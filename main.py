@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from asyncio import sleep
 
 # ייבוא המחלקות השונות
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
@@ -67,8 +68,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
             else:
                 logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
-                await update.message.reply_text("🔒 לא זיהיתי את הקוד. נסה שוב או בקש קוד חדש.")
-                logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
+
+                await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
+                await sleep(1)
+
+                await update.message.reply_text("אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
+                await sleep(1)
+
+                await update.message.reply_text("בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
+     
+                
+                logging.info("📤 נשלחה הודעת וולקאם ראשונה למשתמש שבו הוא מתבקש לרשום קוד אישור")
         except Exception as ex:
             logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
