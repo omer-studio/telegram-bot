@@ -9,7 +9,7 @@ from openai import OpenAI
 # טעינת קונפיגורציה
 def load_config():
     """טוען את קובץ הקונפיגורציה"""
-    with open("config.json") as f:
+with open("/etc/secrets/config.json") as f:
         return json.load(f)
 
 def load_system_prompt():
