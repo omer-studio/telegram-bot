@@ -1,20 +1,19 @@
-# 🛡 קבצים רגישים - לא להעלות לגיטהאב
+# 🔐 סודות
 config.json
 service_account.json
 client_secret.json
 .env
 
-# 🧪 לוגים ונתוני ריצה
+# 🧠 נתונים רגישים מהבוט
 chat_history.json
 bot_errors.jsonl
 bot_trace_log.jsonl
 
-# 🔧 קבצי מערכת / סביבת עבודה
+# 🧰 קבצי מערכת
 __pycache__/
 *.pyc
 *.pyo
 *.log
 
-# Replit specific
+# Replit
 .replit
-*.sqlite3
