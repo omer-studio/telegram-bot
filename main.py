@@ -241,6 +241,8 @@ def main():
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
     try:
+        import time
+        time.sleep(10)  # השהיה של 10 שניות!
         app.run_polling()
         logging.info("🛑 הבוט הופסק (run_polling הסתיים)")
     except Exception as ex:
