@@ -66,28 +66,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             user_state = get_user_state(chat_id)
             code_try = int(user_state.get("code_try", 0)) if user_state else 0
-    
+
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
                 logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
                 await update.message.reply_text("✅ קוד אושר. האם אתה מאשר את התנאים? ✅✅")
                 update_user_state(chat_id, "code_try", code_try + 1)
                 update_user_state(chat_id, "code_approved", "TRUE")
                 return
-    
+
             # אם הקוד שגוי
             if code_try == 0:
                 await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
                 await sleep(1)
-                await update.message.reply_text("אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
+                await update.message.reply_text("אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן צ'אנס!")
                 await sleep(1)
-                await update.message.reply_text("בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
+                await update.message.reply_text("בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n(תכתוב אותו נקי בלי מילים מיותרות)")
             elif code_try == 1:
                 await update.message.reply_text("אופססס לא קלטתי תנסה שוב אולי?")
             elif code_try == 2:
                 await update.message.reply_text("משהו אתה מקליד לא נכון... תנסה לחפש בחשבונית בדיוק את המספר")
             else:
                 await update.message.reply_text("מתנצל. לא מצליח לקלוט את המספר, תנסה להקליד עד שתצליח")
-    
+
             update_user_state(chat_id, "code_try", code_try + 1)
         except Exception as ex:
             logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
@@ -95,54 +95,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
         return
 
-
     # טיפול באישור תנאים
     if not approved:
-    logging.info(f"📝 משתמש {chat_id} קיים אך לא אישר תנאים, תוכן ההודעה: {user_msg!r}")
-    try:
-        msg = user_msg.strip().lower()
-
-        if msg in ["כן אני מאשר", "מאשר"]:
-            approve_user(context.bot_data["sheet"], chat_id)
-            update_user_state(chat_id, "agreed_to_terms", "TRUE")
-            await update.message.reply_text("תודה 🙏 עכשיו רק שאלה קטנה – בן כמה אתה?")
-            return
-
-        elif msg in ["לא מאשר", "לא מאשר סליחה"]:
-            await update.message.reply_text("הבנתי ❤️ אני פה אם תרצה לחזור בעתיד")
-            return
-
-        else:
-            await update.message.reply_text("📜 לפני שנתחיל, חשוב שתאשר שאתה לוקח אחריות על השימוש בצ׳אט הזה\n\nשלח 'כן אני מאשר' או 'לא מאשר סליחה'")
-            return
-    except Exception as ex:
-        logging.error(f"❌ שגיאה בתהליך אישור תנאים: {ex}")
-        await handle_critical_error(ex, chat_id, user_msg, update)
-    return
-
-    #שואלים גיל
-    user_state = get_user_state(chat_id)
-gpt_ready = user_state and str(user_state.get("gpt_ready", "")).upper() == "TRUE"
-
-if not gpt_ready:
-    # בדוק אם כבר אישרו תנאים
-    if str(user_state.get("code_approved", "")).upper() == "TRUE" and str(user_state.get("agreed_to_terms", "")).upper() == "TRUE":
+        logging.info(f"📝 משתמש {chat_id} קיים אך לא אישר תנאים, תוכן ההודעה: {user_msg!r}")
         try:
-            age_input = user_msg.strip()
-            if age_input.isdigit() and 8 < int(age_input) < 100:
-                update_user_profile(chat_id, {"age": age_input})
-                update_user_state(chat_id, "AGE", age_input)
-                update_user_state(chat_id, "gpt_ready", "TRUE")
-                await update.message.reply_text("תודה רבה! 🙏 עכשיו אני לגמרי מוכן ללוות אותך בדרך שלך\nרוצה לשתף אותי במה עובר עליך?")
+            msg = user_msg.strip().lower()
+
+            if msg in ["כן אני מאשר", "מאשר"]:
+                approve_user(context.bot_data["sheet"], chat_id)
+                update_user_state(chat_id, "agreed_to_terms", "TRUE")
+                await update.message.reply_text("תודה 🙏 עכשיו רק שאלה קטנה – בן כמה אתה?")
                 return
+
+            elif msg in ["לא מאשר", "לא מאשר סליחה"]:
+                await update.message.reply_text("הבנתי ❤️ אני פה אם תרצה לחזור בעתיד")
+                return
+
             else:
-                await update.message.reply_text("תוכל לרשום רק מספר? בן כמה אתה?")
+                await update.message.reply_text("📜 לפני שנתחיל, חשוב שתאשר שאתה לוקח אחריות על השימוש בצ׳אט הזה\n\nשלח 'כן אני מאשר' או 'מאשר' כדי להמשיך")
                 return
         except Exception as ex:
-            logging.error(f"❌ שגיאה בקבלת גיל: {ex}")
+            logging.error(f"❌ שגיאה בתהליך אישור תנאים: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
-            return
+        return
 
+    # שואלים גיל
+    user_state = get_user_state(chat_id)
+    gpt_ready = user_state and str(user_state.get("gpt_ready", "")).upper() == "TRUE"
+
+    if not gpt_ready:
+        # בדוק אם כבר אישרו תנאים
+        if str(user_state.get("code_approved", "")).upper() == "TRUE" and str(user_state.get("agreed_to_terms", "")).upper() == "TRUE":
+            try:
+                age_input = user_msg.strip()
+                if age_input.isdigit() and 8 < int(age_input) < 100:
+                    update_user_profile(chat_id, {"age": age_input})
+                    update_user_state(chat_id, "AGE", age_input)
+                    update_user_state(chat_id, "gpt_ready", "TRUE")
+                    await update.message.reply_text("תודה רבה! 🙏 עכשיו אני לגמרי מוכן ללוות אותך בדרך שלך\nרוצה לשתף אותי במה עובר עליך?")
+                    return
+                else:
+                    await update.message.reply_text("תוכל לרשום רק מספר? בן כמה אתה?")
+                    return
+            except Exception as ex:
+                logging.error(f"❌ שגיאה בקבלת גיל: {ex}")
+                await handle_critical_error(ex, chat_id, user_msg, update)
+                return
 
     # המשך טיפול בהודעה רגילה
     logging.info("👨‍💻 משתמש מאושר, מתחיל תהליך מענה...")
