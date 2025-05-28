@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 # ייבוא המחלקות השונות
-from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT
+from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
 from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, calculate_total_cost
 from sheets_handler import get_user_summary, update_user_profile, log_to_sheets
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
