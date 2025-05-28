@@ -237,3 +237,37 @@ def approve_user(sheet, chat_id):
     except Exception as e:
         print(f"❌ approve_user error: {e}")
         return False
+
+
+def get_user_state(chat_id):
+    try:
+        records = sheet_users.get_all_records()
+        for row in records:
+            if str(row.get("chat_id")) == str(chat_id):
+                return row
+        return None
+    except Exception as e:
+        print(f"❌ שגיאה ב-get_user_state: {e}")
+        return None
+
+def update_user_state(chat_id, field, value):
+    try:
+        records = sheet_users.get_all_records()
+        header = sheet_users.row_values(1)
+
+        for idx, row in enumerate(records):
+            if str(row.get("chat_id")) == str(chat_id):
+                if field in header:
+                    col_index = header.index(field) + 1
+                    sheet_users.update_cell(idx + 2, col_index, str(value))
+                    print(f"✅ עודכן {field} = {value} למשתמש {chat_id}")
+                return
+        # אם לא נמצא – ניצור שורה חדשה
+        new_row = {col: "" for col in header}
+        new_row["chat_id"] = str(chat_id)
+        new_row[field] = str(value)
+        sheet_users.append_row([new_row.get(col, "") for col in header])
+        print(f"✅ נוצר משתמש חדש {chat_id} עם {field} = {value}")
+    except Exception as e:
+        print(f"❌ שגיאה ב-update_user_state: {e}")
+
