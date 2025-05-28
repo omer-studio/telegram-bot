@@ -37,18 +37,16 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 def setup_google_sheets():
     """מגדיר את החיבור ל-Google Sheets"""
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-import json
-
-with open("/etc/secrets/config.json") as f:
-    service_account_data = json.load(f)
-
-creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_data, scope)
+    with open("/etc/secrets/config.json") as f:
+        service_account_data = json.load(f)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_data, scope)
     gs_client = gspread.authorize(creds)
     
     sheet_users = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_USER_TAB"])
     sheet_log = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_LOG_TAB"])
     
     return sheet_users, sheet_log
+
 
 # שדות פרופיל משתמש
 PROFILE_FIELDS = ["age", "closet_status", "relationship_type", "religious_context", "occupation_or_role", "attracted_to"]
