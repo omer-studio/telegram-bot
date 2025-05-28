@@ -61,39 +61,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # טיפול ברישום משתמש חדש
     from sheets_handler import get_user_state, update_user_state
 
-if not exists:
-    logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
-    try:
-        user_state = get_user_state(chat_id)
-        code_try = int(user_state.get("code_try", 0)) if user_state else 0
-
-        if register_user(context.bot_data["sheet"], chat_id, user_msg):
-            logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
-            await update.message.reply_text("✅ קוד אושר. האם אתה מאשר את התנאים? ✅✅")
+    if not exists:
+        logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
+        try:
+            user_state = get_user_state(chat_id)
+            code_try = int(user_state.get("code_try", 0)) if user_state else 0
+    
+            if register_user(context.bot_data["sheet"], chat_id, user_msg):
+                logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
+                await update.message.reply_text("✅ קוד אושר. האם אתה מאשר את התנאים? ✅✅")
+                update_user_state(chat_id, "code_try", code_try + 1)
+                update_user_state(chat_id, "code_approved", "TRUE")
+                return
+    
+            # אם הקוד שגוי
+            if code_try == 0:
+                await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
+                await sleep(1)
+                await update.message.reply_text("אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
+                await sleep(1)
+                await update.message.reply_text("בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
+            elif code_try == 1:
+                await update.message.reply_text("אופססס לא קלטתי תנסה שוב אולי?")
+            elif code_try == 2:
+                await update.message.reply_text("משהו אתה מקליד לא נכון... תנסה לחפש בחשבונית בדיוק את המספר")
+            else:
+                await update.message.reply_text("מתנצל. לא מצליח לקלוט את המספר, תנסה להקליד עד שתצליח")
+    
             update_user_state(chat_id, "code_try", code_try + 1)
-            update_user_state(chat_id, "code_approved", "TRUE")
-            return
-
-        # אם הקוד שגוי
-        if code_try == 0:
-            await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
-            await sleep(1)
-            await update.message.reply_text("אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
-            await sleep(1)
-            await update.message.reply_text("בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
-        elif code_try == 1:
-            await update.message.reply_text("אופססס לא קלטתי תנסה שוב אולי?")
-        elif code_try == 2:
-            await update.message.reply_text("משהו אתה מקליד לא נכון... תנסה לחפש בחשבונית בדיוק את המספר")
-        else:
-            await update.message.reply_text("מתנצל. לא מצליח לקלוט את המספר, תנסה להקליד עד שתצליח")
-
-        update_user_state(chat_id, "code_try", code_try + 1)
-    except Exception as ex:
-        logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
-        await handle_critical_error(ex, chat_id, user_msg, update)
-    logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
-    return
+        except Exception as ex:
+            logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
+            await handle_critical_error(ex, chat_id, user_msg, update)
+        logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
+        return
 
 
     # טיפול באישור תנאים
