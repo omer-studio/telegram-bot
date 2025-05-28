@@ -4,7 +4,7 @@
 from config import setup_google_sheets, SUMMARY_FIELD
 
 # יצירת חיבור לגיליונות
-sheet_users, sheet_log = setup_google_sheets()
+sheet_users, sheet_log, sheet_states = setup_google_sheets()
 
 
 def get_user_summary(chat_id):
@@ -13,7 +13,6 @@ def get_user_summary(chat_id):
     """
     try:
         all_records = sheet_users.get_all_records()
-        
         for row in all_records:
             if str(row.get("chat_id")) == str(chat_id):
                 summary = row.get("summery", "").strip()
@@ -212,70 +211,52 @@ def check_user_access(sheet, chat_id):
         return False, None, False
 
 def register_user(sheet, chat_id, code_input):
+    """
+    במקום לעדכן את chat_id בגיליון 1, נרשום את הלקוח ל-user_states:
+    1. מחפש אם chat_id כבר קיים ב-user_states. אם כן, לא עושה כלום.
+    2. אם לא קיים, מוסיף שורה חדשה עם chat_id והקוד.
+    3. מחפש קוד בגיליון 1 בעמודה הראשונה.
+    """
     try:
+        # 1. בדוק אם chat_id כבר קיים ב-user_states
+        states_records = sheet_states.get_all_records()
+        for row in states_records:
+            if str(row.get("chat_id")) == str(chat_id):
+                print(f"👤 chat_id {chat_id} כבר קיים ב-user_states")
+                return True  # כבר רשום, נחשב הצלחה
+
+        # 2. האם הקוד קיים בגיליון 1 (sheet)
         codes = sheet.col_values(1)  # עמודה A = access_code
+        found_code = None
         for i, code in enumerate(codes, start=2):  # שורה 2 ומעלה
-            existing_id = sheet.cell(i, 3).value  # עמודה C = chat_id
-            if code.strip() == code_input.strip() and (existing_id is None or existing_id == ""):
-                sheet.update_cell(i, 3, str(chat_id))  # מכניס את ה-chat_id לעמודה C
-                return True
-        return False
+            if code.strip() == code_input.strip():
+                found_code = code
+                break
+
+        if not found_code:
+            print(f"❌ קוד {code_input} לא נמצא בגיליון 1")
+            return False
+
+        # 3. מוסיף שורה חדשה ל-user_states
+        # חשוב: עמודות user_states הן [chat_id, access_code, approved]
+        sheet_states.append_row([str(chat_id), code_input.strip(), "FALSE"])
+        print(f"✅ נרשם chat_id {chat_id} ל-user_states עם קוד {code_input}")
+        return True
     except Exception as e:
         print(f"שגיאה ברישום קוד גישה: {e}")
         return False
 
 def approve_user(sheet, chat_id):
-    """מסמן בטבלה שהמשתמש אישר תנאים"""
+    """מסמן בטבלת user_states שהמשתמש אישר תנאים"""
     try:
-        cell = sheet.find(str(chat_id))
+        # חפש את השורה עם ה-chat_id בגיליון user_states
+        cell = sheet_states.find(str(chat_id))
         if cell:
-            header_cell = sheet.find("approved")  # עמודת "אישר תנאים?"
+            header_cell = sheet_states.find("approved")  # עמודת "approved"
             if header_cell:
-                sheet.update_cell(cell.row, header_cell.col, "TRUE")
+                sheet_states.update_cell(cell.row, header_cell.col, "TRUE")
                 return True
         return False
     except Exception as e:
         print(f"❌ approve_user error: {e}")
         return False
-
-
-def get_user_state(chat_id):
-    try:
-        records = sheet_users.get_all_records()
-        for row in records:
-            if str(row.get("chat_id")) == str(chat_id):
-                return row
-        return None
-    except Exception as e:
-        print(f"❌ שגיאה ב-get_user_state: {e}")
-        return None
-
-def update_user_state(chat_id, field, value):
-    try:
-        records = sheet_users.get_all_records()
-        header = sheet_users.row_values(1)
-
-        found = False
-        for idx, row in enumerate(records):
-            if str(row.get("chat_id")) == str(chat_id):
-                found = True
-                if field in header:
-                    col_index = header.index(field) + 1
-                    sheet_users.update_cell(idx + 2, col_index, str(value))
-                    print(f"✅ עודכן {field} = {value} למשתמש {chat_id}")
-                return
-
-        if not found:
-            print(f"🆕 מוסיף משתמש חדש עם chat_id: {chat_id}")
-            new_row = ["" for _ in header]
-            if "chat_id" in header:
-                chat_id_index = header.index("chat_id")
-                new_row[chat_id_index] = str(chat_id)
-            if field in header:
-                field_index = header.index(field)
-                new_row[field_index] = str(value)
-            sheet_users.append_row(new_row)
-            print(f"✅ נוצר משתמש חדש {chat_id} עם {field} = {value}")
-
-    except Exception as e:
-        print(f"❌ שגיאה ב-update_user_state: {e}")
