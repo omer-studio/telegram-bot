@@ -201,7 +201,7 @@ def main():
     from oauth2client.service_account import ServiceAccountCredentials
 
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
     sheet = gspread.authorize(creds).open_by_key("1qt5kEPu_YJcbpQNaMdz60r1JTSx9Po89yOIfyV80Q-c").worksheet("גיליון1")
 
     app.bot_data["sheet"] = sheet  # ⬅️ זה מכניס את הגיליון לשימוש בתוך context
