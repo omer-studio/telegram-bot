@@ -38,7 +38,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 def setup_google_sheets():
     """מגדיר את החיבור ל-Google Sheets"""
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_CREDENTIALS_FILE, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
     gs_client = gspread.authorize(creds)
     
     sheet_users = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_USER_TAB"])
