@@ -35,7 +35,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     log_payload["user_msg"] = user_msg
 
-    from sheets_handler import check_user_access, register_user, approve_user
+    from sheets_handler import check_user_access, register_user
 
     # בדיקת מצב המשתמש מול הטבלה
     exists, code, approved = check_user_access(context.bot_data["sheet"], chat_id)
