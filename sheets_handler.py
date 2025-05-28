@@ -255,19 +255,27 @@ def update_user_state(chat_id, field, value):
         records = sheet_users.get_all_records()
         header = sheet_users.row_values(1)
 
+        found = False
         for idx, row in enumerate(records):
             if str(row.get("chat_id")) == str(chat_id):
+                found = True
                 if field in header:
                     col_index = header.index(field) + 1
                     sheet_users.update_cell(idx + 2, col_index, str(value))
                     print(f"✅ עודכן {field} = {value} למשתמש {chat_id}")
                 return
-        # אם לא נמצא – ניצור שורה חדשה
-        new_row = {col: "" for col in header}
-        new_row["chat_id"] = str(chat_id)
-        new_row[field] = str(value)
-        sheet_users.append_row([new_row.get(col, "") for col in header])
-        print(f"✅ נוצר משתמש חדש {chat_id} עם {field} = {value}")
+
+        if not found:
+            print(f"🆕 מוסיף משתמש חדש עם chat_id: {chat_id}")
+            new_row = ["" for _ in header]
+            if "chat_id" in header:
+                chat_id_index = header.index("chat_id")
+                new_row[chat_id_index] = str(chat_id)
+            if field in header:
+                field_index = header.index(field)
+                new_row[field_index] = str(value)
+            sheet_users.append_row(new_row)
+            print(f"✅ נוצר משתמש חדש {chat_id} עם {field} = {value}")
+
     except Exception as e:
         print(f"❌ שגיאה ב-update_user_state: {e}")
-
