@@ -223,3 +223,17 @@ def register_user(sheet, chat_id, code_input):
     except Exception as e:
         print(f"שגיאה ברישום קוד גישה: {e}")
         return False
+
+def approve_user(sheet, chat_id):
+    """מסמן בטבלה שהמשתמש אישר תנאים"""
+    try:
+        cell = sheet.find(str(chat_id))
+        if cell:
+            header_cell = sheet.find("approved")  # עמודת "אישר תנאים?"
+            if header_cell:
+                sheet.update_cell(cell.row, header_cell.col, "TRUE")
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ approve_user error: {e}")
+        return False
