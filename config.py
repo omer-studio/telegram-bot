@@ -1,0 +1,55 @@
+"""
+קובץ הגדרות - כל הקונפיגורציה במקום אחד
+"""
+import json
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from openai import OpenAI
+
+# טעינת קונפיגורציה
+def load_config():
+    """טוען את קובץ הקונפיגורציה"""
+    with open("config.json") as f:
+        return json.load(f)
+
+def load_system_prompt():
+    """טוען את ה-system prompt"""
+    with open("system_prompt.txt", encoding="utf-8") as f:
+        return f.read()
+
+# הגדרות גלובליות
+config = load_config()
+SYSTEM_PROMPT = load_system_prompt()
+
+# טוקנים וזיהויים
+TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
+OPENAI_API_KEY = config["OPENAI_API_KEY"]
+GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
+GOOGLE_CREDENTIALS_FILE = config["GOOGLE_CREDENTIALS_FILE"]
+
+# הגדרות התראות שגיאות
+ERROR_NOTIFICATION_CHAT_ID = "111709341"
+ADMIN_TELEGRAM_TOKEN = config.get("ADMIN_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
+
+# יצירת קליינטים
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# הגדרת Google Sheets
+def setup_google_sheets():
+    """מגדיר את החיבור ל-Google Sheets"""
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_CREDENTIALS_FILE, scope)
+    gs_client = gspread.authorize(creds)
+    
+    sheet_users = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_USER_TAB"])
+    sheet_log = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_LOG_TAB"])
+    
+    return sheet_users, sheet_log
+
+# שדות פרופיל משתמש
+PROFILE_FIELDS = ["age", "closet_status", "relationship_type", "religious_context", "occupation_or_role", "attracted_to"]
+SUMMARY_FIELD = "summery"
+
+# הגדרות לוגים
+LOG_FILE_PATH = "bot_trace_log.jsonl"
+LOG_LIMIT = 100
