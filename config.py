@@ -39,11 +39,13 @@ def setup_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
     gs_client = gspread.authorize(creds)
-    
-    sheet_users = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_USER_TAB"])
-    sheet_log = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet(config["SHEET_LOG_TAB"])
-    
-    return sheet_users, sheet_log
+
+    sheet_users = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet("גיליון1")
+    sheet_log = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet("2")
+    sheet_states = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet("user_states")
+
+    return sheet_users, sheet_log, sheet_states
+
 
 # שדות פרופיל משתמש
 PROFILE_FIELDS = ["age", "closet_status", "relationship_type", "religious_context", "occupation_or_role", "attracted_to"]
