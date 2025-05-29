@@ -23,7 +23,7 @@ def get_main_response(full_messages):
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=full_messages
+            messages=full_messages,
             temperature=1,
         )
         return (
