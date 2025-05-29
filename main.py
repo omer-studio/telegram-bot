@@ -100,9 +100,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_first_time:
             logging.info("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
             print("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
-            await update.message.reply_text("היי מלך! 👑 אני רואה שזו הפעם הראשונה שלך כאן... איזה כיף!")
-            logging.info("📤 נשלחה הודעת 'היי מלך' למשתמש חדש")
-            print("📤 נשלחה הודעת 'היי מלך' למשתמש חדש")
+              # שולח רצף הודעות וולקאם בפעם הראשונה והאחרונה כולל השהיה בינהם שייראה שבן אדם אנושי כתב את זה 
+            await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
+            await sleep(2)
+            await update.message.reply_text("אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
+            await sleep(3)
+            await update.message.reply_text("בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
+            
+            logging.info("📤 נשלחו הודועת וולקאם ראשונה ואחרונה'היי מלך' למשתמש חדש")
+            print("📤 נשלחו הודעות וולקאם 'היי מלך' למשתמש חדש")
             logging.info("---- סיום טיפול בהודעה (משתמש חדש) ----")
             print("---- סיום טיפול בהודעה (משתמש חדש) ----")
             return
