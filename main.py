@@ -15,9 +15,14 @@ main.py — הבוט הראשי של הצ'אט
 """
 
 import logging
+# משתיק את הלוגים של HTTP כדי שלא יראו את הטוקן
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)  # גם זה עוזר לעודפים
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+
 
 # ייבוא המחלקות השונות
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
