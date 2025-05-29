@@ -13,7 +13,7 @@ main.py — הבוט הראשי של הצ'אט
 מטרת התיעוד היא שלא תצטרך להסביר שוב את ההיגיון — הכל כתוב בקוד.
 
 """
-
+import asyncio
 import logging
 # משתיק את הלוגים של HTTP כדי שלא יראו את הטוקן
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -333,7 +333,7 @@ async def webhook(request: Request):
         return {"error": str(ex)}
 
 
-def main():
+async def main():
     """
     אתחול הבוט: חיבור ל-Telegram ול-Google Sheets, הגדרת handlers, ניהול לוגים.
     """
@@ -356,6 +356,8 @@ def main():
         logging.info("📡 מתחבר ל-Telegram...")
         print("📡 מתחבר ל-Telegram...")
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        await app.initialize()
+        await app.start()
         logging.info("✅ חיבור ל-Telegram הושלם")
         print("✅ חיבור ל-Telegram הושלם")
     except Exception as ex:
@@ -386,4 +388,4 @@ def main():
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
 
-main()
+asyncio.run(main())
