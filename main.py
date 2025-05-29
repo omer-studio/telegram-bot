@@ -386,6 +386,4 @@ def main():
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
 
-if __name__ == "__main__":
-    main()
-    uvicorn.run(app_fastapi, host="0.0.0.0", port=10000)
+main()
