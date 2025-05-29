@@ -323,18 +323,20 @@ def register_user(sheet, chat_id, code_input):
     לוגיקה: מוצא קוד פנוי ורושם שם את ה-chat_id.
     """
     try:
-        codes = sheet.col_values(1)  # עמודה A = access_code
-        for i, code in enumerate(codes, start=2):  # שורה 2 ומעלה
-            existing_id = sheet.cell(i, 3).value  # עמודה C = chat_id
-            if code.strip() == code_input.strip() and (existing_id is None or existing_id == ""):
-                sheet.update_cell(i, 3, str(chat_id))  # מכניס את ה-chat_id לעמודה C
-                print(f"[register_user] קוד {code_input} אושר ל-chat_id {chat_id}")
+        code_cell = sheet.find(code_input)  # מוצא את השורה של הקוד המדויק!
+        if code_cell:
+            row = code_cell.row
+            chat_id_cell = sheet.cell(row, 3).value  # עמודה C (chat_id)
+            if not chat_id_cell or str(chat_id_cell).strip() == "":
+                sheet.update_cell(row, 3, str(chat_id))  # מעדכן בעמודה C באותה שורה!
+                print(f"[register_user] קוד {code_input} אושר ל-chat_id {chat_id} בשורה {row}")
                 return True
         print(f"[register_user] קוד {code_input} לא תקין או כבר שויך")
         return False
     except Exception as e:
         print(f"שגיאה ברישום קוד גישה: {e}")
         return False
+
 
 def approve_user(sheet, chat_id):
     """
