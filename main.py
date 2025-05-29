@@ -136,17 +136,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
             print("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
             await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
-            await sleep(2)
             await update.message.reply_text(
                 "אתה תופתע לגלות איזה שימושי אני 😎\n"
                 "אני יודע מה אתה חושב... בינה מלאכותית וזה...\n"
-                "תן לי להפתיע אותך!! 🚀\n\n"
+                "תן לי להפתיע אותך!! 🚀\n\n\n"
                 "לפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩"
             )
-            await sleep(3)
             await update.message.reply_text(
                 "בוא נתחיל במספר האישור שקיבלת 🔢\n"
-                "מה מספר האישור שקיבלת?\n"
+                "מה מספר האישור שקיבלת?\n\n"
                 "(תכתוב אותו נקי בלי מילים נוספות ✍️)"
             )
             logging.info("📤 נשלחו הודעות וולקאם למשתמש חדש")
