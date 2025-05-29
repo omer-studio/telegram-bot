@@ -140,7 +140,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     # שליחת הודעה למשתמש
     try:
         await update.message.reply_text(
-            "🙏 מתנצל, קרתה תקלה. דיווחתי לעומר וננסה לטפל בזה בהקדם."
+            "🙏  ..מתנצל, קרתה תקלה. דיווחתי לעומר ונטפל בזה בהקדם - תמשיך להנות מהקורס בינתיים "
         )
     except Exception as e:
         print(f"⚠️ שגיאה בשליחת ההודעה למשתמש: {e}")
