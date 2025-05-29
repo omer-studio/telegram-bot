@@ -18,6 +18,8 @@ main.py — הבוט הראשי של הצ'אט
 
 
 """
+import requests
+
 import asyncio
 import logging
 # משתיק את הלוגים של HTTP כדי שלא יראו את הטוקן
@@ -50,6 +52,27 @@ from sheets_handler import (
 )
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
+
+# יצירת וובהוק ליתר ביטחון
+def set_telegram_webhook():
+    """
+    מגדיר webhook בטלגרם לפי הכתובת בענן, מבלי לחשוף את הטוקן.
+    קורא לטלגרם אוטומטית בכל הפעלה.
+    """
+    from config import TELEGRAM_BOT_TOKEN
+    WEBHOOK_URL = "https://telegram-bot-b1na.onrender.com/webhook"
+    set_webhook_url = (
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}"
+    )
+    try:
+        resp = requests.get(set_webhook_url)
+        if resp.status_code == 200 and resp.json().get("ok"):
+            print("✅ Webhook נקבע בטלגרם!")
+        else:
+            print("⚠️ שגיאה בהגדרת Webhook:", resp.text)
+    except Exception as e:
+        print("❌ שגיאה:", e)
+
 
 # הגדרת הלוגר — גם למסוף וגם לקובץ
 logging.basicConfig(
@@ -353,6 +376,7 @@ async def main():
     print("========== אתחול הבוט ==========")
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
     # שליחת התראה על אתחול
+    set_telegram_webhook()
     try:
         logging.info("📢 שולח התראת התחלה לאדמין...")
         print("📢 שולח התראת התחלה לאדמין...")
