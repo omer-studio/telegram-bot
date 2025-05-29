@@ -203,22 +203,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"✅ קוד גישה אושר למשתמש {chat_id}")
                 await update.message.reply_text("✅ הקוד אושר איזה התרגשות! אפשר להמשיך לשלב הבא 🙏✨")
                 approval_text = (
-    "רק לפני שנתחיל – חשוב לי שתדע:\n\n"
-    "🔸 אני לא אדם אמיתי\n"
-    "🔸 זה לא ייעוץ, לא טיפול, ולא תחליף לליווי מקצועי\n"
-    "🔸 אני מרחב תומך רגשי שנועד ללוות אותך כחלק מהקורס\n"
-    "🔸 אני מבוסס AI – וגם אני עלול לטעות לפעמים\n"
-    "🔸 השימוש בי הוא באחריותך האישית בלבד\n"
-    "🔸 השיחה איתי מיועדת רק למי שמעל גיל 18\n\n"
-    "אנא אשר שקראת והבנת את הכל כדי להמשיך."
-)
+                    "רק לפני שנתחיל – חשוב לי שתדע:\n\n"
+                    "🔸 אני לא אדם אמיתי\n"
+                    "🔸 זה לא ייעוץ, לא טיפול, ולא תחליף לליווי מקצועי\n"
+                    "🔸 אני מרחב תומך רגשי שנועד ללוות אותך כחלק מהקורס\n"
+                    "🔸 אני מבוסס AI – וגם אני עלול לטעות לפעמים\n"
+                    "🔸 השימוש בי הוא באחריותך האישית בלבד\n"
+                    "🔸 השיחה איתי מיועדת רק למי שמעל גיל 18\n\n"
+                    "אנא אשר שקראת והבנת את הכל כדי להמשיך."
+                )
 
-keyboard = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("✅ קראתי את הכל ואני מאשר", callback_data="approve_yes"),
-        InlineKeyboardButton("❌ לא מאשר", callback_data="approve_no"),
-    ]
-])
+                keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ קראתי את הכל ואני מאשר", callback_data="approve_yes"),
+                    InlineKeyboardButton("❌ לא מאשר", callback_data="approve_no"),
+                ]
+                ])
 
 await update.message.reply_text(approval_text, reply_markup=keyboard)
 
