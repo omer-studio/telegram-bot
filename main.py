@@ -46,7 +46,7 @@ app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, calculate_total_cost
 from sheets_handler import (
     get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user,
-    approve_user, ensure_user_state_row, approve_user_in_states
+    approve_user, ensure_user_state_row
 )
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
@@ -269,7 +269,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if user_msg.strip() == "✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי":
                 approve_user(context.bot_data["sheet"], chat_id)
-                approve_user_in_states(context.bot_data["sheet_states"], chat_id)
                 await update.message.reply_text(
                     "מעולה, קיבלת גישה מלאה ✅ דבר אליי.",
                     reply_markup=ReplyKeyboardRemove())
