@@ -22,6 +22,11 @@ logging.getLogger("telegram").setLevel(logging.WARNING)  # גם זה עוזר ל
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from fastapi import FastAPI, Request
+import uvicorn
+
+app_fastapi = FastAPI()
+
 
 
 # ייבוא המחלקות השונות
@@ -308,6 +313,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- סיום טיפול בהודעה ----")
     print("---- סיום טיפול בהודעה ----")
 
+@app_fastapi.post("/webhook")
+async def webhook(request: Request):
+    try:
+        data = await request.json()
+        update = Update.de_json(data, app.bot)
+        await handle_message(update, ContextTypes.DEFAULT_TYPE(bot=app.bot))
+        return {"ok": True}
+    except Exception as ex:
+        logging.error(f"❌ שגיאה ב-webhook: {ex}")
+        return {"error": str(ex)}
+
+
 def main():
     """
     אתחול הבוט: חיבור ל-Telegram ול-Google Sheets, הגדרת handlers, ניהול לוגים.
@@ -361,14 +378,7 @@ def main():
     logging.info("🚦 הבוט מוכן ומחכה להודעות! (Ctrl+C לעצירה)")
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
-    try:
-        app.run_polling()
-        logging.info("🛑 הבוט הופסק (run_polling הסתיים)")
-        print("🛑 הבוט הופסק (run_polling הסתיים)")
-    except Exception as ex:
-        logging.critical(f"❌ שגיאה בהרצת loop של הבוט: {ex}")
-        print(f"❌ שגיאה בהרצת loop של הבוט: {ex}")
-        raise
 
 if __name__ == "__main__":
     main()
+    uvicorn.run(app_fastapi, host="0.0.0.0", port=10000)
