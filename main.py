@@ -137,13 +137,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # אם המשתמש לא קיים - מנסים לרשום אותו עם הקוד שהוא כתב (כל טקסט יקבל מענה)
+      # שלב 3: טיפול ברישום משתמש חדש (הכנסת קוד)
     if not exists:
-        logging.info(f"👤 משתמש לא קיים, מנסה לרשום עם הקוד שקיבל: {user_msg!r}")
-        print(f"👤 משתמש לא קיים, מנסה לרשום עם הקוד שקיבל: {user_msg!r}")
+        logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
+        print(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
         try:
+            # קודם כל נקבל את ערך code_try הנוכחי (או 0 אם אין)
+            # לצורך זה יש פונקציה ב-sheets_handler בשם get_code_try או נעשה בדיקה ידנית שם
+            # אבל אם אין לך פונקציה כזאת, נניח שה-increment_code_try עושה את זה
+            # אנחנו לא נגדיל את code_try לפני שננסה להקליד קוד בפעם הראשונה (כלומר אם code_try==0)
+            # אז אם code_try == 0 וניסיון להקליד קוד, אז מעלים ל-1
+            # בכל פעם שמקלידים קוד נוסף מעלים ב-1 את code_try
+            
             current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
-
-            # מנסה לרשום, אם הצליח שולח אישור, אחרת שולח הודעת טעות
+            if current_try is None:
+                current_try = 0  # להתחלה
+            
+            # אם זה ניסיון ראשון (0) - מעלים ל-1 עכשיו כי מנסים להקליד קוד בפעם הראשונה
+            if current_try == 0:
+                current_try = 1
+            
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
                 logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
                 print(f"✅ קוד גישה אושר למשתמש {chat_id}")
@@ -153,33 +166,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
                 print(f"❌ קוד גישה לא תקין עבור {chat_id}")
-
-                # שליחת הודעות מנומסות לפי ניסיונות
-                if current_try == 2:
-                    await update.message.reply_text(
-                        "🧐 סליחה, לא הצלחתי לקלוט את הקוד נכון...\n"
-                        "תוודא שאתה כותב את הקוד בדיוק כפי שקיבלת (גם אם זה לא רק מספרים)."
-                    )
+                
+                # שולחים הודעה בהתאם ל־current_try (המספר של הניסיון הנוכחי)
+                if current_try == 1:
+                    # ניסיון ראשון להקליד קוד, שולחים הודעה ראשונה (אפשר בלי הודעה, או עם הודעה ספציפית)
+                    await update.message.reply_text("❌ הקוד שכתבת לא תקין, נסה שוב.")
+                elif current_try == 2:
+                    await update.message.reply_text("🧐 סליחה, לא הצלחתי לקלוט את הקוד נכון...\nתוודא שאתה כותב את הספרות בדיוק כמו שמופיע בחשבונית שרכשת את הקורס (אם אין לך — תכתוב לעומר והוא יתן לך קוד!)")
                 elif current_try == 3:
-                    await update.message.reply_text(
-                        "🥴 משהו עדיין לא נכון...\n"
-                        "תבדוק שאתה כותב את הקוד בדיוק כפי שקיבלת — בלי תווים מיותרים."
-                    )
+                    await update.message.reply_text("🥴 אוף... משהו עדיין לא נכון...\nתבדוק שוב שאתה כותב את זה נכון, ושהקוד תואם בדיוק למה שקיבלת — רק ספרות, בלי תווים מיותרים.")
                 elif current_try == 4:
-                    await update.message.reply_text(
-                        "🙈 לא מצליח לקלוט את הקוד...\n"
-                        "בוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא."
-                    )
+                    await update.message.reply_text("🙈 לא מצליח לקלוט את הקוד...\nבוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא, רק ספרות.")
                 elif current_try >= 5:
-                    await update.message.reply_text(
-                        "🚫 מצטער... הקוד לא תקין.\n"
-                        "מוזמן להקליד שוב עד שתצליח, או לפנות לעומר שיעזור לך 💬"
-                    )
+                    await update.message.reply_text("🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך 💬")
                 else:
-                    # ניסיון ראשון - לא שולח הודעה מיוחדת
-                    await update.message.reply_text(
-                        "הקלד בבקשה את קוד הגישה שקיבלת כדי להתחיל."
-                    )
+                    # אם משהו יוצא דופן, לא שולחים הודעה נוספת
+                    pass
 
                 logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
                 print("📤 נשלחה הודעת קוד לא תקין למשתמש")
@@ -195,6 +197,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
         print("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
         return
+
 
     # המשתמש קיים, ממשיכים
     try:
