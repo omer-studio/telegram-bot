@@ -12,6 +12,11 @@ main.py — הבוט הראשי של הצ'אט
 כל לוגיקה של שליחת הודעות, ניהול משתמשים, שמירת היסטוריה, חישוב עלויות ועוד — הכל מתועד בלוג (לקובץ ולמסך) ובדוקומנטציה בראש כל פונקציה.
 מטרת התיעוד היא שלא תצטרך להסביר שוב את ההיגיון — הכל כתוב בקוד.
 
+# DummyContext:
+# פתרון ל־webhook של FastAPI שמייצר context פשוט המכיל את bot_data
+# כדי שכל הפונקציות יעבדו גם בלי ContextTypes של טלגרם
+
+
 """
 import asyncio
 import logging
@@ -24,9 +29,14 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 from fastapi import FastAPI, Request
 import uvicorn
+from asyncio import sleep
+
 
 app_fastapi = FastAPI()
 
+class DummyContext:
+    def __init__(self, bot_data):
+        self.bot_data = bot_data
 
 
 
@@ -326,11 +336,13 @@ async def webhook(request: Request):
     try:
         data = await request.json()
         update = Update.de_json(data, app.bot)
-        await handle_message(update, await app.get_update_context(update))
+        context = DummyContext(app.bot_data)  # ניצור קונטקסט דמה עם ה־bot_data הקיים
+        await handle_message(update, context)  # נשלח אותו לפונקציה
         return {"ok": True}
     except Exception as ex:
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
+
 
 
 async def main():
