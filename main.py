@@ -123,6 +123,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_critical_error(ex, None, None, update)
         return
 
+    try:
+        # שלב 1: בדיקת משתמש חדש (Onboarding)
+        logging.info("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
+        print("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
+        is_first_time = ensure_user_state_row(
+            context.bot_data["sheet"],           # גיליון 1 (access_codes)
+            context.bot_data["sheet_states"],    # גיליון user_states
+            chat_id
+        )
+        if is_first_time:
+            logging.info("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
+            print("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
+            await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
+            await sleep(2)
+            await update.message.reply_text(
+                "אתה תופתע לגלות איזה שימושי אני 😎\n"
+                "אני יודע מה אתה חושב... בינה מלאכותית וזה...\n"
+                "תן לי להפתיע אותך!! 🚀\n\n"
+                "לפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩"
+            )
+            await sleep(3)
+            await update.message.reply_text(
+                "בוא נתחיל במספר האישור שקיבלת 🔢\n"
+                "מה מספר האישור שקיבלת?\n"
+                "(תכתוב אותו נקי בלי מילים נוספות ✍️)"
+            )
+            logging.info("📤 נשלחו הודעות וולקאם למשתמש חדש")
+            print("📤 נשלחו הודעות וולקאם למשתמש חדש")
+            logging.info("---- סיום טיפול בהודעה (משתמש חדש) ----")
+            print("---- סיום טיפול בהודעה (משתמש חדש) ----")
+            return
+        else:
+            logging.info("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
+            print("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
+    except Exception as ex:
+        logging.error(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
+        print(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
+        await handle_critical_error(ex, chat_id, user_msg, update)
+        return
+
+    
     # בדיקה שהמשתמש קיים ולקבל פרטי גישה
     try:
         logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
@@ -200,46 +241,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     # המשתמש קיים, ממשיכים
-    try:
-        # שלב 1: בדיקת משתמש חדש (Onboarding)
-        logging.info("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
-        print("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
-        is_first_time = ensure_user_state_row(
-            context.bot_data["sheet"],           # גיליון 1 (access_codes)
-            context.bot_data["sheet_states"],    # גיליון user_states
-            chat_id
-        )
-        if is_first_time:
-            logging.info("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
-            print("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
-            await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
-            await sleep(2)
-            await update.message.reply_text(
-                "אתה תופתע לגלות איזה שימושי אני 😎\n"
-                "אני יודע מה אתה חושב... בינה מלאכותית וזה...\n"
-                "תן לי להפתיע אותך!! 🚀\n\n"
-                "לפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩"
-            )
-            await sleep(3)
-            await update.message.reply_text(
-                "בוא נתחיל במספר האישור שקיבלת 🔢\n"
-                "מה מספר האישור שקיבלת?\n"
-                "(תכתוב אותו נקי בלי מילים נוספות ✍️)"
-            )
-            logging.info("📤 נשלחו הודעות וולקאם למשתמש חדש")
-            print("📤 נשלחו הודעות וולקאם למשתמש חדש")
-            logging.info("---- סיום טיפול בהודעה (משתמש חדש) ----")
-            print("---- סיום טיפול בהודעה (משתמש חדש) ----")
-            return
-        else:
-            logging.info("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
-            print("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
-    except Exception as ex:
-        logging.error(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
-        print(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
-        await handle_critical_error(ex, chat_id, user_msg, update)
-        return
-
+  
     # שלב 2: בדיקת הרשאות משתמש (שוב, לוודא)
     try:
         logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
