@@ -68,23 +68,45 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
 def increment_code_try(sheet_states, chat_id):
     """
     מעלה את ערך code_try ב-user_states ב-1 למשתמש הרלוונטי.
+    אם לא קיים, מוסיף שורה עם code_try=0 (עוד לא ניסה).
+    במקרה של שגיאה מחזיר את הערך האחרון שנמצא (ולא None או 0).
     """
     try:
         records = sheet_states.get_all_records()
         header = sheet_states.row_values(1)
         for idx, row in enumerate(records):
             if str(row.get("chat_id")) == str(chat_id):
-                current_try = int(row.get("code_try", 0))
+                current_try = row.get("code_try")
+                if current_try is None or current_try == "":
+                    current_try = 0
+                else:
+                    current_try = int(current_try)
                 new_try = current_try + 1
                 col_index = header.index("code_try") + 1
                 sheet_states.update_cell(idx + 2, col_index, new_try)
                 return new_try
-        # אם לא קיים, תוסיף שורה חדשה (לא אמור לקרות אבל שיהיה)
-        sheet_states.append_row([str(chat_id), 1])
-        return 1
+        # אם לא נמצא שורה, מוסיף שורה עם code_try=0
+        sheet_states.append_row([str(chat_id), 0])
+        return 0
     except Exception as e:
         print(f"שגיאה בהעלאת code_try: {e}")
-        return None
+        # במקרה של שגיאה, מחזיר את המספר האחרון שנשמר בגיליון
+        try:
+            records = sheet_states.get_all_records()
+            for row in records:
+                if str(row.get("chat_id")) == str(chat_id):
+                    current_try = row.get("code_try")
+                    if current_try is None or current_try == "":
+                        return 0
+                    return int(current_try)
+            # אם לא נמצא, מחזיר 0
+            return 0
+        except Exception as e2:
+            print(f"שגיאה בקריאה חוזרת של code_try: {e2}")
+            # אם לא מצליח לקרוא בכלל, מחזיר 1 כדי שלא ישבור
+            return 1
+
+
 
 
 
@@ -97,7 +119,7 @@ def get_user_summary(chat_id):
         all_records = sheet_users.get_all_records()
         for row in all_records:
             if str(row.get("chat_id")) == str(chat_id):
-                summary = row.get("summery", "").strip()
+                summary = row.get("summary", "").strip()
                 if summary:
                     return summary
         return ""
