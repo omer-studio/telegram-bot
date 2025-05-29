@@ -284,7 +284,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML"
                 )
 
-                    reply_markup=ReplyKeyboardRemove())
                 logging.info("📤 נשלחה הודעת גישה מלאה למשתמש")
                 print("📤 נשלחה הודעת גישה מלאה למשתמש")
             elif user_msg.strip() == "❌לא מאשר":
