@@ -22,13 +22,11 @@ import requests
 import asyncio
 import logging
 
-# משתיק את הלוגים של HTTP כדי שלא יראו את הטוקן
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("telegram").setLevel(logging.WARNING)  # גם זה עוזר לעודפים
+logging.getLogger("telegram").setLevel(logging.WARNING)
 
-from telegram.ext import CallbackQueryHandler
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
@@ -39,23 +37,19 @@ from sheets_handler import increment_code_try
 
 app_fastapi = FastAPI()
 
-
 class DummyContext:
     def __init__(self, bot_data):
         self.bot_data = bot_data
 
-
-# ייבוא המחלקות השונות
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
 app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, calculate_total_cost
 from sheets_handler import (
     get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user,
-    approve_user, ensure_user_state_row
+    approve_user, ensure_user_state_row, approve_user_in_states
 )
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
-
 
 def connect_google_sheets():
     try:
@@ -76,15 +70,9 @@ def connect_google_sheets():
         print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         raise
 
-
 connect_google_sheets()
 
-
 def set_telegram_webhook():
-    """
-    מגדיר webhook בטלגרם לפי הכתובת בענן, מבלי לחשוף את הטוקן.
-    קורא לטלגרם אוטומטית בכל הפעלה.
-    """
     from config import TELEGRAM_BOT_TOKEN
     WEBHOOK_URL = "https://telegram-bot-b1na.onrender.com/webhook"
     set_webhook_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}"
@@ -97,7 +85,6 @@ def set_telegram_webhook():
     except Exception as e:
         print("❌ שגיאה:", e)
 
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -106,7 +93,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- התחלת טיפול בהודעה ----")
@@ -212,13 +198,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "אנא אשר שקראת והבנת את הכל כדי להמשיך."
                 )
 
-                keyboard = InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton("✅ קראתי את הכל ואני מאשר", callback_data="approve_yes"),
-                        InlineKeyboardButton("❌ לא מאשר", callback_data="approve_no"),
-                    ]
-                ])
-                await update.message.reply_text(approval_text, reply_markup=keyboard)
+                approval_keyboard = ReplyKeyboardMarkup(
+                    [["מאשר"], ["לא מאשר"]],
+                    one_time_keyboard=True,
+                    resize_keyboard=True
+                )
+
+                await update.message.reply_text(
+                    approval_text + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
+                    reply_markup=approval_keyboard
+                )
 
                 logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
                 print("📤 נשלחה הודעת אישור קוד למשתמש")
@@ -243,8 +232,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text(
                         "🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך."
                     )
-                # else: אם משהו יוצא דופן, לא שולחים הודעה נוספת
-
                 logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
                 print("📤 נשלחה הודעת קוד לא תקין למשתמש")
 
@@ -280,16 +267,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"📝 משתמש {chat_id} קיים אך לא מאושר, תוכן ההודעה: {user_msg!r}")
         print(f"📝 משתמש {chat_id} קיים אך לא מאושר, תוכן ההודעה: {user_msg!r}")
         try:
-            if user_msg.strip().lower() == "מאשר":
+            if user_msg.strip() == "מאשר":
                 approve_user(context.bot_data["sheet"], chat_id)
-                logging.info(f"🙌 משתמש {chat_id} אישר תנאים בהצלחה")
-                print(f"🙌 משתמש {chat_id} אישר תנאים בהצלחה")
-                await update.message.reply_text("מעולה, קיבלת גישה מלאה ✅ דבר אליי.")
+                approve_user_in_states(context.bot_data["sheet_states"], chat_id)
+                await update.message.reply_text(
+                    "מעולה, קיבלת גישה מלאה ✅ דבר אליי.",
+                    reply_markup=ReplyKeyboardRemove())
                 logging.info("📤 נשלחה הודעת גישה מלאה למשתמש")
                 print("📤 נשלחה הודעת גישה מלאה למשתמש")
-            else:
+            elif user_msg.strip() == "לא מאשר":
                 await update.message.reply_text(
-                    "📜 לפני שנתחיל, חשוב שתאשר שאתה לוקח אחריות על השימוש בצ׳אט הזה.\n\nשלח 'מאשר' כדי להמשיך."
+                    "הבנת שלא אישרת את התנאים. אין גישה לשירות כרגע.",
+                    reply_markup=ReplyKeyboardRemove())
+            else:
+                approval_keyboard = ReplyKeyboardMarkup(
+                    [["מאשר"], ["לא מאשר"]],
+                    one_time_keyboard=True,
+                    resize_keyboard=True
+                )
+                await update.message.reply_text(
+                    "📜 לפני שנתחיל, חשוב שתאשר שאתה לוקח אחריות על השימוש בצ׳אט הזה.\n\n"
+                    "לחץ 'מאשר' או 'לא מאשר' במקלדת למטה.",
+                    reply_markup=approval_keyboard
                 )
                 logging.info("📤 נשלחה תזכורת לאישור תנאים למשתמש")
                 print("📤 נשלחה תזכורת לאישור תנאים למשתמש")
@@ -430,7 +429,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- סיום טיפול בהודעה ----")
     print("---- סיום טיפול בהודעה ----")
 
-
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
     try:
@@ -440,8 +438,6 @@ async def webhook(request: Request):
 
         if update.message:
             await handle_message(update, context)
-        elif update.callback_query:
-            await handle_callback(update, context)
         else:
             print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
             logging.warning("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
@@ -450,27 +446,6 @@ async def webhook(request: Request):
     except Exception as ex:
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
-
-
-
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    chat_id = query.message.chat.id
-
-    if query.data == "approve_yes":
-        success = approve_user(context.bot_data["sheet"], chat_id)
-        success_states = approve_user_in_states(context.bot_data["sheet_states"], chat_id)
-        if success and success_states:
-            await query.edit_message_text("תודה רבה! עכשיו יש לך גישה מלאה. דבר אליי 🙏✨")
-        else:
-            await query.edit_message_text("❌ הייתה שגיאה בעדכון האישור, אנא נסה שוב.")
-    elif query.data == "approve_no":
-        await query.edit_message_text("הבנת שלא אישרת את התנאים. אין גישה לשירות כרגע.")
-    else:
-        await query.edit_message_text("❌ פעולה לא מוכרת.")
-
 
 async def main():
     logging.info("========== אתחול הבוט ==========")
@@ -493,7 +468,6 @@ async def main():
         logging.info("📡 מתחבר ל-Telegram...")
         print("📡 מתחבר ל-Telegram...")
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        app.add_handler(CallbackQueryHandler(handle_callback))
         await app.initialize()
         await app.start()
         logging.info("✅ חיבור ל-Telegram הושלם")
@@ -506,3 +480,4 @@ async def main():
     logging.info("🚦 הבוט מוכן ומחכה להודעות! (Ctrl+C לעצירה)")
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
+
