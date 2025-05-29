@@ -356,3 +356,23 @@ def approve_user(sheet, chat_id):
     except Exception as e:
         print(f"❌ approve_user error: {e}")
         return False
+
+
+def approve_user_in_states(sheet_states, chat_id):
+    """
+    מסמן ב-user_states שהמשתמש אישר תנאים (gpt_ready = TRUE)
+    """
+    try:
+        cell = sheet_states.find(str(chat_id))
+        if cell:
+            header_cell = sheet_states.find("gpt_ready")
+            if header_cell:
+                sheet_states.update_cell(cell.row, header_cell.col, "TRUE")
+                print(f"[approve_user_in_states] משתמש {chat_id} אושר ב-user_states.")
+                return True
+        print(f"[approve_user_in_states] לא נמצא chat_id {chat_id} או עמודה gpt_ready")
+        return False
+    except Exception as e:
+        print(f"❌ approve_user_in_states error: {e}")
+        return False
+
