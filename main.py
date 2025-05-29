@@ -437,11 +437,20 @@ async def webhook(request: Request):
         data = await request.json()
         update = Update.de_json(data, app.bot)
         context = DummyContext(app.bot_data)
-        await handle_message(update, context)
+
+        if update.message:
+            await handle_message(update, context)
+        elif update.callback_query:
+            await handle_callback(update, context)
+        else:
+            print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
+            logging.warning("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
+
         return {"ok": True}
     except Exception as ex:
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
+
 
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
