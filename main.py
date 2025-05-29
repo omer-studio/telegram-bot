@@ -199,7 +199,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 approval_keyboard = ReplyKeyboardMarkup(
-                    [["מאשר"], ["לא מאשר"]],
+                    [["✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי"], ["❌לא מאשר"]],
                     one_time_keyboard=True,
                     resize_keyboard=True
                 )
@@ -267,7 +267,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"📝 משתמש {chat_id} קיים אך לא מאושר, תוכן ההודעה: {user_msg!r}")
         print(f"📝 משתמש {chat_id} קיים אך לא מאושר, תוכן ההודעה: {user_msg!r}")
         try:
-            if user_msg.strip() == "מאשר":
+            if user_msg.strip() == "✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי":
                 approve_user(context.bot_data["sheet"], chat_id)
                 approve_user_in_states(context.bot_data["sheet_states"], chat_id)
                 await update.message.reply_text(
@@ -275,7 +275,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=ReplyKeyboardRemove())
                 logging.info("📤 נשלחה הודעת גישה מלאה למשתמש")
                 print("📤 נשלחה הודעת גישה מלאה למשתמש")
-            elif user_msg.strip() == "לא מאשר":
+            elif user_msg.strip() == "❌לא מאשר":
                 await update.message.reply_text(
                     "הבנת שלא אישרת את התנאים. אין גישה לשירות כרגע.",
                     reply_markup=ReplyKeyboardRemove())
