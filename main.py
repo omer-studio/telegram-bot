@@ -29,8 +29,10 @@ app_fastapi = FastAPI()
 
 
 
+
 # ייבוא המחלקות השונות
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
+app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, calculate_total_cost
 from sheets_handler import (
     get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user,
@@ -347,7 +349,6 @@ def main():
     try:
         logging.info("📡 מתחבר ל-Telegram...")
         print("📡 מתחבר ל-Telegram...")
-        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         logging.info("✅ חיבור ל-Telegram הושלם")
         print("✅ חיבור ל-Telegram הושלם")
