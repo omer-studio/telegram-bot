@@ -140,10 +140,61 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_critical_error(ex, None, None, update)
         return
 
+    # ** הוספתי פה - צריך להשאיר! **
+    try:
+        logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
+        print("🔍 בודק הרשאות משתמש מול הגיליון...")
+        exists, code, approved = check_user_access(context.bot_data["sheet"], chat_id)
+        logging.info(f"סטטוס משתמש: קיים={exists}, קוד={code}, מאושר={approved}")
+        print(f"סטטוס משתמש: קיים={exists}, קוד={code}, מאושר={approved}")
+    except Exception as ex:
+        logging.error(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
+        print(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
+        await handle_critical_error(ex, chat_id, user_msg, update)
+        return
+
+    # אם משתמש לא קיים - זה הקוד שעולה
+    if not exists:
+        logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
+        print(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
+        try:
+            current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
+
+            if register_user(context.bot_data["sheet"], chat_id, user_msg):
+                logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
+                print(f"✅ קוד גישה אושר למשתמש {chat_id}")
+                await update.message.reply_text("✅ הקוד אושר! אפשר להמשיך לשלב הבא — שלח 'מאשר' כדי להמשיך 🙏✨")
+                logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
+                print("📤 נשלחה הודעת אישור קוד למשתמש")
+            else:
+                logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
+                print(f"❌ קוד גישה לא תקין עבור {chat_id}")
+
+                if current_try == 2:
+                    await update.message.reply_text("🧐 סליחה, לא הצלחתי לקלוט את הקוד נכון...\nתוודא שאתה כותב את הספרות בדיוק כמו שמופיע בחשבונית שרכשת את הקורס (אם אין לך — תכתוב לעומר והוא יתן לך קוד!)")
+                elif current_try == 3:
+                    await update.message.reply_text("🥴 אוף... משהו עדיין לא נכון...\nתבדוק שוב שאתה כותב את זה נכון, ושהקוד תואם בדיוק למה שקיבלת — רק ספרות, בלי תווים מיותרים.")
+                elif current_try == 4:
+                    await update.message.reply_text("🙈 לא מצליח לקלוט את הקוד...\nבוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא, רק ספרות.")
+                elif current_try >= 5:
+                    await update.message.reply_text("🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך 💬")
+                else:
+                    pass  # ניסיון ראשון - לא שולח הודעה מיוחדת
+
+                logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
+                print("📤 נשלחה הודעת קוד לא תקין למשתמש")
+
+        except Exception as ex:
+            logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
+            print(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
+            await handle_critical_error(ex, chat_id, user_msg, update)
+
+        logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
+        print("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
+        return
+
+    # עכשיו ממשיכים עם המשתמש שקיים
     # שלב 1: בדיקת משתמש חדש (Onboarding)
-    # -------------------------------------------------
-    # למה? כי אנחנו רוצים לדעת אם זו פנייה ראשונה בחייו של המשתמש לצ'אט.
-    # אם לא קיים לא בגיליון 1 ולא ב-user_states — נרשום אותו שם עם code_try=0.
     try:
         logging.info("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
         print("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
@@ -188,51 +239,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
         await handle_critical_error(ex, chat_id, user_msg, update)
         return
-
-    # שלב 3: טיפול ברישום משתמש חדש (הכנסת קוד)
-
-if not exists:
-    logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
-    print(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
-    try:
-        # העלאת code_try לפני כל ניסיון (כולל הניסיון הנוכחי)
-        current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
-    
-        if register_user(context.bot_data["sheet"], chat_id, user_msg):
-            logging.info(f"✅  קוד גישה אושר למשתמש - מדהים !  {chat_id}")
-            print(f"✅ קוד גישה אושר למשתמש {chat_id}")
-            await update.message.reply_text("✅ הקוד אושר! אפשר להמשיך לשלב הבא — שלח 'מאשר' כדי להמשיך 🙏✨")
-            logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
-            print("📤 נשלחה הודעת אישור קוד למשתמש")
-        else:
-            logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
-            print(f"❌ קוד גישה לא תקין עבור {chat_id}")
-    
-            if current_try == 2:
-                await update.message.reply_text("🧐 סליחה, לא הצלחתי לקלוט את הקוד נכון...\nתוודא שאתה כותב את הספרות בדיוק כמו שמופיע בחשבונית שרכשת את הקורס (אם אין לך — תכתוב לעומר והוא יתן לך קוד!)")
-            elif current_try == 3:
-                await update.message.reply_text("🥴 אוף... משהו עדיין לא נכון...\nתבדוק שוב שאתה כותב את זה נכון, ושהקוד תואם בדיוק למה שקיבלת — רק ספרות, בלי תווים מיותרים.")
-            elif current_try == 4:
-                await update.message.reply_text("🙈 לא מצליח לקלוט את הקוד...\nבוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא, רק ספרות.")
-            elif current_try >= 5:
-                await update.message.reply_text("🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך 💬")
-            else:
-                pass  # ניסיון ראשון - לא שולח הודעה מיוחדת
-    
-            logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
-            print("📤 נשלחה הודעת קוד לא תקין למשתמש")
-    
-    except Exception as ex:
-        logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
-        print(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
-        await handle_critical_error(ex, chat_id, user_msg, update)
-
-    logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
-    print("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
-    return
-
-
-
 
     # שלב 4: טיפול באישור תנאים
     if not approved:
