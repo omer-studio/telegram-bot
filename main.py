@@ -27,6 +27,8 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)  # גם זה עוזר לעודפים
 
+from telegram.ext import CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
@@ -199,7 +201,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
                 logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
                 print(f"✅ קוד גישה אושר למשתמש {chat_id}")
-                await update.message.reply_text("✅ הקוד אושר! אפשר להמשיך לשלב הבא — שלח 'מאשר' כדי להמשיך 🙏✨")
+                await update.message.reply_text("✅ הקוד אושר איזה התרגשות! אפשר להמשיך לשלב הבא 🙏✨")
+                approval_text = (
+    "רק לפני שנתחיל – חשוב לי שתדע:\n\n"
+    "🔸 אני לא אדם אמיתי\n"
+    "🔸 זה לא ייעוץ, לא טיפול, ולא תחליף לליווי מקצועי\n"
+    "🔸 אני מרחב תומך רגשי שנועד ללוות אותך כחלק מהקורס\n"
+    "🔸 אני מבוסס AI – וגם אני עלול לטעות לפעמים\n"
+    "🔸 השימוש בי הוא באחריותך האישית בלבד\n"
+    "🔸 השיחה איתי מיועדת רק למי שמעל גיל 18\n\n"
+    "אנא אשר שקראת והבנת את הכל כדי להמשיך."
+)
+
+keyboard = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("✅ קראתי את הכל ואני מאשר", callback_data="approve_yes"),
+        InlineKeyboardButton("❌ לא מאשר", callback_data="approve_no"),
+    ]
+])
+
+await update.message.reply_text(approval_text, reply_markup=keyboard)
+
                 logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
                 print("📤 נשלחה הודעת אישור קוד למשתמש")
             else:
@@ -406,6 +428,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- סיום טיפול בהודעה ----")
     print("---- סיום טיפול בהודעה ----")
 
+    
+    
+
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
     try:
@@ -417,6 +442,27 @@ async def webhook(request: Request):
     except Exception as ex:
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
+
+
+
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+    
+        chat_id = query.message.chat.id
+    
+        if query.data == "approve_yes":
+            success = approve_user(context.bot_data["sheet"], chat_id)
+            if success:
+                await query.edit_message_text("תודה רבה! עכשיו יש לך גישה מלאה. דבר אליי 🙏✨")
+            else:
+                await query.edit_message_text("❌ הייתה שגיאה בעדכון האישור, אנא נסה שוב.")
+        elif query.data == "approve_no":
+            await query.edit_message_text("הבנת שלא אישרת את התנאים. אין גישה לשירות כרגע.")
+        else:
+            await query.edit_message_text("❌ פעולה לא מוכרת.")
+    
+
 
 async def main():
     logging.info("========== אתחול הבוט ==========")
@@ -439,6 +485,7 @@ async def main():
         logging.info("📡 מתחבר ל-Telegram...")
         print("📡 מתחבר ל-Telegram...")
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_handler(CallbackQueryHandler(handle_callback))
         await app.initialize()
         await app.start()
         logging.info("✅ חיבור ל-Telegram הושלם")
