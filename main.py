@@ -451,9 +451,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = query.message.chat.id
 
     if query.data == "approve_yes":
-        success_states = approve_user_in_states(context.bot_data["sheet_states"], chat_id)  # <- הוספנו!
+        success = approve_user(context.bot_data["sheet"], chat_id)
+        success_states = approve_user_in_states(context.bot_data["sheet_states"], chat_id)
         if success and success_states:
-
             await query.edit_message_text("תודה רבה! עכשיו יש לך גישה מלאה. דבר אליי 🙏✨")
         else:
             await query.edit_message_text("❌ הייתה שגיאה בעדכון האישור, אנא נסה שוב.")
