@@ -1,30 +1,39 @@
 """
-מחלקת נתונים - כל פונקציות Google Sheets
+sheets_handler.py — ניהול גישה, הרשאות ולוגים ב-Google Sheets
 
-# לוגיקת רישום משתמש חדש (חשוב!):
-1. בכל הודעה נכנסת, קודם כל מחפשים את ה-chat_id בעמודה 1 של גיליון 1 ("access_codes").
-2. אם נמצא – המשתמש כבר רשום והקוד כבר הוצמד, ממשיכים כרגיל.
-3. אם לא נמצא – בודקים אם ה-chat_id קיים בעמודה 1 של גיליון user_states.
-4. אם נמצא – המשתמש התחיל תהליך רישום אבל עדיין לא אישר קוד/תנאים, ממשיכים בתהליך.
-5. אם לא נמצא גם שם – זה פנייה ראשונה אי פעם של המשתמש:
-     - מוסיפים שורה חדשה לגיליון user_states – עמודה A: chat_id, עמודה B: code_try (תמיד 0).
-     - מכאן ממשיכים בתהליך onboarding.
-# This logic ensures new users are registered to user_states only on their first-ever interaction.
+מה עושה הקובץ ולמה:
+==================
+מנהל את כל הגישה ל-Google Sheets עבור הבוט. כאן נמצאת הלוגיקה שמזהה אם משתמש פונה בפעם הראשונה (Onboarding), מזהה אם יש לו הרשאה, רושמת אותו ב-user_states רק אם באמת זו פנייה ראשונה אי-פעם, ומבצעת עדכונים בגיליונות.
+המטרה: שכל מה שקשור לגישה והרשאות יעבוד בצורה ברורה, מתועדת ומבוקרת — כולל לוגים ופרינט בכל שלב.
+
+למה בודקים גם בגיליון 1 וגם ב-user_states?
+-----------------------------------------
+אנחנו רוצים לדעת אם המשתמש נכנס בפעם הראשונה בחייו לצ'אט, ולכן:
+- קודם כל בודקים האם ה-chat_id של המשתמש קיים בעמודה הראשונה של גיליון 1 (access_codes).
+- אם לא מצאנו אותו שם, בודקים אם הוא קיים בעמודה הראשונה של גיליון user_states.
+- אם לא מצאנו אותו גם שם — זו הפעם הראשונה של המשתמש בצ'אט! נרשום אותו ב-user_states עם code_try=0.
+
+כל פונקציה כאן כוללת תיעוד ולוגיקה ברורה למה אנחנו עושים את מה שעושים.
 """
+
 from config import setup_google_sheets, SUMMARY_FIELD
 
 # יצירת חיבור לגיליונות
+# חשוב! setup_google_sheets צריך להחזיר (sheet_users, sheet_log, sheet_states)
 sheet_users, sheet_log, sheet_states = setup_google_sheets()
 
 def find_chat_id_in_sheet(sheet, chat_id, col=1):
     """
-    מחפש chat_id בעמודה הנתונה (ברירת מחדל: עמודה 1) בגיליון.
+    מחפש chat_id בעמודה הנתונה בגיליון (ברירת מחדל: עמודה 1).
+    למה? כדי לדעת אם המשתמש כבר מוכר במערכת.
     """
     try:
         values = sheet.col_values(col)
         for v in values[1:]:  # דילוג על כותרת
             if str(v).strip() == str(chat_id).strip():
+                print(f"[find_chat_id_in_sheet] נמצא chat_id {chat_id} בעמודה {col}")
                 return True
+        print(f"[find_chat_id_in_sheet] לא נמצא chat_id {chat_id} בעמודה {col}")
         return False
     except Exception as e:
         print(f"שגיאה בחיפוש chat_id בגיליון: {e}")
@@ -32,19 +41,22 @@ def find_chat_id_in_sheet(sheet, chat_id, col=1):
 
 def ensure_user_state_row(sheet_users, sheet_states, chat_id):
     """
-    מממש את הלוגיקה: רושם משתמש חדש ב-user_states רק אם לא קיים באף גיליון.
-    מחזיר True אם נוצרה שורה חדשה, False אם כבר קיים.
+    לוגיקת Onboarding — רושם משתמש חדש ב-user_states רק אם לא קיים לא בגיליון 1 ולא ב-user_states.
+    למה? כי רק אם זו פנייה ראשונה אי-פעם, יש לרשום את המשתמש ב-user_states עם code_try=0.
+    מחזיר True אם נוצרה שורה חדשה (פנייה ראשונה). אחרת False.
     """
-    # 1. בדיקה בגיליון 1 (access_codes) – עמודה 1
+    # בדיקה בגיליון 1 (access_codes) — עמודה 1
     if find_chat_id_in_sheet(sheet_users, chat_id, col=1):
-        return False  # כבר רשום במערכת (לא פנייה ראשונה)
-    # 2. בדיקה ב-user_states – עמודה 1
+        print(f"[ensure_user_state_row] chat_id {chat_id} נמצא בגיליון 1 — לא פנייה ראשונה.")
+        return False
+    # בדיקה ב-user_states — עמודה 1
     if find_chat_id_in_sheet(sheet_states, chat_id, col=1):
-        return False  # התחיל תהליך רישום קודם
-    # 3. לא נמצא – פנייה ראשונה: יצירת שורה חדשה
+        print(f"[ensure_user_state_row] chat_id {chat_id} כבר קיים ב-user_states — לא פנייה ראשונה.")
+        return False
+    # לא נמצא — פנייה ראשונה אי-פעם: יצירת שורה חדשה
     try:
-        sheet_states.append_row([str(chat_id), 0])  # code_try=0 בפנייה ראשונה
-        print(f"✅ נרשם chat_id {chat_id} ל-user_states (פנייה ראשונה, code_try=0)")
+        sheet_states.append_row([str(chat_id), 0])
+        print(f"[ensure_user_state_row] ✅ נרשם chat_id {chat_id} ל-user_states (פנייה ראשונה, code_try=0)")
         return True
     except Exception as e:
         print(f"שגיאה ביצירת שורה חדשה ב-user_states: {e}")
@@ -52,11 +64,10 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
 
 def get_user_summary(chat_id):
     """
-    מחזיר את הסיכום של המשתמש מגיליון המשתמשים
+    מחזיר את הסיכום של המשתמש מגיליון המשתמשים (למטרות קונטקסט ל-GPT).
     """
     try:
         all_records = sheet_users.get_all_records()
-        
         for row in all_records:
             if str(row.get("chat_id")) == str(chat_id):
                 summary = row.get("summery", "").strip()
@@ -69,7 +80,8 @@ def get_user_summary(chat_id):
 
 def update_user_profile(chat_id, field_values):
     """
-    מעדכן פרופיל משתמש בגיליון המשתמשים
+    מעדכן פרופיל משתמש בגיליון המשתמשים.
+    לכל שדה שמעודכן — מתעדכן גם סיכום רגשי.
     """
     try:
         print(f"🔄 מעדכן פרופיל למשתמש {chat_id} עם שדות: {field_values}")
@@ -118,11 +130,11 @@ def update_user_profile(chat_id, field_values):
 
 def compose_emotional_summary(row):
     """
-    יוצר סיכום רגשי מפרטי המשתמש
+    יוצר סיכום רגשי מפרטי המשתמש (עבור קונטקסט ל-GPT).
     """
     parts = []
 
-    # גיל - תמיד ראשו
+    # גיל - תמיד ראשון
     age = row.get("age", "").strip()
     if age and str(age) != "":
         parts.append(f"בן {age}")
@@ -201,7 +213,8 @@ def compose_emotional_summary(row):
 def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary, 
                  main_usage, summary_usage, extract_usage, total_tokens, cost_usd, cost_ils):
     """
-    שומר את כל הנתונים בגיליון הלוגים
+    שומר את כל נתוני השיחה בגיליון הלוגים.
+    לוגיקה: כל שיחה, כל עלות, כל סיכום — הכל מתועד בלוגיים.
     """
     try:
         sheet_log.append_row([
@@ -239,6 +252,10 @@ def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary,
         raise
 
 def check_user_access(sheet, chat_id):
+    """
+    בודק אם למשתמש יש הרשאה בגיליון 1 ומחזיר את הסטטוס.
+    לוגיקה: אם chat_id קיים — מחזירים קוד ומצב אישור.
+    """
     try:
         records = sheet.get_all_records()
         for row in records:
@@ -252,27 +269,38 @@ def check_user_access(sheet, chat_id):
         return False, None, False
 
 def register_user(sheet, chat_id, code_input):
+    """
+    מאפשר רישום משתמש חדש בגיליון 1 אם הקוד תקין.
+    לוגיקה: מוצא קוד פנוי ורושם שם את ה-chat_id.
+    """
     try:
         codes = sheet.col_values(1)  # עמודה A = access_code
         for i, code in enumerate(codes, start=2):  # שורה 2 ומעלה
             existing_id = sheet.cell(i, 3).value  # עמודה C = chat_id
             if code.strip() == code_input.strip() and (existing_id is None or existing_id == ""):
                 sheet.update_cell(i, 3, str(chat_id))  # מכניס את ה-chat_id לעמודה C
+                print(f"[register_user] קוד {code_input} אושר ל-chat_id {chat_id}")
                 return True
+        print(f"[register_user] קוד {code_input} לא תקין או כבר שויך")
         return False
     except Exception as e:
         print(f"שגיאה ברישום קוד גישה: {e}")
         return False
 
 def approve_user(sheet, chat_id):
-    """מסמן בטבלה שהמשתמש אישר תנאים"""
+    """
+    מסמן בטבלה שהמשתמש אישר תנאים.
+    לוגיקה: עדכון עמודת 'approved' בהתאם ל-chat_id.
+    """
     try:
         cell = sheet.find(str(chat_id))
         if cell:
             header_cell = sheet.find("approved")  # עמודת "אישר תנאים?"
             if header_cell:
                 sheet.update_cell(cell.row, header_cell.col, "TRUE")
+                print(f"[approve_user] משתמש {chat_id} אישר תנאים.")
                 return True
+        print(f"[approve_user] לא נמצא chat_id {chat_id} או עמודה מתאימה")
         return False
     except Exception as e:
         print(f"❌ approve_user error: {e}")
