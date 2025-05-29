@@ -53,6 +53,26 @@ from sheets_handler import (
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 
+def connect_google_sheets(): #מתחבר לשיטס
+    try:
+        logging.info("🔗 מתחבר ל-Google Sheets...")
+        print("🔗 מתחבר ל-Google Sheets...")
+        import gspread
+        from oauth2client.service_account import ServiceAccountCredentials
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
+        sheet = gspread.authorize(creds).open_by_key("1qt5kEPu_YJcbpQNaMdz60r1JTSx9Po89yOIfyV80Q-c").worksheet("גיליון1")
+        sheet_states = gspread.authorize(creds).open_by_key("1qt5kEPu_YJcbpQNaMdz60r1JTSx9Po89yOIfyV80Q-c").worksheet("user_states")
+        app.bot_data["sheet"] = sheet
+        app.bot_data["sheet_states"] = sheet_states
+        logging.info("✅ חיבור ל-Google Sheets בוצע בהצלחה")
+        print("✅ חיבור ל-Google Sheets בוצע בהצלחה")
+    except Exception as ex:
+        logging.critical(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
+        print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
+        raise
+
+
 # יצירת וובהוק ליתר ביטחון
 def set_telegram_webhook():
     """
@@ -372,6 +392,7 @@ async def main():
     """
     אתחול הבוט: חיבור ל-Telegram ול-Google Sheets, הגדרת handlers, ניהול לוגים.
     """
+    connect_google_sheets()
     logging.info("========== אתחול הבוט ==========")
     print("========== אתחול הבוט ==========")
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
@@ -399,25 +420,6 @@ async def main():
     except Exception as ex:
         logging.critical(f"❌ שגיאה ביצירת האפליקציה: {ex}")
         print(f"❌ שגיאה ביצירת האפליקציה: {ex}")
-        raise
-
-    # חיבור ל-Google Sheets (ודא שמחזיר גם sheet_states!)
-    try:
-        logging.info("🔗 מתחבר ל-Google Sheets...")
-        print("🔗 מתחבר ל-Google Sheets...")
-        import gspread
-        from oauth2client.service_account import ServiceAccountCredentials
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
-        sheet = gspread.authorize(creds).open_by_key("1qt5kEPu_YJcbpQNaMdz60r1JTSx9Po89yOIfyV80Q-c").worksheet("גיליון1")
-        sheet_states = gspread.authorize(creds).open_by_key("1qt5kEPu_YJcbpQNaMdz60r1JTSx9Po89yOIfyV80Q-c").worksheet("user_states")
-        app.bot_data["sheet"] = sheet
-        app.bot_data["sheet_states"] = sheet_states
-        logging.info("✅ חיבור ל-Google Sheets בוצע בהצלחה")
-        print("✅ חיבור ל-Google Sheets בוצע בהצלחה")
-    except Exception as ex:
-        logging.critical(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
-        print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         raise
 
     logging.info("🚦 הבוט מוכן ומחכה להודעות! (Ctrl+C לעצירה)")
