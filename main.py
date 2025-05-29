@@ -6,10 +6,10 @@ main.py — הבוט הראשי של הצ'אט
 אנחנו רוצים לדעת אם המשתמש נכנס בפעם הראשונה בחייו לצ'אט, ולכן:
 1. בכל הודעה נכנסת, אנחנו קודם כל בודקים האם ה-chat_id של המשתמש קיים בעמודה הראשונה של גיליון 1 (access_codes).
 2. אם לא מצאנו אותו שם, בודקים אם הוא קיים בעמודה הראשונה של גיליון user_states.
-3. אם לא מצאנו אותו גם שם — זו הפעם הראשונה של המשתמש בצ'אט! נרשום אותו ב-user_states עם code_try=0 ונשלח לו הודעת קבלת פנים ("היי מלך!").
+3. אם לא מצאנו אותו גם שם — זו הפעם הראשונה של המשתמש בצ'אט! נרשום אותו ב-user_states עם code_try=0 ונשלח לו הודעת קבלת פנים.
 4. אם המשתמש כן קיים באחד הגיליונות, ממשיכים בתהליך הרגיל (בדיקת הרשאות, קוד גישה, אישור תנאים וכו').
 
-כל לוגיקה של שליחת הודעות, ניהול משתמשים, שמירת היסטוריה, חישוב עלויות ועוד — הכל מתועד בלוג (לקובץ ולמסך) ובדוקומנטציה בראש כל פונקציה.
+כל לוגיקה של שליחת הודעות, ניהול משתמשים, שמירת היסטוריה, חישוב עלויות ועוד — הכל מתועד בלוג (לקובץ ולמסך) ובדו...
 מטרת התיעוד היא שלא תצטרך להסביר שוב את ההיגיון — הכל כתוב בקוד.
 
 # DummyContext:
@@ -39,9 +39,11 @@ from sheets_handler import increment_code_try
 
 app_fastapi = FastAPI()
 
+
 class DummyContext:
     def __init__(self, bot_data):
         self.bot_data = bot_data
+
 
 # ייבוא המחלקות השונות
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
@@ -53,6 +55,7 @@ from sheets_handler import (
 )
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
+
 
 def connect_google_sheets():
     try:
@@ -72,7 +75,10 @@ def connect_google_sheets():
         logging.critical(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         raise
+
+
 connect_google_sheets()
+
 
 def set_telegram_webhook():
     """
@@ -91,6 +97,7 @@ def set_telegram_webhook():
     except Exception as e:
         print("❌ שגיאה:", e)
 
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -99,6 +106,7 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- התחלת טיפול בהודעה ----")
@@ -163,7 +171,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_critical_error(ex, chat_id, user_msg, update)
         return
 
-    
     # בדיקה שהמשתמש קיים ולקבל פרטי גישה
     try:
         logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
@@ -178,26 +185,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # אם המשתמש לא קיים - מנסים לרשום אותו עם הקוד שהוא כתב (כל טקסט יקבל מענה)
-      # שלב 3: טיפול ברישום משתמש חדש (הכנסת קוד)
+    # שלב 3: טיפול ברישום משתמש חדש (הכנסת קוד)
     if not exists:
         logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
         print(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
         try:
-            # קודם כל נקבל את ערך code_try הנוכחי (או 0 אם אין)
-            # לצורך זה יש פונקציה ב-sheets_handler בשם get_code_try או נעשה בדיקה ידנית שם
-            # אבל אם אין לך פונקציה כזאת, נניח שה-increment_code_try עושה את זה
-            # אנחנו לא נגדיל את code_try לפני שננסה להקליד קוד בפעם הראשונה (כלומר אם code_try==0)
-            # אז אם code_try == 0 וניסיון להקליד קוד, אז מעלים ל-1
-            # בכל פעם שמקלידים קוד נוסף מעלים ב-1 את code_try
-            
             current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
             if current_try is None:
                 current_try = 0  # להתחלה
-            
-            # אם זה ניסיון ראשון (0) - מעלים ל-1 עכשיו כי מנסים להקליד קוד בפעם הראשונה
+
             if current_try == 0:
                 current_try = 1
-            
+
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
                 logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
                 print(f"✅ קוד גישה אושר למשתמש {chat_id}")
@@ -214,33 +213,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 keyboard = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("✅ קראתי את הכל ואני מאשר", callback_data="approve_yes"),
-                    InlineKeyboardButton("❌ לא מאשר", callback_data="approve_no"),
-                ]
+                    [
+                        InlineKeyboardButton("✅ קראתי את הכל ואני מאשר", callback_data="approve_yes"),
+                        InlineKeyboardButton("❌ לא מאשר", callback_data="approve_no"),
+                    ]
                 ])
-
-await update.message.reply_text(approval_text, reply_markup=keyboard)
+                await update.message.reply_text(approval_text, reply_markup=keyboard)
 
                 logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
                 print("📤 נשלחה הודעת אישור קוד למשתמש")
             else:
                 logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
                 print(f"❌ קוד גישה לא תקין עבור {chat_id}")
-                
+
                 # שולחים הודעה בהתאם ל־current_try (המספר של הניסיון הנוכחי)
                 if current_try == 1:
-                    # ניסיון ראשון להקליד קוד, שולחים הודעה ראשונה (אפשר בלי הודעה, או עם הודעה ספציפית)
-                    await update.message.reply_text(" סליחה, לא הצלחתי לקלוט את הקוד נכון...🧐\nתוודא שאתה כותב את הספרות בדיוק כמו שמופיע בחשבונית שרכשת את הקורס (אם אין לך — תכתוב לעומר והוא יתן לך קוד!)")
+                    await update.message.reply_text(
+                        "סליחה, לא הצלחתי לקלוט את הקוד נכון...🧐\nתוודא שאתה כותב את הספרות בדיוק כמו שמופיע בהודעה."
+                    )
                 elif current_try == 2:
-                    await update.message.reply_text(" אוף... משהו עדיין לא נכון...🥴\nתבדוק שוב שאתה כותב את זה נכון, ושהקוד תואם בדיוק למה שקיבלת — רק ספרות, בלי תווים מיותרים.")
+                    await update.message.reply_text(
+                        "אוף... משהו עדיין לא נכון...🥴\nתבדוק שוב שאתה כותב את זה נכון, ושהקוד תואם בדיוק למספר שקיבלת."
+                    )
                 elif current_try == 3:
-                    await update.message.reply_text(" לא מצליח לקלוט את הקוד...🙈\nבוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא, רק ספרות.")
+                    await update.message.reply_text(
+                        "לא מצליח לקלוט את הקוד...🙈\nבוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא, רק ספרות."
+                    )
                 elif current_try >= 4:
-                    await update.message.reply_text("🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך 💬")
-                else:
-                    # אם משהו יוצא דופן, לא שולחים הודעה נוספת
-                    pass
+                    await update.message.reply_text(
+                        "🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך."
+                    )
+                # else: אם משהו יוצא דופן, לא שולחים הודעה נוספת
 
                 logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
                 print("📤 נשלחה הודעת קוד לא תקין למשתמש")
@@ -257,9 +260,8 @@ await update.message.reply_text(approval_text, reply_markup=keyboard)
         print("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
         return
 
-
     # המשתמש קיים, ממשיכים
-  
+
     # שלב 2: בדיקת הרשאות משתמש (שוב, לוודא)
     try:
         logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
@@ -428,8 +430,6 @@ await update.message.reply_text(approval_text, reply_markup=keyboard)
     logging.info("---- סיום טיפול בהודעה ----")
     print("---- סיום טיפול בהודעה ----")
 
-    
-    
 
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
@@ -444,24 +444,22 @@ async def webhook(request: Request):
         return {"error": str(ex)}
 
 
-
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        await query.answer()
-    
-        chat_id = query.message.chat.id
-    
-        if query.data == "approve_yes":
-            success = approve_user(context.bot_data["sheet"], chat_id)
-            if success:
-                await query.edit_message_text("תודה רבה! עכשיו יש לך גישה מלאה. דבר אליי 🙏✨")
-            else:
-                await query.edit_message_text("❌ הייתה שגיאה בעדכון האישור, אנא נסה שוב.")
-        elif query.data == "approve_no":
-            await query.edit_message_text("הבנת שלא אישרת את התנאים. אין גישה לשירות כרגע.")
+    query = update.callback_query
+    await query.answer()
+
+    chat_id = query.message.chat.id
+
+    if query.data == "approve_yes":
+        success = approve_user(context.bot_data["sheet"], chat_id)
+        if success:
+            await query.edit_message_text("תודה רבה! עכשיו יש לך גישה מלאה. דבר אליי 🙏✨")
         else:
-            await query.edit_message_text("❌ פעולה לא מוכרת.")
-    
+            await query.edit_message_text("❌ הייתה שגיאה בעדכון האישור, אנא נסה שוב.")
+    elif query.data == "approve_no":
+        await query.edit_message_text("הבנת שלא אישרת את התנאים. אין גישה לשירות כרגע.")
+    else:
+        await query.edit_message_text("❌ פעולה לא מוכרת.")
 
 
 async def main():
