@@ -64,6 +64,30 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
         print(f"שגיאה ביצירת שורה חדשה ב-user_states: {e}")
         return False
 
+
+def increment_code_try(sheet_states, chat_id):
+    """
+    מעלה את ערך code_try ב-user_states ב-1 למשתמש הרלוונטי.
+    """
+    try:
+        records = sheet_states.get_all_records()
+        header = sheet_states.row_values(1)
+        for idx, row in enumerate(records):
+            if str(row.get("chat_id")) == str(chat_id):
+                current_try = int(row.get("code_try", 0))
+                new_try = current_try + 1
+                col_index = header.index("code_try") + 1
+                sheet_states.update_cell(idx + 2, col_index, new_try)
+                return new_try
+        # אם לא קיים, תוסיף שורה חדשה (לא אמור לקרות אבל שיהיה)
+        sheet_states.append_row([str(chat_id), 1])
+        return 1
+    except Exception as e:
+        print(f"שגיאה בהעלאת code_try: {e}")
+        return None
+
+
+
 def get_user_summary(chat_id):
     """
     מחזיר את הסיכום של המשתמש מגיליון המשתמשים.
