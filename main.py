@@ -326,7 +326,7 @@ async def webhook(request: Request):
     try:
         data = await request.json()
         update = Update.de_json(data, app.bot)
-        await handle_message(update, ContextTypes.DEFAULT_TYPE(bot=app.bot))
+        await handle_message(update, await app.get_update_context(update))
         return {"ok": True}
     except Exception as ex:
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
