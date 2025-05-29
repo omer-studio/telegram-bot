@@ -71,6 +71,7 @@ def connect_google_sheets(): #מתחבר לשיטס
         logging.critical(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         raise
+connect_google_sheets()
 
 
 # יצירת וובהוק ליתר ביטחון
@@ -392,7 +393,6 @@ async def main():
     """
     אתחול הבוט: חיבור ל-Telegram ול-Google Sheets, הגדרת handlers, ניהול לוגים.
     """
-    connect_google_sheets()
     logging.info("========== אתחול הבוט ==========")
     print("========== אתחול הבוט ==========")
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
