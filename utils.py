@@ -22,7 +22,7 @@ def log_event_to_file(log_data):
             lines = []
         
         # הוספת לוג חדש
-        lines.append(json.dumps(log_data, ensure_ascii=False, indent=2))
+        lines.append(json.dumps(log_data, ensure_ascii=False))
         
         # שמירה על מגבלת הלוגים
         lines = lines[-LOG_LIMIT:]
