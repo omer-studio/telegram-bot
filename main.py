@@ -340,12 +340,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
         print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
 
-        logging.info("✂️ מקצר את התשובה...")
-        print("✂️ מקצר את התשובה...")
-        summary_response = summarize_bot_reply(reply_text)
-        reply_summary, sum_prompt, sum_completion, sum_total, sum_model = summary_response
-        logging.info(f"סיכום תשובה: {reply_summary!r}")
-        print(f"סיכום תשובה: {reply_summary!r}")
+        num_words = len(reply_text.split())
+        if num_words > 50:
+            logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
+            summary_response = summarize_bot_reply(reply_text)
+            reply_summary, sum_prompt, sum_completion, sum_total, sum_model = summary_response
+         else:
+            logging.info(f"✂️ התשובה קצרה - לא מבצע סיכום ({num_words} מילים)")
+            reply_summary = reply_text
+            sum_prompt = sum_completion = sum_total = 0
+            sum_model = ""
+
 
         logging.info("📤 שולח תשובה למשתמש...")
         print("📤 שולח תשובה למשתמש...")
