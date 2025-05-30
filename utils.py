@@ -66,8 +66,8 @@ def update_chat_history(chat_id, user_msg, bot_summary):
             "timestamp": datetime.now().isoformat()
         })
 
-        # שמירה על 5 הודעות אחרונות בלבד
-        history_data[chat_id]["history"] = history_data[chat_id]["history"][-5:]
+        # שמירה על 300 הודעות אחרונות בלבד
+        history_data[chat_id]["history"] = history_data[chat_id]["history"][-300:]
 
         # שמירה חזרה לקובץ
         with open(file_path, "w", encoding="utf-8") as f:
@@ -96,9 +96,11 @@ def get_chat_history_messages(chat_id):
         return []
     
     messages = []
-    for entry in history_data[chat_id]["history"]:
+    last_entries = history_data[chat_id]["history"][-5:]
+    for entry in last_entries:
         messages.append({"role": "user", "content": entry["user"]})
         messages.append({"role": "assistant", "content": entry["bot"]})
+
     
     print(f"📖 נטענו {len(messages)//2} הודעות מההיסטוריה של {chat_id}")
     return messages
