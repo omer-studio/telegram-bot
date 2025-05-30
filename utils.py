@@ -85,7 +85,7 @@ def get_chat_history_messages(chat_id):
     מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT
     """
     try:
-        with open("chat_history.json", encoding="utf-8") as f:
+        with open("/data/chat_history.json", encoding="utf-8") as f:
             history_data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
@@ -109,7 +109,7 @@ def get_user_stats(chat_id):
     מחזיר סטטיסטיקות על המשתמש
     """
     try:
-        with open("chat_history.json", encoding="utf-8") as f:
+        with open("/data/chat_history.json", encoding="utf-8") as f:
             history_data = json.load(f)
         
         chat_id = str(chat_id)
