@@ -12,29 +12,31 @@ def log_event_to_file(log_data):
     רושם אירועים לקובץ הלוגים הראשי
     """
     try:
+        file_path = "/data/bot_trace_log.jsonl"
         log_data["timestamp_end"] = datetime.now().isoformat()
-        
+
         # קריאת לוגים קיימים
-        if os.path.exists(LOG_FILE_PATH):
-            with open(LOG_FILE_PATH, "r", encoding="utf-8") as f:
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
         else:
             lines = []
-        
+
         # הוספת לוג חדש
-        lines.append(json.dumps(log_data, ensure_ascii=False))
-        
-        # שמירה על מגבלת הלוגים
-        lines = lines[-LOG_LIMIT:]
-        
+        lines.append(json.dumps(log_data, ensure_ascii=False, indent=2))
+
+        # שמירה על מגבלת הלוגים (למשל 200)
+        lines = lines[-200:]
+
         # שמירה חזרה לקובץ
-        with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
-            
-        print(f"📝 לוג נשמר: {LOG_FILE_PATH}")
-        
+
+        print(f"📝 לוג נשמר: {file_path}")
+
     except Exception as e:
         print(f"❌ שגיאה בשמירת לוג: {e}")
+
 
 
 def update_chat_history(chat_id, user_msg, bot_summary):
@@ -42,37 +44,40 @@ def update_chat_history(chat_id, user_msg, bot_summary):
     מעדכן את היסטוריית השיחה של המשתמש
     """
     try:
+        file_path = "/data/chat_history.json"
+
         # טעינת היסטוריה קיימת
         try:
-            with open("chat_history.json", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 history_data = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             history_data = {}
-        
+
         chat_id = str(chat_id)
-        
+
         # יצירת היסטוריה חדשה למשתמש אם לא קיימת
         if chat_id not in history_data:
             history_data[chat_id] = {"am_context": "", "history": []}
-        
+
         # הוספת האירוע החדש
         history_data[chat_id]["history"].append({
-            "user": user_msg, 
+            "user": user_msg,
             "bot": bot_summary,
             "timestamp": datetime.now().isoformat()
         })
-        
+
         # שמירה על 5 הודעות אחרונות בלבד
         history_data[chat_id]["history"] = history_data[chat_id]["history"][-5:]
-        
+
         # שמירה חזרה לקובץ
-        with open("chat_history.json", "w", encoding="utf-8") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(history_data, f, ensure_ascii=False, indent=2)
-            
+
         print(f"📚 היסטוריה עודכנה למשתמש {chat_id}")
-        
+
     except Exception as e:
         print(f"❌ שגיאה בעדכון היסטוריה: {e}")
+
 
 
 def get_chat_history_messages(chat_id):
