@@ -21,6 +21,10 @@ def get_main_response(full_messages):
     GPT ראשי - נותן תשובה למשתמש
     """
     try:
+        print("🔍 נשלח ל־GPT:")
+        for m in full_messages:
+            print(f"{m['role']}: {m['content']}")
+
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=full_messages,
