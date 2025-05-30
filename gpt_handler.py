@@ -30,6 +30,20 @@ def get_main_response(full_messages):
             messages=full_messages,
             temperature=1,
         )
+                # לוג מלא של GPT
+        from utils import log_event_to_file
+        log_event_to_file({
+            "event": "gpt_main_call",
+            "gpt_input": full_messages,
+            "gpt_reply": response.choices[0].message.content,
+            "model": response.model,
+            "usage": {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        })
+
         return (
             response.choices[0].message.content,
             response.usage.prompt_tokens,
