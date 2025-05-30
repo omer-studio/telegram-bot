@@ -345,7 +345,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
             summary_response = summarize_bot_reply(reply_text)
             reply_summary, sum_prompt, sum_completion, sum_total, sum_model = summary_response
-         else:
+        else:
             logging.info(f"✂️ התשובה קצרה - לא מבצע סיכום ({num_words} מילים)")
             reply_summary = reply_text
             sum_prompt = sum_completion = sum_total = 0
