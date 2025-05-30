@@ -1,4 +1,4 @@
-"""
+FS"""
 מחלקת AI - כל פונקציות ה-GPT במקום אחד
 """
 import json
@@ -39,9 +39,14 @@ def get_main_response(full_messages):
 
 def summarize_bot_reply(reply_text):
     """
-    GPT מקצר - מקצר את תשובת הבוט
+    GPT מקצר - תמצות תשובת הבוט בסגנון חם ובגובה העיניים
     """
-    system_prompt = "תמצת את משמעות ההודעה במשפט קצר (עד 10 מילים). בלי ציטוטים, בלי ניתוחים – רק תיאור יבש של מהות ההודעה."
+    system_prompt = (
+        "סכם את ההודעה שלי כאילו אני מדבר עם חבר: "
+        "משפט אחד חם ואישי בסגנון חופשי (לא תיאור יבש), בגוף ראשון, כולל אמירה אישית קצרה על מהות התגובה שלי, "
+        "ואז את השאלה ששאלתי אם יש, בצורה חמה וזורמת, עד 20 מילים בסך הכל. תשלב אימוג'י רלוונטי אם מתאים, כמו שמדברים בווטסאפ. "
+        "אל תעשה ניתוחים טכניים או תיאור של הודעה – ממש תכתוב את זה כמו הודעת וואטסאפ קצרה, בגוף ראשון, בסגנון חופשי וקליל."
+    )
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -49,8 +54,8 @@ def summarize_bot_reply(reply_text):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": reply_text}
             ],
-            temperature=0.2,
-            max_tokens=30
+            temperature=0.6,
+            max_tokens=40
         )
         return (
             response.choices[0].message.content.strip(),
@@ -62,6 +67,7 @@ def summarize_bot_reply(reply_text):
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
+
 
 def extract_user_profile_fields(text):
     """
