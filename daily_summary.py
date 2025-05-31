@@ -13,7 +13,7 @@ if not os.path.exists(GPT_LOG_PATH):
         pass  # פשוט יוצר קובץ ריק
 
 from telegram import Bot
-from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, TELEGRAM_BOT_TOKEN, ADMIN_NOTIFICATION_CHAT_ID
+from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID
 
 bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 
