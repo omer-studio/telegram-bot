@@ -54,7 +54,7 @@ def setup_google_sheets():
 
 # שדות פרופיל משתמש
 PROFILE_FIELDS = ["age", "closet_status", "relationship_type", "religious_context", "occupation_or_role", "attracted_to"]
-SUMMARY_FIELD = "summery"
+SUMMARY_FIELD = "summary"
 
 # הגדרות לוגים
 LOG_FILE_PATH = "bot_trace_log.jsonl"
