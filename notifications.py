@@ -5,7 +5,7 @@ import json
 import os
 from datetime import datetime
 import requests
-from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_TELEGRAM_TOKEN, TELEGRAM_BOT_TOKEN
+from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, TELEGRAM_BOT_TOKEN
 
 def write_deploy_commit_to_log(commit):
     log_file = "/data/bot_trace_log.jsonl"
@@ -124,7 +124,7 @@ def send_error_notification(error_msg, chat_id=None, user_msg=None, error_type="
         if len(str(error_msg)) > 400:
             notification_text += "...\n\n📄 השגיאה המלאה נשמרה בקובץ הלוגים"
 
-        url = f"https://api.telegram.org/bot{ADMIN_TELEGRAM_TOKEN}/sendMessage"
+        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         data = {
             "chat_id": ERROR_NOTIFICATION_CHAT_ID,
             "text": notification_text,
@@ -148,7 +148,7 @@ def send_admin_notification(message, urgent=False):
         prefix = "🚨 הודעה דחופה לאדמין: 🚨" if urgent else "ℹ️ הודעה לאדמין:"
         notification_text = f"{prefix}\n\n{message}\n\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
 
-        url = f"https://api.telegram.org/bot{ADMIN_TELEGRAM_TOKEN}/sendMessage"
+        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         data = {
             "chat_id": ERROR_NOTIFICATION_CHAT_ID,
             "text": notification_text,
@@ -169,7 +169,7 @@ def log_error_to_file(error_data):
     רושם שגיאות לקובץ נפרד ב־/data וגם שולח טלגרם לאדמין
     """
     import requests
-    from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_TELEGRAM_TOKEN
+    from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
 
     try:
         error_file = "/data/bot_errors.jsonl"
@@ -203,7 +203,7 @@ def log_error_to_file(error_data):
             f"הודעה: {str(error_data.get('user_msg', ''))[:80]}\n"
         )
 
-        url = f"https://api.telegram.org/bot{ADMIN_TELEGRAM_TOKEN}/sendMessage"
+        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         data = {
             "chat_id": ERROR_NOTIFICATION_CHAT_ID,
             "text": msg
