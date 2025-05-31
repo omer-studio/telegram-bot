@@ -266,34 +266,35 @@ def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary,
     לוגיקה: כל שיחה, כל עלות, כל סיכום — הכל מתועד בלוגיים.
     """
     try:
-        sheet_log.append_row([
-            message_id,                       # A: MASSAGE ID
-            chat_id,                          # B: CHAT ID  
-            user_msg,                         # C: משתמש כתב
-            "",                              # D: תימצות משתמש (ריק)
-            reply_text,                       # E: בוט ענה
-            reply_summary,                    # F: בוט תימצת
-            "", "", "", "", "",               # G-K: שדות ריקים
-            total_tokens,                     # L: סהכ טוקנים
-            "", "",                           # M-N: ריקות
-            "",                              # O: CACHED טוקנים
-            cost_usd,                         # P: עלות בדולר
-            cost_ils,                         # Q: עלות בשקל
-            main_usage[0],                    # R: GPT ראשי - prompt tokens
-            main_usage[1],                    # S: GPT ראשי - completion tokens  
-            main_usage[2],                    # T: GPT ראשי - total tokens
-            main_usage[4],                    # U: GPT ראשי - מודל
-            summary_usage[1],                 # V: GPT מקצר - prompt tokens
-            summary_usage[2],                 # W: GPT מקצר - completion tokens
-            summary_usage[3],                 # X: GPT מקצר - total tokens  
-            summary_usage[4],                 # Y: GPT מקצר - מודל
-            extract_usage["prompt_tokens"],   # Z: GPT מחלץ - prompt tokens
-            extract_usage["completion_tokens"], # AA: GPT מחלץ - completion tokens
-            extract_usage["total_tokens"],    # AB: GPT מחלץ - total tokens
-            extract_usage["model"],           # AC: GPT מחלץ - מודל
-            "", "", "", "",                   # AD-AG: ריק
-            "", "", "", "", ""                # AH-AK: ריק נוסף
-        ])
+           sheet_log.append_row([
+        message_id,      # 1
+        chat_id,         # 2
+        user_msg,        # 3
+        "",              # 4
+        reply_text,      # 5
+        reply_summary,   # 6
+        "", "", "", "", "",   # 7-11: שדות ריקים
+        total_tokens,    # 12
+        "", "",          # 13-14: שדות ריקים
+        "",              # 15: CACHED טוקנים
+        cost_usd,        # 16
+        cost_ils,        # 17
+        main_usage[0],   # 18
+        main_usage[1],   # 19
+        main_usage[2],   # 20
+        main_usage[4],   # 21
+        summary_usage[1], # 22
+        summary_usage[2], # 23
+        summary_usage[3], # 24
+        summary_usage[4], # 25
+        extract_usage["prompt_tokens"],      # 26
+        extract_usage["completion_tokens"],  # 27
+        extract_usage["total_tokens"],       # 28
+        extract_usage["model"],              # 29
+        "", "", "", "",                     # 30-33: ריק
+        "",                                 # 34: ריק
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 35 - זה עמודה AI!!!
+    ])
         print("✅ נתונים נשמרו בגיליון הלוגים")
         return True
     except Exception as e:
