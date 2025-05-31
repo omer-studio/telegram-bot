@@ -5,7 +5,7 @@ import json
 import os
 from datetime import datetime
 import requests
-from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_BOT_TELEGRAM_TOKEN
+from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
 
 def write_deploy_commit_to_log(commit):
     log_file = "/data/bot_trace_log.jsonl"
