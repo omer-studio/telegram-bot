@@ -6,6 +6,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from openai import OpenAI
 
+
 # טעינת קונפיגורציה
 def load_config():
     """טוען את קובץ הקונפיגורציה"""
@@ -24,6 +25,7 @@ SYSTEM_PROMPT = load_system_prompt()
 # טוקנים וזיהויים
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
+OPENAI_ADMIN_KEY = config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY)
 GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 
 # הגדרות התראות שגיאות
