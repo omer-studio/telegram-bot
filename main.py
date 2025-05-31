@@ -465,6 +465,8 @@ async def webhook(request: Request):
 
 async def main():
     from daily_summary import schedule_daily_summary
+    from notifications import send_deploy_notification
+    send_deploy_notification(success=True)
     asyncio.create_task(schedule_daily_summary())
 
     logging.info("========== אתחול הבוט ==========")
