@@ -460,10 +460,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- סיום טיפול בהודעה ----")
     print("---- סיום טיפול בהודעה ----")
 
-
-    asyncio.create_task(delayed_daily_summary())
-
-
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
     try:
