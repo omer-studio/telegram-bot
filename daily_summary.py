@@ -4,6 +4,14 @@ import asyncio
 import logging
 import os
 import json
+
+GPT_LOG_PATH = "/data/gpt_usage_log.jsonl"
+
+# יצירת הקובץ אם הוא לא קיים
+if not os.path.exists(GPT_LOG_PATH):
+    with open(GPT_LOG_PATH, "w", encoding="utf-8") as f:
+        pass  # פשוט יוצר קובץ ריק
+
 from telegram import Bot
 from config import OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, ERROR_NOTIFICATION_CHAT_ID
 
@@ -37,12 +45,11 @@ async def send_daily_summary():
             n_output = item["n_output_tokens"]
 
             # --- ניתוח קובץ usage log ---
-            log_path = "/data/gpt_usage_log.jsonl"
             total_main = total_extract = total_summary = 0
             tokens_main = tokens_extract = tokens_summary = 0
 
-            if os.path.exists(log_path):
-                with open(log_path, "r", encoding="utf-8") as f:
+            if os.path.exists(GPT_LOG_PATH):
+                with open(GPT_LOG_PATH, "r", encoding="utf-8") as f:
                     for line in f:
                         try:
                             entry = json.loads(line)
@@ -82,6 +89,13 @@ async def send_daily_summary():
 
     except Exception as e:
         logging.error(f"שגיאה בשליחת סיכום יומי: {e}")
+        try:
+            await bot.send_message(
+                chat_id=ERROR_NOTIFICATION_CHAT_ID,
+                text="❗ מצטער, לא הצלחתי להפיק דוח יומי היום. בדוק את השרת או את OpenAI."
+            )
+        except Exception as telegram_error:
+            logging.error(f"שגיאה גם בשליחת הודעת שגיאה לטלגרם: {telegram_error}")
 
 async def schedule_daily_summary():
     await asyncio.sleep(50)  # מריץ עוד 50 שניות מהרגע שהבוט עלה
