@@ -7,7 +7,7 @@ from datetime import datetime
 import requests
 from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_TELEGRAM_TOKEN, TELEGRAM_BOT_TOKEN
 
-def send_deploy_notification(success=True, error_message=None):
+def send_deploy_notification(success=True, error_message=None, deploy_duration=None):
     """
     שולח הודעה לאדמין האם הפריסה החדשה הצליחה או לא, כולל פרטים וטיימסטמפ
     """
@@ -19,8 +19,9 @@ def send_deploy_notification(success=True, error_message=None):
 
     if success:
         text = (
-            f"❕הודעה לאדמין❕\n"
+            f"❕הודעה לאדמין❕\n\n"
             f"✅ פריסה חדשה הושלמה בהצלחה!\n"
+            f"זמן שלקח לפרוס: {duration_str}\n"
             f"⏰ טיימסטמפ: {timestamp}\n"
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
@@ -29,9 +30,10 @@ def send_deploy_notification(success=True, error_message=None):
         )
     else:
         text = (
-            f"❕הודעה לאדמין❕\n"
+            f"❕הודעה לאדמין❕\n\n"
             f"❌ פריסה חדשה נכשלה!\n"
             f"⏰ טיימסטמפ: {timestamp}\n"
+            f"זמן שלקח לפרוס: {duration_str}\n"
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
