@@ -480,12 +480,7 @@ async def webhook(request: Request):
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
 
-    # שליחת דוח usage יומי לאדמין — בסוף כל שיחה (עם השהייה)
-async def delayed_daily_summary():
-    print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
-    await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
-    from daily_summary import send_daily_summary
-    await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
+
 
 
 async def main():
