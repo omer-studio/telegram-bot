@@ -367,7 +367,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logging.info("📤 שולח תשובה למשתמש...")
         print("📤 שולח תשובה למשתמש...")
-        await update.message.reply_text(reply_text)
+        await update.message.reply_text(reply_text, parse_mode="Markdown")
         logging.info("📨 תשובה נשלחה למשתמש")
         print("📨 תשובה נשלחה למשתמש")
 
