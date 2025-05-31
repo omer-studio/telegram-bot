@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import json
+import time
 
 GPT_LOG_PATH = "/data/gpt_usage_log.jsonl"
 
@@ -19,19 +20,14 @@ bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 
 async def send_daily_summary():
     try:
-        # תאריך של אתמול (UTC)
+        # תאריך היום והאתמול (UTC)
         today = datetime.utcnow().date()
-        yesterday = today - timedelta(days=1)
-        start_date = end_date = yesterday.strftime("%Y-%m-%d")
+        days_to_fetch = 4  # משיכת usage ל-4 ימים אחורה
+        start_date_dt = today - timedelta(days=days_to_fetch)
+        end_date_dt = today
 
-        # --- משיכת עלות אמיתית מתוך OpenAI ---
-        headers = {
-            "Authorization": f"Bearer {OPENAI_ADMIN_KEY}"
-        }
-
-        import time
-        start_time_unix = int(time.mktime(datetime.combine(yesterday, datetime.min.time()).timetuple()))
-        end_time_unix = int(time.mktime(datetime.combine(yesterday + timedelta(days=1), datetime.min.time()).timetuple()))
+        start_time_unix = int(time.mktime(datetime.combine(start_date_dt, datetime.min.time()).timetuple()))
+        end_time_unix = int(time.mktime(datetime.combine(end_date_dt, datetime.min.time()).timetuple()))
 
         url = "https://api.openai.com/v1/organization/usage/completions"
         params = {
@@ -40,22 +36,35 @@ async def send_daily_summary():
             "interval": "1d"
         }
 
-        print(f"משיכת usage ל-{start_date} בלבד")
+        headers = {
+            "Authorization": f"Bearer {OPENAI_ADMIN_KEY}"
+        }
+
+        print(f"משיכת usage ל-{days_to_fetch} ימים אחורה מ-{start_date_dt} ועד {end_date_dt}")
         print(f"URL: {url} עם params: {params}")
 
         response = requests.get(url, headers=headers, params=params)
         print("Response status code:", response.status_code)
-        print("Response JSON:", response.json())
         data = response.json()
+        print("Response JSON:", data)
 
-        if "data" not in data or not data["data"]:
+        yesterday_str = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # סינון הנתונים ליום אתמול בלבד
+        filtered_data = []
+        for day_data in data.get("data", []):
+            day_str = datetime.utcfromtimestamp(day_data["start_time"]).strftime("%Y-%m-%d")
+            if day_str == yesterday_str:
+                filtered_data.append(day_data)
+
+        if not filtered_data:
             summary = (
                 f"❕הודעה לאדמין❕\n\n"
-                f"❌ אין נתונים זמינים מ-OPENAI ל-{start_date}\n"
+                f"❌ אין נתונים זמינים מ-OPENAI ל-{yesterday_str}\n"
                 f"באסוש... מצטער"
             )
         else:
-            usage_item = data["data"][0]["results"][0]
+            usage_item = filtered_data[0]["results"][0]
             dollar_cost = usage_item.get("cost", 0)
             shekel_cost = dollar_cost * 3.7
             model = usage_item.get("model", "unknown")
@@ -74,7 +83,7 @@ async def send_daily_summary():
                         try:
                             entry = json.loads(line)
                             timestamp = entry.get("timestamp", "")
-                            if not timestamp.startswith(start_date):
+                            if not timestamp.startswith(yesterday_str):
                                 continue
                             ttype = entry.get("type")
                             tokens = entry.get("tokens_total", 0)
@@ -94,7 +103,7 @@ async def send_daily_summary():
             total_calls = total_main + total_extract + total_summary
 
             summary = (
-                f"📅 סיכום GPT ל-{start_date}\n"
+                f"📅 סיכום GPT ל-{yesterday_str}\n"
                 f"💰 עלות מ־OpenAI: ${dollar_cost:.3f} (~₪{shekel_cost:.1f})\n"
                 f"📨 הודעות משתמש: {total_messages:,}\n"
                 f"⚙️ קריאות GPT: {total_calls:,} "
