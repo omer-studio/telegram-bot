@@ -47,9 +47,5 @@ async def send_daily_summary():
         logging.error(f"שגיאה בשליחת סיכום יומי: {e}")
 
 async def schedule_daily_summary():
-    while True:
-        now = datetime.utcnow()
-        next_run = datetime.combine(now.date() + timedelta(days=1), datetime.min.time()) + timedelta(minutes=10)
-        wait_seconds = (next_run - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
-        await send_daily_summary()
+    await asyncio.sleep(5)  # מריץ עוד 5 שניות מהרגע שהבוט עלה
+    await send_daily_summary()
