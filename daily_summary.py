@@ -33,11 +33,11 @@ async def send_daily_summary():
         data = response.json()
 
         if "daily_costs" not in data or not data["daily_costs"]:
-            summary = 
+            summary =  (
                 f"❕הודעה לאדמין❕\n\n"
                 f"❌ אין נתונים זמינים מ-OPENAI ל-{start_date}\n"
                 f"באסוש... מצטער"
-
+            )
         else:
             item = data["daily_costs"][0]["line_items"][0]
             dollar_cost = item["cost"]
