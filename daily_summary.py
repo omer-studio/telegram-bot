@@ -106,7 +106,7 @@ async def send_daily_summary(days_back=0):
 
         # ===== חישוב עלות ממוצעת בשקלים =====
         if total_main > 0:
-            avg_cost_agorot = (shekel_cost / total_main) * 100  # אגורות
+            avg_cost_shekel = (shekel_cost / total_main) * 100  # אגורות
         else:
             avg_cost_shekel = 0
 
