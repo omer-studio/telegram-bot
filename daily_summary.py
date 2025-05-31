@@ -78,7 +78,7 @@ async def send_daily_summary():
             )
 
         await bot.send_message(chat_id=ERROR_NOTIFICATION_CHAT_ID, text=summary)
-        print("📬 נשלח הסיכום היומי לטלגרם")
+        print(f"📬 נשלח הסיכום היומי ל-chat_id: {ERROR_NOTIFICATION_CHAT_ID}")
 
     except Exception as e:
         logging.error(f"שגיאה בשליחת סיכום יומי: {e}")
