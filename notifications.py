@@ -42,7 +42,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
-            f"🆔 מזהה דפלוי: {deploy_id}\n"
+            f"🦓 מזהה דפלוי: {deploy_id}\n"
             f"🔢 מזהה קומיט: {git_commit}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
@@ -55,7 +55,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
-            f"🆔 מזהה דפלוי: {deploy_id}\n"
+            f"🦓 מזהה דפלוי: {deploy_id}\n"
             f"🔢 מזהה קומיט: {git_commit}\n"
             f"⚠️ פירוט השגיאה:\n{error_message or '🤷🏼'}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
