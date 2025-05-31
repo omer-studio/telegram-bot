@@ -7,50 +7,57 @@ from datetime import datetime
 import requests
 from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_TELEGRAM_TOKEN, TELEGRAM_BOT_TOKEN
 
+def emoji_or_na(value):
+    return value if value and value != "N/A" else "🤷🏼"
+
+def get_last_commit_digits(commit):
+    if not commit or commit == "N/A":
+        return "🤷🏼"
+    return commit[-4:]
+
 def send_deploy_notification(success=True, error_message=None, deploy_duration=None):
     """
     שולח הודעה לאדמין האם הפריסה החדשה הצליחה או לא, כולל פרטים וטיימסטמפ
     """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    project = os.getenv('RENDER_SERVICE_NAME', 'N/A')
-    environment = os.getenv('RENDER_ENVIRONMENT', 'N/A')
-    user = os.getenv('USER', 'N/A')
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    deploy_id = os.getenv('RENDER_DEPLOY_ID', 'N/A')
-    git_commit = os.getenv('RENDER_GIT_COMMIT', 'N/A')
-
+    project = emoji_or_na(os.getenv('RENDER_SERVICE_NAME', None))
+    environment = emoji_or_na(os.getenv('RENDER_ENVIRONMENT', None))
+    user = emoji_or_na(os.getenv('USER', None))
+    deploy_id = emoji_or_na(os.getenv('RENDER_DEPLOY_ID', None))
+    git_commit = get_last_commit_digits(os.getenv('RENDER_GIT_COMMIT', None))
 
     if deploy_duration is not None:
-        duration_str = f"⏳ זמן פריסה: {int(deploy_duration)} שניות\n"
+        duration_str = f"⏳ {int(deploy_duration)} שניות"
     else:
-        duration_str = "אין נתון"
-    
+        duration_str = "🤷🏼"
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
     if success:
         text = (
             f"❕הודעה לאדמין❕\n\n"
-            f" ✅ פריסה חדשה הושלמה בהצלחה!\n"
+            f"✅ פריסה חדשה הושלמה בהצלחה!\n"
             f"זמן שלקח לפרוס: {duration_str}\n"
-            f" ⏰ טיימסטמפ: {timestamp}\n"
-            f" 📁 פרויקט: {project}\n"
-            f" 🖥️ סביבת הפעלה: {environment}\n"
-            f" 👤 יוזר: {user}\n"
-            f" 🆔 מזהה דפלוי: {deploy_id}\n"
-            f" 🔢 Commit: {git_commit}\n"
-
+            f"⏰ טיימסטמפ: {timestamp}\n"
+            f"📁 פרויקט: {project}\n"
+            f"🖥️ סביבת הפעלה: {environment}\n"
+            f"👤 יוזר: {user}\n"
+            f"🆔 מזהה דפלוי: {deploy_id}\n"
+            f"🔢 Commit: {git_commit}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
     else:
         text = (
             f"❕הודעה לאדמין❕\n\n"
             f"❌ פריסה חדשה נכשלה!\n"
-            f"⏰ טיימסטמפ: {timestamp}\n"
             f"זמן שלקח לפרוס: {duration_str}\n"
+            f"⏰ טיימסטמפ: {timestamp}\n"
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
             f"🆔 מזהה דפלוי: {deploy_id}\n"
             f"🔢 Commit: {git_commit}\n"
-            f"⚠️ פירוט השגיאה:\n{error_message or 'אין פירוט'}\n"
+            f"⚠️ פירוט השגיאה:\n{error_message or '🤷🏼'}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
     data = {
@@ -61,6 +68,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         requests.post(url, data=data)
     except Exception as e:
         print(f"שגיאה בשליחת הודעת פריסה: {e}")
+
 
 def send_error_notification(error_msg, chat_id=None, user_msg=None, error_type="שגיאה כללית"):
     """
