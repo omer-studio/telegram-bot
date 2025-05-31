@@ -1,4 +1,0 @@
-{"error_type": "critical_error", "error": "can't multiply sequence by non-int of type 'float'", "chat_id": 111709341, "user_msg": "מה נשמע?", "critical": true, "timestamp": "2025-05-27T16:11:55.049797"}
-{"error_type": "critical_error", "error": "can't multiply sequence by non-int of type 'float'", "chat_id": 111709341, "user_msg": "איך הולך?", "critical": true, "timestamp": "2025-05-27T16:16:08.614413"}
-{"error_type": "critical_error", "error": "name 'logging' is not defined", "chat_id": 111709341, "user_msg": "אוקי", "critical": true, "timestamp": "2025-05-27T16:23:11.923399"}
-{"error_type": "critical_error", "error": "name 'logging' is not defined", "chat_id": 111709341, "user_msg": "מה?", "critical": true, "timestamp": "2025-05-27T16:23:26.217156"}
