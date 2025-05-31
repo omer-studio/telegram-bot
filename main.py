@@ -502,7 +502,7 @@ async def main():
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
 
-    if __name__ == "__main__":
+if __name__ == "__main__":
         import asyncio
         asyncio.run(main())
 
