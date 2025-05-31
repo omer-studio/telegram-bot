@@ -20,6 +20,8 @@ sheets_handler.py — ניהול גישה, הרשאות ולוגים ב-Google S
 """
 
 from config import setup_google_sheets, SUMMARY_FIELD
+from datetime import datetime
+
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
 sheet_users, sheet_log, sheet_states = setup_google_sheets()
