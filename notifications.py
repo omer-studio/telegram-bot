@@ -5,7 +5,7 @@ import json
 import os
 from datetime import datetime
 import requests
-from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, TELEGRAM_BOT_TOKEN
+from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_BOT_TELEGRAM_TOKEN
 
 def write_deploy_commit_to_log(commit):
     log_file = "/data/bot_trace_log.jsonl"
@@ -92,7 +92,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         )
 
     data = {
-        "chat_id": ERROR_NOTIFICATION_CHAT_ID,
+        "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
         "text": text
     }
     try:
@@ -106,7 +106,7 @@ def send_error_notification(error_msg, chat_id=None, user_msg=None, error_type="
     שולח התראת שגיאה לאדמין בטלגרם
     """
     try:
-        if not ERROR_NOTIFICATION_CHAT_ID:
+        if not ADMIN_NOTIFICATION_CHAT_ID:
             print("⚠️ לא הוגדר chat ID להתראות שגיאה")
             return
 
@@ -126,7 +126,7 @@ def send_error_notification(error_msg, chat_id=None, user_msg=None, error_type="
 
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         data = {
-            "chat_id": ERROR_NOTIFICATION_CHAT_ID,
+            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
             "text": notification_text,
             "parse_mode": "HTML"
         }
@@ -150,7 +150,7 @@ def send_admin_notification(message, urgent=False):
 
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         data = {
-            "chat_id": ERROR_NOTIFICATION_CHAT_ID,
+            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
             "text": notification_text,
             "parse_mode": "HTML"
         }
@@ -169,7 +169,7 @@ def log_error_to_file(error_data):
     רושם שגיאות לקובץ נפרד ב־/data וגם שולח טלגרם לאדמין
     """
     import requests
-    from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
+    from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
 
     try:
         error_file = "/data/bot_errors.jsonl"
@@ -205,7 +205,7 @@ def log_error_to_file(error_data):
 
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         data = {
-            "chat_id": ERROR_NOTIFICATION_CHAT_ID,
+            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
             "text": msg
         }
         requests.post(url, data=data)
