@@ -5,6 +5,7 @@ import logging
 import os
 import json
 import time
+from dateutil.parser import parse as parse_dt  # שים לב - זה צריך להיות מותקן ב־requirements.txt
 
 GPT_LOG_PATH = "/data/gpt_usage_log.jsonl"
 
@@ -85,8 +86,15 @@ async def send_daily_summary(days_back=1):
                     try:
                         entry = json.loads(line)
                         timestamp = entry.get("timestamp", "")
-                        if not timestamp.startswith(target_str):
+                        if not timestamp:
                             continue
+                        try:
+                            entry_dt = parse_dt(timestamp)
+                        except Exception:
+                            continue
+                        if not (datetime.combine(target_date, datetime.min.time()) <= entry_dt < datetime.combine(target_date + timedelta(days=1), datetime.min.time())):
+                            continue
+
                         ttype = entry.get("type")
                         tokens = entry.get("tokens_total", 0)
                         if ttype == "main_reply":
@@ -139,12 +147,11 @@ async def send_daily_summary(days_back=1):
 # await send_daily_summary(days_back=0)   # דוח של היום
 # await send_daily_summary(days_back=2)   # דוח של שלשום
 
-async def schedule_daily_summary(): #פקודה שמריצה  אחרי שהפריסה הושלמה 
+async def schedule_daily_summary():
     await asyncio.sleep(2)  # מריץ עוד איקס שניות מהרגע שהפריסה הושלמה והבוט עלה
     await send_daily_summary()
 
-# שליחת דוח usage יומי לאדמין — בסוף כל שיחה (עם השהייה)
-async def delayed_daily_summary(): #פקודה שמריצה בסוף כל תהליך
+async def delayed_daily_summary():
     print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
     await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
     from daily_summary import send_daily_summary
