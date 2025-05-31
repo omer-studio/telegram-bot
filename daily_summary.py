@@ -36,7 +36,6 @@ async def send_daily_summary(days_back=0):
 
         # -------------------------------------------------------------
         # משיכת usage (טוקנים, קריאות) - זה נותן נתונים טכניים!
-        # כאן שולפים מכמות הקריאות, כמות הטוקנים, מטמון וכו'
         # -------------------------------------------------------------
         usage_url = "https://api.openai.com/v1/organization/usage/completions"
         usage_params = {
@@ -60,7 +59,6 @@ async def send_daily_summary(days_back=0):
 
         # -------------------------------------------------------------
         # משיכת חיוב אמיתי (כסף שחויבת בפועל!) - זה מקור שונה!
-        # זה מחזיר את מה ש-OpenAI חייבו באותו יום, לפי הארגון שלך.
         # -------------------------------------------------------------
         costs_url = "https://api.openai.com/v1/organization/costs"
         costs_params = {
@@ -78,7 +76,7 @@ async def send_daily_summary(days_back=0):
                 dollar_cost = cost_results[0].get("amount", {}).get("value", 0)
         shekel_cost = dollar_cost * 3.7
 
-        # --- מחלץ גם נתונים מה-usage log שלך (אופציונלי) ---
+        # --- מחלץ גם נתונים מה-usage log שלך ---
         total_main = total_extract = total_summary = 0
         tokens_main = tokens_extract = tokens_summary = 0
         if os.path.exists(GPT_LOG_PATH):
@@ -106,12 +104,18 @@ async def send_daily_summary(days_back=0):
         total_messages = total_main
         total_calls = total_main + total_extract + total_summary
 
+        # ===== חישוב עלות ממוצעת בשקלים =====
+        if total_main > 0:
+            avg_cost_shekel = shekel_cost / total_main
+        else:
+            avg_cost_shekel = 0
+
         # ---- הודעה מסכמת ומפורטת ----
         summary = (
             f"📅 סיכום GPT ל-{target_str}\n"
             f"💰 עלות אמיתית: ${dollar_cost:.3f} (~₪{shekel_cost:.2f})\n"
             f"📨 הודעות משתמש (log): {total_messages:,}\n"
-            f"🪙 עלות ממוצעת להודעת משתמש: ₪{(shekel_cost / total_main):.3f if total_main else 0}\n"
+            f"🪙 עלות ממוצעת להודעת משתמש: ₪{avg_cost_shekel:.3f}\n"
             f"⚙️ קריאות GPT (log): {total_calls:,} (API: {num_requests:,})\n"
             f"🔢 טוקנים API: קלט={input_tokens:,} | פלט={output_tokens:,} | מטמון={cached_tokens:,}\n"
             f"🔢 טוקנים לוג: main={tokens_main:,} | extract={tokens_extract:,} | summary={tokens_summary:,}\n"
@@ -139,11 +143,9 @@ async def schedule_daily_summary(): #פקודה שמריצה  אחרי שהפר�
     await asyncio.sleep(2)  # מריץ עוד איקס שניות מהרגע שהפריסה הושלמה והבוט עלה
     await send_daily_summary()
 
-    # שליחת דוח usage יומי לאדמין — בסוף כל שיחה (עם השהייה)
+# שליחת דוח usage יומי לאדמין — בסוף כל שיחה (עם השהייה)
 async def delayed_daily_summary(): #פקודה שמריצה בסוף כל תהליך
     print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
     await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
     from daily_summary import send_daily_summary
     await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
-
-
