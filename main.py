@@ -37,6 +37,10 @@ from sheets_handler import increment_code_try
 
 app_fastapi = FastAPI()
 
+from notifications import send_deploy_notification
+send_deploy_notification(success=True)
+
+
 class DummyContext:
     def __init__(self, bot_data):
         self.bot_data = bot_data
