@@ -3,6 +3,25 @@
 """
 import json
 import logging
+import os
+from datetime import datetime
+
+def write_gpt_log(ttype, usage, model):
+    log_path = "/data/gpt_usage_log.jsonl"
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "type": ttype,
+        "model": model,
+        "tokens_prompt": usage.get("prompt_tokens", 0),
+        "tokens_completion": usage.get("completion_tokens", 0),
+        "tokens_total": usage.get("total_tokens", 0)
+    }
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logging.error(f"שגיאה בכתיבה לקובץ gpt_usage_log: {e}")
+
 
 from config import client, SYSTEM_PROMPT
 
@@ -43,6 +62,11 @@ def get_main_response(full_messages):
                 "total_tokens": response.usage.total_tokens
             }
         })
+        write_gpt_log("main_reply", {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens
+        }, response.model)
 
         return (
             response.choices[0].message.content,
@@ -75,6 +99,12 @@ def summarize_bot_reply(reply_text):
             temperature=0.6,
             max_tokens=40
         )
+        write_gpt_log("reply_summary", {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens
+        }, response.model)
+
         return (
             response.choices[0].message.content.strip(),
             response.usage.prompt_tokens,
@@ -138,6 +168,7 @@ closet_status - בארון או יצא או חלקי
 
         result = json.loads(content)
         logging.info(f"✅ GPT מצא שדות: {result}")
+        write_gpt_log("identity_extraction", usage_data, usage_data.get("model", ""))
         return result, usage_data
 
     except json.JSONDecodeError as e:
