@@ -1,25 +1,5 @@
-"""
-sheets_handler.py — ניהול גישה, הרשאות ולוגים ב-Google Sheets
-
-למה הקובץ הזה קיים?
-==================
-הקובץ הזה אחראי על כל האינטראקציה בין הבוט לגיליונות Google Sheets, לצורך:
-- זיהוי משתמשים חדשים (Onboarding) — לדעת אם מישהו פונה בפעם הראשונה בחייו לבוט!
-- ניהול הרשאות, בדיקת קוד, אישור תנאים
-- רישום משתמשים חדשים בדיוק במקום הנכון (user_states)
-- שמירת לוגים, עדכון פרופיל, סיכום רגשי וכו'
-
-למה בודקים גם בגיליון 1 וגם ב-user_states?
-------------------------------------------
-אנחנו רוצים לדעת אם המשתמש נכנס בפעם הראשונה בחייו לצ'אט, ולכן:
-1. קודם כל בודקים האם ה-chat_id של המשתמש קיים בעמודה הראשונה של גיליון 1 (access_codes או "גיליון1").
-2. אם לא מצאנו אותו שם, בודקים אם הוא קיים בעמודה הראשונה של גיליון user_states.
-3. אם לא מצאנו אותו גם שם — זו הפעם הראשונה של המשתמש בצ'אט! נרשום אותו ב-user_states עם code_try=0.
-
-כל פונקציה כאן כוללת תיעוד ולוגיקה ברורה למה עושים כל שלב, ויש לוגים (וגם print) לכל פעולה קריטית.
-"""
-
 from config import setup_google_sheets, SUMMARY_FIELD
+from datetime import datetime
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
 sheet_users, sheet_log, sheet_states = setup_google_sheets()
@@ -105,8 +85,6 @@ def increment_code_try(sheet_states, chat_id):
             print(f"שגיאה בקריאה חוזרת של code_try: {e2}")
             # אם לא מצליח לקרוא בכלל, מחזיר 1 כדי שלא ישבור
             return 1
-
-
 
 
 
@@ -266,33 +244,36 @@ def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary,
     לוגיקה: כל שיחה, כל עלות, כל סיכום — הכל מתועד בלוגיים.
     """
     try:
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet_log.append_row([
-            message_id,                       # A: MASSAGE ID
-            chat_id,                          # B: CHAT ID  
-            user_msg,                         # C: משתמש כתב
-            "",                              # D: תימצות משתמש (ריק)
-            reply_text,                       # E: בוט ענה
-            reply_summary,                    # F: בוט תימצת
-            "", "", "", "", "",               # G-K: שדות ריקים
-            total_tokens,                     # L: סהכ טוקנים
-            "", "",                           # M-N: ריקות
-            "",                              # O: CACHED טוקנים
-            cost_usd,                         # P: עלות בדולר
-            cost_ils,                         # Q: עלות בשקל
-            main_usage[0],                    # R: GPT ראשי - prompt tokens
-            main_usage[1],                    # S: GPT ראשי - completion tokens  
-            main_usage[2],                    # T: GPT ראשי - total tokens
-            main_usage[4],                    # U: GPT ראשי - מודל
-            summary_usage[1],                 # V: GPT מקצר - prompt tokens
-            summary_usage[2],                 # W: GPT מקצר - completion tokens
-            summary_usage[3],                 # X: GPT מקצר - total tokens  
-            summary_usage[4],                 # Y: GPT מקצר - מודל
-            extract_usage["prompt_tokens"],   # Z: GPT מחלץ - prompt tokens
-            extract_usage["completion_tokens"], # AA: GPT מחלץ - completion tokens
-            extract_usage["total_tokens"],    # AB: GPT מחלץ - total tokens
-            extract_usage["model"],           # AC: GPT מחלץ - מודל
-            "", "", "", "",                   # AD-AG: ריק
-            "", "", "", "", ""                # AH-AK: ריק נוסף
+            now_str,                          # A: תאריך ושעה
+            message_id,                       # B: MASSAGE ID
+            chat_id,                          # C: CHAT ID  
+            user_msg,                         # D: משתמש כתב
+            "",                              # E: תימצות משתמש (ריק)
+            reply_text,                       # F: בוט ענה
+            reply_summary,                    # G: בוט תימצת
+            "", "", "", "", "",               # H-L: שדות ריקים
+            total_tokens,                     # M: סהכ טוקנים
+            "", "",                           # N-O: ריקות
+            "",                              # P: CACHED טוקנים
+            cost_usd,                         # Q: עלות בדולר
+            cost_ils,                         # R: עלות בשקל
+            main_usage[0],                    # S: GPT ראשי - prompt tokens
+            main_usage[1],                    # T: GPT ראשי - completion tokens  
+            main_usage[2],                    # U: GPT ראשי - total tokens
+            main_usage[4],                    # V: GPT ראשי - מודל
+            summary_usage[1],                 # W: GPT מקצר - prompt tokens
+            summary_usage[2],                 # X: GPT מקצר - completion tokens
+            summary_usage[3],                 # Y: GPT מקצר - total tokens  
+            summary_usage[4],                 # Z: GPT מקצר - מודל
+            extract_usage["prompt_tokens"],   # AA: GPT מחלץ - prompt tokens
+            extract_usage["completion_tokens"], # AB: GPT מחלץ - completion tokens
+            extract_usage["total_tokens"],    # AC: GPT מחלץ - total tokens
+            extract_usage["model"],           # AD: GPT מחלץ - מודל
+            "", "", "", "",                   # AE-AH: ריק
+            "", "", "", "", ""                # AI-AL: ריק נוסף
         ])
         print("✅ נתונים נשמרו בגיליון הלוגים")
         return True
@@ -356,4 +337,3 @@ def approve_user(sheet, chat_id):
     except Exception as e:
         print(f"❌ approve_user error: {e}")
         return False
-
