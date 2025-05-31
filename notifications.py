@@ -81,7 +81,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         text = (
             f"❕הודעה לאדמין❕\n\n"
             f"✅ פריסה חדשה הושלמה בהצלחה!\n"
-            f"זמן שלקח לפרוס: {duration_str}\n"
+            f"⌛זמן שלקח לפרוס: {duration_str}\n"
             f"⏰ טיימסטמפ: {timestamp}\n"
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
