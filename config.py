@@ -28,9 +28,10 @@ OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY)
 GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 
-# הגדרות התראות שגיאות
-ERROR_NOTIFICATION_CHAT_ID = "111709341"
-ADMIN_TELEGRAM_TOKEN = config.get("ADMIN_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
+# הגדרות התראות שגיאות (לבוט הניהולי החדש)
+ADMIN_BOT_TOKEN = config.get("ADMIN_BOT_TOKEN", "")  
+ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
+
 
 # יצירת קליינטים
 client = OpenAI(api_key=OPENAI_API_KEY)
