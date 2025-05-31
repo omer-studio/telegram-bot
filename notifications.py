@@ -62,7 +62,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     else:
         duration_str = "🤷🏼"
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
 
     if previous_commit and previous_commit == current_commit:
         # לא התבצע דפלוי חדש!
