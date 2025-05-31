@@ -34,9 +34,9 @@ async def send_daily_summary():
 
         if "daily_costs" not in data or not data["daily_costs"]:
             summary = 
-            f"❕הודעה לאדמין❕\n\n"
-            f"❌ אין נתונים זמינים מ-OPENAI ל-{start_date}\n"
-            f"באסוש... מצטער"
+                f"❕הודעה לאדמין❕\n\n"
+                f"❌ אין נתונים זמינים מ-OPENAI ל-{start_date}\n"
+                f"באסוש... מצטער"
 
         else:
             item = data["daily_costs"][0]["line_items"][0]
