@@ -21,7 +21,7 @@ async def send_daily_summary():
     try:
         # תאריך של אתמול (UTC)
         today = datetime.utcnow().date()
-        yesterday = today - timedelta(days=1)
+        yesterday = today - timedelta(days=2)
         start_date = end_date = yesterday.strftime("%Y-%m-%d")
 
         # --- משיכת עלות אמיתית מתוך OpenAI ---
