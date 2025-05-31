@@ -15,13 +15,13 @@ if not os.path.exists(GPT_LOG_PATH):
 from telegram import Bot
 from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, TELEGRAM_BOT_TOKEN, ADMIN_NOTIFICATION_CHAT_ID
 
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 
 async def send_daily_summary():
     try:
         # תאריך של אתמול (UTC)
         today = datetime.utcnow().date()
-        yesterday = today - timedelta(days=2)
+        yesterday = today - timedelta(days=1)
         start_date = end_date = yesterday.strftime("%Y-%m-%d")
 
         # --- משיכת עלות אמיתית מתוך OpenAI ---
