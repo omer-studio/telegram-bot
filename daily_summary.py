@@ -13,7 +13,7 @@ if not os.path.exists(GPT_LOG_PATH):
         pass  # פשוט יוצר קובץ ריק
 
 from telegram import Bot
-from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, TELEGRAM_BOT_TOKEN, ERROR_NOTIFICATION_CHAT_ID
+from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, TELEGRAM_BOT_TOKEN, ADMIN_NOTIFICATION_CHAT_ID
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
@@ -88,14 +88,14 @@ async def send_daily_summary():
                 f"🧠 מודל: {model} | Cached: {n_cached:,}\n"
             )
 
-        await bot.send_message(chat_id=ERROR_NOTIFICATION_CHAT_ID, text=summary)
-        print(f"📬 נשלח הסיכום היומי ל-chat_id: {ERROR_NOTIFICATION_CHAT_ID}")
+        await bot.send_message(chat_id=ADMIN_NOTIFICATION_CHAT_ID, text=summary)
+        print(f"📬 נשלח הסיכום היומי ל-chat_id: {ADMIN_NOTIFICATION_CHAT_ID}")
 
     except Exception as e:
         logging.error(f"שגיאה בשליחת סיכום יומי: {e}")
         try:
             await bot.send_message(
-                chat_id=ERROR_NOTIFICATION_CHAT_ID,
+                chat_id=ADMIN_NOTIFICATION_CHAT_ID,
                 text="❗ מצטער, לא הצלחתי להפיק דוח יומי היום. בדוק את השרת או את OpenAI."
             )
         except Exception as telegram_error:
