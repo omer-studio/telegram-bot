@@ -16,7 +16,15 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     environment = os.getenv('RENDER_ENVIRONMENT', 'N/A')
     user = os.getenv('USER', 'N/A')
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    deploy_id = os.getenv('RENDER_DEPLOY_ID', 'N/A')
+    git_commit = os.getenv('RENDER_GIT_COMMIT', 'N/A')
 
+
+    if deploy_duration is not None:
+        duration_str = f"⏳ זמן פריסה: {int(deploy_duration)} שניות\n"
+    else:
+        duration_str = "אין נתון"
+    
     if success:
         text = (
             f"❕הודעה לאדמין❕\n\n"
@@ -26,6 +34,9 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
+            f"🆔 מזהה דפלוי: {deploy_id}\n"
+            f"🔢 Commit: {git_commit}\n"
+
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
     else:
@@ -37,6 +48,8 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             f"📁 פרויקט: {project}\n"
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
+            f"🆔 מזהה דפלוי: {deploy_id}\n"
+            f"🔢 Commit: {git_commit}\n"
             f"⚠️ פירוט השגיאה:\n{error_message or 'אין פירוט'}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
