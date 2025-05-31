@@ -295,8 +295,8 @@ def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary,
         "",                                 # 34: ריק
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 35 - זה עמודה AI!!!
     ])
-    print("✅ נתונים נשמרו בגיליון הלוגים")
-    return True
+        print("✅ נתונים נשמרו בגיליון הלוגים")
+        return True
     except Exception as e:
         print(f"❌ שגיאה בשמירה לגיליון: {e}")
         raise
