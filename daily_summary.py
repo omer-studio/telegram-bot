@@ -106,5 +106,5 @@ async def send_daily_summary():
             logging.error(f"שגיאה גם בשליחת הודעת שגיאה לטלגרם: {telegram_error}")
 
 async def schedule_daily_summary():
-    await asyncio.sleep(50)  # מריץ עוד 50 שניות מהרגע שהבוט עלה
+    await asyncio.sleep(3)  # מריץ עוד 3 שניות מהרגע שהבוט עלה
     await send_daily_summary()
