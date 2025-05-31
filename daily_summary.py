@@ -13,7 +13,7 @@ if not os.path.exists(GPT_LOG_PATH):
         pass  # פשוט יוצר קובץ ריק
 
 from telegram import Bot
-from config import OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, ERROR_NOTIFICATION_CHAT_ID
+from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, TELEGRAM_BOT_TOKEN, ERROR_NOTIFICATION_CHAT_ID
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
@@ -26,7 +26,7 @@ async def send_daily_summary():
 
         # --- משיכת עלות אמיתית מתוך OpenAI ---
         headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}"
+            "Authorization": f"Bearer {OPENAI_ADMIN_KEY}"
         }
         url = f"https://api.openai.com/v1/usage?start_date={start_date}&end_date={end_date}"
         response = requests.get(url, headers=headers)
