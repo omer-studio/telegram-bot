@@ -109,11 +109,11 @@ async def send_daily_summary(days_back=0):
         # ---- הודעה מסכמת ומפורטת ----
         summary = (
             f"📅 סיכום GPT ל-{target_str}\n"
-            f"💰 עלות אמיתית מ־OpenAI (מה-costs): ${dollar_cost:.3f} (~₪{shekel_cost:.2f})\n"
+            f"💰 עלות אמיתית מ־OpenAI: ${dollar_cost:.3f} (~₪{shekel_cost:.2f})\n"
             f"📨 הודעות משתמש (log): {total_messages:,}\n"
             f"⚙️ קריאות GPT (log): {total_calls:,} (API: {num_requests:,})\n"
             f"🔢 טוקנים מה-API (usage): קלט={input_tokens:,} | פלט={output_tokens:,} | מטמון={cached_tokens:,}\n"
-            f"🔢 טוקנים ע״פ usage log: main={tokens_main:,} | extract={tokens_extract:,} | summary={tokens_summary:,}\n"
+            f"🔢 טוקנים ע״פ log: main={tokens_main:,} | extract={tokens_extract:,} | summary={tokens_summary:,}\n"
         )
 
         await bot.send_message(chat_id=ADMIN_NOTIFICATION_CHAT_ID, text=summary)
