@@ -36,6 +36,15 @@ from asyncio import sleep
 from sheets_handler import increment_code_try
 
 app_fastapi = FastAPI()
+import threading
+import asyncio
+from daily_summary import schedule_daily_summary
+
+def run_summary():
+    asyncio.run(schedule_daily_summary())
+
+threading.Thread(target=run_summary, daemon=True).start()
+
 
 from notifications import send_deploy_notification
 send_deploy_notification(success=True)
