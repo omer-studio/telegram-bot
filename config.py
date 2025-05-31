@@ -29,7 +29,7 @@ OPENAI_ADMIN_KEY = config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY)
 GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 
 # הגדרות התראות שגיאות (לבוט הניהולי החדש)
-ADMIN_BOT_TOKEN = config.get("ADMIN_BOT_TOKEN", "")  
+ADMIN_BOT_TELEGRAM_TOKEN = config.get("ADMIN_BOT_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
 ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
 
 
