@@ -29,7 +29,11 @@ async def send_daily_summary():
             "Authorization": f"Bearer {OPENAI_ADMIN_KEY}"
         }
         url = f"https://api.openai.com/v1/usage?start_date={start_date}&end_date={end_date}"
+        print(f"משיכת usage ל-{start_date} בלבד")
+        print(f"URL: {url}")
         response = requests.get(url, headers=headers)
+        print("Response status code:", response.status_code)
+        print("Response JSON:", response.json())
         data = response.json()
 
         if "daily_costs" not in data or not data["daily_costs"]:
