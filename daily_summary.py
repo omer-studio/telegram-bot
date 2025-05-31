@@ -115,7 +115,7 @@ async def send_daily_summary(days_back=0):
             f"📅 סיכום GPT ל-{target_str}\n"
             f"💰 עלות אמיתית: ${dollar_cost:.3f} (~₪{shekel_cost:.2f})\n"
             f"📨 הודעות משתמש (log): {total_messages:,}\n"
-            f"🪙 עלות ממוצעת להודעת משתמש: ₪{avg_cost_shekel:.3f}\n"
+            f"🪙 עלות ממוצעת להודעת משתמש:  אגורות{avg_cost_shekel:.3f}\n"
             f"⚙️ קריאות GPT (log): {total_calls:,} (API: {num_requests:,})\n"
             f"🔢 טוקנים API: קלט={input_tokens:,} | פלט={output_tokens:,} | מטמון={cached_tokens:,}\n"
             f"🔢 טוקנים לוג: main={tokens_main:,} | extract={tokens_extract:,} | summary={tokens_summary:,}\n"
