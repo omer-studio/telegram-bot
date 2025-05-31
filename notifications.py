@@ -7,15 +7,37 @@ from datetime import datetime
 import requests
 from config import ERROR_NOTIFICATION_CHAT_ID, ADMIN_TELEGRAM_TOKEN, TELEGRAM_BOT_TOKEN
 
-def send_deploy_notification(success=True):
+def send_deploy_notification(success=True, error_message=None):
     """
-    שולח הודעה לאדמין האם הפריסה החדשה הצליחה או לא
+    שולח הודעה לאדמין האם הפריסה החדשה הצליחה או לא, כולל פרטים וטיימסטמפ
     """
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    project = os.getenv('RENDER_SERVICE_NAME', 'N/A')
+    environment = os.getenv('RENDER_ENVIRONMENT', 'N/A')
+    user = os.getenv('USER', 'N/A')
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
     if success:
-        text = "✅ פריסה חדשה הושלמה בהצלחה!"
+        text = (
+            f"❕הודעה לאדמין❕\n"
+            f"✅ פריסה חדשה הושלמה בהצלחה!\n"
+            f"⏰ טיימסטמפ: {timestamp}\n"
+            f"📁 פרויקט: {project}\n"
+            f"🖥️ סביבת הפעלה: {environment}\n"
+            f"👤 יוזר: {user}\n"
+            f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
+        )
     else:
-        text = "❌ פריסה חדשה לא הושלמה - הבוט משתמש בפריסה הישנה עדיין"
+        text = (
+            f"❕הודעה לאדמין❕\n"
+            f"❌ פריסה חדשה נכשלה!\n"
+            f"⏰ טיימסטמפ: {timestamp}\n"
+            f"📁 פרויקט: {project}\n"
+            f"🖥️ סביבת הפעלה: {environment}\n"
+            f"👤 יוזר: {user}\n"
+            f"⚠️ פירוט השגיאה:\n{error_message or 'אין פירוט'}\n"
+            f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
+        )
     data = {
         "chat_id": ERROR_NOTIFICATION_CHAT_ID,
         "text": text
