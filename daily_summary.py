@@ -28,29 +28,41 @@ async def send_daily_summary():
         headers = {
             "Authorization": f"Bearer {OPENAI_ADMIN_KEY}"
         }
-        url = f"https://api.openai.com/v1/usage?start_date={start_date}&end_date={end_date}"
+
+        import time
+        start_time_unix = int(time.mktime(datetime.combine(yesterday, datetime.min.time()).timetuple()))
+        end_time_unix = int(time.mktime(datetime.combine(yesterday + timedelta(days=1), datetime.min.time()).timetuple()))
+
+        url = "https://api.openai.com/v1/organization/usage/completions"
+        params = {
+            "start_time": start_time_unix,
+            "end_time": end_time_unix,
+            "interval": "1d"
+        }
+
         print(f"משיכת usage ל-{start_date} בלבד")
-        print(f"URL: {url}")
-        response = requests.get(url, headers=headers)
+        print(f"URL: {url} עם params: {params}")
+
+        response = requests.get(url, headers=headers, params=params)
         print("Response status code:", response.status_code)
         print("Response JSON:", response.json())
         data = response.json()
 
-        if "daily_costs" not in data or not data["daily_costs"]:
-            summary =  (
+        if "data" not in data or not data["data"]:
+            summary = (
                 f"❕הודעה לאדמין❕\n\n"
                 f"❌ אין נתונים זמינים מ-OPENAI ל-{start_date}\n"
                 f"באסוש... מצטער"
             )
         else:
-            item = data["daily_costs"][0]["line_items"][0]
-            dollar_cost = item["cost"]
+            usage_item = data["data"][0]["results"][0]
+            dollar_cost = usage_item.get("cost", 0)
             shekel_cost = dollar_cost * 3.7
-            model = item["model"]
-            n_requests = item["n_requests"]
-            n_prompt = item["n_prompt_tokens"]
-            n_cached = item["n_cached_tokens"]
-            n_output = item["n_output_tokens"]
+            model = usage_item.get("model", "unknown")
+            n_requests = usage_item.get("num_model_requests", 0)
+            n_prompt = usage_item.get("input_tokens", 0)
+            n_cached = usage_item.get("input_cached_tokens", 0)
+            n_output = usage_item.get("output_tokens", 0)
 
             # --- ניתוח קובץ usage log ---
             total_main = total_extract = total_summary = 0
@@ -81,7 +93,6 @@ async def send_daily_summary():
             total_messages = total_main
             total_calls = total_main + total_extract + total_summary
 
-            # --- בניית הסיכום לטלגרם ---
             summary = (
                 f"📅 סיכום GPT ל-{start_date}\n"
                 f"💰 עלות מ־OpenAI: ${dollar_cost:.3f} (~₪{shekel_cost:.1f})\n"
@@ -104,6 +115,7 @@ async def send_daily_summary():
             )
         except Exception as telegram_error:
             logging.error(f"שגיאה גם בשליחת הודעת שגיאה לטלגרם: {telegram_error}")
+
 
 async def schedule_daily_summary():
     await asyncio.sleep(3)  # מריץ עוד 3 שניות מהרגע שהבוט עלה
