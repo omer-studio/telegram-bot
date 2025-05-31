@@ -133,3 +133,9 @@ async def send_daily_summary(days_back=0):
 # await send_daily_summary(days_back=1)   # דוח של אתמול
 # await send_daily_summary(days_back=0)   # דוח של היום
 # await send_daily_summary(days_back=2)   # דוח של שלשום
+
+async def schedule_daily_summary():
+    await asyncio.sleep(2)  # מריץ עוד 2 שניות מהרגע שהפריסה הושלמה והבוט עלה
+    await send_daily_summary()
+
+
