@@ -28,14 +28,14 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     if success:
         text = (
             f"❕הודעה לאדמין❕\n\n"
-            f"✅ פריסה חדשה הושלמה בהצלחה!\n"
+            f" ✅ פריסה חדשה הושלמה בהצלחה!\n"
             f"זמן שלקח לפרוס: {duration_str}\n"
-            f"⏰ טיימסטמפ: {timestamp}\n"
-            f"📁 פרויקט: {project}\n"
-            f"🖥️ סביבת הפעלה: {environment}\n"
-            f"👤 יוזר: {user}\n"
-            f"🆔 מזהה דפלוי: {deploy_id}\n"
-            f"🔢 Commit: {git_commit}\n"
+            f" ⏰ טיימסטמפ: {timestamp}\n"
+            f" 📁 פרויקט: {project}\n"
+            f" 🖥️ סביבת הפעלה: {environment}\n"
+            f" 👤 יוזר: {user}\n"
+            f" 🆔 מזהה דפלוי: {deploy_id}\n"
+            f" 🔢 Commit: {git_commit}\n"
 
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
