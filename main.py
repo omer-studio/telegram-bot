@@ -458,6 +458,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- סיום טיפול בהודעה ----")
     print("---- סיום טיפול בהודעה ----")
 
+
+    asyncio.create_task(delayed_daily_summary())
+
+
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
     try:
@@ -475,6 +479,13 @@ async def webhook(request: Request):
     except Exception as ex:
         logging.error(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
+
+    # שליחת דוח usage יומי לאדמין — בסוף כל שיחה (עם השהייה)
+async def delayed_daily_summary():
+    await asyncio.sleep(30)  # מחכה 30 שניות לסיום כל התהליך
+    from daily_summary import send_daily_summary
+    await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
+
 
 async def main():
     from daily_summary import schedule_daily_summary
@@ -514,6 +525,9 @@ async def main():
     logging.info("🚦 הבוט מוכן ומחכה להודעות! (Ctrl+C לעצירה)")
     print("✅ הבוט פועל! מחכה להודעות...")
     print("=" * 50)
+
+
+
 
 if __name__ == "__main__":
         import asyncio
