@@ -164,6 +164,31 @@ def send_admin_notification(message, urgent=False):
     except Exception as e:
         print(f"💥 שגיאה בשליחת הודעה: {e}")
 
+# === הוספה: שליחת התראת קוד סודי לאדמין ===
+def send_admin_secret_command_notification(message: str):
+    """
+    שולח הודעה מיוחדת לאדמין על שימוש בקוד סודי (למחיקה וכד').
+    """
+    try:
+        notification_text = (
+            f"🔑 *הפעלה של קוד סודי בבוט!* 🔑\n\n"
+            f"{message}\n\n"
+            f"⏰ {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+        )
+        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
+        data = {
+            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
+            "text": notification_text,
+            "parse_mode": "Markdown"
+        }
+        response = requests.post(url, data=data, timeout=10)
+        if response.status_code == 200:
+            print("✅ התראת קוד סודי נשלחה לאדמין")
+        else:
+            print(f"❌ שגיאה בשליחת התראת קוד סודי: {response.status_code}")
+    except Exception as e:
+        print(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")
+
 def log_error_to_file(error_data):
     """
     רושם שגיאות לקובץ נפרד ב־/data וגם שולח טלגרם לאדמין
