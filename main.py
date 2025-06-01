@@ -123,6 +123,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.message.chat_id
         message_id = update.message.message_id
         user_msg = update.message.text
+        did, reply = handle_secret_command(chat_id, user_message)
+        if did:
+            context.bot.send_message(chat_id=chat_id, text=reply)
+            return
+
         log_payload["chat_id"] = chat_id
         log_payload["message_id"] = message_id
         log_payload["user_msg"] = user_msg
