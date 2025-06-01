@@ -428,7 +428,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.info("ℹ️ לא נמצא מידע אישי לעדכון")
                 print("ℹ️ לא נמצא מידע אישי לעדכון")
         except Exception as profile_error:
-            logging.error(f"⚠️ שגיאה ב
             logging.error(f"⚠️ שגיאה בעדכון פרופיל משתמש: {profile_error}")
             print(f"⚠️ שגיאה בעדכון פרופיל משתמש: {profile_error}")
             handle_non_critical_error(profile_error, chat_id, user_msg, "שגיאה בעדכון פרופיל משתמש")
