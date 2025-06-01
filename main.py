@@ -320,6 +320,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if user_msg.strip() == "✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי":
                 approve_user(context.bot_data["sheet"], chat_id)
+                # שליחת מקלדת חביבה "מיותרת"
+                nice_keyboard = ReplyKeyboardMarkup(
+                    [["היי מה נשמע? הייתי שמח שנדבר קצת..."]],
+                    one_time_keyboard=True,
+                    resize_keyboard=True
+                )
+                await update.message.reply_text(
+                    "היי מה נשמע? הייתי שמח שנדבר קצת...",
+                    reply_markup=nice_keyboard
+                )
+                
+                # שליחת מחיקת מקלדת מיד לאחר מכן
+                await update.message.reply_text(
+                    "אפשר להמשיך להקליד כל דבר כאן! 🙂",
+                    reply_markup=ReplyKeyboardRemove()
+)
+
                 await update.message.reply_text(
                     "מעולה, קיבלת גישה מלאה ✅\n\n"
                     "אני ממש שמח להתחיל להכיר אותך 🙂\n"
