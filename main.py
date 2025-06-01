@@ -153,7 +153,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat_id = update.message.chat_id
         message_id = update.message.message_id
-        user_msg = update.message.text
+        if update.message.text:
+            user_msg = update.message.text
+        else:
+            logging.error(f"❌ שגיאה - אין טקסט בהודעה | chat_id={chat_id}")
+            await update.message.reply_text("❌ לא קיבלתי טקסט בהודעה.")
+            return  # לסיים את טיפול ההודעה כאן
+
         did, reply = handle_secret_command(chat_id, user_msg)
         if did:
             await update.message.reply_text(reply)
