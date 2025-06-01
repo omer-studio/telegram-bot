@@ -487,10 +487,6 @@ async def webhook(request: Request):
 
 
 async def main():
-    from daily_summary import schedule_daily_summary
-    asyncio.create_task(schedule_daily_summary())
-
-
     logging.info("========== אתחול הבוט ==========")
     print("========== אתחול הבוט ==========")
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
