@@ -147,6 +147,18 @@ async def send_daily_summary(days_back=1):
 # await send_daily_summary(days_back=0)   # דוח של היום
 # await send_daily_summary(days_back=2)   # דוח של שלשום
 
+# פונקציה להתחלת תזמון הדוח היומי
+async def start_daily_summary_scheduler():
+    """
+    מתחיל את התזמון של הדוח היומי
+    """
+    print("🕐 מתחיל תזמון דוח יומי - ישלח כל יום ב-01:00 UTC (שעה אחרי איפוס Usage)")
+    logging.info("🕐 מתחיל תזמון דוח יומי - ישלח כל יום ב-01:00 UTC")
+    
+    # יצירת משימה שתרוץ ברקע
+    asyncio.create_task(wait_until_target_time_and_send())
+
+
 async def schedule_daily_summary():
     await asyncio.sleep(2)  # מריץ עוד איקס שניות מהרגע שהפריסה הושלמה והבוט עלה
     await send_daily_summary()
