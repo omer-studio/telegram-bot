@@ -22,10 +22,21 @@ import requests
 import asyncio
 import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
+
+
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from datetime import datetime
@@ -100,14 +111,7 @@ def set_telegram_webhook():
     except Exception as e:
         print("❌ שגיאה:", e)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-    handlers=[
-        logging.FileHandler("bot.log", encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("---- התחלת טיפול בהודעה ----")
