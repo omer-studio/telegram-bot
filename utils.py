@@ -66,8 +66,8 @@ def update_chat_history(chat_id, user_msg, bot_summary):
             "timestamp": datetime.now().isoformat()
         })
 
-        # שמירה על 300 הודעות אחרונות בלבד
-        history_data[chat_id]["history"] = history_data[chat_id]["history"][-300:]
+        # שמירה על איקס הודעות אחרונות בלבד
+        history_data[chat_id]["history"] = history_data[chat_id]["history"][-30000:]
 
         # שמירה חזרה לקובץ
         with open(file_path, "w", encoding="utf-8") as f:
