@@ -71,6 +71,24 @@ from sheets_handler import (
 )
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
+async def send_message(update, chat_id, text, is_bot_message=True):
+    # שליחת ההודעה בטלגרם
+    await update.message.reply_text(text, parse_mode="HTML")
+
+    # שמירה להיסטוריה
+    if is_bot_message:
+        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", text)
+
+    # שמירה ללוג
+    log_event_to_file({
+        "chat_id": chat_id,
+        "bot_message": text,
+        "timestamp": datetime.now().isoformat()
+    })
+
+    # הדפסה למסך
+    print(f"[📤 הודעת בוט]: {text}")
+
 
 def connect_google_sheets():
     try:
@@ -151,18 +169,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_first_time:
             logging.info("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
             print("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
-            await update.message.reply_text("היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
-            await update.message.reply_text(
-                "אתה תופתע לגלות איזה שימושי אני 😎\n"
-                "אני יודע מה אתה חושב... בינה מלאכותית וזה...\n"
-                "תן לי להפתיע אותך!! 🚀\n\n\n"
-                "לפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩"
-            )
-            await update.message.reply_text(
-                "בוא נתחיל במספר האישור שקיבלת 🔢\n"
-                "מה מספר האישור שקיבלת?\n\n"
-                "(תכתוב אותו נקי בלי מילים נוספות ✍️)"
-            )
+            await send_message(update, chat_id, "היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
+            await send_message(update, chat_id, "אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
+            await send_message(update, chat_id, "בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
+
             logging.info("📤 נשלחו הודעות וולקאם למשתמש חדש")
             print("📤 נשלחו הודעות וולקאם למשתמש חדש")
             logging.info("---- סיום טיפול בהודעה (משתמש חדש) ----")
