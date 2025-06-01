@@ -168,3 +168,41 @@ async def delayed_daily_summary():
     await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
     from daily_summary import send_daily_summary
     await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
+
+
+async def wait_until_target_time_and_send():
+    """
+    ממתינה עד לשעה הרצויה (01:00 UTC) ושולחת דוח יומי
+    """
+    while True:
+        try:
+            now_utc = datetime.utcnow()
+            target_time = now_utc.replace(hour=1, minute=0, second=0, microsecond=0)
+            
+            # אם השעה הנוכחית עברה את השעה היעד של היום, עבור ליום הבא
+            if now_utc >= target_time:
+                target_time += timedelta(days=1)
+            
+            # חישוב כמה זמן נותר עד השעה היעד
+            time_until_target = (target_time - now_utc).total_seconds()
+            
+            print(f"⏰ מחכה {time_until_target/3600:.1f} שעות עד לשליחת הדוח היומי הבא ({target_time.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
+            logging.info(f"⏰ מחכה {time_until_target/3600:.1f} שעות עד לשליחת הדוח היומי הבא ({target_time.strftime('%Y-%m-%d %H:%M:%S')} UTC)")
+            
+            # המתן עד השעה היעד
+            await asyncio.sleep(time_until_target)
+            
+            # שלח דוח על היום הקודם (days_back=1)
+            print("📊 שולח דוח יומי...")
+            logging.info("📊 שולח דוח יומי...")
+            await send_daily_summary(days_back=1)
+            
+            # המתן כמה שניות לפני התחלת המחזור הבא (למנוע שליחה כפולה)
+            await asyncio.sleep(60)
+            
+        except Exception as e:
+            logging.error(f"❌ שגיאה בלולאת הדוח היומי: {e}")
+            print(f"❌ שגיאה בלולאת הדוח היומי: {e}")
+            # במקרה של שגיאה, חכה 10 דקות ונסה שוב
+            await asyncio.sleep(600)
+
