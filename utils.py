@@ -96,7 +96,12 @@ def get_chat_history_messages(chat_id):
         return []
     
     messages = []
-    last_entries = history_data[chat_id]["history"][-5:]
+    history = history_data[chat_id]["history"]
+    if len(history) < 20:
+        last_entries = history  #  שולח את כל ההיסטוריה אם יש פחות מ-איקס הודעות
+    else:
+        last_entries = history[-5:]  # רק 5 אחרונות
+
     for entry in last_entries:
         messages.append({"role": "user", "content": entry["user"]})
         messages.append({"role": "assistant", "content": entry["bot"]})
