@@ -56,6 +56,8 @@ import uvicorn
 from asyncio import sleep
 from sheets_handler import increment_code_try
 from secret_commands import handle_secret_command
+from messages import get_welcome_messages
+
 
 
 app_fastapi = FastAPI()
@@ -181,9 +183,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_first_time:
             logging.info("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
             print("[Onboarding] משתמש חדש - נוסף ל-user_states (code_try=0)")
-            await send_message(update, chat_id, "היי מלך! 👑 אני רואה שזה שימוש ראשוני שלך...\nאיזה כיף! 🎉")
-            await send_message(update, chat_id, "אתה תופתע לגלות איזה שימושי אני 😎\nאני יודע מה אתה חושב... בינה מלאכותית וזה...\nתן לי להפתיע אותך!! 🚀\n\n\nלפני שנתחיל בפעם הראשונה נצטרך כמה דברים 🧩")
-            await send_message(update, chat_id, "בוא נתחיל במספר האישור שקיבלת 🔢\nמה מספר האישור שקיבלת?\n\n(תכתוב אותו נקי בלי מילים נוספות ✍️)")
+            if is_first_time:
+                welcome_messages = get_welcome_messages()  # שלוף את כל הודעות קבלת הפנים
+                for message in welcome_messages:
+                    await send_message(update, chat_id, message)  # שלח את כל ההודעות אחת אחרי השנייה
 
             logging.info("📤 נשלחו הודעות וולקאם למשתמש חדש")
             print("📤 נשלחו הודעות וולקאם למשתמש חדש")
@@ -215,47 +218,54 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # אם המשתמש לא קיים - מנסים לרשום אותו עם הקוד שהוא כתב (כל טקסט יקבל מענה)
     # שלב 3: טיפול ברישום משתמש חדש (הכנסת קוד)
     if not exists:
-        logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
-        print(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
-        try:
-            current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
-            if current_try is None:
-                current_try = 0  # להתחלה
+     logging.info(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
+     print(f"👤 משתמש לא קיים, בודק קוד גישה: {user_msg!r}")
+     try:
+         current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
+         if current_try is None:
+             current_try = 0  # להתחלה
 
-            if current_try == 0:
-                current_try = 1
+         if current_try == 0:
+             current_try = 1
 
-            if register_user(context.bot_data["sheet"], chat_id, user_msg):
-                logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
-                print(f"✅ קוד גישה אושר למשתמש {chat_id}")
-                await update.message.reply_text("✅ הקוד אושר איזה התרגשות! אפשר להמשיך לשלב הבא 🙏✨")
-                approval_text = (
-                    "רק לפני שנתחיל – חשוב לי שתדע:\n\n"
-                    "🔸 אני לא אדם אמיתי\n"
-                    "🔸 זה לא ייעוץ, לא טיפול, ולא תחליף לליווי מקצועי\n"
-                    "🔸 אני מרחב תומך רגשי שנועד ללוות אותך כחלק מהקורס\n"
-                    "🔸 אני מבוסס AI – וגם אני עלול לטעות לפעמים\n"
-                    "🔸 השימוש בי הוא באחריותך האישית בלבד\n"
-                    "🔸 השיחה איתי מיועדת רק למי שמעל גיל 18\n\n"
-                    "אנא אשר שקראת והבנת את הכל כדי להמשיך."
-                )
+         if register_user(context.bot_data["sheet"], chat_id, user_msg):
+             logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
+             print(f"✅ קוד גישה אושר למשתמש {chat_id}")
+             await update.message.reply_text("✅ הקוד אושר איזה התרגשות! אפשר להמשיך לשלב הבא 🙏✨")
+             approval_text = (
+                 "רק לפני שנתחיל – חשוב לי שתדע:\n\n"
+                 "🔸 אני לא אדם אמיתי\n"
+                 "🔸 זה לא ייעוץ, לא טיפול, ולא תחליף לליווי מקצועי\n"
+                 "🔸 אני מרחב תומך רגשי שנועד ללוות אותך כחלק מהקורס\n"
+                 "🔸 אני מבוסס AI – וגם אני עלול לטעות לפעמים\n"
+                 "🔸 השימוש בי הוא באחריותך האישית בלבד\n"
+                 "🔸 השיחה איתי מיועדת רק למי שמעל גיל 18\n\n"
+                 "אנא אשר שקראת והבנת את הכל כדי להמשיך."
+             )
 
-                approval_keyboard = ReplyKeyboardMarkup(
-                    [["✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי"], ["❌לא מאשר"]],
-                    one_time_keyboard=True,
-                    resize_keyboard=True
-                )
+             approval_keyboard = ReplyKeyboardMarkup(
+                 [["✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי"], ["❌לא מאשר"]],
+                 one_time_keyboard=True,
+                 resize_keyboard=True
+             )
 
-                await update.message.reply_text(
-                    approval_text + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
-                    reply_markup=approval_keyboard
-                )
+             await update.message.reply_text(
+                 approval_text + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
+                 reply_markup=approval_keyboard
+             )
 
-                logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
-                print("📤 נשלחה הודעת אישור קוד למשתמש")
-            else:
-                logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
-                print(f"❌ קוד גישה לא תקין עבור {chat_id}")
+             logging.info("📤 נשלחה הודעת אישור קוד למשתמש")
+             print("📤 נשלחה הודעת אישור קוד למשתמש")
+         else:
+             logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
+             print(f"❌ קוד גישה לא תקין עבור {chat_id}")
+
+             # שולחים הודעה בהתאם ל־current_try (המספר של הניסיון הנוכחי)
+             retry_message = get_retry_message_by_attempt(current_try)  # מקבלים את ההודעה לפי ניסיון
+             await update.message.reply_text(retry_message)
+             logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
+             print("📤 נשלחה הודעת קוד לא תקין למשתמש")
+
 
                 # שולחים הודעה בהתאם ל־current_try (המספר של הניסיון הנוכחי)
                 if current_try == 1:
