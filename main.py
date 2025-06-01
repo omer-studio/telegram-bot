@@ -36,7 +36,16 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
 
+import sys
 
+# הוספת דיבוג מיידי
+print("🔥 DEBUGGING START - הבוט מתחיל!", flush=True)
+sys.stdout.flush()
+logging.info("🔥 LOGGING TEST - האם זה נראה?")
+
+# בדיקה אם stdout עובד
+import os
+print(f"🔍 DEBUG ENV: {os.environ.get('RENDER_SERVICE_NAME', 'לא Render')}", flush=True)
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from datetime import datetime
@@ -127,6 +136,9 @@ def set_telegram_webhook():
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥🔥🔥 HANDLE MESSAGE CALLED! 🔥🔥🔥", flush=True)
+    sys.stdout.flush()
+    logging.info("🔥🔥🔥 HANDLE MESSAGE CALLED VIA LOGGING! 🔥🔥🔥")
     logging.info("---- התחלת טיפול בהודעה ----")
     print("---- התחלת טיפול בהודעה ----")
     log_payload = {
