@@ -48,19 +48,22 @@ from asyncio import sleep
 from sheets_handler import increment_code_try
 from secret_commands import handle_secret_command
 
+
 app_fastapi = FastAPI()
 import threading
 import asyncio
-from daily_summary import schedule_daily_summary
+from daily_summary import start_daily_summary_scheduler
 
-def run_summary():
-    asyncio.run(schedule_daily_summary())
+def run_daily_scheduler():
+    asyncio.run(start_daily_summary_scheduler())
 
-threading.Thread(target=run_summary, daemon=True).start()
+
+threading.Thread(target=run_daily_scheduler, daemon=True).start()
 
 
 from notifications import send_deploy_notification
 send_deploy_notification(success=True)
+
 
 
 class DummyContext:
