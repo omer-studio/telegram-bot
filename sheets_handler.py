@@ -363,12 +363,35 @@ def approve_user(sheet, chat_id):
 def delete_row_by_chat_id(sheet_name, chat_id):
     """
     מוחק שורה מהגיליון לפי chat_id (בעמודה B).
-    מחזיר True אם נמחקה שורה, אחרת False.
+    בגיליון user_states מוחק את כל השורה.
+    בגיליון1 (users) מרוקן את השורה חוץ מהעמודה הראשונה (הקוד).
     """
-    worksheet = client.open_by_key(GOOGLE_SHEET_ID).worksheet(sheet_name)
+    from config import setup_google_sheets
+
+    sheet_users, sheet_log, sheet_states = setup_google_sheets()
+
+    if sheet_name == "user_states":
+        worksheet = sheet_states
+    elif sheet_name == "log":
+        worksheet = sheet_log
+    else:
+        worksheet = sheet_users
+
     all_records = worksheet.get_all_records()
-    for idx, row in enumerate(all_records, start=2):  # שורה 2 כי כותרות בשורה 1
+    header = worksheet.row_values(1)  # רשימת כותרות
+    for idx, row in enumerate(all_records, start=2):  # מתחילים מ-2 כי שורה 1 זה כותרות
         if str(row.get("chat_id")) == str(chat_id):
-            worksheet.delete_row(idx)
+            if sheet_name == "user_states":
+                # מוחק את כל השורה
+                worksheet.delete_row(idx)
+                print(f"✅ נמחקה שורה לגמרי עבור chat_id {chat_id} בגיליון user_states (שורה {idx})")
+            else:
+                # מרוקן את כל העמודות חוץ מהעמודה הראשונה (קוד)
+                for col in range(2, len(header) + 1):  # עמודה 2 עד סוף (1 זה הקוד)
+                    worksheet.update_cell(idx, col, "")
+                print(f"✅ נוקתה השורה עבור chat_id {chat_id} בגיליון1 (נשמר רק הקוד בשורה {idx})")
             return True
+    print(f"❌ לא נמצאה שורה עם chat_id {chat_id} למחיקה בגיליון {sheet_name}")
     return False
+
+
