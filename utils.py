@@ -26,7 +26,7 @@ def log_event_to_file(log_data):
         lines.append(json.dumps(log_data, ensure_ascii=False))
 
         # שמירה על מגבלת הלוגים (למשל 200)
-        lines = lines[-200:]
+        lines = lines[-500:]
 
         # שמירה חזרה לקובץ
         with open(file_path, "w", encoding="utf-8") as f:
@@ -97,7 +97,7 @@ def get_chat_history_messages(chat_id):
     
     messages = []
     history = history_data[chat_id]["history"]
-    if len(history) < 20:
+    if len(history) < 30:
         last_entries = history  #  שולח את כל ההיסטוריה אם יש פחות מ-איקס הודעות
     else:
         last_entries = history[-5:]  # רק 5 אחרונות
