@@ -22,6 +22,7 @@ import requests
 import asyncio
 import logging
 
+
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
@@ -34,6 +35,7 @@ from fastapi import FastAPI, Request
 import uvicorn
 from asyncio import sleep
 from sheets_handler import increment_code_try
+from secret_commands import handle_secret_command
 
 app_fastapi = FastAPI()
 import threading
