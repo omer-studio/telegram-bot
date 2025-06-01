@@ -63,7 +63,7 @@ def handle_secret_command(chat_id, text):
         send_admin_secret_command_notification(
             f"❗ הופעל קוד סודי למחיקת נתונים בגיליונות בצ'אט {chat_id}.\n"
             f"נמחק אך ורק מידע של משתמש זה (לא של אחרים).\n"
-            f"גיליון1: {'✔️' if deleted_sheet else '❌'}, user_states: {'✔️' if deleted_state else '❌'}"
+            f"גיליון1: {'הצליח' if deleted_sheet else 'לא הצליח'}, user_states: {'הצליח' if deleted_state else 'לא הצליח'}"
         )
         return True, msg
 
