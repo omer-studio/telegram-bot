@@ -359,3 +359,16 @@ def approve_user(sheet, chat_id):
     except Exception as e:
         print(f"❌ approve_user error: {e}")
         return False
+
+def delete_row_by_chat_id(sheet_name, chat_id):
+    """
+    מוחק שורה מהגיליון לפי chat_id (בעמודה B).
+    מחזיר True אם נמחקה שורה, אחרת False.
+    """
+    worksheet = client.open_by_key(GOOGLE_SHEET_ID).worksheet(sheet_name)
+    all_records = worksheet.get_all_records()
+    for idx, row in enumerate(all_records, start=2):  # שורה 2 כי כותרות בשורה 1
+        if str(row.get("chat_id")) == str(chat_id):
+            worksheet.delete_row(idx)
+            return True
+    return False
