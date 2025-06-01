@@ -264,15 +264,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print("📤 נשלחה הודעת אישור קוד למשתמש")
             else:
                 logging.warning(f"❌ קוד גישה לא תקין עבור {chat_id}")
-                print(f"❌ קוד גישה לא תקין עבור {chat_id}")
-
-                # שולחים הודעה בהתאם ל־current_try (המספר של הניסיון הנוכחי)
-                retry_message = get_retry_message_by_attempt(current_try)  # מקבלים את ההודעה לפי ניסיון
-                await update.message.reply_text(retry_message)
-                logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
-                print("📤 נשלחה הודעת קוד לא תקין למשתמש")
+                print(f"❌ קוד גישה לא תקין עבור {chat_id}")               
                 
-
                 # שולחים הודעה בהתאם ל־current_try (המספר של הניסיון הנוכחי)
                 if current_try == 1:
                     await update.message.reply_text(
