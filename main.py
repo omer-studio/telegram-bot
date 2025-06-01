@@ -50,15 +50,7 @@ from secret_commands import handle_secret_command
 
 
 app_fastapi = FastAPI()
-import threading
-import asyncio
-from daily_summary import start_daily_summary_scheduler
 
-def run_daily_scheduler():
-    asyncio.run(start_daily_summary_scheduler())
-
-
-threading.Thread(target=run_daily_scheduler, daemon=True).start()
 
 
 from notifications import send_deploy_notification
@@ -496,9 +488,8 @@ async def webhook(request: Request):
 
 async def main():
     from daily_summary import schedule_daily_summary
-    from notifications import send_deploy_notification
-    send_deploy_notification(success=True)
     asyncio.create_task(schedule_daily_summary())
+
 
     logging.info("========== אתחול הבוט ==========")
     print("========== אתחול הבוט ==========")
