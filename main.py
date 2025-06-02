@@ -64,7 +64,7 @@ from daily_summary import send_daily_summary
 import pytz
 
 scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))  # תזמון לפי תאילנד
-scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=18)  # יריץ ב-10:15 בבוקר תאילנד
+scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=25)  # יריץ ב-10:25 בבוקר תאילנד
 scheduler.start()
 # ============================================
 
