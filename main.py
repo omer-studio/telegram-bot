@@ -57,6 +57,21 @@ from asyncio import sleep
 from sheets_handler import increment_code_try
 from secret_commands import handle_secret_command
 from messages import get_welcome_messages
+from apscheduler.schedulers.background import BackgroundScheduler
+from daily_summary import send_daily_summary
+import pytz
+
+# ========== תזמון דוח יומי אוטומטי ==========
+from apscheduler.schedulers.background import BackgroundScheduler
+from daily_summary import send_daily_summary
+import pytz
+
+scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))  # תזמון לפי תאילנד
+scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=15)  # יריץ ב-10:15 בבוקר תאילנד
+scheduler.start()
+# ============================================
+
+
 
 
 
