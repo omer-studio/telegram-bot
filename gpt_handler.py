@@ -1,7 +1,6 @@
-
 """
 gpt_handler.py — כל הפונקציות לטיפול ב־GPT במקום אחד
-בגרסה זו נוסף חישוב עלות לכל סוג טוקן (רגיל, קשד, פלט) + תיעוד מלא של הטוקנים
+בגרסה זו נוסף חישוב עלות לכל סוג טוקן (רגיל, קשד, פלט) + תיעוד מלא של הטוקנים + החזר עלות באגורות לכל קריאה
 """
 
 import json
@@ -80,6 +79,7 @@ def get_main_response(full_messages):
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
+        cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות #NEW
 
         print(f"🔢 פרטי שימוש: prompt={prompt_tokens} קשד={cached_tokens} רגיל={prompt_regular} פלט={completion_tokens}")
         print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סה"כ ${cost_total:.6f} (₪{cost_total_ils})")
@@ -95,6 +95,7 @@ def get_main_response(full_messages):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
+            "cost_gpt1": cost_gpt1  # באגורות
         }
 
         # שורת לוג לדיבאג ולמעקב
@@ -112,18 +113,19 @@ def get_main_response(full_messages):
 
         # מחזיר את כל הפרמטרים
         return (
-            response.choices[0].message.content,
-            prompt_tokens,
-            cached_tokens,
-            prompt_regular,
-            completion_tokens,
-            total_tokens,
+            response.choices[0].message.content,  # bot_reply
+            prompt_tokens,                        # prompt_tokens_total
+            cached_tokens,                        # cached_tokens
+            prompt_regular,                       # prompt_regular
+            completion_tokens,                    # completion_tokens_total
+            total_tokens,                         # total_tokens
             cost_prompt_regular,
             cost_prompt_cached,
             cost_completion,
             cost_total,
-            cost_total_ils,
-            response.model
+            cost_total_ils,                       # total_cost_ils בש"ח
+            cost_gpt1,                            # cost_gpt1 באגורות
+            response.model                        # model_GPT1
         )
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT ראשי: {e}")
@@ -132,7 +134,7 @@ def get_main_response(full_messages):
 def summarize_bot_reply(reply_text):
     """
     GPT מקצר - תמצות תשובת הבוט
-    (הוספנו גם כאן חישוב עלות מלא)
+    (הוספנו גם כאן חישוב עלות מלא והחזרת עלות באגורות וקשד)
     """
     system_prompt = (
         "סכם את ההודעה שלי כאילו אני מדבר עם חבר: "
@@ -162,6 +164,7 @@ def summarize_bot_reply(reply_text):
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
+        cost_gpt2 = int(round(cost_total_ils * 100))  # באגורות #NEW
 
         usage_log = {
             "prompt_tokens": prompt_tokens,
@@ -173,14 +176,15 @@ def summarize_bot_reply(reply_text):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
+            "cost_gpt2": cost_gpt2 # באגורות
         }
 
         write_gpt_log("reply_summary", usage_log, response.model)
 
         return (
-            response.choices[0].message.content.strip(),
+            response.choices[0].message.content.strip(),  # bot_summary
             prompt_tokens,
-            cached_tokens,
+            cached_tokens,         # cached_tokens_gpt2 #NEW
             prompt_regular,
             completion_tokens,
             total_tokens,
@@ -189,7 +193,8 @@ def summarize_bot_reply(reply_text):
             cost_completion,
             cost_total,
             cost_total_ils,
-            response.model
+            cost_gpt2,             # cost_gpt2 באגורות #NEW
+            response.model         # model_GPT2
         )
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
@@ -198,7 +203,7 @@ def summarize_bot_reply(reply_text):
 def extract_user_profile_fields(text):
     """
     GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה
-    (הוספנו גם כאן חישוב עלות מלא)
+    (הוספנו גם כאן חישוב עלות מלא והחזרת עלות באגורות וקשד)
     """
     system_prompt = """אתה מחלץ מידע אישי מטקסט.
 החזר JSON עם השדות הבאים אם הם מוזכרים:
@@ -217,7 +222,7 @@ closet_status - בארון או יצא או חלקי
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
         "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
-        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "model": ""
+        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""
     }
     try:
         response = client.chat.completions.create(
@@ -243,17 +248,19 @@ closet_status - בארון או יצא או חלקי
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
+        cost_gpt3 = int(round(cost_total_ils * 100))  # באגורות #NEW
 
         usage_data = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
-            "cached_tokens": cached_tokens,
+            "cached_tokens": cached_tokens,   # cached_tokens_gpt3 #NEW
             "cost_prompt_regular": cost_prompt_regular,
             "cost_prompt_cached": cost_prompt_cached,
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
+            "cost_gpt3": cost_gpt3,           # cost_gpt3 באגורות #NEW
             "model": response.model
         }
 
@@ -307,6 +314,7 @@ closet_status - בארון או יצא או חלקי
 - נוספו חישובי עלות וטוקנים לכל קריאה (רגיל, קשד, פלט).
 - כל קריאה שומרת לוג עם כל השדות.
 - פונקציות מחזירות עכשיו את כל הערכים — אפשר לשמור אותם ל־Google Sheets ולעשות דוחות.
+- נוסף החזר עלות באגורות (cost_gptX) וקשד (cached_tokens_gptX) לכל קריאה.
 - בכל מקום נוסף # הסבר קצר בעברית כדי שתדע מה קורה.
 - אין מחיקות — רק תוספות.
 
