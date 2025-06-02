@@ -82,7 +82,7 @@ def get_main_response(full_messages):
         cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות #NEW
 
         print(f"🔢 פרטי שימוש: prompt={prompt_tokens} קשד={cached_tokens} רגיל={prompt_regular} פלט={completion_tokens}")
-        print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סה"כ ${cost_total:.6f} (₪{cost_total_ils})")
+        print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סהכ ${cost_total:.6f} (₪{cost_total_ils})")
 
         # תיעוד מלא ללוג נוסף
         usage_log = {
