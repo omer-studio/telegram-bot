@@ -95,6 +95,8 @@ from sheets_handler import (
 from notifications import send_startup_notification, handle_critical_error, handle_non_critical_error
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 async def send_message(update, chat_id, text, is_bot_message=True):
+    print(f"[DEBUG] -- send_message: chat_id={chat_id}, text={text[:60]!r}...", flush=True)
+    import sys; sys.stdout.flush()
     # שליחת ההודעה בטלגרם
     await update.message.reply_text(text, parse_mode="HTML")
 
@@ -150,6 +152,8 @@ def set_telegram_webhook():
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("[DEBUG] -- handle_message התחיל!", flush=True)
+    import sys; sys.stdout.flush()
     print("🔥🔥🔥 HANDLE MESSAGE CALLED! 🔥🔥🔥", flush=True)
     sys.stdout.flush()
     logging.info("🔥🔥🔥 HANDLE MESSAGE CALLED VIA LOGGING! 🔥🔥🔥")
