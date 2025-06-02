@@ -540,6 +540,11 @@ async def main():
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
 
     set_telegram_webhook()
+    # הפעלת דוח יומי
+    from daily_summary import schedule_daily_summary, send_daily_summary
+    asyncio.create_task(schedule_daily_summary())
+    await send_daily_summary(days_back=0)  # בדיקה - דוח של היום
+
 
     try:
         logging.info("📢 שולח התראת התחלה לאדמין...")
