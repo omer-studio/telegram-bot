@@ -407,33 +407,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             main_response = get_main_response(full_messages)
             
             # אנחנו יודעים שהget_main_response מחזיר תמיד 13 ערכים — נקבל אותם בדיוק
-(
-    reply_text,
-    main_prompt_tokens,
-    main_cached_tokens,
-    main_prompt_regular,
-    main_completion_tokens,
-    main_total_tokens,
-    main_cost_prompt_regular,
-    main_cost_prompt_cached,
-    main_cost_completion,
-    main_cost_total_usd,
-    main_cost_total_ils,
-    main_cost_gpt1,
-    main_model
-) = main_response
+try:
+    (
+        reply_text,
+        main_prompt_tokens,
+        main_cached_tokens,
+        main_prompt_regular,
+        main_completion_tokens,
+        main_total_tokens,
+        main_cost_prompt_regular,
+        main_cost_prompt_cached,
+        main_cost_completion,
+        main_cost_total_usd,
+        main_cost_total_ils,
+        main_cost_gpt1,
+        main_model
+    ) = main_response
+except Exception as e:
+    print(f"💥 שגיאה בפירוק main_response: {e}")
+    reply_text = "שגיאה טכנית. אנא נסה שוב."
+    main_prompt_tokens = main_completion_tokens = main_total_tokens = 0
+    main_cached_tokens = main_prompt_regular = 0
+    main_cost_prompt_regular = main_cost_prompt_cached = main_cost_completion = 0
+    main_cost_total_usd = main_cost_total_ils = main_cost_gpt1 = 0
+    main_model = "error"
 
-# שומרים את כל הערכים לשימוש בהמשך
-main_usage = (
-    main_prompt_tokens,
-    main_completion_tokens,
-    main_total_tokens,
-    main_cached_tokens,
-    main_model,
-    main_cost_gpt1,
-    main_cost_total_usd,
-    main_cost_total_ils
-)
+
 
                 
             logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
