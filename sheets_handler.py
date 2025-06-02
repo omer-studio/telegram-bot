@@ -308,32 +308,31 @@ def log_to_sheets(
                 return 0
 
         # שליפה ישירה מתוך main_usage לפי הסדר החדש (13 ערכים מלאים)
-main_prompt_tokens = safe_int(main_usage[0])  # טוקנים קלט GPT1
-main_completion_tokens = safe_int(main_usage[1])
-main_total_tokens = safe_int(main_usage[2])
-main_cached_tokens = safe_int(main_usage[3])
-main_model = main_usage[4]
-main_cost_gpt1 = safe_int(main_usage[5])
-main_cost_usd = safe_float(main_usage[6])
-main_cost_ils = safe_float(main_usage[7])
+        main_prompt_tokens = safe_int(main_usage[0])  # טוקנים קלט GPT1
+        main_completion_tokens = safe_int(main_usage[1])
+        main_total_tokens = safe_int(main_usage[2])
+        main_cached_tokens = safe_int(main_usage[3])
+        main_model = main_usage[4]
+        main_cost_gpt1 = safe_int(main_usage[5])
+        main_cost_usd = safe_float(main_usage[6])
+        main_cost_ils = safe_float(main_usage[7])
 
-# אם summary_usage או extract_usage קיימים, נוסיף אותם
-summary_prompt_tokens = safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else 0
-summary_completion_tokens = safe_int(summary_usage[2]) if summary_usage and len(summary_usage) > 2 else 0
-summary_total_tokens = safe_int(summary_usage[3]) if summary_usage and len(summary_usage) > 3 else 0
-summary_model = summary_usage[4] if summary_usage and len(summary_usage) > 4 else ""
+        # אם summary_usage או extract_usage קיימים, נוסיף אותם
+        summary_prompt_tokens = safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else 0
+        summary_completion_tokens = safe_int(summary_usage[2]) if summary_usage and len(summary_usage) > 2 else 0
+        summary_total_tokens = safe_int(summary_usage[3]) if summary_usage and len(summary_usage) > 3 else 0
+        summary_model = summary_usage[4] if summary_usage and len(summary_usage) > 4 else ""
 
-extract_prompt_tokens = safe_int(extract_usage.get("prompt_tokens", 0)) if extract_usage else 0
-extract_completion_tokens = safe_int(extract_usage.get("completion_tokens", 0)) if extract_usage else 0
-extract_total_tokens = safe_int(extract_usage.get("total_tokens", 0)) if extract_usage else 0
-extract_model = extract_usage.get("model", "") if extract_usage else ""
+        extract_prompt_tokens = safe_int(extract_usage.get("prompt_tokens", 0)) if extract_usage else 0
+        extract_completion_tokens = safe_int(extract_usage.get("completion_tokens", 0)) if extract_usage else 0
+        extract_total_tokens = safe_int(extract_usage.get("total_tokens", 0)) if extract_usage else 0
+        extract_model = extract_usage.get("model", "") if extract_usage else ""
 
-# סיכום כולל
-prompt_tokens_total = main_prompt_tokens + summary_prompt_tokens + extract_prompt_tokens
-completion_tokens_total = main_completion_tokens + summary_completion_tokens + extract_completion_tokens
-total_tokens = main_total_tokens + summary_total_tokens + extract_total_tokens
-cached_tokens = main_cached_tokens
-
+        # סיכום כולל
+        prompt_tokens_total = main_prompt_tokens + summary_prompt_tokens + extract_prompt_tokens
+        completion_tokens_total = main_completion_tokens + summary_completion_tokens + extract_completion_tokens
+        total_tokens = main_total_tokens + summary_total_tokens + extract_total_tokens
+        cached_tokens = main_cached_tokens
 
         # חישוב cached tokens (כרגע 0 כי OpenAI לא מחזיר)
         if cached_tokens is None:
