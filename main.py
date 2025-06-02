@@ -406,34 +406,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             main_response = get_main_response(full_messages)
             
-            # הוספת debug להבין מה בדיוק מוחזר
-            print(f"🔍 DEBUG: get_main_response החזיר {len(main_response) if hasattr(main_response, '__len__') else 'לא tuple'} ערכים")
-            print(f"🔍 DEBUG: הערכים הם: {main_response}")
-            
-            # פירוק בטוח
-            try:
-                if isinstance(main_response, tuple) and len(main_response) == 5:
-                    reply_text, main_prompt, main_completion, main_total, main_model = main_response
-                    print("✅ פירוק בהצלחה - 5 ערכים")
-                elif isinstance(main_response, tuple) and len(main_response) > 5:
-                    # יותר מ-5 ערכים - ניקח את הראשונים
-                    reply_text = main_response[0]
-                    main_prompt = main_response[1]
-                    main_completion = main_response[2]
-                    main_total = main_response[3]
-                    main_model = main_response[4]
-                    print(f"⚠️ התקבלו {len(main_response)} ערכים במקום 5, לקחתי את הראשונים")
-                else:
-                    # במקרה של בעיה - ערכי ברירת מחדל
-                    print(f"❌ פירוק נכשל! main_response = {main_response}")
-                    reply_text = "סליחה, הייתה בעיה טכנית. אנא נסה שוב."
-                    main_prompt = main_completion = main_total = 0
-                    main_model = "error"
-            except Exception as e:
-                print(f"💥 שגיאה בפירוק: {e}")
-                reply_text = "סליחה, הייתה בעיה טכנית. אנא נסה שוב."
-                main_prompt = main_completion = main_total = 0
-                main_model = "error"
+            # אנחנו יודעים שהget_main_response מחזיר תמיד 13 ערכים — נקבל אותם בדיוק
+(
+    reply_text,
+    main_prompt_tokens,
+    main_cached_tokens,
+    main_prompt_regular,
+    main_completion_tokens,
+    main_total_tokens,
+    main_cost_prompt_regular,
+    main_cost_prompt_cached,
+    main_cost_completion,
+    main_cost_total_usd,
+    main_cost_total_ils,
+    main_cost_gpt1,
+    main_model
+) = main_response
+
+# שומרים את כל הערכים לשימוש בהמשך
+main_usage = (
+    main_prompt_tokens,
+    main_completion_tokens,
+    main_total_tokens,
+    main_cached_tokens,
+    main_model,
+    main_cost_gpt1,
+    main_cost_total_usd,
+    main_cost_total_ils
+)
+
                 
             logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
             print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
