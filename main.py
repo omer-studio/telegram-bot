@@ -300,9 +300,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as ex:
                 logging.error(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
                 print(f"❌ שגיאה בתהליך רישום משתמש חדש: {ex}")
-                await update.message.reply_text(
-                    "❌ סליחה, קרתה תקלה במערכת. אנא נסה שוב בעוד רגע."
-                )
                 await handle_critical_error(ex, chat_id, user_msg, update)
 
             logging.info("---- סיום טיפול בהודעה (משתמש לא קיים) ----")
@@ -566,9 +563,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as critical_error:
             logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
             print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-            await update.message.reply_text(
-                "❌ סליחה, קרתה תקלה במערכת. אנא נסה שוב בעוד רגע."
-            )
             await handle_critical_error(critical_error, chat_id, user_msg, update)
 
         logging.info("---- סיום טיפול בהודעה ----")
@@ -581,8 +575,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ניסיון לשלוח הודעה למשתמש
         try:
             await update.message.reply_text(
-                "😅 אופס! קרתה תקלה טכנית לא צפויה. "
-                "הבוט ממשיך לעבוד, אנא נסה שוב בעוד רגע."
+                "😅  אופס! קרתה תקלה טכנית לא צפויה איזה פאדיחות. "
+                "הבוט ממשיך לעבוד פשוט יקח לו קצת זמן לענות, אנא נסה שוב בעוד רגע."
             )
         except:
             print("🚨 [ULTIMATE_ERROR] לא הצלחתי אפילו לשלוח הודעת שגיאה למשתמש")
