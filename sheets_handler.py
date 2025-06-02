@@ -261,11 +261,22 @@ def compose_emotional_summary(row):
 
     return summary
 
-def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary, 
-                 main_usage, summary_usage, extract_usage, total_tokens, cost_usd, cost_ils):
+def log_to_sheets(
+    message_id, chat_id, user_msg, reply_text, reply_summary,
+    main_usage, summary_usage, extract_usage, total_tokens,
+    cost_usd, cost_ils,
+    prompt_tokens_total=None, completion_tokens_total=None, cached_tokens=None,
+    cached_tokens_gpt1=None, cost_gpt1=None,
+    cached_tokens_gpt2=None, cost_gpt2=None,
+    cached_tokens_gpt3=None, cost_gpt3=None
+):
     """
-    שומר את כל נתוני השיחה בגיליון הלוגים לפי שמות כותרות, לא לפי מספר עמודה.
+    שומר את כל נתוני השיחה בגיליון הלוגים לפי שמות כותרות (ולא לפי אינדקס עמודה).
+    שדות ריקים יישמרו כריק ("") ולא כ־0.
+    שדה bot_summary נשמר רק אם הופעל קיצור (GPT2).
+    ערכי עלות באגורות נשמרים כ-int בלבד.
     """
+
     try:
         now = datetime.now()
         timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -275,44 +286,69 @@ def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary,
         header = sheet_log.row_values(1)
         row_data = [""] * len(header)
 
+        # האם הופעל קיצור תשובה (GPT2)?
+        has_summary = summary_usage and summary_usage[0]  # נניח שאם יש טוקנים בפרומפט זה הופעל
+
         values_to_log = {
             "message_id": message_id,
             "chat_id": chat_id,
             "user_msg": user_msg,
+            # שדה bot_summary נשמר רק אם הופעל קיצור (GPT2)
+            "bot_summary": reply_summary if has_summary else "",
             "bot_reply": reply_text,
-            "bot_summary": reply_summary,
-            "total_tokens": total_tokens,
-            "cost_usd": cost_usd,
-            "cost_ils": cost_ils,
-            "usage_prompt_tokens_GPT1": main_usage[0],
-            "usage_completion_tokens_GPT1": main_usage[1],
-            "usage_total_tokens_GPT1": main_usage[2],
-            "model_GPT1": main_usage[4],
-            "usage_prompt_tokens_GPT2": summary_usage[1],
-            "usage_completion_tokens_GPT2": summary_usage[2],
-            "usage_total_tokens_GPT2": summary_usage[3],
-            "model_GPT2": summary_usage[4],
-            "usage_prompt_tokens_GPT3": extract_usage["prompt_tokens"],
-            "usage_completion_tokens_GPT3": extract_usage["completion_tokens"],
-            "usage_total_tokens_GPT3": extract_usage["total_tokens"],
-            "model_GPT3": extract_usage["model"],
+            "total_tokens": total_tokens if total_tokens is not None else "",
+            "prompt_tokens_total": prompt_tokens_total if prompt_tokens_total is not None else "",  # סך הטוקנים בפרומפט (לכלל השיחה)
+            "completion_tokens_total": completion_tokens_total if completion_tokens_total is not None else "",  # סך הטוקנים בתשובה (לכלל השיחה)
+            "cached_tokens": cached_tokens if cached_tokens is not None else "",  # כמות טוקנים מקשד (לכלל השיחה)
+            "total_cost_usd": cost_usd if cost_usd is not None else "",  # עלות בדולרים (float/str)
+            "total_cost_ils": int(cost_ils) if cost_ils is not None and str(cost_ils) != "" else "",  # עלות באגורות
+            # --- נתוני GPT ראשי (הודעה)
+            "usage_prompt_tokens_GPT1": main_usage[0] if main_usage and len(main_usage) > 0 else "",
+            "usage_completion_tokens_GPT1": main_usage[1] if main_usage and len(main_usage) > 1 else "",
+            "usage_total_tokens_GPT1": main_usage[2] if main_usage and len(main_usage) > 2 else "",
+            "cached_tokens_gpt1": cached_tokens_gpt1 if cached_tokens_gpt1 is not None else "",
+            "cost_gpt1": int(cost_gpt1) if cost_gpt1 is not None and str(cost_gpt1) != "" else "",  # באגורות
+            "model_GPT1": main_usage[4] if main_usage and len(main_usage) > 4 else "",
+            # --- נתוני GPT2 (תקציר)
+            "usage_prompt_tokens_GPT2": summary_usage[1] if summary_usage and len(summary_usage) > 1 else "",
+            "usage_completion_tokens_GPT2": summary_usage[2] if summary_usage and len(summary_usage) > 2 else "",
+            "usage_total_tokens_GPT2": summary_usage[3] if summary_usage and len(summary_usage) > 3 else "",
+            "cached_tokens_gpt2": cached_tokens_gpt2 if cached_tokens_gpt2 is not None else "",
+            "cost_gpt2": int(cost_gpt2) if cost_gpt2 is not None and str(cost_gpt2) != "" else "",  # באגורות
+            "model_GPT2": summary_usage[4] if summary_usage and len(summary_usage) > 4 else "",
+            # --- נתוני GPT3 (חילוץ)
+            "usage_prompt_tokens_GPT3": extract_usage.get("prompt_tokens", "") if extract_usage else "",
+            "usage_completion_tokens_GPT3": extract_usage.get("completion_tokens", "") if extract_usage else "",
+            "usage_total_tokens_GPT3": extract_usage.get("total_tokens", "") if extract_usage else "",
+            "cached_tokens_gpt3": cached_tokens_gpt3 if cached_tokens_gpt3 is not None else "",
+            "cost_gpt3": int(cost_gpt3) if cost_gpt3 is not None and str(cost_gpt3) != "" else "",  # באגורות
+            "model_GPT3": extract_usage.get("model", "") if extract_usage else "",
+            # --- נתוני GPT4 (אם קיים)
+            "usage_prompt_tokens_GPT4": "",  # (ניתן להוסיף אם יש)
+            "usage_completion_tokens_GPT4": "",
+            "usage_total_tokens_GPT4": "",
+            "model_GPT4": "",
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only
         }
 
+        # הכנסת ערכים לפי header
         for key, val in values_to_log.items():
             if key in header:
                 idx = header.index(key)
                 row_data[idx] = val
 
         sheet_log.append_row(row_data)
-        print("✅ נתונים נשמרו בגיליון הלוגים")
+
+        # הדפסה מרוכזת לכל מה שנשמר
+        print(f"✅ לוג נרשם: { {k: v for k, v in values_to_log.items() if k in header} }")
         return True
 
     except Exception as e:
         print(f"❌ שגיאה בשמירה לגיליון: {e}")
         raise
+
 
 
 def check_user_access(sheet, chat_id):
