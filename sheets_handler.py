@@ -264,44 +264,56 @@ def compose_emotional_summary(row):
 def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary, 
                  main_usage, summary_usage, extract_usage, total_tokens, cost_usd, cost_ils):
     """
-    שומר את כל נתוני השיחה בגיליון הלוגים.
-    לוגיקה: כל שיחה, כל עלות, כל סיכום — הכל מתועד בלוגיים.
+    שומר את כל נתוני השיחה בגיליון הלוגים לפי שמות כותרות, לא לפי מספר עמודה.
     """
     try:
-        sheet_log.append_row([
-        message_id,      # 1
-        chat_id,         # 2
-        user_msg,        # 3
-        "",              # 4
-        reply_text,      # 5
-        reply_summary,   # 6
-        "", "", "", "", "",   # 7-11: שדות ריקים
-        total_tokens,    # 12
-        "", "",          # 13-14: שדות ריקים
-        "",              # 15: CACHED טוקנים
-        cost_usd,        # 16
-        cost_ils,        # 17
-        main_usage[0],   # 18
-        main_usage[1],   # 19
-        main_usage[2],   # 20
-        main_usage[4],   # 21
-        summary_usage[1], # 22
-        summary_usage[2], # 23
-        summary_usage[3], # 24
-        summary_usage[4], # 25
-        extract_usage["prompt_tokens"],      # 26
-        extract_usage["completion_tokens"],  # 27
-        extract_usage["total_tokens"],       # 28
-        extract_usage["model"],              # 29
-        "", "", "", "",                     # 30-33: ריק
-        "",                                 # 34: ריק
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 35 - זה עמודה AI!!!
-    ])
+        now = datetime.now()
+        timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")
+        date_only = now.strftime("%Y-%m-%d")
+        time_only = now.strftime("%H:%M")
+
+        header = sheet_log.row_values(1)
+        row_data = [""] * len(header)
+
+        values_to_log = {
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "user_msg": user_msg,
+            "bot_reply": reply_text,
+            "bot_summary": reply_summary,
+            "total_tokens": total_tokens,
+            "cost_usd": cost_usd,
+            "cost_ils": cost_ils,
+            "usage_prompt_tokens_GPT1": main_usage[0],
+            "usage_completion_tokens_GPT1": main_usage[1],
+            "usage_total_tokens_GPT1": main_usage[2],
+            "model_GPT1": main_usage[4],
+            "usage_prompt_tokens_GPT2": summary_usage[1],
+            "usage_completion_tokens_GPT2": summary_usage[2],
+            "usage_total_tokens_GPT2": summary_usage[3],
+            "model_GPT2": summary_usage[4],
+            "usage_prompt_tokens_GPT3": extract_usage["prompt_tokens"],
+            "usage_completion_tokens_GPT3": extract_usage["completion_tokens"],
+            "usage_total_tokens_GPT3": extract_usage["total_tokens"],
+            "model_GPT3": extract_usage["model"],
+            "timestamp": timestamp_full,
+            "date_only": date_only,
+            "time_only": time_only
+        }
+
+        for key, val in values_to_log.items():
+            if key in header:
+                idx = header.index(key)
+                row_data[idx] = val
+
+        sheet_log.append_row(row_data)
         print("✅ נתונים נשמרו בגיליון הלוגים")
         return True
+
     except Exception as e:
         print(f"❌ שגיאה בשמירה לגיליון: {e}")
         raise
+
 
 def check_user_access(sheet, chat_id):
     """
