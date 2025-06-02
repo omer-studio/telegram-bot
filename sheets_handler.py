@@ -271,12 +271,8 @@ def log_to_sheets(
     cached_tokens_gpt3=None, cost_gpt3=None
 ):
     """
-    שומר את כל נתוני השיחה בגיליון הלוגים לפי שמות כותרות (ולא לפי אינדקס עמודה).
-    שדות ריקים יישמרו כריק ("") ולא כ־0.
-    שדה bot_summary נשמר רק אם הופעל קיצור (GPT2).
-    ערכי עלות באגורות נשמרים כ-int בלבד.
+    שומר את כל נתוני השיחה בגיליון הלוגים - עם תיקון לשדות החסרים
     """
-
     try:
         now = datetime.now()
         timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -287,47 +283,101 @@ def log_to_sheets(
         row_data = [""] * len(header)
 
         # האם הופעל קיצור תשובה (GPT2)?
-        has_summary = summary_usage and summary_usage[0]  # נניח שאם יש טוקנים בפרומפט זה הופעל
+        has_summary = summary_usage and summary_usage[0]
+
+        # 🚨 תיקון: חישוב הערכים החסרים
+        # חישוב סך טוקנים מכל ה-GPT calls
+        calculated_prompt_total = 0
+        calculated_completion_total = 0
+        calculated_cached_total = 0
+        
+        # GPT1 (main)
+        if main_usage and len(main_usage) >= 3:
+            calculated_prompt_total += main_usage[0] if main_usage[0] else 0
+            calculated_completion_total += main_usage[1] if main_usage[1] else 0
+            
+        # GPT2 (summary) 
+        if summary_usage and len(summary_usage) >= 3:
+            calculated_prompt_total += summary_usage[1] if summary_usage[1] else 0
+            calculated_completion_total += summary_usage[2] if summary_usage[2] else 0
+            
+        # GPT3 (extract)
+        if extract_usage:
+            calculated_prompt_total += extract_usage.get("prompt_tokens", 0)
+            calculated_completion_total += extract_usage.get("completion_tokens", 0)
+
+        # חישוב סך cached tokens
+        if cached_tokens_gpt1:
+            calculated_cached_total += cached_tokens_gpt1
+        if cached_tokens_gpt2:
+            calculated_cached_total += cached_tokens_gpt2
+        if cached_tokens_gpt3:
+            calculated_cached_total += cached_tokens_gpt3
+
+        # 🚨 תיקון: ניקוי ערכי עלות מסימנים
+        def clean_cost_value(cost_val):
+            if cost_val is None or cost_val == "":
+                return ""
+            # הסרת סימנים כמו $, ₪, רווחים
+            if isinstance(cost_val, str):
+                cleaned = cost_val.replace("$", "").replace("₪", "").replace(",", "").strip()
+                try:
+                    return float(cleaned) if cleaned and cleaned != "0.00" else ""
+                except:
+                    return ""
+            return cost_val
+
+        # 🚨 תיקון: חישוב עלויות אמיתיות
+        total_cost_gpt1 = cost_gpt1 if cost_gpt1 is not None and cost_gpt1 != "" else 0
+        total_cost_gpt2 = cost_gpt2 if cost_gpt2 is not None and cost_gpt2 != "" else 0
+        total_cost_gpt3 = cost_gpt3 if cost_gpt3 is not None and cost_gpt3 != "" else 0
+        
+        # סכימה של כל העלויות
+        calculated_total_cost_ils = total_cost_gpt1 + total_cost_gpt2 + total_cost_gpt3
 
         values_to_log = {
-            "message_id": message_id,
-            "chat_id": chat_id,
+            # פרטי הודעה בסיסיים
+            "message_id": str(message_id) if message_id is not None else "",
+            "chat_id": str(chat_id) if chat_id is not None else "",
             "user_msg": user_msg,
-            # שדה bot_summary נשמר רק אם הופעל קיצור (GPT2)
             "bot_summary": reply_summary if has_summary else "",
             "bot_reply": reply_text,
+            
+            # 🚨 תיקון: סך טוקנים מחושב
             "total_tokens": total_tokens if total_tokens is not None else "",
-            "prompt_tokens_total": prompt_tokens_total if prompt_tokens_total is not None else "",  # סך הטוקנים בפרומפט (לכלל השיחה)
-            "completion_tokens_total": completion_tokens_total if completion_tokens_total is not None else "",  # סך הטוקנים בתשובה (לכלל השיחה)
-            "cached_tokens": cached_tokens if cached_tokens is not None else "",  # כמות טוקנים מקשד (לכלל השיחה)
-            "total_cost_usd": cost_usd if cost_usd is not None else "",  # עלות בדולרים (float/str)
-            "total_cost_ils": int(cost_ils) if cost_ils is not None and str(cost_ils) != "" else "",  # עלות באגורות
-            # --- נתוני GPT ראשי (הודעה)
+            "prompt_tokens_total": calculated_prompt_total if calculated_prompt_total > 0 else "",
+            "completion_tokens_total": calculated_completion_total if calculated_completion_total > 0 else "",
+            "cached_tokens": calculated_cached_total if calculated_cached_total > 0 else "",
+            
+            # 🚨 תיקון: עלויות נקיות
+            "total_cost_usd": clean_cost_value(cost_usd),
+            "total_cost_ils": calculated_total_cost_ils if calculated_total_cost_ils > 0 else "",
+            
+            # נתוני GPT1 (main)
             "usage_prompt_tokens_GPT1": main_usage[0] if main_usage and len(main_usage) > 0 else "",
             "usage_completion_tokens_GPT1": main_usage[1] if main_usage and len(main_usage) > 1 else "",
             "usage_total_tokens_GPT1": main_usage[2] if main_usage and len(main_usage) > 2 else "",
-            "cached_tokens_gpt1": cached_tokens_gpt1 if cached_tokens_gpt1 is not None else "",
-            "cost_gpt1": int(cost_gpt1) if cost_gpt1 is not None and str(cost_gpt1) != "" else "",  # באגורות
+            "cached_tokens_gpt1": cached_tokens_gpt1 if cached_tokens_gpt1 is not None and cached_tokens_gpt1 > 0 else "",
+            "cost_gpt1": int(cost_gpt1) if cost_gpt1 is not None and cost_gpt1 > 0 else "",
             "model_GPT1": main_usage[4] if main_usage and len(main_usage) > 4 else "",
-            # --- נתוני GPT2 (תקציר)
+            
+            # נתוני GPT2 (summary)
             "usage_prompt_tokens_GPT2": summary_usage[1] if summary_usage and len(summary_usage) > 1 else "",
             "usage_completion_tokens_GPT2": summary_usage[2] if summary_usage and len(summary_usage) > 2 else "",
             "usage_total_tokens_GPT2": summary_usage[3] if summary_usage and len(summary_usage) > 3 else "",
-            "cached_tokens_gpt2": cached_tokens_gpt2 if cached_tokens_gpt2 is not None else "",
-            "cost_gpt2": int(cost_gpt2) if cost_gpt2 is not None and str(cost_gpt2) != "" else "",  # באגורות
+            "cached_tokens_gpt2": cached_tokens_gpt2 if cached_tokens_gpt2 is not None and cached_tokens_gpt2 > 0 else "",
+            "cost_gpt2": int(cost_gpt2) if cost_gpt2 is not None and cost_gpt2 > 0 else "",
             "model_GPT2": summary_usage[4] if summary_usage and len(summary_usage) > 4 else "",
-            # --- נתוני GPT3 (חילוץ)
+            
+            # נתוני GPT3 (extract)
             "usage_prompt_tokens_GPT3": extract_usage.get("prompt_tokens", "") if extract_usage else "",
             "usage_completion_tokens_GPT3": extract_usage.get("completion_tokens", "") if extract_usage else "",
             "usage_total_tokens_GPT3": extract_usage.get("total_tokens", "") if extract_usage else "",
-            "cached_tokens_gpt3": cached_tokens_gpt3 if cached_tokens_gpt3 is not None else "",
-            "cost_gpt3": int(cost_gpt3) if cost_gpt3 is not None and str(cost_gpt3) != "" else "",  # באגורות
+            "cached_tokens_gpt3": cached_tokens_gpt3 if cached_tokens_gpt3 is not None and cached_tokens_gpt3 > 0 else "",
+            "cost_gpt3": int(cost_gpt3) if cost_gpt3 is not None and cost_gpt3 > 0 else "",
             "model_GPT3": extract_usage.get("model", "") if extract_usage else "",
-            # --- נתוני GPT4 (אם קיים)
-            "usage_prompt_tokens_GPT4": "",  # (ניתן להוסיף אם יש)
-            "usage_completion_tokens_GPT4": "",
-            "usage_total_tokens_GPT4": "",
-            "model_GPT4": "",
+            
+            # נתוני זמן
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only
@@ -341,12 +391,18 @@ def log_to_sheets(
 
         sheet_log.append_row(row_data)
 
-        # הדפסה מרוכזת לכל מה שנשמר
-        print(f"✅ לוג נרשם: { {k: v for k, v in values_to_log.items() if k in header} }")
+        # הדפסה מרוכזת
+        print(f"✅ לוג נרשם עם ערכים מתוקנים:")
+        print(f"   📊 סך טוקנים: prompt={calculated_prompt_total}, completion={calculated_completion_total}")
+        print(f"   💰 עלויות: גיליון={calculated_total_cost_ils}, דולר={clean_cost_value(cost_usd)}")
+        print(f"   🔄 cached: {calculated_cached_total}")
+        
         return True
 
     except Exception as e:
         print(f"❌ שגיאה בשמירה לגיליון: {e}")
+        import traceback
+        traceback.print_exc()
         raise
 
 
