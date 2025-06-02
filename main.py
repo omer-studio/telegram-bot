@@ -99,7 +99,7 @@ class DummyContext:
 
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
 app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, calculate_total_cost
+from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields
 from sheets_handler import (
     get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user,
     approve_user, ensure_user_state_row
@@ -507,7 +507,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("💰 מחשב עלויות...")
             main_usage = (main_prompt_tokens, main_completion_tokens, main_total_tokens, "", main_model)
             summary_usage = ("", sum_prompt, sum_completion, sum_total, sum_model)
-            total_tokens, cost_usd, cost_ils = calculate_total_cost(main_usage, summary_usage, extract_usage)
+            
             logging.info(f"💸 עלות כוללת: ${cost_usd} (₪{cost_ils}), טוקנים: {total_tokens}")
             print(f"💸 עלות כוללת: ${cost_usd} (₪{cost_ils}), טוקנים: {total_tokens}")
 
