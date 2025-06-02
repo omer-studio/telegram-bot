@@ -14,8 +14,10 @@ def write_gpt_log(ttype, usage, model):
         "model": model,
         "tokens_prompt": usage.get("prompt_tokens", 0),
         "tokens_completion": usage.get("completion_tokens", 0),
-        "tokens_total": usage.get("total_tokens", 0)
+        "tokens_total": usage.get("total_tokens", 0),
+        "tokens_cached": usage.get("cached_tokens", 0)  # הוספנו!
     }
+
     try:
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
@@ -49,6 +51,21 @@ def get_main_response(full_messages):
             messages=full_messages,
             temperature=1,
         )
+        print("---------- USAGE FULL ----------")
+        print(response.usage)
+        try:
+            print("AS DICT:", response.usage.__dict__)
+        except Exception as e:
+            print("USAGE אין dict:", e)
+        try:
+            print("PROMPT TOKENS DETAILS:", response.usage.prompt_tokens_details)
+        except Exception as e:
+            print("prompt_tokens_details לא נמצא:", e)
+        try:
+            print("PROMPT TOKENS DETAILS AS DICT:", response.usage.prompt_tokens_details.__dict__)
+        except Exception as e:
+            print("prompt_tokens_details dict לא נתמך:", e)
+
                 # לוג מלא של GPT
         from utils import log_event_to_file
         log_event_to_file({
@@ -62,11 +79,21 @@ def get_main_response(full_messages):
                 "total_tokens": response.usage.total_tokens
             }
         })
+        cached_tokens = 0
+        if hasattr(response.usage, "prompt_tokens_details") and hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
+            cached_tokens = response.usage.prompt_tokens_details.cached_tokens
+        elif "prompt_tokens_details" in response.usage and "cached_tokens" in response.usage["prompt_tokens_details"]:
+            cached_tokens = response.usage["prompt_tokens_details"]["cached_tokens"]
+
+        print(f"🔵 קשד: {cached_tokens} מתוך {response.usage.prompt_tokens}")
+
         write_gpt_log("main_reply", {
             "prompt_tokens": response.usage.prompt_tokens,
             "completion_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens
+            "total_tokens": response.usage.total_tokens,
+            "cached_tokens": cached_tokens
         }, response.model)
+
 
         return (
             response.choices[0].message.content,
