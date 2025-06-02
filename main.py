@@ -57,9 +57,6 @@ from asyncio import sleep
 from sheets_handler import increment_code_try
 from secret_commands import handle_secret_command
 from messages import get_welcome_messages
-from apscheduler.schedulers.background import BackgroundScheduler
-from daily_summary import send_daily_summary
-import pytz
 
 # ========== תזמון דוח יומי אוטומטי ==========
 from apscheduler.schedulers.background import BackgroundScheduler
