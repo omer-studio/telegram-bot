@@ -269,7 +269,7 @@ def log_to_sheets(message_id, chat_id, user_msg, reply_text, reply_summary,
     try:
         now = datetime.now()
         timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")
-        date_only = now.strftime("%Y-%m-%d")
+        date_only = now.strftime("%Y/%m/%d")
         time_only = now.strftime("%H:%M")
 
         header = sheet_log.row_values(1)
