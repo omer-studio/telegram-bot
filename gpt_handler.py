@@ -306,43 +306,15 @@ closet_status - בארון או יצא או חלקי
 
 
 
-def calculate_total_cost(main_usage, summary_usage, extract_usage):
-    """
-    מחשב את סך כל הטוקנים והעלות מכל שלוש הקריאות ל־GPT:
-    - main_usage: קריאה ראשית (tuple)
-    - summary_usage: סיכום (tuple)
-    - extract_usage: חילוץ תעודת זהות (dict)
-    מחזיר:
-    - total_tokens: סכום טוקנים
-    - cost_usd: עלות כוללת בדולרים
-    - cost_ils: עלות כוללת בש"ח (עגול ל-4 ספרות)
-    """
-    try:
-        # שליפה מהקריאה הראשית
-        main_prompt = main_usage[1] if len(main_usage) > 1 else 0
-        main_completion = main_usage[4] if len(main_usage) > 4 else 0
-        main_total = main_usage[5] if len(main_usage) > 5 else 0
-        cost_main_usd = main_usage[9] if len(main_usage) > 9 else 0
-        cost_main_ils = main_usage[10] if len(main_usage) > 10 else 0
-
-        # שליפה מהסיכום
-        summary_prompt = summary_usage[1] if len(summary_usage) > 1 else 0
-        summary_completion = summary_usage[4] if len(summary_usage) > 4 else 0
-        summary_total = summary_usage[5] if len(summary_usage) > 5 else 0
-        cost_summary_usd = summary_usage[9] if len(summary_usage) > 9 else 0
-        cost_summary_ils = summary_usage[10] if len(summary_usage) > 10 else 0
-
-        # שליפה מהחילוץ
-        extract_total = extract_usage.get("total_tokens", 0)
-        cost_extract_usd = extract_usage.get("cost_total", 0)
-        cost_extract_ils = extract_usage.get("cost_total_ils", 0)
-
         # חיבור כל הטוקנים
         total_tokens = main_total + summary_total + extract_total
         cost_usd = round(cost_main_usd + cost_summary_usd + cost_extract_usd, 6)
         cost_ils = round(cost_main_ils + cost_summary_ils + cost_extract_ils, 4)
 
-        return total_tokens, cost_usd, cost_ils
+        cost_ils_agorot = int(round(cost_ils * 100))  # המרה לאגורות
+
+        return total_tokens, cost_usd, cost_ils_agorot
+
 
     except Exception as e:
         logging.error(f"❌ שגיאה בחישוב עלות כוללת: {e}")
