@@ -19,6 +19,12 @@ from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, ADMIN_BOT_TELEGRAM_TOKEN, A
 bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 
 async def send_daily_summary(days_back=1):
+    import sys
+    print("🔔🔔🔔 send_daily_summary — התחיל לרוץ! 🔔🔔🔔", flush=True)
+    sys.stdout.flush()
+    import logging
+    logging.info("🔔🔔🔔 send_daily_summary — התחיל לרוץ! 🔔🔔🔔")
+
     """
     days_back = 1 --> אתמול (ברירת מחדל)
     days_back = 0 --> היום
