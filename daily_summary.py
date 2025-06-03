@@ -5,7 +5,7 @@ import logging
 import os
 import json
 import time
-from dateutil.parser import parse as parse_dt
+from dateutil.parser import parse as parse_dt  # שים לב - זה צריך להיות מותקן ב־requirements.txt
 
 GPT_LOG_PATH = "/data/gpt_usage_log.jsonl"
 
@@ -56,6 +56,7 @@ async def send_daily_summary(days_back=1):
                 output_tokens = u.get("output_tokens", 0)
                 cached_tokens = u.get("input_cached_tokens", 0)
                 num_requests = u.get("num_model_requests", 0)
+        # כאן יכול להיות 0 אם אין usage לאותו יום
 
         # -------------------------------------------------------------
         # משיכת חיוב אמיתי (כסף שחויבת בפועל!) - זה מקור שונה!
@@ -141,61 +142,17 @@ async def send_daily_summary(days_back=1):
         except Exception as telegram_error:
             logging.error(f"שגיאה גם בשליחת הודעת שגיאה לטלגרם: {telegram_error}")
 
-def calculate_seconds_until_target_time(target_hour=2, target_minute=0):
-    """
-    מחשב כמה שניות נשארו עד השעה המבוקשת (ברירת מחדל: 02:00 UTC)
-    """
-    now = datetime.utcnow()
-    today = now.date()
-    
-    # יצירת הזמן המטרה להיום
-    target_time = datetime.combine(today, datetime.min.time().replace(hour=target_hour, minute=target_minute))
-    
-    # אם הזמן המטרה עבר היום, עבור למחר
-    if now >= target_time:
-        target_time = target_time + timedelta(days=1)
-    
-    # חישוב ההפרש בשניות
-    diff = target_time - now
-    return int(diff.total_seconds())
+# דוגמה לשימוש:
+# await send_daily_summary(days_back=1)   # דוח של אתמול
+# await send_daily_summary(days_back=0)   # דוח של היום
+# await send_daily_summary(days_back=2)   # דוח של שלשום
 
 async def schedule_daily_summary():
-    """
-    פונקציה שרצה כל יום ב-02:00 UTC ושולחת דוח יומי
-    (02:00 UTC = 04:00/05:00 בישראל, תלוי בחורף/קיץ - אחרי איפוס OpenAI)
-    """
-    print("🕐 מתחיל תזמון דוח יומי - ירוץ כל יום ב-02:00 UTC")
-    logging.info("🕐 מתחיל תזמון דוח יומי - ירוץ כל יום ב-02:00 UTC")
-    
-    # דוח ראשון - אחרי 30 שניות מהעלאת הבוט (כדי שהמערכת תהיה מוכנה)
-    await asyncio.sleep(30)
-    print("📬 שולח דוח ראשון של אתמול...")
-    await send_daily_summary(days_back=1)
-    
-    while True:
-        try:
-            # חישוב כמה זמן לחכות עד 02:00 הבאה
-            seconds_to_wait = calculate_seconds_until_target_time(target_hour=2, target_minute=0)
-            
-            print(f"⏰ הדוח הבא יישלח בעוד {seconds_to_wait//3600} שעות ו-{(seconds_to_wait%3600)//60} דקות")
-            logging.info(f"⏰ הדוח הבא יישלח בעוד {seconds_to_wait//3600} שעות ו-{(seconds_to_wait%3600)//60} דקות")
-            
-            # המתנה עד השעה המבוקשת
-            await asyncio.sleep(seconds_to_wait)
-            
-            # שליחת הדוח היומי
-            print("📬 זמן לשלוח דוח יומי!")
-            logging.info("📬 זמן לשלוח דוח יומי!")
-            await send_daily_summary(days_back=1)  # דוח של אתמול
-            
-        except Exception as e:
-            logging.error(f"❌ שגיאה בתזמון הדוח היומי: {e}")
-            print(f"❌ שגיאה בתזמון הדוח היומי: {e}")
-            # במקרה של שגיאה, חכה שעה ונסה שוב
-            await asyncio.sleep(3600)
+    await asyncio.sleep(2)  # מריץ עוד איקס שניות מהרגע שהפריסה הושלמה והבוט עלה
+    await send_daily_summary()
 
-# הפונקציה הישנה נשארת לתאימות לאחור, אבל לא בשימוש
 async def delayed_daily_summary():
     print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
-    await asyncio.sleep(1)
-    await send_daily_summary(days_back=0)
+    await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
+    from daily_summary import send_daily_summary
+    await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
