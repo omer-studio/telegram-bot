@@ -172,7 +172,7 @@ def summarize_bot_reply(reply_text):
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
-            cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
+        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
         cost_gpt2 = int(round(cost_total_ils * 100))  # באגורות #NEW
 
