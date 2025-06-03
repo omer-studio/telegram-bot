@@ -176,3 +176,44 @@ async def delayed_daily_summary():
     print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
     await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
     await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
+
+# ===============================================
+# אתחול אוטומטי של דוחות יומיים
+# ===============================================
+import threading
+import time
+from apscheduler.schedulers.background import BackgroundScheduler
+import pytz
+
+def setup_daily_reports():
+    """הגדרת דוח מיידי ודוח יומי אוטומטי"""
+    print("🚀 [DAILY] מתחיל הגדרת דוחות יומיים...")
+    
+    # דוח מיידי באתחול
+    def startup_report():
+        time.sleep(15)  # המתן שהכל יתייצב
+        print("🔥 [DAILY] שולח דוח יומי באתחול...")
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(send_daily_summary())
+            print("✅ [DAILY] דוח באתחול נשלח בהצלחה!")
+        except Exception as e:
+            print(f"❌ [DAILY] שגיאה בדוח באתחול: {e}")
+    
+    # דוח יומי אוטומטי
+    try:
+        thailand_tz = pytz.timezone("Asia/Bangkok")
+        scheduler = BackgroundScheduler(timezone=thailand_tz)
+        scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=38)
+        scheduler.start()
+        print("✅ [DAILY] תזמון דוח יומי הופעל ב-10:38 תאילנד")
+    except Exception as e:
+        print(f"❌ [DAILY] שגיאה בהגדרת תזמון: {e}")
+    
+    # הפעל דוח מיידי
+    threading.Thread(target=startup_report, daemon=True).start()
+
+# הפעל אוטומטית כשטוענים את הקובץ
+setup_daily_reports()
