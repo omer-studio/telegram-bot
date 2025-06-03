@@ -100,7 +100,7 @@ class DummyContext:
 
 from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
 app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields
+from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, smart_update_profile
 from sheets_handler import (
     get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user,
     approve_user, ensure_user_state_row
@@ -473,50 +473,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info("📨 תשובה נשלחה למשתמש")
             print("📨 תשובה נשלחה למשתמש")
 
-            identity_fields = {}
-            extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "main_total_tokens": 0, "model": ""}
             try:
-                logging.info("🔍 מחלץ מידע אישי מהודעת המשתמש...")
-                print("🔍 מחלץ מידע אישי מהודעת המשתמש...")
-                
-                extract_result = extract_user_profile_fields(user_msg)
-                if isinstance(extract_result, tuple) and len(extract_result) >= 13:
-                    identity_fields = extract_result[0]
-                    extract_usage = {
-                        "prompt_tokens": extract_result[1],
-                        "cached_tokens": extract_result[2],
-                        "prompt_regular": extract_result[3],
-                        "completion_tokens": extract_result[4],
-                        "total_tokens": extract_result[5],
-                        "cost_prompt_regular": extract_result[6],
-                        "cost_prompt_cached": extract_result[7],
-                        "cost_completion": extract_result[8],
-                        "cost_total": extract_result[9],
-                        "cost_total_ils": extract_result[10],
-                        "cost_gpt3": extract_result[11],
-                        "model": extract_result[12],
-                    }
-                    print("✅ חילוץ מידע אישי בהצלחה")
-                else:
-                    print(f"⚠️ extract_user_profile_fields החזיר פורמט לא צפוי: {extract_result}")
-                    identity_fields = {}
-                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": ""}
-                    
-                logging.info(f"מידע אישי שחולץ: {identity_fields!r}")
-                print(f"מידע אישי שחולץ: {identity_fields!r}")
-                if identity_fields:
-                    logging.info("👤 מעדכן פרופיל משתמש בגיליון...")
-                    print("👤 מעדכן פרופיל משתמש בגיליון...")
-                    update_user_profile(chat_id, identity_fields)
-                    logging.info("✅ הפרופיל עודכן בהצלחה")
-                    print("✅ הפרופיל עודכן בהצלחה")
-                else:
-                    logging.info("ℹ️ לא נמצא מידע אישי לעדכון")
-                    print("ℹ️ לא נמצא מידע אישי לעדכון")
-            except Exception as profile_error:
-                logging.error(f"⚠️ שגיאה בעדכון פרופיל משתמש: {profile_error}")
-                print(f"⚠️ שגיאה בעדכון פרופיל משתמש: {profile_error}")
-                handle_non_critical_error(profile_error, chat_id, user_msg, "שגיאה בעדכון פרופיל משתמש")
+                logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
+                existing_profile = user_summary or "{}"
+                updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
+                identity_fields = updated_profile
+                if updated_profile and updated_profile != existing_profile:
+                    update_user_profile(chat_id, updated_profile)
+                    logging.info("📝 ת.ז רגשית עודכנה בהצלחה")
+            except Exception as e:
+                logging.error(f"❌ שגיאה בעדכון ת.ז רגשית: {e}")
+                identity_fields = {}
+                extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": ""}
+                merge_usage = None
 
             logging.info("💰 מחשב עלויות...")
             print("💰 מחשב עלויות...")
