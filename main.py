@@ -480,14 +480,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print("🔍 מחלץ מידע אישי מהודעת המשתמש...")
                 
                 extract_result = extract_user_profile_fields(user_msg)
-                if isinstance(extract_result, tuple) and len(extract_result) >= 2:
+                if isinstance(extract_result, tuple) and len(extract_result) >= 13:
                     identity_fields = extract_result[0]
-                    extract_usage = extract_result[1]
+                    extract_usage = {
+                        "prompt_tokens": extract_result[1],
+                        "cached_tokens": extract_result[2],
+                        "prompt_regular": extract_result[3],
+                        "completion_tokens": extract_result[4],
+                        "total_tokens": extract_result[5],
+                        "cost_prompt_regular": extract_result[6],
+                        "cost_prompt_cached": extract_result[7],
+                        "cost_completion": extract_result[8],
+                        "cost_total": extract_result[9],
+                        "cost_total_ils": extract_result[10],
+                        "cost_gpt3": extract_result[11],
+                        "model": extract_result[12],
+                    }
                     print("✅ חילוץ מידע אישי בהצלחה")
                 else:
                     print(f"⚠️ extract_user_profile_fields החזיר פורמט לא צפוי: {extract_result}")
                     identity_fields = {}
-                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "main_total_tokens": 0, "model": ""}
+                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": ""}
                     
                 logging.info(f"מידע אישי שחולץ: {identity_fields!r}")
                 print(f"מידע אישי שחולץ: {identity_fields!r}")
