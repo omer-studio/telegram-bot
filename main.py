@@ -628,14 +628,23 @@ async def main():
 
     # דוח יומי מיידי עם השהיה
     async def delayed_startup_report():
-        await asyncio.sleep(15)  # חכה 5 שניות שהכל יתייצב
+        print("🟢 [DEBUG] התחלת delayed_startup_report - עומד להמתין 15 שניות...")
+        await asyncio.sleep(15)  # חכה 15 שניות שהכל יתייצב
+        print("🟡 [DEBUG] סיימנו להמתין, עכשיו נשלח דוח יומי...")
         try:
+            print("🔵 [DEBUG] קורא ל-send_daily_summary()...")
             await send_daily_summary()
+            print("✅ [DEBUG] send_daily_summary הושלם בהצלחה!")
             print("✅ דוח יומי נשלח בהצלחה")
         except Exception as e:
+            print(f"❌ [DEBUG] שגיאה ב-send_daily_summary: {e}")
             print(f"❌ שגיאה בדוח יומי: {e}")
-    
+            import traceback
+            print(f"🔴 [DEBUG] מלא traceback: {traceback.format_exc()}")
+
+    print("🚀 [DEBUG] יוצר task לדוח יומי...")
     asyncio.create_task(delayed_startup_report())
+    print("✅ [DEBUG] task נוצר בהצלחה!")
 
     try:
         logging.info("📢 שולח התראת התחלה לאדמין...")
