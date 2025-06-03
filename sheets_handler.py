@@ -134,7 +134,11 @@ def update_user_profile(chat_id, field_values):
     """
     מעדכן פרופיל משתמש בגיליון המשתמשים.
     לכל שדה שמעודכן — מתעדכן גם סיכום רגשי.
+    חובה: field_values חייב להיות dict בלבד!
     """
+    if not isinstance(field_values, dict):
+        logging.error(f"❌ update_user_profile קיבל טיפוס לא תקין: {type(field_values)}. הערך: {field_values}")
+        raise TypeError(f"update_user_profile: field_values חייב להיות dict! קיבלתי: {type(field_values)}")
     try:
         print(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
         logging.info(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")

@@ -475,7 +475,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             try:
                 logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
-                existing_profile = user_summary or "{}"
+                # ודא ש-existing_profile הוא dict
+                if isinstance(user_summary, str):
+                    import json
+                    try:
+                        existing_profile = json.loads(user_summary)
+                    except Exception:
+                        existing_profile = {}
+                elif isinstance(user_summary, dict):
+                    existing_profile = user_summary
+                else:
+                    existing_profile = {}
                 updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
                 identity_fields = updated_profile
                 if updated_profile and updated_profile != existing_profile:
