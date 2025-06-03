@@ -252,9 +252,9 @@ def setup_daily_reports():
     try:
         thailand_tz = pytz.timezone("Asia/Bangkok")
         scheduler = BackgroundScheduler(timezone=thailand_tz)
-        scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=38)
+        scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=28)
         scheduler.start()
-        print("✅ [DAILY] תזמון דוח יומי הופעל ב-10:38 תאילנד")
+        print("✅ [DAILY] תזמון דוח יומי הופעל ב-12:28 תאילנד")
     except Exception as e:
         print(f"❌ [DAILY] שגיאה בהגדרת תזמון: {e}")
     
