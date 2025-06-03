@@ -313,9 +313,9 @@ def log_to_sheets(
         main_total_tokens = safe_int(main_usage[2])
         main_cached_tokens = safe_int(main_usage[3])
         main_model = main_usage[4]
-        main_cost_gpt1 = safe_int(main_usage[5])
-        main_cost_usd = safe_float(main_usage[6])
-        main_cost_ils = safe_float(main_usage[7])
+        main_cost_gpt1 = safe_int(main_usage[11])
+        main_cost_usd = safe_float(main_usage[9])
+        main_cost_ils = safe_float(main_usage[10])
 
         # אם summary_usage או extract_usage קיימים, נוסיף אותם
         summary_prompt_tokens = safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else 0
