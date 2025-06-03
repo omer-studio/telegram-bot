@@ -49,6 +49,11 @@ def safe_float(val):
         logging.warning(f"safe_float: value '{val}' could not be converted to float. Using 0.0 instead.")
         return 0.0
 
+
+
+# ============================הג'יפיטי ה-1 - פועל תמיד ועונה תשובה למשתמש ======================= 
+
+
 def get_main_response(full_messages):
     """
     GPT ראשי - נותן תשובה למשתמש
@@ -131,6 +136,11 @@ def get_main_response(full_messages):
         logging.error(f"❌ שגיאה ב-GPT ראשי: {e}")
         raise
 
+
+
+# ============================הג'יפיטי ה-2 - מקצר את תשובת הבוט אם היא ארוכה מדי כדי לחסוך בהיסטוריה ======================= 
+
+
 def summarize_bot_reply(reply_text):
     """
     GPT מקצר - תמצות תשובת הבוט
@@ -162,7 +172,7 @@ def summarize_bot_reply(reply_text):
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
-        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
+            cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
         cost_gpt2 = int(round(cost_total_ils * 100))  # באגורות #NEW
 
@@ -199,7 +209,11 @@ def summarize_bot_reply(reply_text):
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
-#============================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ======================= 
+
+
+
+# ============================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ======================= 
+
 def extract_user_profile_fields(text):
     """
     GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת)
