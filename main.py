@@ -539,9 +539,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "summary_prompt": sum_prompt,
                     "summary_completion": sum_completion,
                     "summary_total": sum_total,
-                    "extract_prompt": extract_usage["prompt_tokens"],
-                    "extract_completion": extract_usage["completion_tokens"],
-                    "extract_total": extract_usage.get("total_tokens", 0),
+                    "extract_prompt": extract_usage[0] if isinstance(extract_usage, (list, tuple)) and len(extract_usage) > 0 else 0,
+                    "extract_completion": extract_usage[4] if isinstance(extract_usage, (list, tuple)) and len(extract_usage) > 4 else 0,
+                    "extract_total": extract_usage[5] if isinstance(extract_usage, (list, tuple)) and len(extract_usage) > 5 else 0,
                     "total_all": main_total_tokens,
                     "main_cost_total_usd": main_cost_total_usd,
                     "main_cost_total_ils": main_cost_total_ils
