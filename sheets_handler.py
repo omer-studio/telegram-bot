@@ -21,6 +21,7 @@ sheets_handler.py — ניהול גישה, הרשאות ולוגים ב-Google S
 
 from config import setup_google_sheets, SUMMARY_FIELD
 from datetime import datetime
+import logging
 
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
@@ -135,6 +136,8 @@ def update_user_profile(chat_id, field_values):
     לכל שדה שמעודכן — מתעדכן גם סיכום רגשי.
     """
     try:
+        print(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
+        logging.info(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
         print(f"🔄 מעדכן פרופיל למשתמש {chat_id} עם שדות: {field_values}")
 
         all_records = sheet_users.get_all_records()
@@ -149,12 +152,14 @@ def update_user_profile(chat_id, field_values):
                 for key, value in field_values.items():
                     if key in header and value:
                         col_index = header.index(key) + 1
-                        print(f"📝 מעדכן {key} = '{value}' בעמודה {col_index}")
+                        print(f"[DEBUG] updating field: {key} = '{value}' at col {col_index}")
+                        logging.info(f"[DEBUG] updating field: {key} = '{value}' at col {col_index}")
                         sheet_users.update_cell(idx + 2, col_index, str(value))
                         updated_fields.append(f"{key}: {value}")
 
                 if updated_fields:
-                    print(f"✅ עודכנו שדות: {', '.join(updated_fields)}")
+                    print(f"[DEBUG] updated fields: {updated_fields}")
+                    logging.info(f"[DEBUG] updated fields: {updated_fields}")
 
                     # מעדכן סיכום
                     updated_row = sheet_users.row_values(idx + 2)

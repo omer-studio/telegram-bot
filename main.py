@@ -479,6 +479,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
                 identity_fields = updated_profile
                 if updated_profile and updated_profile != existing_profile:
+                    print(f"[DEBUG] update_user_profile called with: {updated_profile}")
+                    logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
                     update_user_profile(chat_id, updated_profile)
                     logging.info("📝 ת.ז רגשית עודכנה בהצלחה")
             except Exception as e:

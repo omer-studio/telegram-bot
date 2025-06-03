@@ -319,6 +319,8 @@ future_vision - חזון עתיד
         if validated_result != result:
             logging.info(f"🔧 לאחר validation: {validated_result}")
         
+        logging.info(f"[DEBUG] new_data after extract: {validated_result}")
+        
         return (
             validated_result,           # extracted_data (במקום result)
             prompt_tokens,              # prompt_tokens  
@@ -338,9 +340,9 @@ future_vision - חזון עתיד
     except json.JSONDecodeError as e:
         logging.error(f"❌ שגיאה בפרסור JSON: {e}")
         logging.error(f"📄 התוכן: '{content}'")
-
         # פרסור ידני כ-fallback - מעודכן לשדות החדשים
         manual_result = {}
+        logging.info(f"[DEBUG] fallback manual extraction running on text: {text}")
         
         # גיל
         if "בן " in text or "בת " in text:
@@ -394,12 +396,11 @@ future_vision - חזון עתיד
             manual_result["attends_therapy"] = "כן"
 
         logging.info(f"🔧 פרסור ידני מעודכן: {manual_result}")
-        
         # validation גם על הפרסור הידני
         validated_manual = validate_extracted_data(manual_result)
         if validated_manual != manual_result:
             logging.info(f"🔧 פרסור ידני לאחר validation: {validated_manual}")
-            
+        logging.info(f"[DEBUG] new_data after manual extract: {validated_manual}")
         return (
             validated_manual,           # extracted_data
             0,                          # prompt_tokens (fallback)
@@ -418,6 +419,7 @@ future_vision - חזון עתיד
 
     except Exception as e:
         logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
+        logging.error(f"[DEBUG] Exception in extract_user_profile_fields: {e}")
         return (
             {},                         # extracted_data (ריק)
             0,                          # prompt_tokens
