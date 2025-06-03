@@ -625,15 +625,17 @@ async def main():
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
 
     set_telegram_webhook()
-    async def delayed_startup_report():
-    await asyncio.sleep(5)  # חכה 5 שניות שהכל יתייצב
-    try:
-        await send_daily_summary()
-        print("✅ דוח יומי נשלח בהצלחה")
-    except Exception as e:
-        print(f"❌ שגיאה בדוח יומי: {e}")
 
-asyncio.create_task(delayed_startup_report())
+    # דוח יומי מיידי עם השהיה
+    async def delayed_startup_report():
+        await asyncio.sleep(15)  # חכה 5 שניות שהכל יתייצב
+        try:
+            await send_daily_summary()
+            print("✅ דוח יומי נשלח בהצלחה")
+        except Exception as e:
+            print(f"❌ שגיאה בדוח יומי: {e}")
+    
+    asyncio.create_task(delayed_startup_report())
 
     try:
         logging.info("📢 שולח התראת התחלה לאדמין...")
