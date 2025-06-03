@@ -199,31 +199,46 @@ def summarize_bot_reply(reply_text):
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
-
+#================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ========= 
 def extract_user_profile_fields(text):
     """
-    GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה
-    (הוספנו גם כאן חישוב עלות מלא והחזרת עלות באגורות וקשד)
+    GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת)
     """
-    system_prompt = """אתה מחלץ מידע אישי מטקסט.
-החזר JSON עם השדות הבאים אם הם מוזכרים:
+    system_prompt = """אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
 
-age - גיל (רק מספר)
-religious_context - דתי או חילוני או מסורתי  
-relationship_type - רווק או נשוי או גרוש
-closet_status - בארון או יצא או חלקי
+age - גיל (מספר בלבד)
+pronoun_preference - לשון פניה: "את"/"אתה"/"מעורב"
+occupation_or_role - עיסוק/תפקיד
+attracted_to - משיכה: "גברים"/"נשים"/"שניהם"/"לא ברור"
+relationship_type - מצב זוגי: "רווק"/"נשוי"/"נשוי+2"/"גרוש" וכו'
+self_religious_affiliation - זהות דתית: "יהודי"/"ערבי"/"דרוזי"/"נוצרי"/"שומרוני"
+self_religiosity_level - רמת דתיות: "דתי"/"חילוני"/"מסורתי"/"חרדי"/"דתי לאומי"
+family_religiosity - רקע משפחתי: "משפחה דתית"/"משפחה חילונית"/"משפחה מעורבת"
+closet_status - מצב ארון: "בארון"/"יצא חלקית"/"יצא לכולם"
+who_knows - מי יודע עליו
+who_doesnt_know - מי לא יודע עליו
+attends_therapy - טיפול: "כן"/"לא"/"טיפול זוגי"/"קבוצת תמיכה"
+primary_conflict - הקונפליקט המרכזי
+trauma_history - טראומות (בעדינות)
+goal_in_course - מטרות בקורס
+language_of_strength - משפטים מחזקים
+coping_strategies - דרכי התמודדות
+fears_concerns - פחדים וחששות
+future_vision - חזון עתיד
 
 דוגמאות:
-"אני בן 25" → {"age": 25}
-"אני דתי ורווק" → {"religious_context": "דתי", "relationship_type": "רווק"}
-"בחור דתי בן 23" → {"age": 23, "religious_context": "דתי"}
+"אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
+"נשוי עם שני ילדים" → {"relationship_type": "נשוי+2"}
+"סיפרתי להורים, אבל לעמיתים לא" → {"who_knows": "הורים", "who_doesnt_know": "עמיתים"}
 
 רק JSON, בלי הסברים!"""
+
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
         "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
         "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""
     }
+    
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -232,10 +247,11 @@ closet_status - בארון או יצא או חלקי
                 {"role": "user", "content": text}
             ],
             temperature=0,
-            max_tokens=50
+            max_tokens=200  # הגדלתי כי יש 20 שדות אפשריים
         )
         content = response.choices[0].message.content.strip()
 
+        # חישובי עלות (ללא שינוי)
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
         cached_tokens = prompt_tokens_details['cached_tokens']
@@ -248,19 +264,19 @@ closet_status - בארון או יצא או חלקי
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt3 = int(round(cost_total_ils * 100))  # באגורות #NEW
+        cost_gpt3 = int(round(cost_total_ils * 100))
 
         usage_data = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
-            "cached_tokens": cached_tokens,   # cached_tokens_gpt3 #NEW
+            "cached_tokens": cached_tokens,
             "cost_prompt_regular": cost_prompt_regular,
             "cost_prompt_cached": cost_prompt_cached,
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt3": cost_gpt3,           # cost_gpt3 באגורות #NEW
+            "cost_gpt3": cost_gpt3,
             "model": response.model
         }
 
@@ -278,49 +294,119 @@ closet_status - בארון או יצא או חלקי
                 logging.info(f"🔧 חילצתי: '{content}'")
 
         result = json.loads(content)
+        
+        # בדיקות היגיון וvalidation
+        validated_result = validate_extracted_data(result)
+        
         logging.info(f"✅ GPT מצא שדות: {result}")
-        return result, usage_data
+        if validated_result != result:
+            logging.info(f"🔧 לאחר validation: {validated_result}")
+        
+        return validated_result, usage_data
 
     except json.JSONDecodeError as e:
         logging.error(f"❌ שגיאה בפרסור JSON: {e}")
         logging.error(f"📄 התוכן: '{content}'")
 
-        # פרסור ידני כ-fallback
+        # פרסור ידני כ-fallback - מעודכן לשדות החדשים
         manual_result = {}
-        if "בן " in text:
+        
+        # גיל
+        if "בן " in text or "בת " in text:
             import re
-            age_match = re.search(r'בן (\d+)', text)
+            age_match = re.search(r'ב[ןת] (\d+)', text)
             if age_match:
                 manual_result["age"] = int(age_match.group(1))
-        if "דתי" in text:
-            manual_result["religious_context"] = "דתי"
+        
+        # זהות דתית ורמת דתיות
+        if "יהודי" in text:
+            manual_result["self_religious_affiliation"] = "יהודי"
+        elif "ערבי" in text:
+            manual_result["self_religious_affiliation"] = "ערבי"
+        elif "דרוזי" in text:
+            manual_result["self_religious_affiliation"] = "דרוזי"
+            
+        if "חרדי" in text:
+            manual_result["self_religiosity_level"] = "חרדי"
+        elif "דתי לאומי" in text:
+            manual_result["self_religiosity_level"] = "דתי לאומי"
+        elif "דתי" in text:
+            manual_result["self_religiosity_level"] = "דתי"
+        elif "מסורתי" in text:
+            manual_result["self_religiosity_level"] = "מסורתי"
+        elif "חילוני" in text:
+            manual_result["self_religiosity_level"] = "חילוני"
+            
+        # מצב זוגי
         if "רווק" in text:
             manual_result["relationship_type"] = "רווק"
+        elif "נשוי" in text:
+            if "שני" in text or "2" in text:
+                manual_result["relationship_type"] = "נשוי+2"
+            elif "שלושה" in text or "3" in text:
+                manual_result["relationship_type"] = "נשוי+3"
+            elif "ילדים" in text or "ילד" in text:
+                manual_result["relationship_type"] = "נשוי+2"  # default
+            else:
+                manual_result["relationship_type"] = "נשוי"
+        elif "גרוש" in text:
+            manual_result["relationship_type"] = "גרוש"
+            
+        # מצב ארון
+        if "בארון" in text:
+            manual_result["closet_status"] = "בארון"
+        elif "יצאתי" in text:
+            manual_result["closet_status"] = "יצא חלקית"
+            
+        # טיפול
+        if "פסיכולוג" in text or "טיפול" in text:
+            manual_result["attends_therapy"] = "כן"
 
-        logging.info(f"🔧 פרסור ידני: {manual_result}")
-        return manual_result, usage_data
+        logging.info(f"🔧 פרסור ידני מעודכן: {manual_result}")
+        
+        # validation גם על הפרסור הידני
+        validated_manual = validate_extracted_data(manual_result)
+        if validated_manual != manual_result:
+            logging.info(f"🔧 פרסור ידני לאחר validation: {validated_manual}")
+            
+        return validated_manual, usage_data
 
     except Exception as e:
         logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
         return {}, usage_data
 
 
-
-        # חיבור כל הטוקנים
-        total_tokens = main_total + summary_total + extract_total
-        cost_usd = round(cost_main_usd + cost_summary_usd + cost_extract_usd, 6)
-        cost_ils = round(cost_main_ils + cost_summary_ils + cost_extract_ils, 4)
-
-        cost_ils_agorot = int(round(cost_ils * 100))  # המרה לאגורות
-
-        return total_tokens, cost_usd, cost_ils_agorot
-
-
-    except Exception as e:
-        logging.error(f"❌ שגיאה בחישוב עלות כוללת: {e}")
-        return 0, 0.0, 0.0
-
-
+def validate_extracted_data(data):
+    """
+    בודק רק דברים בסיסיים - לא מגביל תוכן
+    """
+    validated = data.copy()
+    
+    # בדיקת גיל הגיוני - רק מעל 80
+    if "age" in validated:
+        try:
+            age = int(validated["age"])
+            if age > 80:
+                logging.warning(f"⚠️ גיל {age} מעל 80, מסיר מהנתונים")
+                del validated["age"]
+            else:
+                validated["age"] = age
+        except (ValueError, TypeError):
+            logging.warning(f"⚠️ גיל לא תקין: {validated['age']}, מסיר מהנתונים")
+            del validated["age"]
+    
+    # הגבלת אורך שדות לחסכון בטוקנים
+    for field, value in list(validated.items()):
+        if isinstance(value, str):
+            if len(value) > 100:
+                logging.warning(f"⚠️ שדה {field} ארוך מדי ({len(value)} תווים), מקצר")
+                validated[field] = value[:97] + "..."
+            elif len(value.strip()) == 0:
+                logging.warning(f"⚠️ שדה {field} ריק, מסיר")
+                del validated[field]
+    
+    return validated
+#===============================================================================
 # -------------------------------------------------------------
 # הסבר בסוף הקובץ (לשימושך):
 
