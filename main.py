@@ -621,10 +621,11 @@ async def webhook(request: Request):
 
 async def main():
     logging.info("========== אתחול הבוט ==========")
-    print("========== אתחול הבוט ==========")
+    print("========== אתחול הבוט ==========") 
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
 
     set_telegram_webhook()
+    asyncio.create_task(send_daily_summary())  # דוח מיידי באתחול
 
     try:
         logging.info("📢 שולח התראת התחלה לאדמין...")
