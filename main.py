@@ -507,7 +507,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             logging.info("💰 מחשב עלויות...")
             print("💰 מחשב עלויות...")
-            main_usage = (main_prompt_tokens, main_completion_tokens, main_total_tokens, "", main_model)
+            main_usage = (
+                main_prompt_tokens,         # 0
+                main_completion_tokens,     # 1
+                main_total_tokens,          # 2
+                main_cached_tokens,         # 3
+                main_model,                 # 4
+                main_cost_prompt_regular,   # 5
+                main_cost_prompt_cached,    # 6
+                main_cost_completion,       # 7
+                main_cost_total_usd,        # 8
+                main_cost_total_ils,        # 9
+                main_cost_gpt1,             # 10
+                main_model,                 # 11
+                main_model                  # 12
+            )
             summary_usage = ("", sum_prompt, sum_completion, sum_total, sum_model)
             
             logging.info(f"💸 עלות כוללת: ${main_cost_total_usd} (₪{main_cost_total_ils}), טוקנים: {main_total_tokens}")
