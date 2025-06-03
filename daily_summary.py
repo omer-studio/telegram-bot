@@ -26,12 +26,16 @@ async def send_daily_summary(days_back=1):
     """
 
     try:
-        today = datetime.utcnow().date()
+        import pytz
+        thailand_tz = pytz.timezone("Asia/Bangkok")
+        today = datetime.now(thailand_tz).date()
         target_date = today - timedelta(days=days_back)
         target_str = target_date.strftime("%Y-%m-%d")
-
-        start_time_unix = int(time.mktime(datetime.combine(target_date, datetime.min.time()).timetuple()))
-        end_time_unix = int(time.mktime(datetime.combine(target_date + timedelta(days=1), datetime.min.time()).timetuple()))
+        
+        target_start = thailand_tz.localize(datetime.combine(target_date, datetime.min.time()))
+        target_end = thailand_tz.localize(datetime.combine(target_date + timedelta(days=1), datetime.min.time()))
+        start_time_unix = int(target_start.timestamp())
+        end_time_unix = int(target_end.timestamp())
 
         headers = {"Authorization": f"Bearer {OPENAI_ADMIN_KEY}"}
 
@@ -44,8 +48,13 @@ async def send_daily_summary(days_back=1):
             "end_time": end_time_unix,
             "interval": "1d"
         }
-        usage_resp = requests.get(usage_url, headers=headers, params=usage_params)
-        usage_data = usage_resp.json()
+        try:
+            usage_resp = requests.get(usage_url, headers=headers, params=usage_params, timeout=30)
+            usage_resp.raise_for_status()
+            usage_data = usage_resp.json()
+        except requests.RequestException as e:
+            logging.error(f"שגיאה בקריאה ל-OpenAI usage API: {e}")
+            usage_data = {}
 
         input_tokens = output_tokens = cached_tokens = num_requests = 0
         if "data" in usage_data and usage_data["data"]:
@@ -67,8 +76,13 @@ async def send_daily_summary(days_back=1):
             "end_time": end_time_unix,
             "interval": "1d"
         }
-        costs_resp = requests.get(costs_url, headers=headers, params=costs_params)
-        costs_data = costs_resp.json()
+        try:
+            costs_resp = requests.get(costs_url, headers=headers, params=costs_params, timeout=30)
+            costs_resp.raise_for_status()
+            costs_data = costs_resp.json()
+        except requests.RequestException as e:
+            logging.error(f"שגיאה בקריאה ל-OpenAI costs API: {e}")
+            costs_data = {}
 
         dollar_cost = 0
         if "data" in costs_data and costs_data["data"]:
@@ -92,7 +106,14 @@ async def send_daily_summary(days_back=1):
                             entry_dt = parse_dt(timestamp)
                         except Exception:
                             continue
-                        if not (datetime.combine(target_date, datetime.min.time()) <= entry_dt < datetime.combine(target_date + timedelta(days=1), datetime.min.time())):
+                        # המרה לאזור זמן של תאילנד להשוואה נכונה
+                        if entry_dt.tzinfo is None:
+                            entry_dt = thailand_tz.localize(entry_dt)
+                        else:
+                            entry_dt = entry_dt.astimezone(thailand_tz)
+                            
+                        entry_date = entry_dt.date()
+                        if entry_date != target_date:
                             continue
 
                         ttype = entry.get("type")
@@ -154,5 +175,4 @@ async def schedule_daily_summary():
 async def delayed_daily_summary():
     print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
     await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
-    from daily_summary import send_daily_summary
     await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
