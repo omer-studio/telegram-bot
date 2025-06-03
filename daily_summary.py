@@ -18,6 +18,8 @@ from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, ADMIN_BOT_TELEGRAM_TOKEN, A
 
 bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 
+print("🚀 התחלת הרצה של daily_summary.py")
+
 async def send_daily_summary(days_back=1):
     """
     days_back = 1 --> אתמול (ברירת מחדל)
@@ -61,6 +63,16 @@ async def send_daily_summary(days_back=1):
             usage_resp.raise_for_status()
             usage_data = usage_resp.json()
             print(f"🔍 DEBUG: Usage API response data: {json.dumps(usage_data, indent=2)}")
+            # דיבאג נוסף
+            if "data" in usage_data:
+                print(f"🔍 DEBUG: usage_data['data'] = {usage_data['data']}")
+                if usage_data["data"]:
+                    print(f"🔍 DEBUG: usage_data['data'][0] = {usage_data['data'][0]}")
+                    print(f"🔍 DEBUG: usage_data['data'][0].get('results') = {usage_data['data'][0].get('results')}")
+                else:
+                    print("🔍 DEBUG: usage_data['data'] is empty")
+            else:
+                print("🔍 DEBUG: usage_data has no 'data' key")
             
         except requests.RequestException as e:
             print(f"❌ DEBUG: Usage API Error: {e}")
@@ -101,6 +113,16 @@ async def send_daily_summary(days_back=1):
             costs_resp.raise_for_status()
             costs_data = costs_resp.json()
             print(f"🔍 DEBUG: Costs API response data: {json.dumps(costs_data, indent=2)}")
+            # דיבאג נוסף
+            if "data" in costs_data:
+                print(f"🔍 DEBUG: costs_data['data'] = {costs_data['data']}")
+                if costs_data["data"]:
+                    print(f"🔍 DEBUG: costs_data['data'][0] = {costs_data['data'][0]}")
+                    print(f"🔍 DEBUG: costs_data['data'][0].get('results') = {costs_data['data'][0].get('results')}")
+                else:
+                    print("🔍 DEBUG: costs_data['data'] is empty")
+            else:
+                print("🔍 DEBUG: costs_data has no 'data' key")
             
         except requests.RequestException as e:
             print(f"❌ DEBUG: Costs API Error: {e}")
@@ -263,3 +285,10 @@ def setup_daily_reports():
 
 # הפעל אוטומטית כשטוענים את הקובץ
 setup_daily_reports()
+
+if __name__ == "__main__":
+    import asyncio
+    try:
+        asyncio.run(send_daily_summary(days_back=0))
+    except Exception as e:
+        print(f"❌ שגיאה כללית בהרצה: {e}")
