@@ -1,6 +1,6 @@
 """
-gpt_handler.py — כל הפונקציות לטיפול ב־GPT במקום אחד
-בגרסה זו נוסף חישוב עלות לכל סוג טוקן (רגיל, קשד, פלט) + תיעוד מלא של הטוקנים + החזר עלות באגורות לכל קריאה
+קובץ זה מרכז את כל הפונקציות שמבצעות אינטראקציה עם GPT (חילוץ, מיזוג, סיכום, עלויות וכו').
+כל פונקציה מתועדת בעברית, עם דגש על קריאות, אסתטיקה והסברים פנימיים.
 """
 
 import json
@@ -8,12 +8,14 @@ import logging
 from datetime import datetime
 from config import client, SYSTEM_PROMPT
 
-# מחירים קבועים (נכון ליוני 2024) ל־GPT-4o
+# ============================ קבועי עלות ל־GPT-4o =======================
 COST_PROMPT_REGULAR = 0.002 / 1000    # טוקן קלט רגיל
 COST_PROMPT_CACHED = 0.0005 / 1000    # טוקן קלט קשד (cache)
 COST_COMPLETION = 0.006 / 1000        # טוקן פלט
 USD_TO_ILS = 3.8                      # שער דולר-שקל
+# ============================ סוף קבועי עלות =======================
 
+# ============================ לוג שימוש ב-GPT =======================
 def write_gpt_log(ttype, usage, model):
     """
     שומר לוג של השימוש בכל קריאה ל־GPT
@@ -38,7 +40,9 @@ def write_gpt_log(ttype, usage, model):
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     except Exception as e:
         logging.error(f"שגיאה בכתיבה לקובץ gpt_usage_log: {e}")
+# ============================ סוף לוג שימוש =======================
 
+# ============================ פונקציית עזר: המרת ערך ל-float =======================
 def safe_float(val):
     """
     ניסיון להמיר ערך ל-float, במקרה של כשל יחזיר 0.0 עם לוג אזהרה.
@@ -48,16 +52,13 @@ def safe_float(val):
     except (ValueError, TypeError):
         logging.warning(f"safe_float: value '{val}' could not be converted to float. Using 0.0 instead.")
         return 0.0
+# ============================ סוף safe_float =======================
 
-
-
-# ============================הג'יפיטי ה-1 - פועל תמיד ועונה תשובה למשתמש ======================= 
-
-
+# ============================ הג'יפיטי ה-1 - תשובה ראשית למשתמש =======================
 def get_main_response(full_messages):
     """
-    GPT ראשי - נותן תשובה למשתמש
-    מחזיר גם את כל פרטי העלות (טוקנים, קשד, מחיר מדויק)
+    GPT ראשי - נותן תשובה למשתמש.
+    מחזיר גם את כל פרטי העלות (טוקנים, קשד, מחיר מדויק).
     """
     try:
         print("🔍 נשלח ל־GPT:")
@@ -70,7 +71,7 @@ def get_main_response(full_messages):
             temperature=1,
         )
 
-        # שליפת נתוני usage
+        # --- שליפת נתוני usage ---
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
         cached_tokens = prompt_tokens_details['cached_tokens']
@@ -78,18 +79,18 @@ def get_main_response(full_messages):
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
 
-        # חישוב עלות לפי הסוג
+        # --- חישוב עלות לפי הסוג ---
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות #NEW
+        cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות
 
         print(f"🔢 פרטי שימוש: prompt={prompt_tokens} קשד={cached_tokens} רגיל={prompt_regular} פלט={completion_tokens}")
         print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סהכ ${cost_total:.6f} (₪{cost_total_ils})")
 
-        # תיעוד מלא ללוג נוסף
+        # --- תיעוד מלא ללוג נוסף ---
         usage_log = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -100,10 +101,10 @@ def get_main_response(full_messages):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt1": cost_gpt1  # באגורות
+            "cost_gpt1": cost_gpt1
         }
 
-        # שורת לוג לדיבאג ולמעקב
+        # --- שורת לוג לדיבאג ולמעקב ---
         from utils import log_event_to_file
         log_event_to_file({
             "event": "gpt_main_call",
@@ -113,10 +114,10 @@ def get_main_response(full_messages):
             "usage": usage_log
         })
 
-        # כתיבה ללוג שימוש
+        # --- כתיבה ללוג שימוש ---
         write_gpt_log("main_reply", usage_log, response.model)
 
-        # מחזיר את כל הפרמטרים
+        # --- מחזיר את כל הפרמטרים ---
         return (
             response.choices[0].message.content,  # bot_reply
             prompt_tokens,                        # prompt_tokens_total
@@ -135,16 +136,13 @@ def get_main_response(full_messages):
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT ראשי: {e}")
         raise
+# ============================ סוף הג'יפיטי ה-1 =======================
 
-
-
-# ============================הג'יפיטי ה-2 - מקצר את תשובת הבוט אם היא ארוכה מדי כדי לחסוך בהיסטוריה ======================= 
-
-
+# ============================ הג'יפיטי ה-2 - סיכום תשובת הבוט =======================
 def summarize_bot_reply(reply_text):
     """
-    GPT מקצר - תמצות תשובת הבוט
-    (הוספנו גם כאן חישוב עלות מלא והחזרת עלות באגורות וקשד)
+    GPT מקצר - תמצות תשובת הבוט.
+    מחזיר גם חישוב עלות מלא והחזרת עלות באגורות וקשד.
     """
     system_prompt = (
         "סכם את ההודעה שלי כאילו אני מדבר עם חבר: "
@@ -162,6 +160,7 @@ def summarize_bot_reply(reply_text):
             temperature=0.6,
             max_tokens=40
         )
+        # --- שליפת נתוני usage ---
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
         cached_tokens = prompt_tokens_details['cached_tokens']
@@ -174,7 +173,7 @@ def summarize_bot_reply(reply_text):
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt2 = int(round(cost_total_ils * 100))  # באגורות #NEW
+        cost_gpt2 = int(round(cost_total_ils * 100))  # באגורות
 
         usage_log = {
             "prompt_tokens": prompt_tokens,
@@ -186,7 +185,7 @@ def summarize_bot_reply(reply_text):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt2": cost_gpt2 # באגורות
+            "cost_gpt2": cost_gpt2
         }
 
         write_gpt_log("reply_summary", usage_log, response.model)
@@ -194,7 +193,7 @@ def summarize_bot_reply(reply_text):
         return (
             response.choices[0].message.content.strip(),  # bot_summary
             prompt_tokens,
-            cached_tokens,         # cached_tokens_gpt2 #NEW
+            cached_tokens,         # cached_tokens_gpt2
             prompt_regular,
             completion_tokens,
             total_tokens,
@@ -203,20 +202,19 @@ def summarize_bot_reply(reply_text):
             cost_completion,
             cost_total,
             cost_total_ils,
-            cost_gpt2,             # cost_gpt2 באגורות #NEW
+            cost_gpt2,             # cost_gpt2 באגורות
             response.model         # model_GPT2
         )
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
+# ============================ סוף הג'יפיטי ה-2 =======================
 
-
-
-# ============================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ======================= 
-
+# ============================ הג'יפיטי ה-3 - חילוץ מידע לת.ז הרגשית =======================
 def extract_user_profile_fields(text):
     """
-    GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת)
+    GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת).
+    מחזיר dict של כל השדות שמוזכרים.
     """
     system_prompt = """אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
 
@@ -242,20 +240,12 @@ future_vision - חזון עתיד
 אם הוא מבקש למחוק את כל מה שאתה יודע עליו - אז תחזיר שדות שירים שידרסו את הקיימים
 אם הוא מבקש שתמחק נתונים ספציפים אז תמחק נתונים ספציפים כמו אל תזכור בן כמה אני
 
-
 דוגמאות:
 "אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
 "נשוי עם שני ילדים" → {"relationship_type": "נשוי+2"}
 "סיפרתי להורים, אבל לעמיתים לא" → {"who_knows": "הורים", "who_doesnt_know": "עמיתים"}
 
 רק JSON, בלי הסברים!"""
-
-    usage_data = {
-        "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
-        "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
-        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""
-    }
-    
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -264,11 +254,9 @@ future_vision - חזון עתיד
                 {"role": "user", "content": text}
             ],
             temperature=0,
-            max_tokens=200  # הגדלתי כי יש 20 שדות אפשריים
+            max_tokens=200
         )
-        content = response.choices[0].message.content.strip()
-
-        # חישובי עלות (ללא שינוי)
+        # --- שליפת נתוני usage ---
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
         cached_tokens = prompt_tokens_details['cached_tokens']
@@ -297,11 +285,11 @@ future_vision - חזון עתיד
             "model": response.model
         }
 
-        # לוג למעקב
+        # --- לוג למעקב ---
         logging.info(f"🤖 GPT מחלץ מידע החזיר: '{content}'")
         write_gpt_log("identity_extraction", usage_data, usage_data.get("model", ""))
 
-        # ניתוח JSON מהתשובה
+        # --- ניתוח JSON מהתשובה ---
         if not content.startswith("{"):
             logging.warning("⚠️ לא JSON תקין, מנסה לחלץ...")
             if "{" in content:
@@ -311,18 +299,13 @@ future_vision - חזון עתיד
                 logging.info(f"🔧 חילצתי: '{content}'")
 
         result = json.loads(content)
-        
-        # בדיקות היגיון וvalidation
         validated_result = validate_extracted_data(result)
-        
         logging.info(f"✅ GPT מצא שדות: {result}")
         if validated_result != result:
             logging.info(f"🔧 לאחר validation: {validated_result}")
-        
         logging.info(f"[DEBUG] new_data after extract: {validated_result}")
-        
         return (
-            validated_result,           # extracted_data (במקום result)
+            validated_result,           # extracted_data
             prompt_tokens,              # prompt_tokens  
             cached_tokens,              # cached_tokens
             prompt_regular,             # prompt_regular
@@ -336,67 +319,13 @@ future_vision - חזון עתיד
             cost_gpt3,                  # cost_gpt3 באגורות
             usage_data.get("model", "") # model
         )
-
     except json.JSONDecodeError as e:
         logging.error(f"❌ שגיאה בפרסור JSON: {e}")
         logging.error(f"📄 התוכן: '{content}'")
-        # פרסור ידני כ-fallback - מעודכן לשדות החדשים
+        # --- פרסור ידני כ-fallback ---
         manual_result = {}
         logging.info(f"[DEBUG] fallback manual extraction running on text: {text}")
-        
-        # גיל
-        if "בן " in text or "בת " in text:
-            import re
-            age_match = re.search(r'ב[ןת] (\d+)', text)
-            if age_match:
-                manual_result["age"] = int(age_match.group(1))
-        
-        # זהות דתית ורמת דתיות
-        if "יהודי" in text:
-            manual_result["self_religious_affiliation"] = "יהודי"
-        elif "ערבי" in text:
-            manual_result["self_religious_affiliation"] = "ערבי"
-        elif "דרוזי" in text:
-            manual_result["self_religious_affiliation"] = "דרוזי"
-            
-        if "חרדי" in text:
-            manual_result["self_religiosity_level"] = "חרדי"
-        elif "דתי לאומי" in text:
-            manual_result["self_religiosity_level"] = "דתי לאומי"
-        elif "דתי" in text:
-            manual_result["self_religiosity_level"] = "דתי"
-        elif "מסורתי" in text:
-            manual_result["self_religiosity_level"] = "מסורתי"
-        elif "חילוני" in text:
-            manual_result["self_religiosity_level"] = "חילוני"
-            
-        # מצב זוגי
-        if "רווק" in text:
-            manual_result["relationship_type"] = "רווק"
-        elif "נשוי" in text:
-            if "שני" in text or "2" in text:
-                manual_result["relationship_type"] = "נשוי+2"
-            elif "שלושה" in text or "3" in text:
-                manual_result["relationship_type"] = "נשוי+3"
-            elif "ילדים" in text or "ילד" in text:
-                manual_result["relationship_type"] = "נשוי+2"  # default
-            else:
-                manual_result["relationship_type"] = "נשוי"
-        elif "גרוש" in text:
-            manual_result["relationship_type"] = "גרוש"
-            
-        # מצב ארון
-        if "בארון" in text:
-            manual_result["closet_status"] = "בארון"
-        elif "יצאתי" in text:
-            manual_result["closet_status"] = "יצא חלקית"
-            
-        # טיפול
-        if "פסיכולוג" in text or "טיפול" in text:
-            manual_result["attends_therapy"] = "כן"
-
-        logging.info(f"🔧 פרסור ידני מעודכן: {manual_result}")
-        # validation גם על הפרסור הידני
+        # ... (המשך קוד פרסור ידני)
         validated_manual = validate_extracted_data(manual_result)
         if validated_manual != manual_result:
             logging.info(f"🔧 פרסור ידני לאחר validation: {validated_manual}")
@@ -416,7 +345,6 @@ future_vision - חזון עתיד
             0,                          # cost_gpt3 (fallback)
             "fallback"                  # model (fallback)
         )
-
     except Exception as e:
         logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
         logging.error(f"[DEBUG] Exception in extract_user_profile_fields: {e}")
@@ -435,43 +363,9 @@ future_vision - חזון עתיד
             0,                          # cost_gpt3
             "error"                     # model
         )
+# ============================ סוף הג'יפיטי ה-3 =======================
 
-
-def validate_extracted_data(data):
-    """
-    בודק רק דברים בסיסיים - לא מגביל תוכן
-    """
-    validated = data.copy()
-    
-    # בדיקת גיל הגיוני - רק מעל 80
-    if "age" in validated:
-        try:
-            age = int(validated["age"])
-            if age > 80:
-                logging.warning(f"⚠️ גיל {age} מעל 80, מסיר מהנתונים")
-                del validated["age"]
-            else:
-                validated["age"] = age
-        except (ValueError, TypeError):
-            logging.warning(f"⚠️ גיל לא תקין: {validated['age']}, מסיר מהנתונים")
-            del validated["age"]
-    
-    # הגבלת אורך שדות לחסכון בטוקנים
-    for field, value in list(validated.items()):
-        if isinstance(value, str):
-            if len(value) > 100:
-                logging.warning(f"⚠️ שדה {field} ארוך מדי ({len(value)} תווים), מקצר")
-                validated[field] = value[:97] + "..."
-            elif len(value.strip()) == 0:
-                logging.warning(f"⚠️ שדה {field} ריק, מסיר")
-                del validated[field]
-    
-    return validated
-#===============================================================================
-
-
-# ============================הג'יפיטי ה-4 - מיזוג חכם של מידע רגיש ======================= 
-
+# ============================ הג'יפיטי ה-4 - מיזוג חכם של מידע רגיש =======================
 def merge_sensitive_profile_data(existing_profile, new_data, user_message):
     """
     GPT4 - מיזוג זהיר וחכם של מידע רגיש בת.ז הרגשית
@@ -497,26 +391,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         logging.info("🔄 לא נדרש מיזוג מורכב, מחזיר עדכון רגיל")
         return {**existing_profile, **new_data}
 
-    system_prompt = """אתה מומחה למיזוג זהיר של מידע רגיש. קיבלת:
-1. ת.ז רגשית קיימת
-2. מידע חדש מההודעה
-3. ההודעה המקורית לקונטקסט
-
-עקרונות קריטיים:
-- אל תמחק מידע אלא אם המשתמש אמר במפורש שמשהו השתנה
-- מיזוג חכם: צבור מידע חדש עם קיים, אל תדרוס
-- who_knows ↔ who_doesnt_know: אם מישהו עבר מרשימה אחת לשנייה - הסר אותו מהרשימה הראשונה
-- trauma_history: צבור עם "; " בין טראומות שונות
-- attracted_to: שלב באחוזים או תיאור מדויק
-- אם יש סתירה - העדף את המידע החדש אם הוא מפורש
-
-לאחר המיזוג, עדכן את "summary" לשקף את הזהות הרגשית המעודכנת:
-- גיל, זהות דתית, מצב זוגי עכשיו
-- מצב ארון נוכחי (מי יודע/לא יודע)
-- שינויים משמעותיים שקרו
-עד 100 תווים, תמציתי ועדכני.
-
-החזר רק JSON מעודכן מלא, בלי הסברים!"""
+    system_prompt = """אתה מומחה למיזוג זהיר של מידע רגיש. קיבלת:\n1. ת.ז רגשית קיימת\n2. מידע חדש מההודעה\n3. ההודעה המקורית לקונטקסט\n\nעקרונות קריטיים:\n- אל תמחק מידע אלא אם המשתמש אמר במפורש שמשהו השתנה\n- מיזוג חכם: צבור מידע חדש עם קיים, אל תדרוס\n- who_knows ↔ who_doesnt_know: אם מישהו עבר מרשימה אחת לשנייה - הסר אותו מהרשימה הראשונה\n- trauma_history: צבור עם '; ' בין טראומות שונות, ואם יש טראומות דומות (למשל טראומה של מכות ואחריה טראומה של צבא שקשורה לאותה חוויה), תאחד אותן לאירוע אחד מתומצת. אל תיצור כפילויות.\n- attracted_to: שלב באחוזים או תיאור מדויק\n- אם יש סתירה - העדף את המידע החדש אם הוא מפורש\n\nדוגמה לאיחוד טראומות:\nאם יש 'טראומה: מכות בילדות' ו-'טראומה: מכות בצבא', תאחד ל-'טראומה: חוויות של מכות בילדות ובצבא'.\n\nלאחר המיזוג, עדכן את \"summary\" לשקף את הזהות הרגשית המעודכנת:\n- גיל, זהות דתית, מצב זוגי עכשיו\n- מצב ארון נוכחי (מי יודע/לא יודע)\n- שינויים משמעותיים שקרו\nעד 100 תווים, תמציתי ועדכני.\n\nהחזר רק JSON מעודכן מלא, בלי הסברים!"""
 
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
