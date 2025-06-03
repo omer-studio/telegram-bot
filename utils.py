@@ -97,8 +97,8 @@ def get_chat_history_messages(chat_id):
     
     messages = []
     history = history_data[chat_id]["history"]
-    if len(history) < 30:
-        last_entries = history  #  שולח את כל ההיסטוריה אם יש פחות מ-איקס הודעות
+    if len(history) < 15:
+        last_entries = history  #  שולח את כל ההיסטוריה אם יש -  פחות מ-איקס הודעות
     else:
         last_entries = history[-5:]  # רק 5 אחרונות
 
