@@ -39,7 +39,7 @@ logging.getLogger("telegram").setLevel(logging.WARNING)
 import sys
 
 # הוספת דיבוג מיידי
-print("🔥 DEBUGGING START - הבוט מתחיל!", flush=True)
+print("🔥🔥🔥 התחלת הבוט! (בדיקת print ראשונית)", flush=True)
 sys.stdout.flush()
 logging.info("🔥 LOGGING TEST - האם זה נראה?")
 
