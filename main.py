@@ -17,7 +17,7 @@ main.py — הבוט הראשי של הצ'אט
 # כדי שכל הפונקציות יעבדו גם בלי ContextTypes של טלגרם
 
 """
-#בדיקה
+#בקדיקה
 
 import requests
 import asyncio
@@ -419,11 +419,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     main_cost_prompt_regular,
                     main_cost_prompt_cached,
                     main_cost_completion,
-                    main_cost_total_usd,
+                    main_cost_total_usd,   # זה השם הנכון!
                     main_cost_total_ils,
                     main_cost_gpt1,
                     main_model
                 ) = main_response
+
             except Exception as e:
                 print(f"💥 שגיאה בפירוק main_response: {e}")
                 reply_text = "שגיאה טכנית. אנא נסה שוב."
@@ -473,7 +474,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("📨 תשובה נשלחה למשתמש")
 
             identity_fields = {}
-            extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": ""}
+            extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "main_total_tokens": 0, "model": ""}
             try:
                 logging.info("🔍 מחלץ מידע אישי מהודעת המשתמש...")
                 print("🔍 מחלץ מידע אישי מהודעת המשתמש...")
@@ -486,7 +487,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     print(f"⚠️ extract_user_profile_fields החזיר פורמט לא צפוי: {extract_result}")
                     identity_fields = {}
-                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": ""}
+                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "main_total_tokens": 0, "model": ""}
                     
                 logging.info(f"מידע אישי שחולץ: {identity_fields!r}")
                 print(f"מידע אישי שחולץ: {identity_fields!r}")
@@ -509,8 +510,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             main_usage = (main_prompt_tokens, main_completion_tokens, main_total_tokens, "", main_model)
             summary_usage = ("", sum_prompt, sum_completion, sum_total, sum_model)
             
-            logging.info(f"💸 עלות כוללת: ${cost_usd} (₪{cost_ils}), טוקנים: {total_tokens}")
-            print(f"💸 עלות כוללת: ${cost_usd} (₪{cost_ils}), טוקנים: {total_tokens}")
+            logging.info(f"💸 עלות כוללת: ${main_cost_total_usd} (₪{main_cost_total_ils}), טוקנים: {main_total_tokens}")
+            print(f"💸 עלות כוללת: ${main_cost_total_usd} (₪{main_cost_total_ils}), טוקנים: {main_total_tokens}")
 
             logging.info("💾 מעדכן היסטוריית שיחה...")
             print("💾 מעדכן היסטוריית שיחה...")
@@ -523,7 +524,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             log_to_sheets(
                 message_id, chat_id, user_msg, reply_text, reply_summary,
                 main_usage, summary_usage, extract_usage,
-                total_tokens, cost_usd, cost_ils
+                main_total_tokens, main_cost_total_usd, main_cost_total_ils
             )
             logging.info("✅ נתוני שיחה נשמרו בגיליון")
             print("✅ נתוני שיחה נשמרו בגיליון")
@@ -544,10 +545,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "summary_total": sum_total,
                     "extract_prompt": extract_usage["prompt_tokens"],
                     "extract_completion": extract_usage["completion_tokens"],
-                    "extract_total": extract_usage["total_tokens"],
-                    "total_all": total_tokens,
-                    "cost_usd": cost_usd,
-                    "cost_ils": cost_ils
+                    "extract_total": extract_usage["main_total_tokens"],
+                    "total_all": main_total_tokens,
+                    "main_cost_total_usd": main_cost_total_usd,
+                    "main_cost_total_ils": main_cost_total_ils
                 }
             })
             log_event_to_file(log_payload)
