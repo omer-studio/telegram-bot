@@ -393,8 +393,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info("📚 שולף היסטוריית שיחה...")
             print("📚 שולף היסטוריית שיחה...")
             history_messages = get_chat_history_messages(chat_id)
-            logging.info(f"היסטוריית שיחה: {history_messages!r}")
-            print(f"היסטוריית שיחה: {history_messages!r}")
+            logging.info(f"היסטוריית שיחה: (נשלחו {len(history_messages)} הודעות אחרונות משני הצדדים)")
+            print(f"היסטוריית שיחה: (נשלחו {len(history_messages)} הודעות אחרונות משני הצדדים)")
 
             full_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             if user_summary:
@@ -469,7 +469,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             logging.info("📤 שולח תשובה למשתמש...")
             print("📤 שולח תשובה למשתמש...")
-            await update.message.reply_text(reply_text, parse_mode="Markdown")
+            # הדפסת תשובת הבוט ללוג - בשורה אחת בלבד
+            reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
+            print(f"[📤 הודעת בוט]: {reply_text_one_line}")
             logging.info("📨 תשובה נשלחה למשתמש")
             print("📨 תשובה נשלחה למשתמש")
 
@@ -528,7 +530,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("✅ היסטוריית שיחה עודכנה")
 
             logging.info("💾 שומר נתוני שיחה בגיליון...")
-            print("💾 שומר נתוני שיחה בגיליון...")
+            print("�� שומר נתוני שיחה בגיליון...")
             log_to_sheets(
                 message_id, chat_id, user_msg, reply_text, reply_summary,
                 main_usage, summary_usage, extract_usage,

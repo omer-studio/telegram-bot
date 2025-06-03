@@ -191,83 +191,27 @@ def update_user_profile(chat_id, field_values):
 def compose_emotional_summary(row):
     """
     יוצר סיכום רגשי מפרטי המשתמש (עבור קונטקסט ל-GPT).
+    כעת כל שדה שקיים בפרופיל ושאינו ריק נכנס לסיכום.
+    הפורמט: שם שדה: ערך, שם שדה: ערך, ...
+    לדוג' -> age: 25, relationship_type: נשוי+2, trauma_history: ...
+    חותך ל-200 תווים לכל היותר.
+    אם אין מידע בכלל, מחזיר [אין מידע לסיכום]
     """
+    # --- אוסף את כל השדות שאינם ריקים (חוץ מ-chat_id) ---
     parts = []
-
-    # גיל - תמיד ראשון
-    age = row.get("age", "").strip()
-    if age and str(age) != "":
-        parts.append(f"בן {age}")
-
-    # הקשר דתי
-    religious = row.get("religious_context", "").strip()
-    if religious and religious != "":
-        parts.append(religious)
-
-    # מצב משפחתי
-    relationship = row.get("relationship_type", "").strip()
-    if relationship and relationship != "":
-        parts.append(relationship)
-
-    # מצב ארון
-    closet = row.get("closet_status", "").strip()
-    if closet and closet != "":
-        parts.append(closet)
-
-    # משיכה
-    attracted = row.get("attracted_to", "").strip()
-    if attracted and attracted != "":
-        parts.append(f"נמשך ל{attracted}")
-
-    # מי יודע
-    who_knows = row.get("who_knows", "").strip()
-    if who_knows and who_knows != "":
-        parts.append(f"יודעים: {who_knows}")
-
-    # טיפול
-    therapy = row.get("attends_therapy", "").strip()
-    if therapy and therapy != "":
-        if "כן" in therapy or "הולך" in therapy:
-            parts.append("בטיפול")
-        elif "לא" in therapy:
-            parts.append("לא בטיפול")
-
-    # עיסוק
-    job = row.get("occupation_or_role", "").strip()
-    if job and job != "":
-        parts.append(job)
-
-    # קונפליקט מרכזי - קצר
-    conflict = row.get("primary_conflict", "").strip()
-    if conflict and conflict != "" and len(conflict) < 30:
-        parts.append(f"קונפליקט: {conflict}")
-
-    # מטרה בקורס - קצר
-    goal = row.get("goal_in_course", "").strip()
-    if goal and goal != "" and len(goal) < 30:
-        parts.append(f"מטרה: {goal}")
-
-    # אם אין מידע כלל
+    for key, value in row.items():
+        v = str(value).strip()
+        if v and key != "chat_id":
+            # אפשר להחליף כאן את שם השדה לעברית אם רוצים אסתטיקה (למשל: 'age' -> 'גיל')
+            parts.append(f"{key}: {v}")
+    # --- אם אין מידע בכלל ---
     if not parts:
-        return ""
-
-    # מחבר עם פסיקים
-    summary = " | ".join(parts)
-
-    # אם ארוך מדי, מקצר
-    if len(summary) > 100:
-        essential_parts = []
-        if age:
-            essential_parts.append(f"בן {age}")
-        if religious:
-            essential_parts.append(religious)
-        if relationship:
-            essential_parts.append(relationship)
-        if closet:
-            essential_parts.append(closet)
-
-        summary = " | ".join(essential_parts)
-
+        return "[אין מידע לסיכום]"
+    # --- מחבר את כל השדות בפסיקים ---
+    summary = ", ".join(parts)
+    # --- קיצור אם ארוך מדי ---
+    if len(summary) > 200:
+        summary = summary[:197] + "..."
     return summary
 
 def log_to_sheets(
