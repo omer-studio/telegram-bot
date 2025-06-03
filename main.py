@@ -17,6 +17,7 @@ main.py — הבוט הראשי של הצ'אט
 # כדי שכל הפונקציות יעבדו גם בלי ContextTypes של טלגרם
 
 """
+#בדיקה
 
 import requests
 import asyncio
