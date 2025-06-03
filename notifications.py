@@ -37,10 +37,10 @@ def get_last_deploy_commit_from_log():
 def emoji_or_na(value):
     return value if value and value != "N/A" else "🤷🏼"
 
-def get_last_commit_digits(commit):
+def get_commit_7first(commit):
     if not commit or commit == "N/A":
         return "🤷🏼"
-    return commit[-4:]
+    return commit[:7]
 
 def send_deploy_notification(success=True, error_message=None, deploy_duration=None):
     """
@@ -51,7 +51,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     environment = emoji_or_na(os.getenv('RENDER_ENVIRONMENT', None))
     user = emoji_or_na(os.getenv('USER', None))
     deploy_id = emoji_or_na(os.getenv('RENDER_DEPLOY_ID', None))
-    git_commit = get_last_commit_digits(os.getenv('RENDER_GIT_COMMIT', None))
+    git_commit = get_commit_7first(os.getenv('RENDER_GIT_COMMIT', None))
     current_commit = os.getenv('RENDER_GIT_COMMIT', None)
     previous_commit = get_last_deploy_commit_from_log()
     write_deploy_commit_to_log(current_commit)
@@ -69,7 +69,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         text = (
             f"❗️יתכן שהפריסה נכשלה! (לא בוצעה פריסה חדשה)\n"
             f"⏰ טיימסטמפ: {timestamp}\n"
-            f"🔢 מזהה גרסה: {git_commit}\n"
+            f"🔢 מזהה קומיט: {git_commit}\n"
             f"\nבדוק את הלוגים או פנה ל-Render!"
         )
     else:
@@ -87,7 +87,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             f"🖥️ סביבת הפעלה: {environment}\n"
             f"👤 יוזר: {user}\n"
             f"🦓 מזהה דפלוי: {deploy_id}\n"
-            f"🔢 מזהה גרסה: {git_commit}\n"
+            f"🔢 מזהה קומיט: {git_commit}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
         )
 
