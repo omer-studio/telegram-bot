@@ -232,13 +232,16 @@ closet_status - מצב ארון: "בארון"/"יצא חלקית"/"יצא לכו
 who_knows - מי יודע עליו
 who_doesnt_know - מי לא יודע עליו
 attends_therapy - טיפול: "כן"/"לא"/"טיפול זוגי"/"קבוצת תמיכה"
-primary_conflict - הקונפליקט המרכזי
+primary_conflict -  הקונפליקט המרכזי שמעסיק אותו בחייו
 trauma_history - טראומות (בעדינות)
 goal_in_course - מטרות בקורס
 language_of_strength - משפטים מחזקים
-coping_strategies - דרכי התמודדות
-fears_concerns - פחדים וחששות
+coping_strategies - דרכי התמודדות - מה מרים אותו מה עוזר לו
+fears_concerns - פחדים וחששות - אם שיתף בפחד מסויים אתה מכניס את זה לשם
 future_vision - חזון עתיד
+אם הוא מבקש למחוק את כל מה שאתה יודע עליו - אז תחזיר שדות שירים שידרסו את הקיימים
+אם הוא מבקש שתמחק נתונים ספציפים אז תמחק נתונים ספציפים כמו אל תזכור בן כמה אני
+
 
 דוגמאות:
 "אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
