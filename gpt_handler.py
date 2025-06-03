@@ -679,6 +679,85 @@ def should_use_gpt4_merge(existing_profile, new_data):
 #===============================================================================
 
 
+# ============================פונקציה שמפעילה את הג'יפיטי הרביעי לפי היגיון -לא פועל תמיד - עדכון חכם של ת.ז הרגשית ======================= 
+
+def smart_update_profile(existing_profile, user_message):
+    """
+    פונקציה מאחדת שמטפלת בכל תהליך עדכון ת.ז הרגשית:
+    1. מפעילה GPT3 לחילוץ מידע
+    2. בודקה אם צריך GPT4 למיזוג מורכב
+    3. מחזירה ת.ז מעודכנת + כל נתוני העלויות
+    
+    Returns: (updated_profile, extract_usage, merge_usage_or_none)
+    """
+    logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
+    
+    # שלב 1: GPT3 - חילוץ מידע חדש
+    extract_result = extract_user_profile_fields(user_message)
+    new_data = extract_result[0]
+    extract_usage = extract_result[1:]  # כל 12 הערכים הנוספים
+    
+    logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
+    
+    # אם אין מידע חדש - אין מה לעדכן
+    if not new_data:
+        logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
+        return existing_profile, extract_usage, None
+    
+    # שלב 2: בדיקה אם צריך GPT4
+    if should_use_gpt4_merge(existing_profile, new_data):
+        logging.info("🎯 מפעיל GPT4 למיזוג מורכב")
+        
+        # שלב 3: GPT4 - מיזוג חכם
+        merge_result = merge_sensitive_profile_data(existing_profile, new_data, user_message)
+        updated_profile = merge_result[0]
+        merge_usage = merge_result[1:]  # כל 12 הערכים הנוספים
+        
+        logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
+        return updated_profile, extract_usage, merge_usage
+        
+    else:
+        logging.info("✅ עדכון פשוט ללא GPT4")
+        
+        # עדכון פשוט - מיזוג רגיל
+        updated_profile = {**existing_profile, **new_data}
+        
+        return updated_profile, extract_usage, None
+
+
+def get_combined_usage_data(extract_usage, merge_usage=None):
+    """
+    פונקציית עזר - מחברת את נתוני השימוש מGPT3 ו-GPT4 (אם רץ)
+    מחזירה נתונים מאוחדים לשמירה ב-sheets
+    """
+    # נתוני GPT3
+    extract_data = {
+        "extract_prompt_tokens": extract_usage[0],
+        "extract_cached_tokens": extract_usage[1], 
+        "extract_completion_tokens": extract_usage[3],
+        "extract_total_tokens": extract_usage[4],
+        "extract_cost_total": extract_usage[8],
+        "extract_cost_ils": extract_usage[9],
+        "extract_cost_gpt3": extract_usage[10],
+        "extract_model": extract_usage[11]
+    }
+    
+    # אם GPT4 רץ - הוסף את הנתונים שלו
+    if merge_usage:
+        merge_data = {
+            "merge_prompt_tokens": merge_usage[0],
+            "merge_cached_tokens": merge_usage[1],
+            "merge_completion_tokens": merge_usage[3], 
+            "merge_total_tokens": merge_usage[4],
+            "merge_cost_total": merge_usage[8],
+            "merge_cost_ils": merge_usage[9],
+            "merge_cost_gpt4": merge_usage[10],
+            "merge_model": merge_usage[11],
+            "used_gpt4": True
+        }
+        return {**extract_data, **merge_data}
+    else:
+        return {**extract_data, "used_gpt4": False}
 
 
 # -------------------------------------------------------------
