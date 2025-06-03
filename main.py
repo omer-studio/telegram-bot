@@ -572,7 +572,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "summary_total": sum_total,
                     "extract_prompt": extract_usage["prompt_tokens"],
                     "extract_completion": extract_usage["completion_tokens"],
-                    "extract_total": extract_usage["main_total_tokens"],
+                    "extract_total": extract_usage.get("total_tokens", 0),
                     "total_all": main_total_tokens,
                     "main_cost_total_usd": main_cost_total_usd,
                     "main_cost_total_ils": main_cost_total_ils
