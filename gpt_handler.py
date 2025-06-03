@@ -199,7 +199,7 @@ def summarize_bot_reply(reply_text):
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
-#================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ========= 
+#============================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ======================= 
 def extract_user_profile_fields(text):
     """
     GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת)
@@ -302,7 +302,21 @@ future_vision - חזון עתיד
         if validated_result != result:
             logging.info(f"🔧 לאחר validation: {validated_result}")
         
-        return validated_result, usage_data
+        return (
+            validated_result,           # extracted_data (במקום result)
+            prompt_tokens,              # prompt_tokens  
+            cached_tokens,              # cached_tokens
+            prompt_regular,             # prompt_regular
+            completion_tokens,          # completion_tokens
+            total_tokens,               # total_tokens
+            cost_prompt_regular,        # cost_prompt_regular
+            cost_prompt_cached,         # cost_prompt_cached  
+            cost_completion,            # cost_completion
+            cost_total,                 # cost_total
+            cost_total_ils,             # cost_total_ils
+            cost_gpt3,                  # cost_gpt3 באגורות
+            usage_data.get("model", "") # model
+        )
 
     except json.JSONDecodeError as e:
         logging.error(f"❌ שגיאה בפרסור JSON: {e}")
@@ -369,11 +383,39 @@ future_vision - חזון עתיד
         if validated_manual != manual_result:
             logging.info(f"🔧 פרסור ידני לאחר validation: {validated_manual}")
             
-        return validated_manual, usage_data
+        return (
+            validated_manual,           # extracted_data
+            0,                          # prompt_tokens (fallback)
+            0,                          # cached_tokens (fallback)
+            0,                          # prompt_regular (fallback)  
+            0,                          # completion_tokens (fallback)
+            0,                          # total_tokens (fallback)
+            0.0,                        # cost_prompt_regular (fallback)
+            0.0,                        # cost_prompt_cached (fallback)
+            0.0,                        # cost_completion (fallback)
+            0.0,                        # cost_total (fallback)
+            0.0,                        # cost_total_ils (fallback)
+            0,                          # cost_gpt3 (fallback)
+            "fallback"                  # model (fallback)
+        )
 
     except Exception as e:
         logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
-        return {}, usage_data
+        return (
+            {},                         # extracted_data (ריק)
+            0,                          # prompt_tokens
+            0,                          # cached_tokens 
+            0,                          # prompt_regular
+            0,                          # completion_tokens
+            0,                          # total_tokens
+            0.0,                        # cost_prompt_regular
+            0.0,                        # cost_prompt_cached
+            0.0,                        # cost_completion  
+            0.0,                        # cost_total
+            0.0,                        # cost_total_ils
+            0,                          # cost_gpt3
+            "error"                     # model
+        )
 
 
 def validate_extracted_data(data):
