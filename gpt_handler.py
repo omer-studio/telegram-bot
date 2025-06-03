@@ -588,7 +588,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         # validation על התוצאה הסופית
         validated_profile = validate_extracted_data(merged_profile)
         
-        logging.info(f"✅ GPT4 ביצע מיזוג מוצלח: {len(validated_profile)} שדות")
+        logging.info(f"✅ GPT4 עדכן ת.ז עם {len(validated_profile)} שדות")
         if validated_profile != merged_profile:
             logging.info(f"🔧 לאחר validation: הוסרו/תוקנו שדות")
 
