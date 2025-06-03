@@ -466,6 +466,221 @@ def validate_extracted_data(data):
     
     return validated
 #===============================================================================
+
+
+# ============================הג'יפיטי ה-4 - מיזוג חכם של מידע רגיש ======================= 
+
+def merge_sensitive_profile_data(existing_profile, new_data, user_message):
+    """
+    GPT4 - מיזוג זהיר וחכם של מידע רגיש בת.ז הרגשית
+    מטפל במיזוג מורכב של שדות כמו who_knows/who_doesnt_know, trauma_history וכו'
+    """
+    # שדות שצריכים מיזוג מורכב
+    complex_fields = [
+        "attracted_to", "who_knows", "who_doesnt_know", "attends_therapy", 
+        "primary_conflict", "trauma_history", "goal_in_course", 
+        "language_of_strength", "coping_strategies", "fears_concerns", "future_vision"
+    ]
+    
+    # בדיקה אם באמת צריך GPT4
+    needs_merge = False
+    for field in complex_fields:
+        if field in new_data:
+            existing_value = existing_profile.get(field, "")
+            if existing_value and existing_value.strip():
+                needs_merge = True
+                break
+    
+    if not needs_merge:
+        logging.info("🔄 לא נדרש מיזוג מורכב, מחזיר עדכון רגיל")
+        return {**existing_profile, **new_data}
+
+    system_prompt = """אתה מומחה למיזוג זהיר של מידע רגיש. קיבלת:
+1. ת.ז רגשית קיימת
+2. מידע חדש מההודעה
+3. ההודעה המקורית לקונטקסט
+
+עקרונות קריטיים:
+- אל תמחק מידע אלא אם המשתמש אמר במפורש שמשהו השתנה
+- מיזוג חכם: צבור מידע חדש עם קיים, אל תדרוס
+- who_knows ↔ who_doesnt_know: אם מישהו עבר מרשימה אחת לשנייה - הסר אותו מהרשימה הראשונה
+- trauma_history: צבור עם "; " בין טראומות שונות
+- attracted_to: שלב באחוזים או תיאור מדויק
+- אם יש סתירה - העדף את המידע החדש אם הוא מפורש
+
+לאחר המיזוג, עדכן את "summary" לשקף את הזהות הרגשית המעודכנת:
+- גיל, זהות דתית, מצב זוגי עכשיו
+- מצב ארון נוכחי (מי יודע/לא יודע)
+- שינויים משמעותיים שקרו
+עד 100 תווים, תמציתי ועדכני.
+
+החזר רק JSON מעודכן מלא, בלי הסברים!"""
+
+    usage_data = {
+        "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+        "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
+        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt4": 0, "model": ""
+    }
+
+    try:
+        # הכנת המידע למיזוג
+        merge_request = {
+            "existing_profile": existing_profile,
+            "new_data": new_data,
+            "user_message": user_message
+        }
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"מידע קיים:\n{json.dumps(existing_profile, ensure_ascii=False, indent=2)}\n\nמידע חדש:\n{json.dumps(new_data, ensure_ascii=False, indent=2)}\n\nהודעה מקורית:\n{user_message}"}
+        ]
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0,  # דיוק מקסימלי למידע רגיש
+            max_tokens=400   # מספיק לכל השדות + summary
+        )
+
+        content = response.choices[0].message.content.strip()
+
+        # חישובי עלות
+        prompt_tokens = response.usage.prompt_tokens
+        prompt_tokens_details = response.usage.prompt_tokens_details
+        cached_tokens = prompt_tokens_details['cached_tokens']
+        prompt_regular = prompt_tokens - cached_tokens
+        completion_tokens = response.usage.completion_tokens
+        total_tokens = response.usage.total_tokens
+
+        cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
+        cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
+        cost_completion = completion_tokens * COST_COMPLETION
+        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
+        cost_total_ils = round(cost_total * USD_TO_ILS, 4)
+        cost_gpt4 = int(round(cost_total_ils * 100))
+
+        usage_data = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cached_tokens": cached_tokens,
+            "cost_prompt_regular": cost_prompt_regular,
+            "cost_prompt_cached": cost_prompt_cached,
+            "cost_completion": cost_completion,
+            "cost_total": cost_total,
+            "cost_total_ils": cost_total_ils,
+            "cost_gpt4": cost_gpt4,
+            "model": response.model
+        }
+
+        logging.info(f"🤖 GPT4 מיזוג החזיר: '{content[:200]}...'")
+        write_gpt_log("sensitive_merge", usage_data, response.model)
+
+        # פרסור התשובה
+        if not content.startswith("{"):
+            if "{" in content:
+                start = content.find("{")
+                end = content.rfind("}") + 1
+                content = content[start:end]
+
+        merged_profile = json.loads(content)
+        
+        # validation על התוצאה הסופית
+        validated_profile = validate_extracted_data(merged_profile)
+        
+        logging.info(f"✅ GPT4 ביצע מיזוג מוצלח: {len(validated_profile)} שדות")
+        if validated_profile != merged_profile:
+            logging.info(f"🔧 לאחר validation: הוסרו/תוקנו שדות")
+
+        return (
+            validated_profile,          # merged_profile
+            prompt_tokens,              # prompt_tokens
+            cached_tokens,              # cached_tokens  
+            prompt_regular,             # prompt_regular
+            completion_tokens,          # completion_tokens
+            total_tokens,               # total_tokens
+            cost_prompt_regular,        # cost_prompt_regular
+            cost_prompt_cached,         # cost_prompt_cached
+            cost_completion,            # cost_completion
+            cost_total,                 # cost_total
+            cost_total_ils,             # cost_total_ils
+            cost_gpt4,                  # cost_gpt4 באגורות
+            usage_data.get("model", "") # model
+        )
+
+    except json.JSONDecodeError as e:
+        logging.error(f"❌ שגיאה בפרסור JSON במיזוג GPT4: {e}")
+        logging.error(f"📄 התוכן: '{content}'")
+        
+        # fallback - מיזוג פשוט במקרה של כשל
+        fallback_merge = {**existing_profile, **new_data}
+        logging.warning("🔧 משתמש במיזוג fallback פשוט")
+        
+        return (
+            fallback_merge,             # merged_profile (fallback)
+            0,                          # prompt_tokens
+            0,                          # cached_tokens
+            0,                          # prompt_regular
+            0,                          # completion_tokens
+            0,                          # total_tokens
+            0.0,                        # cost_prompt_regular
+            0.0,                        # cost_prompt_cached
+            0.0,                        # cost_completion
+            0.0,                        # cost_total
+            0.0,                        # cost_total_ils
+            0,                          # cost_gpt4
+            "fallback"                  # model
+        )
+
+    except Exception as e:
+        logging.error(f"💥 שגיאה כללית ב-GPT4 מיזוג: {e}")
+        
+        # fallback - מיזוג פשוט במקרה של כשל
+        fallback_merge = {**existing_profile, **new_data}
+        
+        return (
+            fallback_merge,             # merged_profile (fallback)
+            0,                          # prompt_tokens
+            0,                          # cached_tokens
+            0,                          # prompt_regular
+            0,                          # completion_tokens
+            0,                          # total_tokens
+            0.0,                        # cost_prompt_regular
+            0.0,                        # cost_prompt_cached
+            0.0,                        # cost_completion
+            0.0,                        # cost_total
+            0.0,                        # cost_total_ils
+            0,                          # cost_gpt4
+            "error"                     # model
+        )
+
+
+# פונקציית עזר - קובעת אם להפעיל GPT4
+def should_use_gpt4_merge(existing_profile, new_data):
+    """
+    מחליטה אם להפעיל GPT4 למיזוג מורכב
+    רק אם יש שדה מורכב חדש ושדה זה כבר קיים בת.ז
+    """
+    complex_fields = [
+        "attracted_to", "who_knows", "who_doesnt_know", "attends_therapy", 
+        "primary_conflict", "trauma_history", "goal_in_course", 
+        "language_of_strength", "coping_strategies", "fears_concerns", "future_vision"
+    ]
+    
+    for field in complex_fields:
+        if field in new_data:  # GPT3 מצא שדה מורכב חדש
+            existing_value = existing_profile.get(field, "")
+            if existing_value and existing_value.strip():  # והשדה קיים בת.ז
+                logging.info(f"🎯 GPT4 נדרש - שדה '{field}' מצריך מיזוג")
+                return True
+    
+    logging.info("✅ אין צורך ב-GPT4 - עדכון פשוט מספיק")
+    return False
+#===============================================================================
+
+
+
+
 # -------------------------------------------------------------
 # הסבר בסוף הקובץ (לשימושך):
 
