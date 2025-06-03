@@ -168,6 +168,14 @@ async def send_daily_summary(days_back=1):
 # await send_daily_summary(days_back=0)   # דוח של היום
 # await send_daily_summary(days_back=2)   # דוח של שלשום
 
+async def schedule_daily_summary():
+    await asyncio.sleep(2)  # מריץ עוד איקס שניות מהרגע שהפריסה הושלמה והבוט עלה
+    await send_daily_summary()
+
+async def delayed_daily_summary():
+    print("👉 נכנסתי ל־delayed_daily_summary — עומד לשלוח דוח יומי!")
+    await asyncio.sleep(1)  # מחכה איקס שניות לסיום כל התהליך
+    await send_daily_summary(days_back=0)  # days_back=0 זה דוח של היום (אם רוצה אתמול – שנה ל־1)
 
 # ===============================================
 # אתחול אוטומטי של דוחות יומיים
