@@ -414,3 +414,4 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(error_human_funny_message())
     finally:
         print("🏁 [DEBUG] handle_message מסיים (בהצלחה או בשגיאה)") 
+        # תודה1

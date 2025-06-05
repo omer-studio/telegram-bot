@@ -517,4 +517,4 @@ def delete_row_by_chat_id(sheet_name, chat_id):
     print(f"❌ לא נמצאה שורה עם chat_id {chat_id} למחיקה בגיליון {sheet_name}")
     return False
 
-
+# תודה1
