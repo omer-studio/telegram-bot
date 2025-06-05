@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 import logging
 from secret_commands import handle_secret_command
-from messages import get_welcome_messages
+from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile
@@ -61,24 +61,9 @@ async def send_message(update, chat_id, text, is_bot_message=True):
 
 # פונקציה לשליחת הודעת אישור (הועתקה מ-main.py)
 async def send_approval_message(update, chat_id):
-    approval_text = (
-        "רק לפני שנתחיל – חשוב לי שתדע:\n\n"
-        "🔸 אני לא אדם אמיתי\n"
-        "🔸 זה לא ייעוץ, לא טיפול, ולא תחליף לליווי מקצועי\n"
-        "🔸 אני מרחב תומך רגשי שנועד ללוות אותך כחלק מהקורס\n"
-        "🔸 אני מבוסס AI – וגם אני עלול לטעות לפעמים\n"
-        "🔸 השימוש בי הוא באחריותך האישית בלבד\n"
-        "🔸 השיחה איתי מיועדת רק למי שמעל גיל 18\n\n"
-        "אנא אשר שקראת והבנת את הכל כדי להמשיך."
-    )
-    approval_keyboard = ReplyKeyboardMarkup(
-        [["✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי"], ["❌לא מאשר"]],
-        one_time_keyboard=True,
-        resize_keyboard=True
-    )
     await update.message.reply_text(
-        approval_text + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
-        reply_markup=approval_keyboard
+        approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
+        reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -172,7 +157,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if register_user(context.bot_data["sheet"], chat_id, user_msg):
                     logging.info(f"✅ קוד גישה אושר למשתמש {chat_id}")
                     print(f"✅ קוד גישה אושר למשתמש {chat_id}")
-                    await update.message.reply_text("✅ הקוד אושר איזה התרגשות! אפשר להמשיך לשלב הבא 🙏✨")
+                    await update.message.reply_text(code_approved_message())
                     
                     await send_approval_message(update, chat_id)
 
@@ -183,21 +168,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"❌ קוד גישה לא תקין עבור {chat_id}")               
                     
                     if current_try == 1:
-                        await update.message.reply_text(
-                            "סליחה, לא הצלחתי לקלוט את הקוד נכון...🧐\nתוודא שאתה כותב את הספרות בדיוק כמו שמופיע בהודעה."
-                        )
+                        await update.message.reply_text(get_retry_message_by_attempt(current_try))
                     elif current_try == 2:
-                        await update.message.reply_text(
-                            "אוף... משהו עדיין לא נכון...🥴\nתבדוק שוב שאתה כותב את זה נכון, ושהקוד תואם בדיוק למספר שקיבלת."
-                        )
+                        await update.message.reply_text(get_retry_message_by_attempt(current_try))
                     elif current_try == 3:
-                        await update.message.reply_text(
-                            "לא מצליח לקלוט את הקוד...🙈\nבוא ננסה שוב — פשוט תכתוב את הקוד בדיוק כפי שהוא, רק ספרות."
-                        )
+                        await update.message.reply_text(get_retry_message_by_attempt(current_try))
                     elif current_try >= 4:
-                        await update.message.reply_text(
-                            "🚫 מצטער... הקוד לא תקין.\nמוזמן להקליד שוב ושוב עד שתצליח, או לפנות לעומר שיעזור לך."
-                        )
+                        await update.message.reply_text(not_approved_message())
                     logging.info("📤 נשלחה הודעת קוד לא תקין למשתמש")
                     print("📤 נשלחה הודעת קוד לא תקין למשתמש")
 
@@ -228,37 +205,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 if user_msg.strip() == "✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי":
                     approve_user(context.bot_data["sheet"], chat_id)
-                    nice_keyboard = ReplyKeyboardMarkup(
-                        [["היי מה נשמע? הייתי שמח שנדבר קצת..."]],
-                        one_time_keyboard=True,
-                        resize_keyboard=True
-                    )
-                    await update.message.reply_text(
-                        "היי מה נשמע? הייתי שמח שנדבר קצת...",
-                        reply_markup=nice_keyboard
-                    )
-                    await update.message.reply_text(
-                        "אפשר להמשיך להקליד כל דבר כאן! 🙂",
-                        reply_markup=ReplyKeyboardRemove()
-                    )
-                    await update.message.reply_text(
-                        "מעולה, קיבלת גישה מלאה ✅\n\n"
-                        "אני ממש שמח להתחיל להכיר אותך 🙂\n"
-                        "כדי שאוכל להתאים את הליווי והשיח בדיוק בשבילך, אשמח שתשתף אותי בכמה מילים חופשיות:\n\n"
-                        "• בן כמה אתה?\n"
-                        "• דתי? חילוני?\n"
-                        "• איפה אתה במסע עם הארון? (בארון / חצי בחוץ / כולם יודעים)\n"
-                        "• מי יודע עליך?\n"
-                        "• מה הקושי או ההתמודדות שמעסיקים אותך בימים אלה?\n"
-                        "• ומה היית רוצה להשיג או לחוות דרך הקורס הזה?\n\n"
-                        "<b>הכל בדיסקרטיות מלאה 🛡️ — אל תציין שם, טלפון או כל פרט מזהה. נשארים כאן דמויות אנונימיות.</b>\n\n"
-                        "טוב חפרתי... עכשיו תורך! 😅",
-                        parse_mode="HTML"
-                    )
+                    await update.message.reply_text(nice_keyboard_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
+                    await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
+                    await update.message.reply_text(full_access_message(), parse_mode="HTML")
                     logging.info("📤 נשלחה הודעת גישה מלאה למשתמש")
                     print("📤 נשלחה הודעת גישה מלאה למשתמש")
                 elif user_msg.strip() == "❌לא מאשר":
-                    await update.message.reply_text("אם אינך מאשר את התנאים, לא ניתן להמשיך בשירות. ❌")
+                    await update.message.reply_text(DECLINE_BUTTON_TEXT())
                     await send_approval_message(update, chat_id)
                     return
                 else:
