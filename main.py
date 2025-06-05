@@ -40,7 +40,7 @@ async def webhook(request: Request):
 async def main():
     await app.initialize()
     await app.start()
-    print("✅ הבוט פועל! מחכה להודעות...")
+    print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")
 
 if __name__ == "__main__":
     asyncio.run(main())

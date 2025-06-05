@@ -89,7 +89,19 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             f"🦓 מזהה דפלוי: {deploy_id}\n"
             f"🔢 מזהה קומיט: {git_commit}\n"
             f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
+            f"\n\n🚀 הבוט התחיל לרוץ בהצלחה! מוכן לקבל הודעות."
         )
+
+    # Debug info: print actual env values
+    debug_env = (
+        f"\n[DEBUG ENV]"
+        f"\nRENDER_SERVICE_NAME: {os.getenv('RENDER_SERVICE_NAME', 'None')}"
+        f"\nRENDER_ENVIRONMENT: {os.getenv('RENDER_ENVIRONMENT', 'None')}"
+        f"\nUSER: {os.getenv('USER', 'None')}"
+        f"\nRENDER_DEPLOY_ID: {os.getenv('RENDER_DEPLOY_ID', 'None')}"
+        f"\nRENDER_GIT_COMMIT: {os.getenv('RENDER_GIT_COMMIT', 'None')}"
+    )
+    text += debug_env
 
     data = {
         "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
@@ -243,7 +255,7 @@ def send_startup_notification():
     """
     שולח הודעה כשהבוט מתחיל לרוץ
     """
-    send_admin_notification("🚀 הבוט התחיל לרוץ בהצלחה! מוכן לקבל הודעות.")
+    send_deploy_notification()
 
 from telegram import Update # type: ignore
 
