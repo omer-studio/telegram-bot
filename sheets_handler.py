@@ -422,23 +422,18 @@ def log_to_sheets(
         for key in values_to_log.keys():
             if key not in header:
                 missing_headers.append(key)
-        
         if missing_headers:
             print(f"⚠️ כותרות חסרות בגיליון: {missing_headers}")
             from notifications import send_error_notification
             send_error_notification(f"⚠️ כותרות חסרות בגיליון: {missing_headers}")
 
-        # הכנסת ערכים לפי header
+        # הכנסת ערכים לפי header (מתעלם מעמודות מיותרות)
         for key, val in values_to_log.items():
             if key in header:
                 idx = header.index(key)
                 row_data[idx] = val
-            else:
-                print(f"⚠️ כותרת לא נמצאה: {key}")
-
         # שמירה בגיליון
         sheet_log.append_row(row_data)
-
         return True
 
     except Exception as e:
