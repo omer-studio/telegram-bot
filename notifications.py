@@ -78,30 +78,32 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             duration_str = f"⏳ {int(deploy_duration)} שניות"
         else:
             duration_str = "🤷🏼"
-        text = (
-            f"❕הודעה לאדמין❕\n\n"
-            f"✅ פריסה חדשה הושלמה בהצלחה!\n"
-            f"⌛זמן שלקח לפרוס: {duration_str}\n"
-            f"⏰ טיימסטמפ: {timestamp}\n"
-            f"📁 פרויקט: {project}\n"
-            f"🖥️ סביבת הפעלה: {environment}\n"
-            f"👤 יוזר: {user}\n"
-            f"🦓 מזהה דפלוי: {deploy_id}\n"
-            f"🔢 מזהה קומיט: {git_commit}\n"
-            f"\nלפרטים נוספים בדוק את הלוגים ב-Render."
-            f"\n\n🚀 הבוט התחיל לרוץ בהצלחה! מוכן לקבל הודעות."
+        # Build the message only with fields that have real values
+        fields = []
+        fields.append(f"⌛זמן שלקח לפרוס: {duration_str}")
+        fields.append(f"⏰ טיימסטמפ: {timestamp}")
+        if project not in ["🤷🏼", None, "None"]:
+            fields.append(f"📁 פרויקט: {project}")
+        if environment not in ["🤷🏼", None, "None"]:
+            fields.append(f"🖥️ סביבת הפעלה: {environment}")
+        if user not in ["🤷🏼", None, "None"]:
+            fields.append(f"👤 יוזר: {user}")
+        if deploy_id not in ["🤷🏼", None, "None"]:
+            fields.append(f"🦓 מזהה דפלוי: {deploy_id}")
+        if git_commit not in ["🤷🏼", None, "None"]:
+            fields.append(f"🔢 מזהה קומיט: {git_commit}")
+        fields.append("\nלפרטים נוספים בדוק את הלוגים ב-Render.")
+        text = "אדמין יקר - ✅פריסה הצליחה והבוט שלך רץ !! איזה כיף !! 🚀\n\n" + "\n".join(fields)
+        # Debug info: print actual env values
+        debug_env = (
+            f"\n[DEBUG ENV]"
+            f"\nRENDER_SERVICE_NAME: {os.getenv('RENDER_SERVICE_NAME', 'None')}"
+            f"\nRENDER_ENVIRONMENT: {os.getenv('RENDER_ENVIRONMENT', 'None')}"
+            f"\nUSER: {os.getenv('USER', 'None')}"
+            f"\nRENDER_DEPLOY_ID: {os.getenv('RENDER_DEPLOY_ID', 'None')}"
+            f"\nRENDER_GIT_COMMIT: {os.getenv('RENDER_GIT_COMMIT', 'None')}"
         )
-
-    # Debug info: print actual env values
-    debug_env = (
-        f"\n[DEBUG ENV]"
-        f"\nRENDER_SERVICE_NAME: {os.getenv('RENDER_SERVICE_NAME', 'None')}"
-        f"\nRENDER_ENVIRONMENT: {os.getenv('RENDER_ENVIRONMENT', 'None')}"
-        f"\nUSER: {os.getenv('USER', 'None')}"
-        f"\nRENDER_DEPLOY_ID: {os.getenv('RENDER_DEPLOY_ID', 'None')}"
-        f"\nRENDER_GIT_COMMIT: {os.getenv('RENDER_GIT_COMMIT', 'None')}"
-    )
-    text += debug_env
+        text += debug_env
 
     data = {
         "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
