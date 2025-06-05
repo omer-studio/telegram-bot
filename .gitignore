@@ -20,3 +20,12 @@ __pycache__/
 
 # קבצים/תיקיות מקומיים שלא עולים ל-git
 sandbox.py
+
+# Ignore GPT usage log
+/data/gpt_usage_log.jsonl
+
+# Ignore ngrok executable
+ngrok-v3-stable-windows-amd64/ngrok.exe
+
+# Ignore all data directory
+/data/
