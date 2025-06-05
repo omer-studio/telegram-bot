@@ -277,26 +277,17 @@ def log_to_sheets(
         main_cost_usd = safe_float(main_usage.get("cost_total", 0))
         main_cost_ils = safe_float(main_usage.get("cost_total_ils", 0))
 
-        # אם summary_usage או extract_usage קיימים, נוסיף אותם
-        summary_prompt_tokens = safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else 0
-        summary_completion_tokens = safe_int(summary_usage[2]) if summary_usage and len(summary_usage) > 2 else 0
-        summary_total_tokens = safe_int(summary_usage[3]) if summary_usage and len(summary_usage) > 3 else 0
-        summary_model = summary_usage[4] if summary_usage and len(summary_usage) > 4 else ""
+        # summary_usage תמיד dict
+        summary_prompt_tokens = safe_int(summary_usage.get("prompt_tokens", 0))
+        summary_completion_tokens = safe_int(summary_usage.get("completion_tokens", 0))
+        summary_total_tokens = safe_int(summary_usage.get("total_tokens", 0))
+        summary_model = summary_usage.get("model", "")
 
-        # --- תיקון: תמיכה גם ב-tuple וגם ב-dict ל-extract_usage ---
-        if isinstance(extract_usage, (list, tuple)):
-            extract_prompt_tokens = safe_int(extract_usage[0]) if len(extract_usage) > 0 else 0
-            extract_completion_tokens = safe_int(extract_usage[4]) if len(extract_usage) > 4 else 0
-            extract_total_tokens = safe_int(extract_usage[5]) if len(extract_usage) > 5 else 0
-            extract_model = extract_usage[11] if len(extract_usage) > 11 else ""
-        elif isinstance(extract_usage, dict):
-            extract_prompt_tokens = safe_int(extract_usage.get("prompt_tokens", 0))
-            extract_completion_tokens = safe_int(extract_usage.get("completion_tokens", 0))
-            extract_total_tokens = safe_int(extract_usage.get("total_tokens", 0))
-            extract_model = extract_usage.get("model", "")
-        else:
-            extract_prompt_tokens = extract_completion_tokens = extract_total_tokens = 0
-            extract_model = ""
+        # extract_usage תמיד dict
+        extract_prompt_tokens = safe_int(extract_usage.get("prompt_tokens", 0))
+        extract_completion_tokens = safe_int(extract_usage.get("completion_tokens", 0))
+        extract_total_tokens = safe_int(extract_usage.get("total_tokens", 0))
+        extract_model = extract_usage.get("model", "")
 
         # סיכום כולל
         prompt_tokens_total = main_prompt_tokens + summary_prompt_tokens + extract_prompt_tokens
@@ -320,35 +311,15 @@ def log_to_sheets(
             return calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens)
 
         # חישוב עלויות אם לא סופקו
-        if cost_gpt1 is None and main_usage and len(main_usage) >= 2:
-            costs = get_gpt_costs(main_usage[0], main_usage[1], main_usage[3] if len(main_usage) > 3 else 0)
+        if cost_gpt1 is None:
+            costs = get_gpt_costs(main_usage.get("prompt_tokens", 0), main_usage.get("completion_tokens", 0), main_usage.get("cached_tokens", 0))
             cost_gpt1 = costs["cost_agorot"]
-        elif cost_gpt1 is None:
-            cost_gpt1 = 0
-
-        if cost_gpt2 is None and summary_usage and len(summary_usage) >= 3:
-            costs = get_gpt_costs(summary_usage[1], summary_usage[2])
+        if cost_gpt2 is None:
+            costs = get_gpt_costs(summary_usage.get("prompt_tokens", 0), summary_usage.get("completion_tokens", 0), summary_usage.get("cached_tokens", 0))
             cost_gpt2 = costs["cost_agorot"]
-        elif cost_gpt2 is None:
-            cost_gpt2 = 0
-
-        if cost_gpt3 is None and extract_usage:
-            if isinstance(extract_usage, (list, tuple)):
-                costs = get_gpt_costs(
-                    extract_usage[0] if len(extract_usage) > 0 else 0,
-                    extract_usage[4] if len(extract_usage) > 4 else 0
-                )
-                cost_gpt3 = costs["cost_agorot"]
-            elif isinstance(extract_usage, dict):
-                costs = get_gpt_costs(
-                    extract_usage.get("prompt_tokens", 0),
-                    extract_usage.get("completion_tokens", 0)
-                )
-                cost_gpt3 = costs["cost_agorot"]
-            else:
-                cost_gpt3 = 0
-        elif cost_gpt3 is None:
-            cost_gpt3 = 0
+        if cost_gpt3 is None:
+            costs = get_gpt_costs(extract_usage.get("prompt_tokens", 0), extract_usage.get("completion_tokens", 0), extract_usage.get("cached_tokens", 0))
+            cost_gpt3 = costs["cost_agorot"]
 
         # 🚨 תיקון 4: ניקוי ערכי עלות
         def clean_cost_value(cost_val):
@@ -366,7 +337,7 @@ def log_to_sheets(
         clean_cost_ils = clean_cost_value(cost_ils)
 
         # האם הופעל סיכום (GPT2)?
-        has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage[2]) > 0
+        has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
         # 🚨 תיקון 5: מיפוי מדויק לכותרות הגיליון
         values_to_log = {

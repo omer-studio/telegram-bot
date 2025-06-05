@@ -253,9 +253,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("🤖 שולח ל-GPT הראשי...")
             
             main_response = get_main_response(full_messages)
-            
             reply_text = main_response["bot_reply"]
-            main_usage = main_response  # כל usage dict
+            main_usage = {k: v for k, v in main_response.items() if k != "bot_reply"}
             main_prompt_tokens = main_usage.get("prompt_tokens", 0)
             main_completion_tokens = main_usage.get("completion_tokens", 0)
             main_total_tokens = main_usage.get("total_tokens", 0)
@@ -282,17 +281,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if num_words > 50:
                 logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
                 sum_response = summarize_bot_reply(reply_text)
-                sum_prompt = sum_response.get("prompt_tokens", 0)
-                sum_completion = sum_response.get("completion_tokens", 0)
-                sum_total = sum_response.get("total_tokens", 0)
-                sum_model = sum_response.get("model", "")
-                summary_usage = sum_response
+                summary_usage = {k: v for k, v in sum_response.items() if k != "bot_summary"}
+                reply_summary = sum_response.get("bot_summary", reply_text)
+                sum_prompt = summary_usage.get("prompt_tokens", 0)
+                sum_completion = summary_usage.get("completion_tokens", 0)
+                sum_total = summary_usage.get("total_tokens", 0)
+                sum_model = summary_usage.get("model", "")
             else:
                 logging.info(f"✂️ התשובה קצרה - לא מבצע סיכום ({num_words} מילים)")
                 reply_summary = reply_text
+                summary_usage = {}
                 sum_prompt = sum_completion = sum_total = 0
                 sum_model = ""
-                summary_usage = {}
 
             # המשך עדכון לוגים/היסטוריה/גיליון (כמו קודם)
             try:

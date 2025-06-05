@@ -226,7 +226,7 @@ def extract_user_profile_fields(text):
                 {"role": "user", "content": text}
             ],
             temperature=0,
-            max_tokens=200  # הגדלתי כי יש 20 שדות אפשריים
+            max_tokens=200
         )
         content = response.choices[0].message.content.strip()
 
@@ -354,21 +354,19 @@ def extract_user_profile_fields(text):
     except Exception as e:
         logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
         logging.error(f"[DEBUG] Exception in extract_user_profile_fields: {e}")
-        return (
-            {},                         # extracted_data (ריק)
-            0,                          # prompt_tokens
-            0,                          # cached_tokens 
-            0,                          # prompt_regular
-            0,                          # completion_tokens
-            0,                          # total_tokens
-            0.0,                        # cost_prompt_regular
-            0.0,                        # cost_prompt_cached
-            0.0,                        # cost_completion  
-            0.0,                        # cost_total
-            0.0,                        # cost_total_ils
-            0,                          # cost_gpt3
-            "error"                     # model
-        ), usage_data
+        return { }, {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cached_tokens": 0,
+            "cost_prompt_regular": 0,
+            "cost_prompt_cached": 0,
+            "cost_completion": 0,
+            "cost_total": 0,
+            "cost_total_ils": 0,
+            "cost_gpt3": 0,
+            "model": "error"
+        }
 
 
 def validate_extracted_data(data):
@@ -612,7 +610,7 @@ def smart_update_profile(existing_profile, user_message):
     # שלב 1: GPT3 - חילוץ מידע חדש
     extract_result = extract_user_profile_fields(user_message)
     new_data = extract_result[0]
-    extract_usage = extract_result[1:]  # כל 12 הערכים הנוספים
+    extract_usage = extract_result[1]  # תמיד dict
     
     logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
     
@@ -628,7 +626,7 @@ def smart_update_profile(existing_profile, user_message):
         # שלב 3: GPT4 - מיזוג חכם
         merge_result = merge_sensitive_profile_data(existing_profile, new_data, user_message)
         updated_profile = merge_result[0]
-        merge_usage = merge_result[1:]  # כל 12 הערכים הנוספים
+        merge_usage = merge_result[1]  # תמיד dict
         
         logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
         return updated_profile, extract_usage, merge_usage
@@ -648,33 +646,20 @@ def get_combined_usage_data(extract_usage, merge_usage=None):
     מחזירה נתונים מאוחדים לשמירה ב-sheets
     """
     # נתוני GPT3
-    extract_data = {
-        "extract_prompt_tokens": extract_usage[0],
-        "extract_cached_tokens": extract_usage[1], 
-        "extract_completion_tokens": extract_usage[3],
-        "extract_total_tokens": extract_usage[4],
-        "extract_cost_total": extract_usage[8],
-        "extract_cost_ils": extract_usage[9],
-        "extract_cost_gpt3": extract_usage[10],
-        "extract_model": extract_usage[11]
-    }
+    if not isinstance(extract_usage, dict):
+        raise ValueError("extract_usage חייב להיות dict!")
+    extract_data = extract_usage.copy()
     
     # אם GPT4 רץ - הוסף את הנתונים שלו
     if merge_usage:
-        merge_data = {
-            "merge_prompt_tokens": merge_usage[0],
-            "merge_cached_tokens": merge_usage[1],
-            "merge_completion_tokens": merge_usage[3], 
-            "merge_total_tokens": merge_usage[4],
-            "merge_cost_total": merge_usage[8],
-            "merge_cost_ils": merge_usage[9],
-            "merge_cost_gpt4": merge_usage[10],
-            "merge_model": merge_usage[11],
-            "used_gpt4": True
-        }
+        if not isinstance(merge_usage, dict):
+            raise ValueError("merge_usage חייב להיות dict!")
+        merge_data = merge_usage.copy()
+        merge_data["used_gpt4"] = True
         return {**extract_data, **merge_data}
     else:
-        return {**extract_data, "used_gpt4": False}
+        extract_data["used_gpt4"] = False
+        return extract_data
 
 
 # -------------------------------------------------------------
