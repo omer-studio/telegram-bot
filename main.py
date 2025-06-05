@@ -41,7 +41,7 @@ async def webhook(request: Request):
 def root():
     return {"status": "ok"}
 
-@app.on_event("startup")
+@app_fastapi.on_event("startup")
 async def on_startup():
     from utils import health_check
     from notifications import send_error_notification

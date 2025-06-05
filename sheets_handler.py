@@ -433,7 +433,7 @@ def log_to_sheets(
                 idx = header.index(key)
                 row_data[idx] = val
         # שמירה בגיליון
-        sheet_log.append_row(row_data)
+        sheet_log.insert_row(row_data, 3)
         return True
 
     except Exception as e:

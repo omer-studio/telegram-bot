@@ -269,6 +269,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
 
             # שלח למשתמש מיד את התשובה המלאה
+            # *** שימו לב: שליחת התשובה למשתמש מתבצעת מיד, וכל שאר הפעולות (סיכום, עדכון לוגים, שמירת היסטוריה) קורות רק אחרי שליחת התשובה! זה קריטי למהירות תגובה ***
             reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
             print(f"[📤 הודעת בוט]: {reply_text_one_line}")
             logging.info("📨 תשובה נשלחה למשתמש")
