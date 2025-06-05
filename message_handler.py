@@ -280,31 +280,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             num_words = len(reply_text.split())
             if num_words > 50:
                 logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
-                summary_response = summarize_bot_reply(reply_text)
-
-                try:
-                    if isinstance(summary_response, tuple) and len(summary_response) >= 5:
-                        reply_summary = summary_response[0]
-                        sum_prompt = summary_response[1]
-                        sum_completion = summary_response[2]
-                        sum_total = summary_response[3]
-                        sum_model = summary_response[4]
-                        print("✅ סיכום פוצח בהצלחה")
-                    else:
-                        print(f"⚠️ summarize_bot_reply החזיר פורמט לא צפוי: {summary_response}")
-                        reply_summary = reply_text  # נשתמש בטקסט המקורי
-                        sum_prompt = sum_completion = sum_total = 0
-                        sum_model = ""
-                except Exception as e:
-                    print(f"💥 שגיאה בפירוק סיכום: {e}")
-                    reply_summary = reply_text
-                    sum_prompt = sum_completion = sum_total = 0
-                    sum_model = ""
+                sum_response = summarize_bot_reply(reply_text)
+                sum_prompt = sum_response.get("prompt_tokens", 0)
+                sum_completion = sum_response.get("completion_tokens", 0)
+                sum_total = sum_response.get("total_tokens", 0)
+                sum_model = sum_response.get("model", "")
+                summary_usage = sum_response
             else:
                 logging.info(f"✂️ התשובה קצרה - לא מבצע סיכום ({num_words} מילים)")
                 reply_summary = reply_text
                 sum_prompt = sum_completion = sum_total = 0
                 sum_model = ""
+                summary_usage = {}
 
             # המשך עדכון לוגים/היסטוריה/גיליון (כמו קודם)
             try:
@@ -320,7 +307,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     existing_profile = {}
                 updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
-                identity_fields = updated_profile
+                identity_fields, extract_usage = extract_identity_fields(reply_text)
                 if updated_profile and updated_profile != existing_profile:
                     print(f"[DEBUG] update_user_profile called with: {updated_profile}")
                     logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")

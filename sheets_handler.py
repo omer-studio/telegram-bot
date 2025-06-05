@@ -399,20 +399,20 @@ def log_to_sheets(
             FIELDS_DICT["model_GPT1"]: main_usage.get("model", ""),
             
             # נתוני GPT2 (summary)
-            FIELDS_DICT["usage_prompt_tokens_GPT2"]: safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else "",
-            FIELDS_DICT["usage_completion_tokens_GPT2"]: safe_int(summary_usage[2]) if summary_usage and len(summary_usage) > 2 else "",
-            FIELDS_DICT["usage_total_tokens_GPT2"]: safe_int(summary_usage[3]) if summary_usage and len(summary_usage) > 3 else "",
-            FIELDS_DICT["cached_tokens_gpt2"]: cached_tokens_gpt2 if cached_tokens_gpt2 > 0 else "",
-            FIELDS_DICT["cost_gpt2"]: cost_gpt2 if cost_gpt2 > 0 else "",
-            FIELDS_DICT["model_GPT2"]: summary_usage[4] if summary_usage and len(summary_usage) > 4 else "",
+            FIELDS_DICT["usage_prompt_tokens_GPT2"]: summary_usage.get("prompt_tokens", ""),
+            FIELDS_DICT["usage_completion_tokens_GPT2"]: summary_usage.get("completion_tokens", ""),
+            FIELDS_DICT["usage_total_tokens_GPT2"]: summary_usage.get("total_tokens", ""),
+            FIELDS_DICT["cached_tokens_gpt2"]: summary_usage.get("cached_tokens", ""),
+            FIELDS_DICT["cost_gpt2"]: summary_usage.get("cost_gpt2", ""),
+            FIELDS_DICT["model_GPT2"]: summary_usage.get("model", ""),
             
             # נתוני GPT3 (extract)
-            FIELDS_DICT["usage_prompt_tokens_GPT3"]: extract_prompt_tokens,
-            FIELDS_DICT["usage_completion_tokens_GPT3"]: extract_completion_tokens,
-            FIELDS_DICT["usage_total_tokens_GPT3"]: extract_total_tokens,
-            FIELDS_DICT["cached_tokens_gpt3"]: cached_tokens_gpt3 if cached_tokens_gpt3 > 0 else "",
-            FIELDS_DICT["cost_gpt3"]: cost_gpt3 if cost_gpt3 > 0 else "",
-            FIELDS_DICT["model_GPT3"]: extract_model,
+            FIELDS_DICT["usage_prompt_tokens_GPT3"]: extract_usage.get("prompt_tokens", ""),
+            FIELDS_DICT["usage_completion_tokens_GPT3"]: extract_usage.get("completion_tokens", ""),
+            FIELDS_DICT["usage_total_tokens_GPT3"]: extract_usage.get("total_tokens", ""),
+            FIELDS_DICT["cached_tokens_gpt3"]: extract_usage.get("cached_tokens", ""),
+            FIELDS_DICT["cost_gpt3"]: extract_usage.get("cost_gpt3", ""),
+            FIELDS_DICT["model_GPT3"]: extract_usage.get("model", ""),
             
             # נתוני זמן
             FIELDS_DICT["timestamp"]: timestamp_full,

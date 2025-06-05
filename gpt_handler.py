@@ -120,7 +120,7 @@ def get_main_response(full_messages):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt1": cost_gpt1,  # באגורות
+            "cost_gpt1": cost_gpt1,  # עלות באגורות
             "model": response.model
         }
 
@@ -162,12 +162,8 @@ def summarize_bot_reply(reply_text):
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": reply_text}
-            ],
-            temperature=0.6,
-            max_tokens=40
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": reply_text}],
+            temperature=1,
         )
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
@@ -175,44 +171,31 @@ def summarize_bot_reply(reply_text):
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
-
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt2 = int(round(cost_total_ils * 100))  # באגורות #NEW
-
+        cost_gpt2 = int(round(cost_total_ils * 100))  # עלות באגורות
         usage_log = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
             "cached_tokens": cached_tokens,
+            "prompt_regular": prompt_regular,
             "cost_prompt_regular": cost_prompt_regular,
             "cost_prompt_cached": cost_prompt_cached,
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt2": cost_gpt2 # באגורות
+            "cost_gpt2": cost_gpt2,  # עלות באגורות
+            "model": response.model
         }
-
         write_gpt_log("reply_summary", usage_log, response.model)
-
-        return (
-            response.choices[0].message.content.strip(),  # bot_summary
-            prompt_tokens,
-            cached_tokens,         # cached_tokens_gpt2 #NEW
-            prompt_regular,
-            completion_tokens,
-            total_tokens,
-            cost_prompt_regular,
-            cost_prompt_cached,
-            cost_completion,
-            cost_total,
-            cost_total_ils,
-            cost_gpt2,             # cost_gpt2 באגורות #NEW
-            response.model         # model_GPT2
-        )
+        return {
+            "bot_summary": response.choices[0].message.content.strip(),
+            **usage_log
+        }
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
@@ -300,21 +283,7 @@ def extract_user_profile_fields(text):
         
         logging.info(f"[DEBUG] new_data after extract: {validated_result}")
         
-        return (
-            validated_result,           # extracted_data (במקום result)
-            prompt_tokens,              # prompt_tokens  
-            cached_tokens,              # cached_tokens
-            prompt_regular,             # prompt_regular
-            completion_tokens,          # completion_tokens
-            total_tokens,               # total_tokens
-            cost_prompt_regular,        # cost_prompt_regular
-            cost_prompt_cached,         # cost_prompt_cached  
-            cost_completion,            # cost_completion
-            cost_total,                 # cost_total
-            cost_total_ils,             # cost_total_ils
-            cost_gpt3,                  # cost_gpt3 באגורות
-            usage_data.get("model", "") # model
-        )
+        return validated_result, usage_data
 
     except json.JSONDecodeError as e:
         logging.error(f"❌ שגיאה בפרסור JSON: {e}")
@@ -380,21 +349,7 @@ def extract_user_profile_fields(text):
         if validated_manual != manual_result:
             logging.info(f"🔧 פרסור ידני לאחר validation: {validated_manual}")
         logging.info(f"[DEBUG] new_data after manual extract: {validated_manual}")
-        return (
-            validated_manual,           # extracted_data
-            0,                          # prompt_tokens (fallback)
-            0,                          # cached_tokens (fallback)
-            0,                          # prompt_regular (fallback)  
-            0,                          # completion_tokens (fallback)
-            0,                          # total_tokens (fallback)
-            0.0,                        # cost_prompt_regular (fallback)
-            0.0,                        # cost_prompt_cached (fallback)
-            0.0,                        # cost_completion (fallback)
-            0.0,                        # cost_total (fallback)
-            0.0,                        # cost_total_ils (fallback)
-            0,                          # cost_gpt3 (fallback)
-            "fallback"                  # model (fallback)
-        )
+        return validated_manual, usage_data
 
     except Exception as e:
         logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
@@ -413,7 +368,7 @@ def extract_user_profile_fields(text):
             0.0,                        # cost_total_ils
             0,                          # cost_gpt3
             "error"                     # model
-        )
+        ), usage_data
 
 
 def validate_extracted_data(data):
