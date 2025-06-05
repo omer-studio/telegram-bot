@@ -41,6 +41,18 @@ async def webhook(request: Request):
 def root():
     return {"status": "ok"}
 
+@app.on_event("startup")
+async def on_startup():
+    from utils import health_check
+    from notifications import send_error_notification
+    try:
+        health = health_check()
+        if not all(health.values()):
+            send_error_notification(f"[STARTUP] בעיה בבדיקת תקינות: {health}")
+    except Exception as e:
+        from traceback import format_exc
+        send_error_notification(f"[STARTUP] שגיאה בבדיקת תקינות: {e}\n{format_exc()}")
+
 async def main():
     await app.initialize()
     await app.start()

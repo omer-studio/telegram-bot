@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 import logging
 from secret_commands import handle_secret_command
-from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message
+from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile
@@ -396,30 +396,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info("---- סיום טיפול בהודעה ----")
         print("---- סיום טיפול בהודעה ----")
 
-    except Exception as ultimate_error:
-        print(f"🚨 [ULTIMATE_ERROR] שגיאה כללית לא צפויה: {ultimate_error}")
-        print(f"🚨 [ULTIMATE_ERROR] Type: {type(ultimate_error)}")
+    except Exception as e:
+        import traceback
+        from notifications import send_error_notification
+        tb = traceback.format_exc()
+        chat_id = None
+        user_msg = None
         try:
-            await update.message.reply_text(
-                "😅  אופס! קרתה תקלה טכנית לא צפויה איזה פאדיחות. "
-                "הבוט ממשיך לעבוד פשוט יקח לו קצת זמן לענות, אנא נסה שוב בעוד רגע."
-            )
-        except:
-            print("🚨 [ULTIMATE_ERROR] לא הצלחתי אפילו לשלוח הודעת שגיאה למשתמש")
-        try:
-            import traceback
-            error_details = {
-                "timestamp": datetime.now().isoformat(),
-                "error_type": str(type(ultimate_error)),
-                "error_message": str(ultimate_error),
-                "traceback": traceback.format_exc(),
-                "chat_id": getattr(update.message, 'chat_id', 'unknown') if hasattr(update, 'message') else 'unknown'
-            }
-            with open(CRITICAL_ERRORS_PATH, "a", encoding="utf-8") as f:
-                import json
-                f.write(json.dumps(error_details, ensure_ascii=False) + "\n")
-            print("✅ [ULTIMATE_ERROR] השגיאה נשמרה לקובץ critical_errors.jsonl")
-        except:
-            print("🚨 [ULTIMATE_ERROR] לא הצלחתי אפילו לשמור את השגיאה לקובץ")
+            chat_id = update.effective_chat.id if update and update.effective_chat else None
+            user_msg = update.message.text if update and update.message else None
+        except Exception:
+            pass
+        send_error_notification(f"שגיאה בטיפול בהודעה:\n{e}\n{tb}", chat_id=chat_id, user_msg=user_msg)
+        if update and update.message:
+            await update.message.reply_text(error_human_funny_message())
     finally:
         print("🏁 [DEBUG] handle_message מסיים (בהצלחה או בשגיאה)") 

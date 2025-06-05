@@ -428,6 +428,8 @@ def log_to_sheets(
         
         if missing_headers:
             print(f"⚠️ כותרות חסרות בגיליון: {missing_headers}")
+            from notifications import send_error_notification
+            send_error_notification(f"⚠️ כותרות חסרות בגיליון: {missing_headers}")
 
         # הכנסת ערכים לפי header
         for key, val in values_to_log.items():
@@ -446,6 +448,8 @@ def log_to_sheets(
         print(f"❌ שגיאה בשמירה לגיליון: {e}")
         import traceback
         traceback.print_exc()
+        from notifications import send_error_notification
+        send_error_notification(f"❌ שגיאה בשמירה לגיליון: {e}")
         return False
 
 

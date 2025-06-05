@@ -81,3 +81,31 @@ BOT_TRACE_LOG_PATH = os.path.join(DATA_DIR, "bot_trace_log.jsonl")
 CHAT_HISTORY_PATH = os.path.join(DATA_DIR, "chat_history.json")
 BOT_ERRORS_PATH = os.path.join(DATA_DIR, "bot_errors.jsonl")
 CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, "critical_errors.jsonl")
+
+def check_config_sanity():
+    missing = []
+    sensitive_keys = [
+        "TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "GOOGLE_SHEET_ID", "ADMIN_BOT_TELEGRAM_TOKEN"
+    ]
+    for key in sensitive_keys:
+        val = globals().get(key, None)
+        if not val or (isinstance(val, str) and not val.strip()):
+            missing.append(key)
+    if missing:
+        print(f"❌ [CONFIG] חסרים משתני קונפיגורציה קריטיים: {missing}")
+    else:
+        print("✅ [CONFIG] כל משתני הקונפיגורציה הקריטיים קיימים.")
+
+def get_config_snapshot():
+    # מחזיר snapshot של קונפיגורציה ללא ערכים רגישים
+    return {
+        "GOOGLE_SHEET_ID": "***",
+        "DATA_DIR": DATA_DIR,
+        "PROJECT_ROOT": PROJECT_ROOT,
+        "LOG_FILE_PATH": LOG_FILE_PATH,
+        "GPT_LOG_PATH": GPT_LOG_PATH,
+        "BOT_TRACE_LOG_PATH": BOT_TRACE_LOG_PATH,
+        "CHAT_HISTORY_PATH": CHAT_HISTORY_PATH,
+        "BOT_ERRORS_PATH": BOT_ERRORS_PATH,
+        "CRITICAL_ERRORS_PATH": CRITICAL_ERRORS_PATH
+    }

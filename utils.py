@@ -7,7 +7,7 @@ from datetime import datetime
 from config import LOG_FILE_PATH, LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH
 
 
-def log_event_to_file(log_data):
+def log_event_to_file(log_data: dict) -> None:
     """
     רושם אירועים לקובץ הלוגים הראשי
     """
@@ -80,7 +80,7 @@ def update_chat_history(chat_id, user_msg, bot_summary):
 
 
 
-def get_chat_history_messages(chat_id):
+def get_chat_history_messages(chat_id: str) -> list:
     """
     מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT
     """
@@ -111,7 +111,7 @@ def get_chat_history_messages(chat_id):
     return messages
 
 
-def get_user_stats(chat_id):
+def get_user_stats(chat_id: str) -> dict:
     """
     מחזיר סטטיסטיקות על המשתמש
     """
@@ -136,7 +136,7 @@ def get_user_stats(chat_id):
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
 
 
-def clean_old_logs():
+def clean_old_logs() -> None:
     """
     מנקה לוגים ישנים (ניתן לקרוא מעת לעת)
     """
@@ -158,44 +158,42 @@ def clean_old_logs():
         print(f"❌ שגיאה בניקוי לוגים: {e}")
 
 
-def get_system_health():
+def health_check() -> dict:
     """
-    בדיקת תקינות המערכת
+    בדיקת תקינות המערכת (config, sheets, openai, כתיבה לקבצים)
+    שולחת התראה לאדמין אם משהו לא תקין
     """
+    from config import check_config_sanity, get_config_snapshot
+    from notifications import send_error_notification
     health = {
         "config_loaded": False,
         "sheets_connected": False,
         "openai_connected": False,
         "log_files_writable": False
     }
-    
     try:
-        # בדיקת קונפיגורציה
-        from config import config
+        check_config_sanity()
         health["config_loaded"] = True
-        
-        # בדיקת חיבור לשיטס
         from sheets_handler import sheet_users, sheet_log
         health["sheets_connected"] = True
-        
-        # בדיקת OpenAI
         from config import client
         health["openai_connected"] = True
-        
         # בדיקת כתיבה לקבצים
         test_log = {"test": "health_check", "timestamp": datetime.now().isoformat()}
         with open("health_test.json", "w") as f:
             json.dump(test_log, f)
         os.remove("health_test.json")
         health["log_files_writable"] = True
-        
     except Exception as e:
         print(f"⚕️ בעיה בבדיקת תקינות: {e}")
-    
+        try:
+            send_error_notification(f"[HEALTH_CHECK] בעיה בבדיקת תקינות: {e}")
+        except Exception:
+            pass
     return health
 
 
-def format_error_message(error, context=""):
+def format_error_message(error: Exception, context: str = "") -> str:
     """
     מעצב הודעת שגיאה בצורה ברורה
     """

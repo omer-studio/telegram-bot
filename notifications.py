@@ -113,44 +113,33 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         print(f"שגיאה בשליחת הודעת פריסה: {e}")
 
 
-def send_error_notification(error_msg, chat_id=None, user_msg=None, error_type="שגיאה כללית"):
+def send_error_notification(error_message: str, chat_id: str = None, user_msg: str = None) -> None:
     """
-    שולח התראת שגיאה לאדמין בטלגרם
+    שולח הודעת שגיאה לאדמין עם פירוט מלא (ללא טוקנים/סודות)
     """
+    import traceback
+    from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
+    import requests
+    # מסנן טוקנים/סודות
+    def sanitize(msg):
+        import re
+        msg = re.sub(r'(token|key|api|secret)[^\s\n\r:]*[:=][^\s\n\r]+', '[SECURE]', msg, flags=re.IGNORECASE)
+        return msg
+    text = f"🚨 שגיאה קריטית בבוט:\n<pre>{sanitize(error_message)}</pre>"
+    if chat_id:
+        text += f"\nchat_id: {chat_id}"
+    if user_msg:
+        text += f"\nuser_msg: {user_msg[:200]}"
     try:
-        if not ADMIN_NOTIFICATION_CHAT_ID:
-            print("⚠️ לא הוגדר chat ID להתראות שגיאה")
-            return
-
-        notification_text = f"🚨 הודעה לאדמין: 🚨\n\n"
-        notification_text += f"❌ {error_type}\n"
-        notification_text += f"⏰ זמן: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n\n"
-
-        if chat_id:
-            notification_text += f"👤 משתמש: {chat_id}\n"
-        if user_msg:
-            display_msg = user_msg[:80] + "..." if len(user_msg) > 80 else user_msg
-            notification_text += f"💬 הודעת משתמש: \"{display_msg}\"\n\n"
-
-        notification_text += f"🔍 פרטי השגיאה:\n{str(error_msg)[:400]}"
-        if len(str(error_msg)) > 400:
-            notification_text += "...\n\n📄 השגיאה המלאה נשמרה בקובץ הלוגים"
-
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-        data = {
+        payload = {
             "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
-            "text": notification_text,
+            "text": text,
             "parse_mode": "HTML"
         }
-
-        response = requests.post(url, data=data, timeout=10)
-        if response.status_code == 200:
-            print("✅ התראת שגיאה נשלחה לאדמין")
-        else:
-            print(f"❌ שגיאה בשליחת התראה: {response.status_code}")
-
+        requests.post(url, data=payload, timeout=10)
     except Exception as e:
-        print(f"💥 שגיאה בשליחת התראת שגיאה: {e}")
+        print(f"[ERROR] לא הצלחתי לשלוח שגיאה לאדמין: {e}")
 
 def send_admin_notification(message, urgent=False):
     """
