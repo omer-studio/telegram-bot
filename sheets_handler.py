@@ -30,35 +30,40 @@ from fields_dict import FIELDS_DICT
 sheet_users, sheet_log, sheet_states = setup_google_sheets()
 
 def find_chat_id_in_sheet(sheet, chat_id, col=1):
-    """
-    מחפש chat_id בעמודה נתונה (ברירת מחדל: עמודה 1).
-    למה? כדי לדעת אם המשתמש כבר מוכר במערכת.
-    """
+    print(f"[DEBUG] find_chat_id_in_sheet: chat_id={chat_id}, col={col}")
+    logging.debug(f"[DEBUG] find_chat_id_in_sheet: chat_id={chat_id}, col={col}")
     try:
         values = sheet.col_values(col)
         for v in values[1:]:  # דילוג על כותרת
             if str(v).strip() == str(chat_id).strip():
                 print(f"[find_chat_id_in_sheet] נמצא chat_id {chat_id} בעמודה {col}")
+                print(f"[DEBUG] find_chat_id_in_sheet: סיום | chat_id={chat_id}, col={col}")
+                logging.debug(f"[DEBUG] find_chat_id_in_sheet: סיום | chat_id={chat_id}, col={col}")
                 return True
         print(f"[find_chat_id_in_sheet] לא נמצא chat_id {chat_id} בעמודה {col}")
+        print(f"[DEBUG] find_chat_id_in_sheet: סיום | chat_id={chat_id}, col={col}")
+        logging.debug(f"[DEBUG] find_chat_id_in_sheet: סיום | chat_id={chat_id}, col={col}")
         return False
     except Exception as e:
         print(f"שגיאה בחיפוש chat_id בגיליון: {e}")
+        print(f"[DEBUG] find_chat_id_in_sheet: סיום | chat_id={chat_id}, col={col}")
+        logging.debug(f"[DEBUG] find_chat_id_in_sheet: סיום | chat_id={chat_id}, col={col}")
         return False
 
 def ensure_user_state_row(sheet_users, sheet_states, chat_id):
-    """
-    לוגיקת Onboarding — רושם משתמש חדש ב-user_states רק אם לא קיים לא בגיליון 1 ולא ב-user_states.
-    למה? כי רק אם זו פנייה ראשונה אי-פעם, יש לרשום את המשתמש ב-user_states עם code_try=0.
-    מחזיר True אם נוצרה שורה חדשה (פנייה ראשונה), אחרת False.
-    """
+    print(f"[DEBUG] ensure_user_state_row: chat_id={chat_id}")
+    logging.debug(f"[DEBUG] ensure_user_state_row: chat_id={chat_id}")
     # בדיקה בגיליון 1 (access_codes) — עמודה 1
     if find_chat_id_in_sheet(sheet_users, chat_id, col=1):
         print(f"[ensure_user_state_row] chat_id {chat_id} נמצא בגיליון 1 — לא פנייה ראשונה.")
+        print(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
         return False
     # בדיקה ב-user_states — עמודה 1
     if find_chat_id_in_sheet(sheet_states, chat_id, col=1):
         print(f"[ensure_user_state_row] chat_id {chat_id} כבר קיים ב-user_states — לא פנייה ראשונה.")
+        print(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
         return False
     # לא נמצא — פנייה ראשונה אי-פעם: יצירת שורה חדשה
     try:
@@ -68,18 +73,19 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
         from notifications import send_error_notification
         from messages import new_user_admin_message
         send_error_notification(new_user_admin_message(chat_id))
+        print(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
         return True
     except Exception as e:
         print(f"שגיאה ביצירת שורה חדשה ב-user_states: {e}")
+        print(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] ensure_user_state_row: סיום | chat_id={chat_id}")
         return False
 
 
 def increment_code_try(sheet_states, chat_id):
-    """
-    מעלה את ערך code_try ב-user_states ב-1 למשתמש הרלוונטי.
-    אם לא קיים, מוסיף שורה עם code_try=0 (עוד לא ניסה).
-    במקרה של שגיאה מחזיר את הערך האחרון שנמצא (ולא None או 0).
-    """
+    print(f"[DEBUG] increment_code_try: chat_id={chat_id}")
+    logging.debug(f"[DEBUG] increment_code_try: chat_id={chat_id}")
     try:
         records = sheet_states.get_all_records()
         header = sheet_states.row_values(1)
@@ -93,9 +99,13 @@ def increment_code_try(sheet_states, chat_id):
                 new_try = current_try + 1
                 col_index = header.index("code_try") + 1
                 sheet_states.update_cell(idx + 2, col_index, new_try)
+                print(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
+                logging.debug(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
                 return new_try
         # אם לא נמצא שורה, מוסיף שורה עם code_try=0
         sheet_states.append_row([str(chat_id), 0])
+        print(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
         return 0
     except Exception as e:
         print(f"שגיאה בהעלאת code_try: {e}")
@@ -106,13 +116,19 @@ def increment_code_try(sheet_states, chat_id):
                 if str(row.get("chat_id")) == str(chat_id):
                     current_try = row.get("code_try")
                     if current_try is None or current_try == "":
+                        print(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
+                        logging.debug(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
                         return 0
+                    print(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
+                    logging.debug(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
                     return int(current_try)
             # אם לא נמצא, מחזיר 0
             return 0
         except Exception as e2:
             print(f"שגיאה בקריאה חוזרת של code_try: {e2}")
             # אם לא מצליח לקרוא בכלל, מחזיר 1 כדי שלא ישבור
+            print(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
+            logging.debug(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
             return 1
 
 
@@ -120,34 +136,33 @@ def increment_code_try(sheet_states, chat_id):
 
 
 def get_user_summary(chat_id):
-    """
-    מחזיר את הסיכום של המשתמש מגיליון המשתמשים.
-    לוגיקה: מגיש את הנתונים ל-GPT עבור קונטקסט אישי.
-    """
+    print(f"[DEBUG] get_user_summary: chat_id={chat_id}")
+    logging.debug(f"[DEBUG] get_user_summary: chat_id={chat_id}")
     try:
         all_records = sheet_users.get_all_records()
         for row in all_records:
             if str(row.get("chat_id")) == str(chat_id):
                 summary = row.get(FIELDS_DICT['summary'], "").strip()
                 if summary:
+                    print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
+                    logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
                     return summary
+        print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
         return ""
     except Exception as e:
         print(f"❌ שגיאה בקריאת סיכום משתמש: {e}")
+        print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
         return ""
 
 def update_user_profile(chat_id, field_values):
-    """
-    מעדכן פרופיל משתמש בגיליון המשתמשים.
-    לכל שדה שמעודכן — מתעדכן גם סיכום רגשי.
-    חובה: field_values חייב להיות dict בלבד!
-    """
+    print(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
+    logging.debug(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
     if not isinstance(field_values, dict):
         logging.error(f"❌ update_user_profile קיבל טיפוס לא תקין: {type(field_values)}. הערך: {field_values}")
         raise TypeError(f"update_user_profile: field_values חייב להיות dict! קיבלתי: {type(field_values)}")
     try:
-        print(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
-        logging.info(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
         print(f"🔄 מעדכן פרופיל למשתמש {chat_id} עם שדות: {field_values}")
 
         all_records = sheet_users.get_all_records()
@@ -193,16 +208,12 @@ def update_user_profile(chat_id, field_values):
         print(f"💥 שגיאה בעדכון פרופיל: {e}")
         import traceback
         traceback.print_exc()
+        print(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
 
 def compose_emotional_summary(row):
-    """
-    יוצר סיכום רגשי מפרטי המשתמש (עבור קונטקסט ל-GPT).
-    כעת כל שדה שקיים בפרופיל ושאינו ריק נכנס לסיכום.
-    הפורמט: שם שדה: ערך, שם שדה: ערך, ...
-    לדוג' -> age: 25, relationship_type: נשוי+2, trauma_history: ...
-    חותך ל-200 תווים לכל היותר.
-    אם אין מידע בכלל, מחזיר [אין מידע לסיכום]
-    """
+    print(f"[DEBUG] compose_emotional_summary: row keys={list(row.keys())}")
+    logging.debug(f"[DEBUG] compose_emotional_summary: row keys={list(row.keys())}")
     # --- אוסף את כל השדות שאינם ריקים (חוץ מ-chat_id) ---
     parts = []
     for key, value in row.items():
@@ -213,12 +224,16 @@ def compose_emotional_summary(row):
             parts.append(f"{field_name}: {v}")
     # --- אם אין מידע בכלל ---
     if not parts:
+        print(f"[DEBUG] compose_emotional_summary: סיום")
+        logging.debug(f"[DEBUG] compose_emotional_summary: סיום")
         return "[אין מידע לסיכום]"
     # --- מחבר את כל השדות בפסיקים ---
     summary = ", ".join(parts)
     # --- קיצור אם ארוך מדי ---
     if len(summary) > 200:
         summary = summary[:197] + "..."
+    print(f"[DEBUG] compose_emotional_summary: סיום")
+    logging.debug(f"[DEBUG] compose_emotional_summary: סיום")
     return summary
 
 def log_to_sheets(
