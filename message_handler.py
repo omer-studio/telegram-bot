@@ -329,6 +329,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
             print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
 
+            # שלח למשתמש מיד את התשובה המלאה
+            reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
+            print(f"[📤 הודעת בוט]: {reply_text_one_line}")
+            logging.info("📨 תשובה נשלחה למשתמש")
+            print("📨 תשובה נשלחה למשתמש")
+            print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
+            await send_message(update, chat_id, reply_text)
+
+            # עכשיו, אם צריך, בצע סיכום ברקע ועדכן לוגים/היסטוריה/גיליון
             num_words = len(reply_text.split())
             if num_words > 50:
                 logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
@@ -358,15 +367,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 sum_prompt = sum_completion = sum_total = 0
                 sum_model = ""
 
-            logging.info("📤 שולח תשובה למשתמש...")
-            print("📤 שולח תשובה למשתמש...")
-            reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
-            print(f"[📤 הודעת בוט]: {reply_text_one_line}")
-            logging.info("📨 תשובה נשלחה למשתמש")
-            print("📨 תשובה נשלחה למשתמש")
-            print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
-            await send_message(update, chat_id, reply_text)
-
+            # המשך עדכון לוגים/היסטוריה/גיליון (כמו קודם)
             try:
                 logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
                 if isinstance(user_summary, str):
