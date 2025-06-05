@@ -64,6 +64,10 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
     try:
         sheet_states.append_row([str(chat_id), 0])
         print(f"[ensure_user_state_row] ✅ נרשם chat_id {chat_id} ל-user_states (פנייה ראשונה, code_try=0)")
+        # שליחת הודעה לאדמין
+        from notifications import send_error_notification
+        from messages import new_user_admin_message
+        send_error_notification(new_user_admin_message(chat_id))
         return True
     except Exception as e:
         print(f"שגיאה ביצירת שורה חדשה ב-user_states: {e}")
