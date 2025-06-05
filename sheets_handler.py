@@ -377,13 +377,6 @@ def log_to_sheets(
             FIELDS_DICT["bot_reply"]: reply_text if reply_text else "",
             FIELDS_DICT["bot_summary"]: reply_summary if has_summary and reply_summary else "",
             
-            # שדות ריקים
-            FIELDS_DICT["empty_1"]: "",
-            FIELDS_DICT["empty_2"]: "",  
-            FIELDS_DICT["empty_3"]: "",
-            FIELDS_DICT["empty_4"]: "",
-            FIELDS_DICT["empty_5"]: "",
-            
             # סך טוקנים
             FIELDS_DICT["total_tokens"]: safe_int(total_tokens),
             FIELDS_DICT["prompt_tokens_total"]: prompt_tokens_total,
@@ -449,11 +442,20 @@ def log_to_sheets(
         return True
 
     except Exception as e:
-        print(f"❌ שגיאה בשמירה לגיליון: {e}")
         import traceback
-        traceback.print_exc()
         from notifications import send_error_notification
-        send_error_notification(f"❌ שגיאה בשמירה לגיליון: {e}")
+        tb = traceback.format_exc()
+        error_msg = (
+            f"❌ שגיאה בשמירה לגיליון:\n"
+            f"סוג: {type(e).__name__}\n"
+            f"שגיאה: {e}\n"
+            f"chat_id: {chat_id}\n"
+            f"message_id: {message_id}\n"
+            f"user_msg: {str(user_msg)[:100]}\n"
+            f"traceback:\n{tb}"
+        )
+        print(error_msg)
+        send_error_notification(error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
         return False
 
 
