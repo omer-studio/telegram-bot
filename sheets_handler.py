@@ -339,53 +339,47 @@ def log_to_sheets(
         # האם הופעל סיכום (GPT2)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
-        # 🚨 תיקון 5: מיפוי מדויק לכותרות הגיליון
+        # 🚨 מיפוי לפי שמות עמודות בלבד (str), לא dict
         values_to_log = {
-            FIELDS_DICT["message_id"]: str(message_id),
-            FIELDS_DICT["chat_id"]: str(chat_id),
-            FIELDS_DICT["user_msg"]: user_msg if user_msg else "",
-            FIELDS_DICT["user_summary"]: "",  # future
-            FIELDS_DICT["bot_reply"]: reply_text if reply_text else "",
-            FIELDS_DICT["bot_summary"]: reply_summary if has_summary and reply_summary else "",
-            
+            "message_id": str(message_id),
+            "chat_id": str(chat_id),
+            "user_msg": user_msg if user_msg else "",
+            "user_summary": "",  # future
+            "bot_reply": reply_text if reply_text else "",
+            "bot_summary": reply_summary if has_summary and reply_summary else "",
             # סך טוקנים
-            FIELDS_DICT["total_tokens"]: safe_int(total_tokens),
-            FIELDS_DICT["prompt_tokens_total"]: prompt_tokens_total,
-            FIELDS_DICT["completion_tokens_total"]: completion_tokens_total,
-            FIELDS_DICT["cached_tokens"]: cached_tokens,
-            
+            "total_tokens": safe_int(total_tokens),
+            "prompt_tokens_total": prompt_tokens_total,
+            "completion_tokens_total": completion_tokens_total,
+            "cached_tokens": cached_tokens,
             # עלויות כוללות
-            FIELDS_DICT["total_cost_usd"]: clean_cost_usd if clean_cost_usd > 0 else "",
-            FIELDS_DICT["total_cost_ils"]: safe_int(clean_cost_ils * 100) if clean_cost_ils > 0 else "",  # באגורות
-            
+            "total_cost_usd": clean_cost_usd if clean_cost_usd > 0 else "",
+            "total_cost_ils": safe_int(clean_cost_ils * 100) if clean_cost_ils > 0 else "",
             # נתוני GPT1 (main)
-            FIELDS_DICT["usage_prompt_tokens_GPT1"]: main_usage.get("prompt_tokens", ""),
-            FIELDS_DICT["usage_completion_tokens_GPT1"]: main_usage.get("completion_tokens", ""),
-            FIELDS_DICT["usage_total_tokens_GPT1"]: main_usage.get("total_tokens", ""),
-            FIELDS_DICT["cached_tokens_gpt1"]: main_usage.get("cached_tokens", ""),
-            FIELDS_DICT["cost_gpt1"]: main_usage.get("cost_gpt1", ""),
-            FIELDS_DICT["model_GPT1"]: main_usage.get("model", ""),
-            
+            "usage_prompt_tokens_GPT1": main_usage.get("prompt_tokens", ""),
+            "usage_completion_tokens_GPT1": main_usage.get("completion_tokens", ""),
+            "usage_total_tokens_GPT1": main_usage.get("total_tokens", ""),
+            "cached_tokens_gpt1": main_usage.get("cached_tokens", ""),
+            "cost_gpt1": main_usage.get("cost_gpt1", ""),
+            "model_GPT1": main_usage.get("model", ""),
             # נתוני GPT2 (summary)
-            FIELDS_DICT["usage_prompt_tokens_GPT2"]: summary_usage.get("prompt_tokens", ""),
-            FIELDS_DICT["usage_completion_tokens_GPT2"]: summary_usage.get("completion_tokens", ""),
-            FIELDS_DICT["usage_total_tokens_GPT2"]: summary_usage.get("total_tokens", ""),
-            FIELDS_DICT["cached_tokens_gpt2"]: summary_usage.get("cached_tokens", ""),
-            FIELDS_DICT["cost_gpt2"]: summary_usage.get("cost_gpt2", ""),
-            FIELDS_DICT["model_GPT2"]: summary_usage.get("model", ""),
-            
+            "usage_prompt_tokens_GPT2": summary_usage.get("prompt_tokens", ""),
+            "usage_completion_tokens_GPT2": summary_usage.get("completion_tokens", ""),
+            "usage_total_tokens_GPT2": summary_usage.get("total_tokens", ""),
+            "cached_tokens_gpt2": summary_usage.get("cached_tokens", ""),
+            "cost_gpt2": summary_usage.get("cost_gpt2", ""),
+            "model_GPT2": summary_usage.get("model", ""),
             # נתוני GPT3 (extract)
-            FIELDS_DICT["usage_prompt_tokens_GPT3"]: extract_usage.get("prompt_tokens", ""),
-            FIELDS_DICT["usage_completion_tokens_GPT3"]: extract_usage.get("completion_tokens", ""),
-            FIELDS_DICT["usage_total_tokens_GPT3"]: extract_usage.get("total_tokens", ""),
-            FIELDS_DICT["cached_tokens_gpt3"]: extract_usage.get("cached_tokens", ""),
-            FIELDS_DICT["cost_gpt3"]: extract_usage.get("cost_gpt3", ""),
-            FIELDS_DICT["model_GPT3"]: extract_usage.get("model", ""),
-            
+            "usage_prompt_tokens_GPT3": extract_usage.get("prompt_tokens", ""),
+            "usage_completion_tokens_GPT3": extract_usage.get("completion_tokens", ""),
+            "usage_total_tokens_GPT3": extract_usage.get("total_tokens", ""),
+            "cached_tokens_gpt3": extract_usage.get("cached_tokens", ""),
+            "cost_gpt3": extract_usage.get("cost_gpt3", ""),
+            "model_GPT3": extract_usage.get("model", ""),
             # נתוני זמן
-            FIELDS_DICT["timestamp"]: timestamp_full,
-            FIELDS_DICT["date_only"]: date_only,
-            FIELDS_DICT["time_only"]: time_only
+            "timestamp": timestamp_full,
+            "date_only": date_only,
+            "time_only": time_only
         }
 
         # 🚨 תיקון 6: וידוא שכל הכותרות קיימות וההכנסה תקינה
