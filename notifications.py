@@ -56,6 +56,15 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     previous_commit = get_last_deploy_commit_from_log()
     write_deploy_commit_to_log(current_commit)
 
+    # --- DEBUG: הצגת כל משתני הסביבה הרלוונטיים אם חסר מזהה קומיט ---
+    debug_env = ""
+    if not git_commit or git_commit == "🤷🏼":
+        debug_env_vars = []
+        for k, v in os.environ.items():
+            if any(prefix in k for prefix in ["GIT", "RENDER", "COMMIT", "SHA", "DEPLOY", "BRANCH", "ENV"]):
+                debug_env_vars.append(f"{k}={v}")
+        if debug_env_vars:
+            debug_env = "\n\n[DEBUG ENV]\n" + "\n".join(debug_env_vars)
 
     if deploy_duration is not None:
         duration_str = f"⏳ {int(deploy_duration)} שניות"
@@ -91,6 +100,8 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             fields.append(f"🔢 מזהה קומיט: {git_commit}")
         fields.append("\nלפרטים נוספים בדוק את הלוגים ב-Render.")
         text = "אדמין יקר - ✅פריסה הצליחה והבוט שלך רץ !! איזה כיף !! 🚀\n\n" + "\n".join(fields)
+        if debug_env:
+            text += debug_env
 
     data = {
         "chat_id": ADMIN_NOTIFICATION_CHAT_ID,

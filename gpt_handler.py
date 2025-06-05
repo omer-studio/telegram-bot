@@ -84,13 +84,9 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, usd_to
 def get_main_response(full_messages):
     """
     GPT ראשי - נותן תשובה למשתמש
-    מחזיר גם את כל פרטי העלות (טוקנים, קשד, מחיר מדויק)
+    מחזיר גם את כל פרטי העלות (טוקנים, קשד, מחיר מדויק) במבנה dict
     """
     try:
-        # print("🔍 נשלח ל־GPT:")
-        # for m in full_messages:
-        #     print(f"{m['role']}: {m['content']}")
-
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=full_messages,
@@ -113,24 +109,21 @@ def get_main_response(full_messages):
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
         cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות #NEW
 
-        # print(f"🔢 פרטי שימוש: prompt={prompt_tokens} קשד={cached_tokens} רגיל={prompt_regular} פלט={completion_tokens}")
-        # print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סהכ ${cost_total:.6f} (₪{cost_total_ils})")
-
-        # תיעוד מלא ללוג נוסף
         usage_log = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
             "cached_tokens": cached_tokens,
+            "prompt_regular": prompt_regular,
             "cost_prompt_regular": cost_prompt_regular,
             "cost_prompt_cached": cost_prompt_cached,
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt1": cost_gpt1  # באגורות
+            "cost_gpt1": cost_gpt1,  # באגורות
+            "model": response.model
         }
 
-        # שורת לוג לדיבאג ולמעקב
         from utils import log_event_to_file
         log_event_to_file({
             "event": "gpt_main_call",
@@ -140,25 +133,12 @@ def get_main_response(full_messages):
             "usage": usage_log
         })
 
-        # כתיבה ללוג שימוש
         write_gpt_log("main_reply", usage_log, response.model)
 
-        # מחזיר את כל הפרמטרים
-        return (
-            response.choices[0].message.content,  # bot_reply
-            prompt_tokens,                        # prompt_tokens_total
-            cached_tokens,                        # cached_tokens
-            prompt_regular,                       # prompt_regular
-            completion_tokens,                    # completion_tokens_total
-            total_tokens,                         # total_tokens
-            cost_prompt_regular,
-            cost_prompt_cached,
-            cost_completion,
-            cost_total,
-            cost_total_ils,                       # total_cost_ils בש"ח
-            cost_gpt1,                            # cost_gpt1 באגורות
-            response.model                        # model_GPT1
-        )
+        return {
+            "bot_reply": response.choices[0].message.content,
+            **usage_log
+        }
     except Exception as e:
         logging.error(f"❌ שגיאה ב-GPT ראשי: {e}")
         raise
