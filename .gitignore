@@ -29,3 +29,5 @@ ngrok-v3-stable-windows-amd64/ngrok.exe
 
 # Ignore all data directory
 /data/
+
+/tests/

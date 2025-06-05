@@ -358,47 +358,108 @@ def log_to_sheets(
         # האם הופעל סיכום (GPT2)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
-        # 🚨 מיפוי לפי שמות עמודות בלבד (str), לא dict
+        # --- מיפוי ערכים מלא לפי דרישת המשתמש ---
+        # כל שדה כולל הסבר בעברית בצד
         values_to_log = {
-            "message_id": str(message_id),
-            "chat_id": str(chat_id),
-            "user_msg": user_msg if user_msg else "",
-            "user_summary": "",  # future
-            "bot_reply": reply_text if reply_text else "",
-            "bot_summary": reply_summary if has_summary and reply_summary else "",
-            # סך טוקנים
-            "total_tokens": safe_int(total_tokens),
-            "prompt_tokens_total": prompt_tokens_total,
-            "completion_tokens_total": completion_tokens_total,
-            "cached_tokens": cached_tokens,
-            # עלויות כוללות
-            "total_cost_usd": clean_cost_usd if clean_cost_usd > 0 else "",
-            "total_cost_ils": safe_int(clean_cost_ils * 100) if clean_cost_ils > 0 else "",
-            # נתוני GPT1 (main)
-            "usage_prompt_tokens_GPT1": main_usage.get("prompt_tokens", ""),
-            "usage_completion_tokens_GPT1": main_usage.get("completion_tokens", ""),
-            "usage_total_tokens_GPT1": main_usage.get("total_tokens", ""),
-            "cached_tokens_gpt1": main_usage.get("cached_tokens", ""),
-            "cost_gpt1": main_usage.get("cost_gpt1", ""),
-            "model_GPT1": main_usage.get("model", ""),
-            # נתוני GPT2 (summary)
-            "usage_prompt_tokens_GPT2": summary_usage.get("prompt_tokens", ""),
-            "usage_completion_tokens_GPT2": summary_usage.get("completion_tokens", ""),
-            "usage_total_tokens_GPT2": summary_usage.get("total_tokens", ""),
-            "cached_tokens_gpt2": summary_usage.get("cached_tokens", ""),
-            "cost_gpt2": summary_usage.get("cost_gpt2", ""),
-            "model_GPT2": summary_usage.get("model", ""),
-            # נתוני GPT3 (extract)
-            "usage_prompt_tokens_GPT3": extract_usage.get("prompt_tokens", ""),
-            "usage_completion_tokens_GPT3": extract_usage.get("completion_tokens", ""),
-            "usage_total_tokens_GPT3": extract_usage.get("total_tokens", ""),
-            "cached_tokens_gpt3": extract_usage.get("cached_tokens", ""),
-            "cost_gpt3": extract_usage.get("cost_gpt3", ""),
-            "model_GPT3": extract_usage.get("model", ""),
-            # נתוני זמן
-            "timestamp": timestamp_full,
-            "date_only": date_only,
-            "time_only": time_only
+            "message_id": str(message_id),  # מזהה ייחודי להודעה
+            "chat_id": str(chat_id),  # מזהה ייחודי למשתמש
+            "user_msg": user_msg if user_msg else "",  # הודעת המשתמש
+            "user_summary": "",  # תמצות הודעת המשתמש (לא לגעת)
+            "bot_reply": reply_text if reply_text else "",  # תשובת הבוט
+            "bot_summary": reply_summary if has_summary and reply_summary else "",  # סיכום תשובת הבוט
+            "empty_1": "",  # לא לגעת
+            "empty_2": "",  # לא לגעת
+            "empty_3": "",  # לא לגעת
+            "empty_4": "",  # לא לגעת
+            "empty_5": "",  # לא לגעת
+            # סך כל הטוקנים: prompt_tokens_total + completion_tokens_total + cached_tokens
+            "total_tokens": (
+                safe_int(
+                    (safe_int(values_to_log.get("prompt_tokens_total", 0)) +
+                     safe_int(values_to_log.get("completion_tokens_total", 0)) +
+                     safe_int(values_to_log.get("cached_tokens", 0)))
+                )
+            ),
+            # סך טוקנים בפרומט: סכום כל usage_prompt_tokens_GPTx
+            "prompt_tokens_total": (
+                safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)) +
+                safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)) +
+                safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)) +
+                safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0
+            ),
+            # סך טוקנים בתשובה: סכום כל usage_completion_tokens_GPTx
+            "completion_tokens_total": (
+                safe_int(main_usage.get("completion_tokens", 0)) +
+                safe_int(summary_usage.get("completion_tokens", 0)) +
+                safe_int(extract_usage.get("completion_tokens", 0)) +
+                safe_int(merge_usage.get("completion_tokens", 0)) if 'merge_usage' in locals() else 0
+            ),
+            # סך טוקנים קש: סכום כל cached_tokens_gptX
+            "cached_tokens": (
+                safe_int(main_usage.get("cached_tokens", 0)) +
+                safe_int(summary_usage.get("cached_tokens", 0)) +
+                safe_int(extract_usage.get("cached_tokens", 0)) +
+                safe_int(merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0
+            ),
+            # עלות כוללת בדולר (מחושב לפי טבלת עלויות)
+            "total_cost_usd": float(cost_usd),
+            # עלות כוללת באגורות (מחושב לפי שער דולר)
+            "total_cost_ils": safe_int(float(cost_usd) * USD_TO_ILS * 100),
+            # --- GPT1 ---
+            # טוקנים פרומט - GPT1 (רק החלק היוצא, פחות קש)
+            "usage_prompt_tokens_GPT1": safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)),
+            # טוקנים תשובה - GPT1 (החלק הנכנס)
+            "usage_completion_tokens_GPT1": safe_int(main_usage.get("completion_tokens", 0)),
+            # סך טוקנים - GPT1
+            "usage_total_tokens_GPT1": (
+                safe_int(main_usage.get("cached_tokens", 0)) +
+                safe_int(main_usage.get("completion_tokens", 0)) +
+                safe_int(main_usage.get("prompt_tokens", 0))
+            ),
+            # קשד GPT1
+            "cached_tokens_gpt1": safe_int(main_usage.get("cached_tokens", 0)),
+            # עלות GPT1 באגורות (לפי המחירון)
+            "cost_gpt1": safe_int(main_usage.get("cost_gpt1", 0)),
+            # מודל GPT1
+            "model_GPT1": str(main_usage.get("model", "")),
+            # --- GPT2 ---
+            "usage_prompt_tokens_GPT2": safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)),
+            "usage_completion_tokens_GPT2": safe_int(summary_usage.get("completion_tokens", 0)),
+            "usage_total_tokens_GPT2": (
+                safe_int(summary_usage.get("cached_tokens", 0)) +
+                safe_int(summary_usage.get("completion_tokens", 0)) +
+                safe_int(summary_usage.get("prompt_tokens", 0))
+            ),
+            "cached_tokens_gpt2": safe_int(summary_usage.get("cached_tokens", 0)),
+            "cost_gpt2": safe_int(summary_usage.get("cost_gpt2", 0)),
+            "model_GPT2": str(summary_usage.get("model", "")),
+            # --- GPT3 ---
+            "usage_prompt_tokens_GPT3": safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)),
+            "usage_completion_tokens_GPT3": safe_int(extract_usage.get("completion_tokens", 0)),
+            "usage_total_tokens_GPT3": (
+                safe_int(extract_usage.get("cached_tokens", 0)) +
+                safe_int(extract_usage.get("completion_tokens", 0)) +
+                safe_int(extract_usage.get("prompt_tokens", 0))
+            ),
+            "cached_tokens_gpt3": safe_int(extract_usage.get("cached_tokens", 0)),
+            "cost_gpt3": safe_int(extract_usage.get("cost_gpt3", 0)),
+            "model_GPT3": str(extract_usage.get("model", "")),
+            # --- GPT4 ---
+            "usage_prompt_tokens_GPT4": safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0,
+            "usage_completion_tokens_GPT4": safe_int(merge_usage.get("completion_tokens", 0)) if 'merge_usage' in locals() else 0,
+            "usage_total_tokens_GPT4": (
+                safe_int(merge_usage.get("cached_tokens", 0)) +
+                safe_int(merge_usage.get("completion_tokens", 0)) +
+                safe_int(merge_usage.get("prompt_tokens", 0))
+            ) if 'merge_usage' in locals() else 0,
+            "cached_tokens_GPT4": safe_int(merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0,
+            "cost_GPT4": safe_int(merge_usage.get("cost_gpt4", 0)) if 'merge_usage' in locals() else 0,
+            "model_GPT4": str(merge_usage.get("model", "")) if 'merge_usage' in locals() else "",
+            # --- שדות נוספים ---
+            "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if 'fields_updated_by_4gpt' in locals() else "",
+            "timestamp": timestamp_full,  # טיימסטפ מלא
+            "date_only": date_only,  # תאריך בלבד
+            "time_only": time_only,  # שעה בלבד
         }
 
         # 🚨 תיקון 6: וידוא שכל הכותרות קיימות וההכנסה תקינה
