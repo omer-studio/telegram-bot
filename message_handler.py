@@ -333,13 +333,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             logging.info("💾 שומר נתוני שיחה בגיליון...")
             print("💾 שומר נתוני שיחה בגיליון...")
-            log_to_sheets(
-                message_id, chat_id, user_msg, reply_text, reply_summary,
-                extract_usage,
-                main_total_tokens, main_cost_total_usd, main_cost_total_ils
-            )
-            logging.info("✅ נתוני שיחה נשמרו בגיליון")
-            print("✅ נתוני שיחה נשמרו בגיליון")
+            try:
+                log_to_sheets(
+                    message_id, chat_id, user_msg, reply_text, reply_summary,
+                    main_usage, summary_usage, extract_usage,
+                    main_total_tokens, main_cost_total_usd, main_cost_total_ils
+                )
+                logging.info("✅ נתוני שיחה נשמרו בגיליון")
+                print("✅ נתוני שיחה נשמרו בגיליון")
+            except Exception as e:
+                import traceback
+                from notifications import send_error_notification
+                tb = traceback.format_exc()
+                error_msg = (
+                    f"❌ שגיאה בשמירה לגיליון:\n"
+                    f"סוג: {type(e).__name__}\n"
+                    f"שגיאה: {e}\n"
+                    f"chat_id: {chat_id}\n"
+                    f"message_id: {message_id}\n"
+                    f"user_msg: {str(user_msg)[:100]}\n"
+                    f"traceback:\n{tb}"
+                )
+                print(error_msg)
+                send_error_notification(error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
+                logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
 
             logging.info("💾 שומר לוג מפורט לקובץ...")
             print("💾 שומר לוג מפורט לקובץ...")
