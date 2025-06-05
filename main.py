@@ -37,6 +37,10 @@ async def webhook(request: Request):
         print(f"❌ שגיאה ב-webhook: {ex}")
         return {"error": str(ex)}
 
+@app_fastapi.get("/")
+def root():
+    return {"status": "ok"}
+
 async def main():
     await app.initialize()
     await app.start()
