@@ -13,11 +13,13 @@ import os
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(PROJECT_ROOT, exist_ok=True)
 
+# ===================== קבועים מרכזיים לעלויות GPT ושער דולר =====================
+
 # מחירים קבועים (נכון ליוני 2024) ל־GPT-4o
 COST_PROMPT_REGULAR = 0.002 / 1000    # טוקן קלט רגיל
 COST_PROMPT_CACHED = 0.0005 / 1000    # טוקן קלט קשד (cache)
 COST_COMPLETION = 0.006 / 1000        # טוקן פלט
-USD_TO_ILS = 3.8                      # שער דולר-שקל
+USD_TO_ILS = 3.8                      # שער דולר-שקל (לשינוי במקום אחד בלבד)
 
 def write_gpt_log(ttype, usage, model):
     """
@@ -54,7 +56,26 @@ def safe_float(val):
         logging.warning(f"safe_float: value '{val}' could not be converted to float. Using 0.0 instead.")
         return 0.0
 
-
+def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, usd_to_ils=USD_TO_ILS):
+    """
+    מחשב עלות GPT (USD, ILS, אגורות) לפי מספר טוקנים, כולל טוקנים רגילים, קשד ופלט.
+    מחזיר dict עם כל הערכים.
+    """
+    prompt_regular = prompt_tokens - cached_tokens
+    cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
+    cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
+    cost_completion = completion_tokens * COST_COMPLETION
+    cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
+    cost_total_ils = round(cost_total * usd_to_ils, 4)
+    cost_agorot = int(round(cost_total_ils * 100))
+    return {
+        "cost_prompt_regular": cost_prompt_regular,
+        "cost_prompt_cached": cost_prompt_cached,
+        "cost_completion": cost_completion,
+        "cost_total": cost_total,
+        "cost_total_ils": cost_total_ils,
+        "cost_agorot": cost_agorot
+    }
 
 # ============================הג'יפיטי ה-1 - פועל תמיד ועונה תשובה למשתמש ======================= 
 

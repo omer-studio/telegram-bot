@@ -22,6 +22,7 @@ sheets_handler.py — ניהול גישה, הרשאות ולוגים ב-Google S
 from config import setup_google_sheets, SUMMARY_FIELD
 from datetime import datetime
 import logging
+from gpt_handler import calculate_gpt_cost, USD_TO_ILS
 
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
@@ -308,35 +309,36 @@ def log_to_sheets(
             cached_tokens_gpt3 = 0
 
         # 🚨 תיקון 3: חישוב עלויות מפורטות
-        def calculate_gpt_cost_agorot(prompt_tokens, completion_tokens):
-            """חישוב עלות ב-GPT-4o באגורות"""
-            prompt_cost = safe_float(prompt_tokens) * 0.000005  # $0.005 per 1K tokens
-            completion_cost = safe_float(completion_tokens) * 0.000015  # $0.015 per 1K tokens
-            total_cost_usd = prompt_cost + completion_cost
-            return safe_int(total_cost_usd * 3.8 * 100)  # המרה לאגורות
+        # שימוש בפונקציה המרכזית מ-gpt_handler במקום חישוב פנימי
+        def get_gpt_costs(prompt_tokens, completion_tokens, cached_tokens=0):
+            return calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens)
 
         # חישוב עלויות אם לא סופקו
         if cost_gpt1 is None and main_usage and len(main_usage) >= 2:
-            cost_gpt1 = calculate_gpt_cost_agorot(main_usage[0], main_usage[1])
+            costs = get_gpt_costs(main_usage[0], main_usage[1], main_usage[3] if len(main_usage) > 3 else 0)
+            cost_gpt1 = costs["cost_agorot"]
         elif cost_gpt1 is None:
             cost_gpt1 = 0
 
         if cost_gpt2 is None and summary_usage and len(summary_usage) >= 3:
-            cost_gpt2 = calculate_gpt_cost_agorot(summary_usage[1], summary_usage[2])
+            costs = get_gpt_costs(summary_usage[1], summary_usage[2])
+            cost_gpt2 = costs["cost_agorot"]
         elif cost_gpt2 is None:
             cost_gpt2 = 0
 
         if cost_gpt3 is None and extract_usage:
             if isinstance(extract_usage, (list, tuple)):
-                cost_gpt3 = calculate_gpt_cost_agorot(
+                costs = get_gpt_costs(
                     extract_usage[0] if len(extract_usage) > 0 else 0,
                     extract_usage[4] if len(extract_usage) > 4 else 0
                 )
+                cost_gpt3 = costs["cost_agorot"]
             elif isinstance(extract_usage, dict):
-                cost_gpt3 = calculate_gpt_cost_agorot(
+                costs = get_gpt_costs(
                     extract_usage.get("prompt_tokens", 0),
                     extract_usage.get("completion_tokens", 0)
                 )
+                cost_gpt3 = costs["cost_agorot"]
             else:
                 cost_gpt3 = 0
         elif cost_gpt3 is None:

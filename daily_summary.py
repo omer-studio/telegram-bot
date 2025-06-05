@@ -6,6 +6,7 @@ import os
 import json
 import time
 from dateutil.parser import parse as parse_dt  # שים לב - זה צריך להיות מותקן ב־requirements.txt
+from gpt_handler import USD_TO_ILS
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -137,7 +138,7 @@ async def send_daily_summary(days_back=1):
         else:
             print("❌ DEBUG: No cost data found or empty data")
             
-        shekel_cost = dollar_cost * 3.7
+        shekel_cost = dollar_cost * USD_TO_ILS
 
         # --- מחלץ גם נתונים מה-usage log שלך ---
         total_main = total_extract = total_summary = 0
