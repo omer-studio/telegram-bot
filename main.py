@@ -39,13 +39,10 @@ logging.getLogger("telegram").setLevel(logging.WARNING)
 import sys
 
 # הוספת דיבוג מיידי
-print("🔥🔥🔥 התחלת הבוט! (בדיקת print ראשונית)", flush=True)
-sys.stdout.flush()
-logging.info("🔥 LOGGING TEST - האם זה נראה?")
-
-# בדיקה אם stdout עובד
-import os
-print(f"🔍 DEBUG ENV: {os.environ.get('RENDER_SERVICE_NAME', 'לא Render')}", flush=True)
+# print("🔥🔥🔥 התחלת הבוט! (בדיקת print ראשונית)", flush=True)
+# sys.stdout.flush()
+# logging.info("🔥 LOGGING TEST - האם זה נראה?")
+# print(f"🔍 DEBUG ENV: {os.environ.get('RENDER_SERVICE_NAME', 'לא Render')}", flush=True)
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from datetime import datetime
@@ -98,7 +95,7 @@ class DummyContext:
     def __init__(self, bot_data):
         self.bot_data = bot_data
 
-from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config
+from config import TELEGRAM_BOT_TOKEN, SYSTEM_PROMPT, config, CRITICAL_ERRORS_PATH
 app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 from gpt_handler import get_main_response, summarize_bot_reply, extract_user_profile_fields, smart_update_profile
 from sheets_handler import (
@@ -109,24 +106,46 @@ from notifications import send_startup_notification, handle_critical_error, hand
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 
 async def send_message(update, chat_id, text, is_bot_message=True):
-    print(f"[DEBUG] -- send_message: chat_id={chat_id}, text={text[:60]!r}...", flush=True)
+    print(f"[SEND_MESSAGE] chat_id={chat_id} | text={text.replace(chr(10), ' ')[:120]}", flush=True)
+    # דיבאג: מאיזה בוט נשלחת ההודעה
+    try:
+        bot_id = None
+        if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
+            bot_id = getattr(update.message.bot, 'id', None)
+        elif hasattr(update, 'bot'):
+            bot_id = getattr(update.bot, 'id', None)
+        print(f"[DEBUG] SENDING MESSAGE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
+    except Exception as e:
+        print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
     import sys; sys.stdout.flush()
-    # שליחת ההודעה בטלגרם
-    await update.message.reply_text(text, parse_mode="HTML")
-
-    # שמירה להיסטוריה
+    try:
+        sent_message = await update.message.reply_text(text, parse_mode="HTML")
+        print(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+        logging.info(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
+    except Exception as e:
+        print(f"[ERROR] שליחת הודעה נכשלה: {e}", flush=True)
+        logging.error(f"[ERROR] שליחת הודעה נכשלה: {e}")
+        log_event_to_file({
+            "chat_id": chat_id,
+            "bot_message": text,
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        })
+        try:
+            from notifications import send_error_notification
+            send_error_notification(f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=text)
+        except Exception as notify_err:
+            print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
+            logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
+        return
     if is_bot_message:
         update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", text)
-
-    # שמירה ללוג
     log_event_to_file({
         "chat_id": chat_id,
         "bot_message": text,
         "timestamp": datetime.now().isoformat()
     })
-
-    # הדפסה למסך
-    print(f"[📤 הודעת בוט]: {text}")
+    print(f"[BOT_MSG] {text.replace(chr(10), ' ')[:120]}")
 
 def connect_google_sheets():
     try:
@@ -149,40 +168,33 @@ def connect_google_sheets():
 
 connect_google_sheets()
 
-def set_telegram_webhook():
-    from config import TELEGRAM_BOT_TOKEN
-    WEBHOOK_URL = "https://telegram-bot-b1na.onrender.com/webhook"
-    set_webhook_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook?url={WEBHOOK_URL}"
-    try:
-        resp = requests.get(set_webhook_url)
-        if resp.status_code == 200 and resp.json().get("ok"):
-            print("✅ Webhook נקבע בטלגרם!")
-        else:
-            print("⚠️ שגיאה בהגדרת Webhook:", resp.text)
-    except Exception as e:
-        print("❌ שגיאה:", e)
+# =============================================
+# אוטומציה לסביבת פיתוח לוקאלית (dev_env_setup)
+# -------------------------------------------------------------
+# השורות הבאות יוודאו שבלוקאלי הכל יותקן, ngrok ירוץ, וה-webhook יתעדכן אוטומטית.
+# בענן (Render) — לא קורה כלום. הקוד נשאר רזה ונקי.
+# =============================================
+# from dev_env_setup import setup_dev_environment
+# setup_dev_environment()
+# =============================================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🚀 [DEBUG] handle_message התחיל!")
-    print(f"🚀 [DEBUG] update type: {type(update)}")
-    print(f"🚀 [DEBUG] context type: {type(context)}")
-    
-    # הוספת try-catch כולל סביב כל הפונקציה
+    # print("🚀 [DEBUG] handle_message התחיל!")
+    # print(f"🚀 [DEBUG] update type: {type(update)}")
+    # print(f"🚀 [DEBUG] context type: {type(context)}")
     try:
-        print("[DEBUG] -- handle_message התחיל!", flush=True)
-        import sys; sys.stdout.flush()
-        print("🔥🔥🔥 HANDLE MESSAGE CALLED! 🔥🔥🔥", flush=True)
-        sys.stdout.flush()
-        logging.info("🔥🔥🔥 HANDLE MESSAGE CALLED VIA LOGGING! 🔥🔥🔥")
-        logging.info("---- התחלת טיפול בהודעה ----")
-        print("---- התחלת טיפול בהודעה ----")
+        # print("[DEBUG] -- handle_message התחיל!", flush=True)
+        # import sys; sys.stdout.flush()
+        # print("🔥🔥🔥 HANDLE MESSAGE CALLED! 🔥🔥🔥", flush=True)
+        # sys.stdout.flush()
+        # logging.info("🔥🔥🔥 HANDLE MESSAGE CALLED VIA LOGGING! 🔥🔥🔥")
+        # logging.info("---- התחלת טיפול בהודעה ----")
+        # print("---- התחלת טיפול בהודעה ----")
         log_payload = {
             "chat_id": None,
             "message_id": None,
             "timestamp_start": datetime.now().isoformat()
         }
-
-        # קבלת נתונים בסיסיים מההודעה
         try:
             chat_id = update.message.chat_id
             message_id = update.message.message_id
@@ -191,18 +203,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 logging.error(f"❌ שגיאה - אין טקסט בהודעה | chat_id={chat_id}")
                 await update.message.reply_text("❌ לא קיבלתי טקסט בהודעה.")
-                return  # לסיים את טיפול ההודעה כאן
-
+                return
             did, reply = handle_secret_command(chat_id, user_msg)
             if did:
                 await update.message.reply_text(reply)
                 return
-
             log_payload["chat_id"] = chat_id
             log_payload["message_id"] = message_id
             log_payload["user_msg"] = user_msg
             logging.info(f"📩 התקבלה הודעה | chat_id={chat_id}, message_id={message_id}, תוכן={user_msg!r}")
-            print(f"📩 התקבלה הודעה | chat_id={chat_id}, message_id={message_id}, תוכן={user_msg!r}")
+            print(f"[IN_MSG] chat_id={chat_id} | message_id={message_id} | text={user_msg.replace(chr(10), ' ')[:120]}")
         except Exception as ex:
             logging.error(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
             print(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
@@ -474,6 +484,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"[📤 הודעת בוט]: {reply_text_one_line}")
             logging.info("📨 תשובה נשלחה למשתמש")
             print("📨 תשובה נשלחה למשתמש")
+            # דיבאג: שליחת תשובה בפועל
+            print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
+            await send_message(update, chat_id, reply_text)
 
             try:
                 logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
@@ -530,7 +543,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("✅ היסטוריית שיחה עודכנה")
 
             logging.info("💾 שומר נתוני שיחה בגיליון...")
-            print("�� שומר נתוני שיחה בגיליון...")
+            print("💾 שומר נתוני שיחה בגיליון...")
             log_to_sheets(
                 message_id, chat_id, user_msg, reply_text, reply_summary,
                 main_usage, summary_usage, extract_usage,
@@ -569,6 +582,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
             print(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
 
+            print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
+
         except Exception as critical_error:
             logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
             print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
@@ -601,7 +616,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "chat_id": getattr(update.message, 'chat_id', 'unknown') if hasattr(update, 'message') else 'unknown'
             }
             
-            with open("/data/critical_errors.jsonl", "a", encoding="utf-8") as f:
+            with open(CRITICAL_ERRORS_PATH, "a", encoding="utf-8") as f:
                 import json
                 f.write(json.dumps(error_details, ensure_ascii=False) + "\n")
             
@@ -635,8 +650,6 @@ async def main():
     logging.info("========== אתחול הבוט ==========")
     print("========== אתחול הבוט ==========") 
     print("🤖 הבוט מתחיל לרוץ... (ראה גם קובץ bot.log)")
-
-    set_telegram_webhook()
 
     # דוח יומי מיידי עם השהיה
     async def delayed_startup_report():

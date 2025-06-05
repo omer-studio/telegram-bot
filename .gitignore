@@ -17,3 +17,6 @@ __pycache__/
 
 # Replit
 .replit
+
+# קבצים/תיקיות מקומיים שלא עולים ל-git
+sandbox.py

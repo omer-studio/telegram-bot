@@ -6,6 +6,7 @@ from datetime import datetime
 from sheets_handler import delete_row_by_chat_id
 from utils import log_event_to_file  # ודא שהפונקציה קיימת! (יש כמעט בוודאות)
 from notifications import send_admin_secret_command_notification  # <--- נדרש בקובץ notifications.py
+from config import CHAT_HISTORY_PATH
 
 SECRET_CODES = {
     "#487chaCha2025": "clear_history",    # מוחק היסטוריית שיחה
@@ -100,7 +101,7 @@ def handle_secret_command(chat_id, text):
     return False, None
 
 def clear_chat_history(chat_id):
-    path = "/data/chat_history.json"
+    path = CHAT_HISTORY_PATH
     print(f"[CLEAR_HISTORY] מנסה למחוק היסטוריה | chat_id={chat_id} | path={path} | timestamp={datetime.now().isoformat()}")
     if not os.path.exists(path):
         print(f"[CLEAR_HISTORY] קובץ היסטוריה לא קיים | path={path}")

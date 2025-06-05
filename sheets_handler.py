@@ -437,14 +437,6 @@ def log_to_sheets(
         # שמירה בגיליון
         sheet_log.append_row(row_data)
 
-        # הדפסה מפורטת לבדיקה
-        print(f"✅ לוג נרשם בהצלחה:")
-        print(f"   📧 message_id: {message_id}")
-        print(f"   👤 chat_id: {chat_id}")
-        print(f"   📊 טוקנים: prompt={prompt_tokens_total}, completion={completion_tokens_total}, סה\"כ={total_tokens}")
-        print(f"   💰 עלויות: GPT1={cost_gpt1}₪, GPT2={cost_gpt2}₪, GPT3={cost_gpt3}₪")
-        print(f"   🌐 עלות כוללת: ${clean_cost_usd}")
-        
         return True
 
     except Exception as e:

@@ -6,7 +6,12 @@ gpt_handler.py — כל הפונקציות לטיפול ב־GPT במקום אח�
 import json
 import logging
 from datetime import datetime
-from config import client, SYSTEM_PROMPT
+from config import client, SYSTEM_PROMPT, GPT_LOG_PATH
+import os
+
+# הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+os.makedirs(PROJECT_ROOT, exist_ok=True)
 
 # מחירים קבועים (נכון ליוני 2024) ל־GPT-4o
 COST_PROMPT_REGULAR = 0.002 / 1000    # טוקן קלט רגיל
@@ -18,7 +23,7 @@ def write_gpt_log(ttype, usage, model):
     """
     שומר לוג של השימוש בכל קריאה ל־GPT
     """
-    log_path = "/data/gpt_usage_log.jsonl"
+    log_path = GPT_LOG_PATH
     log_entry = {
         "timestamp": datetime.utcnow().isoformat(),
         "type": ttype,
@@ -60,9 +65,9 @@ def get_main_response(full_messages):
     מחזיר גם את כל פרטי העלות (טוקנים, קשד, מחיר מדויק)
     """
     try:
-        print("🔍 נשלח ל־GPT:")
-        for m in full_messages:
-            print(f"{m['role']}: {m['content']}")
+        # print("🔍 נשלח ל־GPT:")
+        # for m in full_messages:
+        #     print(f"{m['role']}: {m['content']}")
 
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -73,7 +78,7 @@ def get_main_response(full_messages):
         # שליפת נתוני usage
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details['cached_tokens']
+        cached_tokens = prompt_tokens_details.cached_tokens
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
@@ -86,8 +91,8 @@ def get_main_response(full_messages):
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
         cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות #NEW
 
-        print(f"🔢 פרטי שימוש: prompt={prompt_tokens} קשד={cached_tokens} רגיל={prompt_regular} פלט={completion_tokens}")
-        print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סהכ ${cost_total:.6f} (₪{cost_total_ils})")
+        # print(f"🔢 פרטי שימוש: prompt={prompt_tokens} קשד={cached_tokens} רגיל={prompt_regular} פלט={completion_tokens}")
+        # print(f"💸 עלויות: רגיל ${cost_prompt_regular:.6f}, קשד ${cost_prompt_cached:.6f}, פלט ${cost_completion:.6f}, סהכ ${cost_total:.6f} (₪{cost_total_ils})")
 
         # תיעוד מלא ללוג נוסף
         usage_log = {
@@ -164,7 +169,7 @@ def summarize_bot_reply(reply_text):
         )
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details['cached_tokens']
+        cached_tokens = prompt_tokens_details.cached_tokens
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
@@ -271,7 +276,7 @@ future_vision - חזון עתיד
         # חישובי עלות (ללא שינוי)
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details['cached_tokens']
+        cached_tokens = prompt_tokens_details.cached_tokens
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
@@ -530,7 +535,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         # חישובי עלות
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details['cached_tokens']
+        cached_tokens = prompt_tokens_details.cached_tokens
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
@@ -747,7 +752,7 @@ def get_combined_usage_data(extract_usage, merge_usage=None):
 # הסבר בסוף הקובץ (לשימושך):
 
 """
-🔵 מה חדש כאן?
+מה חדש כאן?
 
 - אין שום פונקציה שמוסרת — הכל מקורי.
 - נוספו חישובי עלות וטוקנים לכל קריאה (רגיל, קשד, פלט).

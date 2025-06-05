@@ -7,14 +7,11 @@ import json
 import time
 from dateutil.parser import parse as parse_dt  # שים לב - זה צריך להיות מותקן ב־requirements.txt
 
-GPT_LOG_PATH = "/data/gpt_usage_log.jsonl"
-
-if not os.path.exists(GPT_LOG_PATH):
-    with open(GPT_LOG_PATH, "w", encoding="utf-8") as f:
-        pass
+# הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 from telegram import Bot
-from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID
+from config import OPENAI_API_KEY, OPENAI_ADMIN_KEY, ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, GPT_LOG_PATH
 
 bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 

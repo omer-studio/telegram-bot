@@ -6,9 +6,9 @@
 
 
 
-python-telegram-bot==20.3     # ספריה להפעלת בוט טלגרם בפייתון (העיקרי שלך)
-openai==1.3.5                 # ממשק API לצ'אט GPT של OpenAI
-fastapi==0.95.1               # בניית Web API מהיר (משמש ל-webhook)
+python-telegram-bot==22.1     # ספריה להפעלת בוט טלגרם בפייתון (העיקרי שלך)
+openai>=1.30.0                 # ממשק API לצ'אט GPT של OpenAI
+fastapi>=0.110.0               # בניית Web API מהיר (משמש ל-webhook)
 uvicorn==0.22.0               # שרת להרצת FastAPI בענן (מבצע listen)
 gspread==5.12.0               # עבודה עם Google Sheets דרך פייתון
 oauth2client==4.1.3           # התחברות מאובטחת ל-Google API (אימות OAuth)
@@ -18,3 +18,4 @@ Flask                         # שרת Web פשוט (לא נחוץ אצלך כר
 python-dateutil               # עוזר בעבודה עם תאריכים ושעות
 APScheduler                   # מתזמן משימות (הרצת דוחות יומיים אוטומטית)
 pytz                          # טיפול באזורי זמן (שעות ודקות לפי מדינה)
+pydantic>=2.6.0

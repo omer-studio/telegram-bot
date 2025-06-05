@@ -5,10 +5,10 @@ import json
 import os
 from datetime import datetime
 import requests
-from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
+from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, BOT_TRACE_LOG_PATH, BOT_ERRORS_PATH
 
 def write_deploy_commit_to_log(commit):
-    log_file = "/data/bot_trace_log.jsonl"
+    log_file = BOT_TRACE_LOG_PATH
     with open(log_file, "a", encoding="utf-8") as f:
         entry = {
             "type": "deploy_commit",
@@ -18,7 +18,7 @@ def write_deploy_commit_to_log(commit):
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 def get_last_deploy_commit_from_log():
-    log_file = "/data/bot_trace_log.jsonl"
+    log_file = BOT_TRACE_LOG_PATH
     if not os.path.exists(log_file):
         return None
     with open(log_file, "r", encoding="utf-8") as f:
@@ -191,13 +191,13 @@ def send_admin_secret_command_notification(message: str):
 
 def log_error_to_file(error_data):
     """
-    רושם שגיאות לקובץ נפרד ב־/data וגם שולח טלגרם לאדמין
+    רושם שגיאות לקובץ נפרד ב־data וגם שולח טלגרם לאדמין
     """
     import requests
     from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
 
     try:
-        error_file = "/data/bot_errors.jsonl"
+        error_file = BOT_ERRORS_PATH
         error_data["timestamp"] = datetime.now().isoformat()
 
         # יצירה אוטומטית של הקובץ אם לא קיים
@@ -245,7 +245,7 @@ def send_startup_notification():
     """
     send_admin_notification("🚀 הבוט התחיל לרוץ בהצלחה! מוכן לקבל הודעות.")
 
-from telegram import Update
+from telegram import Update # type: ignore
 
 async def handle_critical_error(error, chat_id, user_msg, update: Update):
     """

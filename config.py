@@ -10,8 +10,13 @@ from openai import OpenAI
 
 # טעינת קונפיגורציה
 def load_config():
-    """טוען את קובץ הקונפיגורציה"""
-    with open("/etc/secrets/config.json") as f:
+    local_path = os.path.join("etc", "secrets", "config.json")
+    print("DEBUG: cwd =", os.getcwd())
+    print("DEBUG: local_path exists?", os.path.exists(local_path))
+    abs_path = "/etc/secrets/config.json"
+    path = local_path if os.path.exists(local_path) else abs_path
+    print("DEBUG: using path", path)
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 def load_system_prompt():
@@ -33,7 +38,6 @@ GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 # הגדרות התראות שגיאות (לבוט הניהולי החדש)
 ADMIN_BOT_TELEGRAM_TOKEN = config.get("ADMIN_BOT_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
 ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
-
 
 # יצירת קליינטים
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -59,3 +63,15 @@ SUMMARY_FIELD = "summary"
 # הגדרות לוגים
 LOG_FILE_PATH = "bot_trace_log.jsonl"
 LOG_LIMIT = 100
+
+# הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# נתיבי קבצים עיקריים
+GPT_LOG_PATH = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
+BOT_TRACE_LOG_PATH = os.path.join(DATA_DIR, "bot_trace_log.jsonl")
+CHAT_HISTORY_PATH = os.path.join(DATA_DIR, "chat_history.json")
+BOT_ERRORS_PATH = os.path.join(DATA_DIR, "bot_errors.jsonl")
+CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, "critical_errors.jsonl")

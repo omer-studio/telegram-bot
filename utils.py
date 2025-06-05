@@ -4,7 +4,7 @@
 import json
 import os
 from datetime import datetime
-from config import LOG_FILE_PATH, LOG_LIMIT
+from config import LOG_FILE_PATH, LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH
 
 
 def log_event_to_file(log_data):
@@ -12,7 +12,7 @@ def log_event_to_file(log_data):
     רושם אירועים לקובץ הלוגים הראשי
     """
     try:
-        file_path = "/data/bot_trace_log.jsonl"
+        file_path = BOT_TRACE_LOG_PATH
         log_data["timestamp_end"] = datetime.now().isoformat()
 
         # קריאת לוגים קיימים
@@ -44,7 +44,7 @@ def update_chat_history(chat_id, user_msg, bot_summary):
     מעדכן את היסטוריית השיחה של המשתמש
     """
     try:
-        file_path = "/data/chat_history.json"
+        file_path = CHAT_HISTORY_PATH
 
         # טעינת היסטוריה קיימת
         try:
@@ -85,7 +85,7 @@ def get_chat_history_messages(chat_id):
     מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT
     """
     try:
-        with open("/data/chat_history.json", encoding="utf-8") as f:
+        with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
             history_data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return []
@@ -116,7 +116,7 @@ def get_user_stats(chat_id):
     מחזיר סטטיסטיקות על המשתמש
     """
     try:
-        with open("/data/chat_history.json", encoding="utf-8") as f:
+        with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
             history_data = json.load(f)
         
         chat_id = str(chat_id)
