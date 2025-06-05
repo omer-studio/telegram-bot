@@ -254,31 +254,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             main_response = get_main_response(full_messages)
             
-            try:
-                (
-                    reply_text,
-                    main_prompt_tokens,
-                    main_cached_tokens,
-                    main_prompt_regular,
-                    main_completion_tokens,
-                    main_total_tokens,
-                    main_cost_prompt_regular,
-                    main_cost_prompt_cached,
-                    main_cost_completion,
-                    main_cost_total_usd,   # זה השם הנכון!
-                    main_cost_total_ils,
-                    main_cost_gpt1,
-                    main_model
-                ) = main_response
-
-            except Exception as e:
-                print(f"💥 שגיאה בפירוק main_response: {e}")
-                reply_text = "שגיאה טכנית. אנא נסה שוב."
-                main_prompt_tokens = main_completion_tokens = main_total_tokens = 0
-                main_cached_tokens = main_prompt_regular = 0
-                main_cost_prompt_regular = main_cost_prompt_cached = main_cost_completion = 0
-                main_cost_total_usd = main_cost_total_ils = main_cost_gpt1 = 0
-                main_model = "error"
+            reply_text = main_response["bot_reply"]
+            main_usage = main_response  # כל usage dict
+            main_prompt_tokens = main_usage.get("prompt_tokens", 0)
+            main_completion_tokens = main_usage.get("completion_tokens", 0)
+            main_total_tokens = main_usage.get("total_tokens", 0)
+            main_cached_tokens = main_usage.get("cached_tokens", 0)
+            main_model = main_usage.get("model", "")
+            main_cost_gpt1 = main_usage.get("cost_gpt1", 0)
+            main_cost_total_usd = main_usage.get("cost_total", 0)
+            main_cost_total_ils = main_usage.get("cost_total_ils", 0)
 
             logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
             print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
@@ -355,14 +340,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 main_total_tokens,          # 2
                 main_cached_tokens,         # 3
                 main_model,                 # 4
-                main_cost_prompt_regular,   # 5
-                main_cost_prompt_cached,    # 6
-                main_cost_completion,       # 7
-                main_cost_total_usd,        # 8
-                main_cost_total_ils,        # 9
-                main_cost_gpt1,             # 10
-                main_model,                 # 11
-                main_model                  # 12
+                main_cost_gpt1,             # 5
+                main_cost_total_usd,        # 6
+                main_cost_total_ils,        # 7
+                main_total_tokens,          # 8
+                main_cost_total_usd,        # 9
+                main_cost_total_ils,        # 10
+                main_model                  # 11
             )
             summary_usage = ("", sum_prompt, sum_completion, sum_total, sum_model)
             

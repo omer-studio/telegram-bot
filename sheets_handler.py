@@ -263,15 +263,15 @@ def log_to_sheets(
             except (ValueError, TypeError):
                 return 0
 
-        # שליפה ישירה מתוך main_usage לפי הסדר החדש (13 ערכים מלאים)
-        main_prompt_tokens = safe_int(main_usage[0])  # טוקנים קלט GPT1
-        main_completion_tokens = safe_int(main_usage[1])
-        main_total_tokens = safe_int(main_usage[2])
-        main_cached_tokens = safe_int(main_usage[3])
-        main_model = main_usage[4]
-        main_cost_gpt1 = safe_int(main_usage[11])
-        main_cost_usd = safe_float(main_usage[9])
-        main_cost_ils = safe_float(main_usage[10])
+        # שליפה ישירה מתוך main_usage לפי שמות (dict)
+        main_prompt_tokens = safe_int(main_usage.get("prompt_tokens", 0))
+        main_completion_tokens = safe_int(main_usage.get("completion_tokens", 0))
+        main_total_tokens = safe_int(main_usage.get("total_tokens", 0))
+        main_cached_tokens = safe_int(main_usage.get("cached_tokens", 0))
+        main_model = main_usage.get("model", "")
+        main_cost_gpt1 = safe_int(main_usage.get("cost_gpt1", 0))
+        main_cost_usd = safe_float(main_usage.get("cost_total", 0))
+        main_cost_ils = safe_float(main_usage.get("cost_total_ils", 0))
 
         # אם summary_usage או extract_usage קיימים, נוסיף אותם
         summary_prompt_tokens = safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else 0
@@ -391,12 +391,12 @@ def log_to_sheets(
             FIELDS_DICT["total_cost_ils"]: safe_int(clean_cost_ils * 100) if clean_cost_ils > 0 else "",  # באגורות
             
             # נתוני GPT1 (main)
-            FIELDS_DICT["usage_prompt_tokens_GPT1"]: safe_int(main_usage[0]) if main_usage and len(main_usage) > 0 else "",
-            FIELDS_DICT["usage_completion_tokens_GPT1"]: safe_int(main_usage[1]) if main_usage and len(main_usage) > 1 else "",
-            FIELDS_DICT["usage_total_tokens_GPT1"]: safe_int(main_usage[2]) if main_usage and len(main_usage) > 2 else "",
-            FIELDS_DICT["cached_tokens_gpt1"]: cached_tokens_gpt1 if cached_tokens_gpt1 > 0 else "",
-            FIELDS_DICT["cost_gpt1"]: cost_gpt1 if cost_gpt1 > 0 else "",
-            FIELDS_DICT["model_GPT1"]: main_usage[4] if main_usage and len(main_usage) > 4 else "",
+            FIELDS_DICT["usage_prompt_tokens_GPT1"]: main_usage.get("prompt_tokens", ""),
+            FIELDS_DICT["usage_completion_tokens_GPT1"]: main_usage.get("completion_tokens", ""),
+            FIELDS_DICT["usage_total_tokens_GPT1"]: main_usage.get("total_tokens", ""),
+            FIELDS_DICT["cached_tokens_gpt1"]: main_usage.get("cached_tokens", ""),
+            FIELDS_DICT["cost_gpt1"]: main_usage.get("cost_gpt1", ""),
+            FIELDS_DICT["model_GPT1"]: main_usage.get("model", ""),
             
             # נתוני GPT2 (summary)
             FIELDS_DICT["usage_prompt_tokens_GPT2"]: safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else "",
