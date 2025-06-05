@@ -23,6 +23,7 @@ from config import setup_google_sheets, SUMMARY_FIELD
 from datetime import datetime
 import logging
 from gpt_handler import calculate_gpt_cost, USD_TO_ILS
+from fields_dict import FIELDS_DICT
 
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
@@ -123,7 +124,7 @@ def get_user_summary(chat_id):
         all_records = sheet_users.get_all_records()
         for row in all_records:
             if str(row.get("chat_id")) == str(chat_id):
-                summary = row.get("summary", "").strip()
+                summary = row.get(FIELDS_DICT['summary'], "").strip()
                 if summary:
                     return summary
         return ""
@@ -202,9 +203,10 @@ def compose_emotional_summary(row):
     parts = []
     for key, value in row.items():
         v = str(value).strip()
-        if v and key != "chat_id":
-            # אפשר להחליף כאן את שם השדה לעברית אם רוצים אסתטיקה (למשל: 'age' -> 'גיל')
-            parts.append(f"{key}: {v}")
+        if v and key != FIELDS_DICT["chat_id"]:
+            # Use Hebrew name from FIELDS_DICT if you want aesthetics
+            field_name = FIELDS_DICT.get(key, key)
+            parts.append(f"{field_name}: {v}")
     # --- אם אין מידע בכלל ---
     if not parts:
         return "[אין מידע לסיכום]"
@@ -364,59 +366,58 @@ def log_to_sheets(
 
         # 🚨 תיקון 5: מיפוי מדויק לכותרות הגיליון
         values_to_log = {
-            # פרטי הודעה בסיסיים
-            "MASSAGE ID": str(message_id),  # שם מדויק מהגיליון
-            "CHAT ID": str(chat_id),        # שם מדויק מהגיליון
-            "user_msg": user_msg if user_msg else "",
-            "user_summary": "",  # לעתיד
-            "bot_reply": reply_text if reply_text else "",
-            "bot_summary": reply_summary if has_summary and reply_summary else "",
+            FIELDS_DICT["message_id"]: str(message_id),
+            FIELDS_DICT["chat_id"]: str(chat_id),
+            FIELDS_DICT["user_msg"]: user_msg if user_msg else "",
+            FIELDS_DICT["user_summary"]: "",  # future
+            FIELDS_DICT["bot_reply"]: reply_text if reply_text else "",
+            FIELDS_DICT["bot_summary"]: reply_summary if has_summary and reply_summary else "",
             
             # שדות ריקים
-            "empty_1": "",
-            "empty_2": "",  
-            "empty_3": "",
-            "empty_4": "",
-            "empty_5": "",
+            FIELDS_DICT["empty_1"]: "",
+            FIELDS_DICT["empty_2"]: "",  
+            FIELDS_DICT["empty_3"]: "",
+            FIELDS_DICT["empty_4"]: "",
+            FIELDS_DICT["empty_5"]: "",
             
             # סך טוקנים
-            "total_tokens": safe_int(total_tokens),
-            "prompt_tokens_total": prompt_tokens_total,
-            "completion_tokens_total": completion_tokens_total,
-            "cached_tokens": cached_tokens,
+            FIELDS_DICT["total_tokens"]: safe_int(total_tokens),
+            FIELDS_DICT["prompt_tokens_total"]: prompt_tokens_total,
+            FIELDS_DICT["completion_tokens_total"]: completion_tokens_total,
+            FIELDS_DICT["cached_tokens"]: cached_tokens,
             
             # עלויות כוללות
-            "total_cost_usd": clean_cost_usd if clean_cost_usd > 0 else "",
-            "total_cost_ils": safe_int(clean_cost_ils * 100) if clean_cost_ils > 0 else "",  # באגורות
+            FIELDS_DICT["total_cost_usd"]: clean_cost_usd if clean_cost_usd > 0 else "",
+            FIELDS_DICT["total_cost_ils"]: safe_int(clean_cost_ils * 100) if clean_cost_ils > 0 else "",  # באגורות
             
             # נתוני GPT1 (main)
-            "usage_prompt_tokens_GPT1": safe_int(main_usage[0]) if main_usage and len(main_usage) > 0 else "",
-            "usage_completion_tokens_GPT1": safe_int(main_usage[1]) if main_usage and len(main_usage) > 1 else "",
-            "usage_total_tokens_GPT1": safe_int(main_usage[2]) if main_usage and len(main_usage) > 2 else "",
-            "cached_tokens_gpt1": cached_tokens_gpt1 if cached_tokens_gpt1 > 0 else "",
-            "cost_gpt1": cost_gpt1 if cost_gpt1 > 0 else "",
-            "model_GPT1": main_usage[4] if main_usage and len(main_usage) > 4 else "",
+            FIELDS_DICT["usage_prompt_tokens_GPT1"]: safe_int(main_usage[0]) if main_usage and len(main_usage) > 0 else "",
+            FIELDS_DICT["usage_completion_tokens_GPT1"]: safe_int(main_usage[1]) if main_usage and len(main_usage) > 1 else "",
+            FIELDS_DICT["usage_total_tokens_GPT1"]: safe_int(main_usage[2]) if main_usage and len(main_usage) > 2 else "",
+            FIELDS_DICT["cached_tokens_gpt1"]: cached_tokens_gpt1 if cached_tokens_gpt1 > 0 else "",
+            FIELDS_DICT["cost_gpt1"]: cost_gpt1 if cost_gpt1 > 0 else "",
+            FIELDS_DICT["model_GPT1"]: main_usage[4] if main_usage and len(main_usage) > 4 else "",
             
             # נתוני GPT2 (summary)
-            "usage_prompt_tokens_GPT2": safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else "",
-            "usage_completion_tokens_GPT2": safe_int(summary_usage[2]) if summary_usage and len(summary_usage) > 2 else "",
-            "usage_total_tokens_GPT2": safe_int(summary_usage[3]) if summary_usage and len(summary_usage) > 3 else "",
-            "cached_tokens_gpt2": cached_tokens_gpt2 if cached_tokens_gpt2 > 0 else "",
-            "cost_gpt2": cost_gpt2 if cost_gpt2 > 0 else "",
-            "model_GPT2": summary_usage[4] if summary_usage and len(summary_usage) > 4 else "",
+            FIELDS_DICT["usage_prompt_tokens_GPT2"]: safe_int(summary_usage[1]) if summary_usage and len(summary_usage) > 1 else "",
+            FIELDS_DICT["usage_completion_tokens_GPT2"]: safe_int(summary_usage[2]) if summary_usage and len(summary_usage) > 2 else "",
+            FIELDS_DICT["usage_total_tokens_GPT2"]: safe_int(summary_usage[3]) if summary_usage and len(summary_usage) > 3 else "",
+            FIELDS_DICT["cached_tokens_gpt2"]: cached_tokens_gpt2 if cached_tokens_gpt2 > 0 else "",
+            FIELDS_DICT["cost_gpt2"]: cost_gpt2 if cost_gpt2 > 0 else "",
+            FIELDS_DICT["model_GPT2"]: summary_usage[4] if summary_usage and len(summary_usage) > 4 else "",
             
             # נתוני GPT3 (extract)
-            "usage_prompt_tokens_GPT3": extract_prompt_tokens,
-            "usage_completion_tokens_GPT3": extract_completion_tokens,
-            "usage_total_tokens_GPT3": extract_total_tokens,
-            "cached_tokens_gpt3": cached_tokens_gpt3 if cached_tokens_gpt3 > 0 else "",
-            "cost_gpt3": cost_gpt3 if cost_gpt3 > 0 else "",
-            "model_GPT3": extract_model,
+            FIELDS_DICT["usage_prompt_tokens_GPT3"]: extract_prompt_tokens,
+            FIELDS_DICT["usage_completion_tokens_GPT3"]: extract_completion_tokens,
+            FIELDS_DICT["usage_total_tokens_GPT3"]: extract_total_tokens,
+            FIELDS_DICT["cached_tokens_gpt3"]: cached_tokens_gpt3 if cached_tokens_gpt3 > 0 else "",
+            FIELDS_DICT["cost_gpt3"]: cost_gpt3 if cost_gpt3 > 0 else "",
+            FIELDS_DICT["model_GPT3"]: extract_model,
             
             # נתוני זמן
-            "timestamp": timestamp_full,
-            "date_only": date_only,
-            "time_only": time_only
+            FIELDS_DICT["timestamp"]: timestamp_full,
+            FIELDS_DICT["date_only"]: date_only,
+            FIELDS_DICT["time_only"]: time_only
         }
 
         # 🚨 תיקון 6: וידוא שכל הכותרות קיימות וההכנסה תקינה

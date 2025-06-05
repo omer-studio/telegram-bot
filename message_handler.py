@@ -16,6 +16,7 @@ from sheets_handler import increment_code_try, get_user_summary, update_user_pro
 from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from config import SYSTEM_PROMPT, CRITICAL_ERRORS_PATH
+from fields_dict import FIELDS_DICT
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):

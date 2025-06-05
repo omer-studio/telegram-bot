@@ -6,6 +6,7 @@ import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from openai import OpenAI
+from fields_dict import FIELDS_DICT
 
 
 # טעינת קונפיגורציה
@@ -56,9 +57,14 @@ def setup_google_sheets():
     return sheet_users, sheet_log, sheet_states
 
 
+# ⚠️ יש להשתמש אך ורק במפתחות מתוך FIELDS_DICT! אין להכניס שמות שדה קשיחים חדשים כאן או בקוד אחר.
 # שדות פרופיל משתמש
-PROFILE_FIELDS = ["age", "closet_status", "relationship_type", "religious_context", "occupation_or_role", "attracted_to"]
-SUMMARY_FIELD = "summary"
+PROFILE_FIELDS = [
+    key for key in [
+        "age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"
+    ] if key in FIELDS_DICT
+]
+SUMMARY_FIELD = "summary" if "summary" in FIELDS_DICT else list(FIELDS_DICT.keys())[-1]
 
 # הגדרות לוגים
 LOG_FILE_PATH = "bot_trace_log.jsonl"

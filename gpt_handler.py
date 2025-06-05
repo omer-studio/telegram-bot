@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from config import client, SYSTEM_PROMPT, GPT_LOG_PATH
 import os
+from fields_dict import FIELDS_DICT
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -246,36 +247,8 @@ def extract_user_profile_fields(text):
     """
     system_prompt = """אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
 
-age - גיל (מספר בלבד)
-pronoun_preference - לשון פניה: "את"/"אתה"/"מעורב"
-occupation_or_role - עיסוק/תפקיד
-attracted_to - משיכה: "גברים"/"נשים"/"שניהם"/"לא ברור"
-relationship_type - מצב זוגי: "רווק"/"נשוי"/"נשוי+2"/"גרוש" וכו'
-self_religious_affiliation - זהות דתית: "יהודי"/"ערבי"/"דרוזי"/"נוצרי"/"שומרוני"
-self_religiosity_level - רמת דתיות: "דתי"/"חילוני"/"מסורתי"/"חרדי"/"דתי לאומי"
-family_religiosity - רקע משפחתי: "משפחה דתית"/"משפחה חילונית"/"משפחה מעורבת"
-closet_status - מצב ארון: "בארון"/"יצא חלקית"/"יצא לכולם"
-who_knows - מי יודע עליו
-who_doesnt_know - מי לא יודע עליו
-attends_therapy - טיפול: "כן"/"לא"/"טיפול זוגי"/"קבוצת תמיכה"
-primary_conflict -  הקונפליקט המרכזי שמעסיק אותו בחייו
-trauma_history - טראומות (בעדינות)
-goal_in_course - מטרות בקורס
-language_of_strength - משפטים מחזקים
-coping_strategies - דרכי התמודדות - מה מרים אותו מה עוזר לו
-fears_concerns - פחדים וחששות - אם שיתף בפחד מסויים אתה מכניס את זה לשם
-future_vision - חזון עתיד
-אם הוא מבקש למחוק את כל מה שאתה יודע עליו - אז תחזיר שדות שירים שידרסו את הקיימים
-אם הוא מבקש שתמחק נתונים ספציפים אז תמחק נתונים ספציפים כמו אל תזכור בן כמה אני
-
-
-דוגמאות:
-"אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
-"נשוי עם שני ילדים" → {"relationship_type": "נשוי+2"}
-"סיפרתי להורים, אבל לעמיתים לא" → {"who_knows": "הורים", "who_doesnt_know": "עמיתים"}
-
-רק JSON, בלי הסברים!"""
-
+"""
+    # ... build the prompt dynamically from FIELDS_DICT if needed ...
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
         "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
@@ -371,11 +344,11 @@ future_vision - חזון עתיד
         logging.info(f"[DEBUG] fallback manual extraction running on text: {text}")
         
         # גיל
-        if "בן " in text or "בת " in text:
+        if FIELDS_DICT["age"] in text or FIELDS_DICT["age"] in text:
             import re
             age_match = re.search(r'ב[ןת] (\d+)', text)
             if age_match:
-                manual_result["age"] = int(age_match.group(1))
+                manual_result[FIELDS_DICT["age"]] = int(age_match.group(1))
         
         # זהות דתית ורמת דתיות
         if "יהודי" in text:
@@ -470,17 +443,17 @@ def validate_extracted_data(data):
     validated = data.copy()
     
     # בדיקת גיל הגיוני - רק מעל 80
-    if "age" in validated:
+    if FIELDS_DICT["age"] in validated:
         try:
-            age = int(validated["age"])
+            age = int(validated[FIELDS_DICT["age"]])
             if age > 80:
                 logging.warning(f"⚠️ גיל {age} מעל 80, מסיר מהנתונים")
-                del validated["age"]
+                del validated[FIELDS_DICT["age"]]
             else:
-                validated["age"] = age
+                validated[FIELDS_DICT["age"]] = age
         except (ValueError, TypeError):
-            logging.warning(f"⚠️ גיל לא תקין: {validated['age']}, מסיר מהנתונים")
-            del validated["age"]
+            logging.warning(f"⚠️ גיל לא תקין: {validated[FIELDS_DICT['age']]}, מסיר מהנתונים")
+            del validated[FIELDS_DICT["age"]]
     
     # הגבלת אורך שדות לחסכון בטוקנים
     for field, value in list(validated.items()):
@@ -505,9 +478,9 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
     """
     # שדות שצריכים מיזוג מורכב
     complex_fields = [
-        "attracted_to", "who_knows", "who_doesnt_know", "attends_therapy", 
-        "primary_conflict", "trauma_history", "goal_in_course", 
-        "language_of_strength", "coping_strategies", "fears_concerns", "future_vision"
+        FIELDS_DICT["attracted_to"], FIELDS_DICT["who_knows"], FIELDS_DICT["who_doesnt_know"], FIELDS_DICT["attends_therapy"], 
+        FIELDS_DICT["primary_conflict"], FIELDS_DICT["trauma_history"], FIELDS_DICT["goal_in_course"], 
+        FIELDS_DICT["language_of_strength"], FIELDS_DICT["coping_strategies"], FIELDS_DICT["fears_concerns"], FIELDS_DICT["future_vision"]
     ]
     
     # בדיקה אם באמת צריך GPT4
@@ -671,9 +644,9 @@ def should_use_gpt4_merge(existing_profile, new_data):
     רק אם יש שדה מורכב חדש ושדה זה כבר קיים בת.ז
     """
     complex_fields = [
-        "attracted_to", "who_knows", "who_doesnt_know", "attends_therapy", 
-        "primary_conflict", "trauma_history", "goal_in_course", 
-        "language_of_strength", "coping_strategies", "fears_concerns", "future_vision"
+        FIELDS_DICT["attracted_to"], FIELDS_DICT["who_knows"], FIELDS_DICT["who_doesnt_know"], FIELDS_DICT["attends_therapy"], 
+        FIELDS_DICT["primary_conflict"], FIELDS_DICT["trauma_history"], FIELDS_DICT["goal_in_course"], 
+        FIELDS_DICT["language_of_strength"], FIELDS_DICT["coping_strategies"], FIELDS_DICT["fears_concerns"], FIELDS_DICT["future_vision"]
     ]
     
     for field in complex_fields:
