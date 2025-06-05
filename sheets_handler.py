@@ -141,19 +141,21 @@ def get_user_summary(chat_id):
     try:
         all_records = sheet_users.get_all_records()
         for row in all_records:
-            if str(row.get("chat_id")) == str(chat_id):
-                summary = row.get(FIELDS_DICT['summary'], "").strip()
-                if summary:
-                    print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
-                    logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
-                    return summary
+            if str(row.get("chat_id", "")).strip() == str(chat_id):
+                summary = row.get("summary", "")
+                if summary is not None:
+                    summary = str(summary).strip()
+                else:
+                    summary = ""
+                print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
+                logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
+                return summary
         print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
         logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
         return ""
     except Exception as e:
         print(f"❌ שגיאה בקריאת סיכום משתמש: {e}")
-        print(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
-        logging.debug(f"[DEBUG] get_user_summary: סיום | chat_id={chat_id}")
+        logging.error(f"❌ שגיאה בקריאת סיכום משתמש: {e}")
         return ""
 
 def update_user_profile(chat_id, field_values):
@@ -163,73 +165,75 @@ def update_user_profile(chat_id, field_values):
         logging.error(f"❌ update_user_profile קיבל טיפוס לא תקין: {type(field_values)}. הערך: {field_values}")
         raise TypeError(f"update_user_profile: field_values חייב להיות dict! קיבלתי: {type(field_values)}")
     try:
-        print(f"🔄 מעדכן פרופיל למשתמש {chat_id} עם שדות: {field_values}")
-
         all_records = sheet_users.get_all_records()
         header = sheet_users.row_values(1)
         print(f"📋 כותרות הגיליון: {header}")
-
         for idx, row in enumerate(all_records):
-            if str(row.get("chat_id")) == str(chat_id):
+            if str(row.get("chat_id", "")) == str(chat_id):
                 print(f"👤 מצא משתמש בשורה {idx + 2}")
                 updated_fields = []
-
                 for key, value in field_values.items():
-                    if key in header and value:
+                    if key in header and value is not None and str(value).strip() != "":
                         col_index = header.index(key) + 1
                         print(f"[DEBUG] updating field: {key} = '{value}' at col {col_index}")
                         logging.info(f"[DEBUG] updating field: {key} = '{value}' at col {col_index}")
-                        sheet_users.update_cell(idx + 2, col_index, str(value))
-                        updated_fields.append(f"{key}: {value}")
-
+                        try:
+                            sheet_users.update_cell(idx + 2, col_index, str(value))
+                            updated_fields.append(f"{key}: {value}")
+                        except Exception as e:
+                            print(f"❌ שגיאה בעדכון תא {key}: {e}")
+                            logging.error(f"❌ שגיאה בעדכון תא {key}: {e}")
+                    elif key not in header:
+                        print(f"⚠️ שדה {key} לא קיים בגיליון, מדלג.")
+                        logging.warning(f"⚠️ שדה {key} לא קיים בגיליון, מדלג.")
                 if updated_fields:
                     print(f"[DEBUG] updated fields: {updated_fields}")
                     logging.info(f"[DEBUG] updated fields: {updated_fields}")
-
-                    # מעדכן סיכום
                     updated_row = sheet_users.row_values(idx + 2)
                     row_dict = dict(zip(header, updated_row))
                     summary = compose_emotional_summary(row_dict)
-
                     if SUMMARY_FIELD in header:
                         summary_col = header.index(SUMMARY_FIELD) + 1
                         print(f"📊 מעדכן סיכום בעמודה {summary_col}: '{summary}'")
-                        sheet_users.update_cell(idx + 2, summary_col, summary)
+                        try:
+                            sheet_users.update_cell(idx + 2, summary_col, summary)
+                        except Exception as e:
+                            print(f"❌ שגיאה בעדכון סיכום: {e}")
+                            logging.error(f"❌ שגיאה בעדכון סיכום: {e}")
                     else:
                         print(f"⚠️ לא נמצאה עמודת סיכום: {SUMMARY_FIELD}")
+                        logging.warning(f"⚠️ לא נמצאה עמודת סיכום: {SUMMARY_FIELD}")
                 else:
                     print("⚠️ לא עודכנו שדות - אין ערכים תקינים")
-
+                    logging.info("⚠️ לא עודכנו שדות - אין ערכים תקינים")
                 break
         else:
             print(f"❌ לא נמצא משתמש עם chat_id: {chat_id}")
-
+            logging.warning(f"❌ לא נמצא משתמש עם chat_id: {chat_id}")
     except Exception as e:
         print(f"💥 שגיאה בעדכון פרופיל: {e}")
+        logging.error(f"💥 שגיאה בעדכון פרופיל: {e}")
         import traceback
         traceback.print_exc()
-        print(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
-        logging.debug(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
+    print(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
+    logging.debug(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
 
 def compose_emotional_summary(row):
     print(f"[DEBUG] compose_emotional_summary: row keys={list(row.keys())}")
     logging.debug(f"[DEBUG] compose_emotional_summary: row keys={list(row.keys())}")
-    # --- אוסף את כל השדות שאינם ריקים (חוץ מ-chat_id) ---
     parts = []
     for key, value in row.items():
         v = str(value).strip()
-        if v and key != FIELDS_DICT["chat_id"]:
-            # Use Hebrew name from FIELDS_DICT if you want aesthetics
+        if v and key != "chat_id":
             field_name = FIELDS_DICT.get(key, key)
+            if isinstance(field_name, dict):
+                field_name = field_name.get("label", key)
             parts.append(f"{field_name}: {v}")
-    # --- אם אין מידע בכלל ---
     if not parts:
         print(f"[DEBUG] compose_emotional_summary: סיום")
         logging.debug(f"[DEBUG] compose_emotional_summary: סיום")
         return "[אין מידע לסיכום]"
-    # --- מחבר את כל השדות בפסיקים ---
     summary = ", ".join(parts)
-    # --- קיצור אם ארוך מדי ---
     if len(summary) > 200:
         summary = summary[:197] + "..."
     print(f"[DEBUG] compose_emotional_summary: סיום")
