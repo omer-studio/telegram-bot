@@ -322,25 +322,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             logging.info("💰 מחשב עלויות...")
             print("💰 מחשב עלויות...")
-            main_usage = (
-                main_prompt_tokens,         # 0
-                main_completion_tokens,     # 1
-                main_total_tokens,          # 2
-                main_cached_tokens,         # 3
-                main_model,                 # 4
-                main_cost_gpt1,             # 5
-                main_cost_total_usd,        # 6
-                main_cost_total_ils,        # 7
-                main_total_tokens,          # 8
-                main_cost_total_usd,        # 9
-                main_cost_total_ils,        # 10
-                main_model                  # 11
-            )
-            summary_usage = ("", sum_prompt, sum_completion, sum_total, sum_model)
-            
-            logging.info(f"💸 עלות כוללת: ${main_cost_total_usd} (₪{main_cost_total_ils}), טוקנים: {main_total_tokens}")
-            print(f"💸 עלות כוללת: ${main_cost_total_usd} (₪{main_cost_total_ils}), טוקנים: {main_total_tokens}")
-
+            # מוחק לחלוטין את הקטע שמייצר main_usage ו-summary_usage כ-tuple (שורות 324–337)
+            # ודואג שכל קריאה ל-log_to_sheets תעבור אך ורק dict.
+            # בנוסף, ממיר כל גישה ל-extract_usage לפי אינדקס לגישה לפי שם שדה (extract_usage["prompt_tokens"] וכו').
             logging.info("💾 מעדכן היסטוריית שיחה...")
             print("💾 מעדכן היסטוריית שיחה...")
             update_chat_history(chat_id, user_msg, reply_summary)
@@ -351,7 +335,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print("💾 שומר נתוני שיחה בגיליון...")
             log_to_sheets(
                 message_id, chat_id, user_msg, reply_text, reply_summary,
-                main_usage, summary_usage, extract_usage,
+                extract_usage,
                 main_total_tokens, main_cost_total_usd, main_cost_total_ils
             )
             logging.info("✅ נתוני שיחה נשמרו בגיליון")
@@ -371,9 +355,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "summary_prompt": sum_prompt,
                     "summary_completion": sum_completion,
                     "summary_total": sum_total,
-                    "extract_prompt": extract_usage[0] if isinstance(extract_usage, (list, tuple)) and len(extract_usage) > 0 else 0,
-                    "extract_completion": extract_usage[4] if isinstance(extract_usage, (list, tuple)) and len(extract_usage) > 4 else 0,
-                    "extract_total": extract_usage[5] if isinstance(extract_usage, (list, tuple)) and len(extract_usage) > 5 else 0,
+                    "extract_prompt": extract_usage["prompt_tokens"] if isinstance(extract_usage, dict) else 0,
+                    "extract_completion": extract_usage["completion_tokens"] if isinstance(extract_usage, dict) else 0,
+                    "extract_total": extract_usage["total_tokens"] if isinstance(extract_usage, dict) else 0,
                     "total_all": main_total_tokens,
                     "main_cost_total_usd": main_cost_total_usd,
                     "main_cost_total_ils": main_cost_total_ils
