@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 import requests
 from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, BOT_TRACE_LOG_PATH, BOT_ERRORS_PATH
+from utils import log_error_stat
 
 def write_deploy_commit_to_log(commit):
     log_file = BOT_TRACE_LOG_PATH
@@ -113,13 +114,14 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         print(f"שגיאה בשליחת הודעת פריסה: {e}")
 
 
-def send_error_notification(error_message: str, chat_id: str = None, user_msg: str = None) -> None:
+def send_error_notification(error_message: str, chat_id: str = None, user_msg: str = None, error_type: str = "general_error") -> None:
     """
     שולח הודעת שגיאה לאדמין עם פירוט מלא (ללא טוקנים/סודות)
     """
     import traceback
     from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
     import requests
+    log_error_stat(error_type)
     # מסנן טוקנים/סודות
     def sanitize(msg):
         import re
@@ -253,14 +255,14 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     מטפל בשגיאות קריטיות - שגיאות שמונעות מהבוט לענות למשתמש
     """
     print(f"🚨 שגיאה קריטית: {error}")
-
+    from utils import log_error_stat
+    log_error_stat("critical_error")
     send_error_notification(
         error_msg=error,
         chat_id=chat_id,
         user_msg=user_msg,
         error_type="שגיאה קריטית - הבוט לא הצליח לענות למשתמש"
     )
-
     log_error_to_file({
         "error_type": "critical_error",
         "error": str(error),
@@ -276,14 +278,14 @@ def handle_non_critical_error(error, chat_id, user_msg, error_type):
     מטפל בשגיאות לא קריטיות - שגיאות שלא מונעות מהבוט לעבוד
     """
     print(f"⚠️ שגיאה לא קריטית: {error}")
-    
+    from utils import log_error_stat
+    log_error_stat(error_type)
     send_error_notification(
         error_msg=error,
         chat_id=chat_id,
         user_msg=user_msg,
         error_type=error_type
     )
-    
     log_error_to_file({
         "error_type": error_type.lower().replace(" ", "_"),
         "error": str(error),

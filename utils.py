@@ -216,3 +216,95 @@ def format_error_message(error: Exception, context: str = "") -> str:
     error_msg += f"🔧 פרטים טכניים:\n{tb}"
     
     return error_msg
+
+
+def log_error_stat(error_type: str) -> None:
+    """
+    מעדכן קובץ errors_stats.json עם ספירה לכל error_type
+    """
+    import os, json
+    stats_path = os.path.join("data", "errors_stats.json")
+    if not os.path.exists("data"):
+        os.makedirs("data")
+    try:
+        if os.path.exists(stats_path):
+            with open(stats_path, "r", encoding="utf-8") as f:
+                stats = json.load(f)
+        else:
+            stats = {}
+        stats[error_type] = stats.get(error_type, 0) + 1
+        with open(stats_path, "w", encoding="utf-8") as f:
+            json.dump(stats, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[log_error_stat] שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
+
+
+def send_error_stats_report():
+    """
+    שולח דוח שגיאות מצטבר לאדמין (ספירה לפי סוג שגיאה)
+    """
+    import os, json
+    from notifications import send_admin_notification
+    stats_path = os.path.join("data", "errors_stats.json")
+    if not os.path.exists(stats_path):
+        send_admin_notification("אין נתוני שגיאות זמינים.")
+        return
+    try:
+        with open(stats_path, "r", encoding="utf-8") as f:
+            stats = json.load(f)
+        if not stats:
+            send_admin_notification("אין שגיאות שנרשמו.")
+            return
+        lines = [f"{k}: {v}" for k, v in sorted(stats.items(), key=lambda x: -x[1])]
+        msg = "\n".join(lines)
+        send_admin_notification(f"📊 דוח שגיאות מצטבר:\n{msg}")
+    except Exception as e:
+        send_admin_notification(f"[send_error_stats_report] שגיאה בשליחת דוח שגיאות: {e}")
+
+
+def send_usage_report(days_back: int = 1):
+    """
+    שולח דוח usage יומי/שבועי לאדמין (מספר משתמשים, הודעות, ממוצע תקלות למשתמש)
+    """
+    import os, json
+    from datetime import datetime, timedelta
+    from notifications import send_admin_notification
+    from config import GPT_LOG_PATH
+    if not os.path.exists(GPT_LOG_PATH):
+        send_admin_notification("אין לוג usage זמין.")
+        return
+    try:
+        users = set()
+        messages = 0
+        errors = 0
+        now = datetime.now()
+        since = now - timedelta(days=days_back)
+        with open(GPT_LOG_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    ts = entry.get("timestamp")
+                    if not ts:
+                        continue
+                    dt = datetime.fromisoformat(ts.replace("Z", "")) if "T" in ts else datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                    if dt < since:
+                        continue
+                    chat_id = entry.get("chat_id")
+                    if chat_id:
+                        users.add(str(chat_id))
+                    messages += 1
+                    if entry.get("error"):
+                        errors += 1
+                except Exception:
+                    continue
+        avg_errors = errors / messages if messages else 0
+        msg = (
+            f"📊 דוח usage {days_back} ימים אחרונים:\n"
+            f"משתמשים ייחודיים: {len(users)}\n"
+            f"הודעות: {messages}\n"
+            f"שגיאות: {errors}\n"
+            f"ממוצע שגיאות להודעה: {avg_errors:.2%}"
+        )
+        send_admin_notification(msg)
+    except Exception as e:
+        send_admin_notification(f"[send_usage_report] שגיאה בשליחת דוח usage: {e}")

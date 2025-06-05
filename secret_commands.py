@@ -4,14 +4,16 @@ import os
 import json
 from datetime import datetime
 from sheets_handler import delete_row_by_chat_id
-from utils import log_event_to_file  # ודא שהפונקציה קיימת! (יש כמעט בוודאות)
+from utils import log_event_to_file, send_error_stats_report, send_usage_report  # ודא שהפונקציות קיימות! (יש כמעט בוודאות)
 from notifications import send_admin_secret_command_notification  # <--- נדרש בקובץ notifications.py
-from config import CHAT_HISTORY_PATH
+from config import CHAT_HISTORY_PATH, ADMIN_NOTIFICATION_CHAT_ID
 
 SECRET_CODES = {
     "#487chaCha2025": "clear_history",    # מוחק היסטוריית שיחה
     "#512SheetBooM": "clear_sheets",      # מוחק מידע מהגיליונות
-    "#734TotalZap": "clear_all"           # מוחק הכל (היסטוריה + גיליונות)
+    "#734TotalZap": "clear_all",          # מוחק הכל (היסטוריה + גיליונות)
+    "#errors_report": "errors_report",      # מפעיל דוח שגיאות לאדמין
+    "#usage_report": "usage_report"        # מפעיל דוח usage שבועי לאדמין
 }
 
 def handle_secret_command(chat_id, text):
@@ -88,6 +90,19 @@ def handle_secret_command(chat_id, text):
             f"היסטוריה: {'✔️' if cleared else '❌'} | גיליון1: {'✔️' if deleted_sheet else '❌'} | user_states: {'✔️' if deleted_state else '❌'}"
         )
         return True, msg
+
+    if text.strip() == "#errors_report":
+        if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
+            send_error_stats_report()
+            return True, "נשלח דוח שגיאות לאדמין."
+        else:
+            return False, "אין לך הרשאה לפקודה זו."
+    if text.strip() == "#usage_report":
+        if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
+            send_usage_report(7)
+            return True, "נשלח דוח usage שבועי לאדמין."
+        else:
+            return False, "אין לך הרשאה לפקודה זו."
 
     print(f"[SECRET_CMD] קוד סודי לא תואם אף פעולה | chat_id={chat_id} | action={action} | timestamp={datetime.now().isoformat()}")
     log_event_to_file({

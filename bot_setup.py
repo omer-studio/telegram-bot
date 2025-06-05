@@ -17,7 +17,7 @@ from config import TELEGRAM_BOT_TOKEN, config
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from notifications import send_startup_notification
 from messages import get_welcome_messages
-from utils import log_event_to_file, update_chat_history, get_chat_history_messages
+from utils import log_event_to_file, update_chat_history, get_chat_history_messages, send_error_stats_report, send_usage_report
 from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile
 from apscheduler.schedulers.background import BackgroundScheduler
 from daily_summary import send_daily_summary
@@ -67,6 +67,17 @@ def connect_google_sheets():
 scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
 scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=38)
 scheduler.start()
+
+# === תזמון דוחות אוטומטיים לאדמין ===
+def setup_admin_reports():
+    tz = pytz.timezone("Asia/Jerusalem")
+    scheduler = BackgroundScheduler(timezone=tz)
+    scheduler.add_job(send_error_stats_report, 'cron', hour=8, minute=0)
+    scheduler.add_job(lambda: send_usage_report(1), 'cron', hour=8, minute=0)
+    scheduler.start()
+    print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
+
+setup_admin_reports()
 
 # הוספת handler להודעות טקסט
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

@@ -19,3 +19,6 @@ python-dateutil               # עוזר בעבודה עם תאריכים ושע
 APScheduler                   # מתזמן משימות (הרצת דוחות יומיים אוטומטית)
 pytz                          # טיפול באזורי זמן (שעות ודקות לפי מדינה)
 pydantic>=2.6.0
+apscheduler
+pytest
+pytz
