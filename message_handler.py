@@ -308,7 +308,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     existing_profile = {}
                 updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
-                identity_fields, extract_usage = extract_identity_fields(reply_text)
+                identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
                 if updated_profile and updated_profile != existing_profile:
                     print(f"[DEBUG] update_user_profile called with: {updated_profile}")
                     logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
@@ -317,8 +317,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"❌ שגיאה בעדכון ת.ז רגשית: {e}")
                 identity_fields = {}
-                extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": ""}
-                merge_usage = None
+                extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""}
+                merge_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt4": 0, "model": ""}
 
             logging.info("💰 מחשב עלויות...")
             print("💰 מחשב עלויות...")

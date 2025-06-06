@@ -9,6 +9,7 @@ from datetime import datetime
 from config import client, SYSTEM_PROMPT, GPT_LOG_PATH
 import os
 from fields_dict import FIELDS_DICT
+import threading
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,40 @@ COST_PROMPT_REGULAR = 0.002 / 1000    # טוקן קלט רגיל
 COST_PROMPT_CACHED = 0.0005 / 1000    # טוקן קלט קשד (cache)
 COST_COMPLETION = 0.006 / 1000        # טוקן פלט
 USD_TO_ILS = 3.8                      # שער דולר-שקל (לשינוי במקום אחד בלבד)
+
+# --- Debug state for smart logging ---
+_debug_last_cached_tokens = {}
+_debug_last_gpt3_usages = []
+_debug_printed_models = set()
+_debug_lock = threading.Lock()
+
+# --- Smart debug function ---
+def _debug_gpt_usage(model, prompt_tokens, completion_tokens, cached_tokens, total_tokens, usage_type):
+    with _debug_lock:
+        # Print raw usage once per model per run
+        if model not in _debug_printed_models:
+            print(f"[DEBUG] שימוש ב-GPT ({usage_type}) | model: {model} | prompt: {prompt_tokens} | completion: {completion_tokens} | cached: {cached_tokens} | total: {total_tokens}")
+            _debug_printed_models.add(model)
+        # Track last 3 cached_tokens per model
+        if model not in _debug_last_cached_tokens:
+            _debug_last_cached_tokens[model] = []
+        _debug_last_cached_tokens[model].append(cached_tokens)
+        if len(_debug_last_cached_tokens[model]) > 3:
+            _debug_last_cached_tokens[model].pop(0)
+        if len(_debug_last_cached_tokens[model]) == 3 and len(set(_debug_last_cached_tokens[model])) == 1:
+            print(f"⚠️ [ALERT] cached_tokens עבור המודל {model} ({usage_type}) חזר 3 פעמים ברצף אותו ערך: {cached_tokens}")
+        # Check token sum
+        if None not in (prompt_tokens, completion_tokens, cached_tokens, total_tokens):
+            calc_total = prompt_tokens + completion_tokens + cached_tokens
+            if calc_total != total_tokens:
+                print(f"⚠️ [ALERT] סכום טוקנים לא תואם ({usage_type}, {model}): prompt({prompt_tokens}) + completion({completion_tokens}) + cached({cached_tokens}) = {calc_total} != total({total_tokens})")
+        # Special: GPT3 always zero
+        if model and 'gpt-3' in model:
+            _debug_last_gpt3_usages.append((prompt_tokens, completion_tokens, cached_tokens))
+            if len(_debug_last_gpt3_usages) > 3:
+                _debug_last_gpt3_usages.pop(0)
+            if len(_debug_last_gpt3_usages) == 3 and all(x == (0,0,0) for x in _debug_last_gpt3_usages):
+                print("⚠️ [ALERT] GPT3 usage תמיד 0 בשלוש קריאות אחרונות! בדוק אינטגרציה.")
 
 def write_gpt_log(ttype, usage, model):
     """
@@ -93,6 +128,30 @@ def get_main_response(full_messages):
             temperature=1,
         )
 
+        # --- DEBUG: Print all usage fields from API ---
+        try:
+            def _to_serializable(val):
+                if hasattr(val, '__dict__'):
+                    return {k: _to_serializable(v) for k, v in vars(val).items()}
+                elif isinstance(val, (list, tuple)):
+                    return [_to_serializable(x) for x in val]
+                elif isinstance(val, dict):
+                    return {k: _to_serializable(v) for k, v in val.items()}
+                else:
+                    try:
+                        json.dumps(val)
+                        return val
+                    except Exception:
+                        return str(val)
+            usage_dict = {}
+            for k in dir(response.usage):
+                if not k.startswith("_") and not callable(getattr(response.usage, k)):
+                    v = getattr(response.usage, k)
+                    usage_dict[k] = _to_serializable(v)
+            print(f"[DEBUG] API usage raw: {json.dumps(usage_dict, ensure_ascii=False)}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to print API usage fields: {e}")
+
         # שליפת נתוני usage
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
@@ -100,6 +159,10 @@ def get_main_response(full_messages):
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
+        model_name = response.model
+
+        # --- Smart debug ---
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "main_reply")
 
         # חישוב עלות לפי הסוג
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
@@ -171,6 +234,11 @@ def summarize_bot_reply(reply_text):
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
+        model_name = response.model
+
+        # --- Smart debug ---
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "reply_summary")
+
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
@@ -207,6 +275,7 @@ def summarize_bot_reply(reply_text):
 def extract_user_profile_fields(text):
     """
     GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת)
+    מחזיר tuple: (new_data, usage_data)
     """
     system_prompt = """אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
 
@@ -217,7 +286,6 @@ def extract_user_profile_fields(text):
         "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
         "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""
     }
-    
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -229,7 +297,6 @@ def extract_user_profile_fields(text):
             max_tokens=200
         )
         content = response.choices[0].message.content.strip()
-
         # חישובי עלות (ללא שינוי)
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
@@ -237,14 +304,15 @@ def extract_user_profile_fields(text):
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
-
+        model_name = response.model
+        # --- Smart debug ---
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "identity_extraction")
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * USD_TO_ILS, 4)
         cost_gpt3 = int(round(cost_total_ils * 100))
-
         usage_data = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -258,115 +326,17 @@ def extract_user_profile_fields(text):
             "cost_gpt3": cost_gpt3,
             "model": response.model
         }
-
-        # לוג למעקב
         logging.info(f"🤖 GPT מחלץ מידע החזיר: '{content}'")
         write_gpt_log("identity_extraction", usage_data, usage_data.get("model", ""))
-
-        # ניתוח JSON מהתשובה
-        if not content.startswith("{"):
-            logging.warning("⚠️ לא JSON תקין, מנסה לחלץ...")
-            if "{" in content:
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                content = content[start:end]
-                logging.info(f"🔧 חילצתי: '{content}'")
-
-        result = json.loads(content)
-        
-        # בדיקות היגיון וvalidation
-        validated_result = validate_extracted_data(result)
-        
-        logging.info(f"✅ GPT מצא שדות: {result}")
-        if validated_result != result:
-            logging.info(f"🔧 לאחר validation: {validated_result}")
-        
-        logging.info(f"[DEBUG] new_data after extract: {validated_result}")
-        
-        return validated_result, usage_data
-
-    except json.JSONDecodeError as e:
-        logging.error(f"❌ שגיאה בפרסור JSON: {e}")
-        logging.error(f"📄 התוכן: '{content}'")
-        # פרסור ידני כ-fallback - מעודכן לשדות החדשים
-        manual_result = {}
-        logging.info(f"[DEBUG] fallback manual extraction running on text: {text}")
-        
-        # גיל
-        if FIELDS_DICT["age"] in text or FIELDS_DICT["age"] in text:
-            import re
-            age_match = re.search(r'ב[ןת] (\d+)', text)
-            if age_match:
-                manual_result[FIELDS_DICT["age"]] = int(age_match.group(1))
-        
-        # זהות דתית ורמת דתיות
-        if "יהודי" in text:
-            manual_result["self_religious_affiliation"] = "יהודי"
-        elif "ערבי" in text:
-            manual_result["self_religious_affiliation"] = "ערבי"
-        elif "דרוזי" in text:
-            manual_result["self_religious_affiliation"] = "דרוזי"
-            
-        if "חרדי" in text:
-            manual_result["self_religiosity_level"] = "חרדי"
-        elif "דתי לאומי" in text:
-            manual_result["self_religiosity_level"] = "דתי לאומי"
-        elif "דתי" in text:
-            manual_result["self_religiosity_level"] = "דתי"
-        elif "מסורתי" in text:
-            manual_result["self_religiosity_level"] = "מסורתי"
-        elif "חילוני" in text:
-            manual_result["self_religiosity_level"] = "חילוני"
-            
-        # מצב זוגי
-        if "רווק" in text:
-            manual_result["relationship_type"] = "רווק"
-        elif "נשוי" in text:
-            if "שני" in text or "2" in text:
-                manual_result["relationship_type"] = "נשוי+2"
-            elif "שלושה" in text or "3" in text:
-                manual_result["relationship_type"] = "נשוי+3"
-            elif "ילדים" in text or "ילד" in text:
-                manual_result["relationship_type"] = "נשוי+2"  # default
-            else:
-                manual_result["relationship_type"] = "נשוי"
-        elif "גרוש" in text:
-            manual_result["relationship_type"] = "גרוש"
-            
-        # מצב ארון
-        if "בארון" in text:
-            manual_result["closet_status"] = "בארון"
-        elif "יצאתי" in text:
-            manual_result["closet_status"] = "יצא חלקית"
-            
-        # טיפול
-        if "פסיכולוג" in text or "טיפול" in text:
-            manual_result["attends_therapy"] = "כן"
-
-        logging.info(f"🔧 פרסור ידני מעודכן: {manual_result}")
-        # validation גם על הפרסור הידני
-        validated_manual = validate_extracted_data(manual_result)
-        if validated_manual != manual_result:
-            logging.info(f"🔧 פרסור ידני לאחר validation: {validated_manual}")
-        logging.info(f"[DEBUG] new_data after manual extract: {validated_manual}")
-        return validated_manual, usage_data
-
+        # --- שינוי עיקרי: מחזיר tuple (new_data, usage_data) ---
+        try:
+            new_data = json.loads(content)
+        except Exception:
+            new_data = {}
+        return new_data, usage_data
     except Exception as e:
-        logging.error(f"💥 שגיאה כללית ב-GPT מחלץ מידע: {e}")
-        logging.error(f"[DEBUG] Exception in extract_user_profile_fields: {e}")
-        return { }, {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-            "cached_tokens": 0,
-            "cost_prompt_regular": 0,
-            "cost_prompt_cached": 0,
-            "cost_completion": 0,
-            "cost_total": 0,
-            "cost_total_ils": 0,
-            "cost_gpt3": 0,
-            "model": "error"
-        }
+        logging.error(f"❌ שגיאה ב-GPT מחלץ: {e}")
+        return {}, usage_data
 
 
 def validate_extracted_data(data):
@@ -608,10 +578,7 @@ def smart_update_profile(existing_profile, user_message):
     logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
     
     # שלב 1: GPT3 - חילוץ מידע חדש
-    extract_result = extract_user_profile_fields(user_message)
-    new_data = extract_result[0]
-    extract_usage = extract_result[1]  # תמיד dict
-    
+    new_data, extract_usage = extract_user_profile_fields(user_message)
     logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
     
     # אם אין מידע חדש - אין מה לעדכן

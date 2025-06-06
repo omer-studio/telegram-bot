@@ -386,6 +386,13 @@ def log_to_sheets(
         # האם הופעל סיכום (GPT2)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
+        # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
+        def format_money(val):
+            try:
+                return float(val)
+            except Exception:
+                return 0
+
         # --- מיפוי ערכים מלא לפי דרישת המשתמש ---
         values_to_log = {
             "message_id": str(message_id),  # מזהה ייחודי להודעה
@@ -404,9 +411,9 @@ def log_to_sheets(
             "completion_tokens_total": completion_tokens_total,  # סך טוקנים בתשובה
             "cached_tokens": cached_tokens,  # סך טוקנים קש
             # עלות כוללת בדולר (מחושב לפי טבלת עלויות)
-            "total_cost_usd": float(cost_usd),
+            "total_cost_usd": format_money(cost_usd),
             # עלות כוללת באגורות (מחושב לפי שער דולר)
-            "total_cost_ils": safe_int(float(cost_usd) * USD_TO_ILS * 100),
+            "total_cost_ils": format_money(float(cost_usd) * USD_TO_ILS * 100),
             # --- GPT1 ---
             "usage_prompt_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT1"),
             "usage_completion_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT1"),
@@ -416,7 +423,7 @@ def log_to_sheets(
                 safe_int(main_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_GPT1"),
             "cached_tokens_gpt1": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt1"),
-            "cost_gpt1": safe_calc(lambda: safe_int(main_usage.get("cost_gpt1", 0)), "cost_gpt1"),
+            "cost_gpt1": format_money(main_usage.get("cost_gpt1", 0)),
             "model_GPT1": str(main_usage.get("model", "")),
             # --- GPT2 ---
             "usage_prompt_tokens_GPT2": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT2"),
@@ -427,7 +434,7 @@ def log_to_sheets(
                 safe_int(summary_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_GPT2"),
             "cached_tokens_gpt2": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt2"),
-            "cost_gpt2": safe_calc(lambda: safe_int(summary_usage.get("cost_gpt2", 0)), "cost_gpt2"),
+            "cost_gpt2": format_money(summary_usage.get("cost_gpt2", 0)),
             "model_GPT2": str(summary_usage.get("model", "")),
             # --- GPT3 ---
             "usage_prompt_tokens_GPT3": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT3"),
@@ -438,7 +445,7 @@ def log_to_sheets(
                 safe_int(extract_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_GPT3"),
             "cached_tokens_gpt3": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt3"),
-            "cost_gpt3": safe_calc(lambda: safe_int(extract_usage.get("cost_gpt3", 0)), "cost_gpt3"),
+            "cost_gpt3": format_money(extract_usage.get("cost_gpt3", 0)),
             "model_GPT3": str(extract_usage.get("model", "")),
             # --- GPT4 ---
             "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0, "usage_prompt_tokens_GPT4"),
@@ -449,7 +456,7 @@ def log_to_sheets(
                 safe_int(merge_usage.get("prompt_tokens", 0))
             ) if 'merge_usage' in locals() else 0, "usage_total_tokens_GPT4"),
             "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0, "cached_tokens_GPT4"),
-            "cost_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cost_gpt4", 0)) if 'merge_usage' in locals() else 0, "cost_GPT4"),
+            "cost_GPT4": format_money(merge_usage.get("cost_gpt4", 0)) if 'merge_usage' in locals() else "-",
             "model_GPT4": str(merge_usage.get("model", "")) if 'merge_usage' in locals() else "",
             # --- שדות נוספים ---
             "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if 'fields_updated_by_4gpt' in locals() else "",
@@ -475,6 +482,21 @@ def log_to_sheets(
                 row_data[idx] = val
         # שמירה בגיליון
         sheet_log.insert_row(row_data, 3)
+
+        # --- אחרי בניית values_to_log, לוג דיבאג על תקינות כל שדה ---
+        try:
+            debug_fields = []
+            for k, v in values_to_log.items():
+                if v == "-":
+                    debug_fields.append(f"❌ {k}='-' (שגיאה)")
+                else:
+                    debug_fields.append(f"✅ {k}='{v}'")
+            debug_msg = "[DEBUG] fields_to_log: " + ", ".join(debug_fields)
+            print(debug_msg)
+            # אפשר גם לכתוב ללוג קובץ אם תרצה
+        except Exception as e:
+            print(f"[DEBUG] שגיאה בלוג דיבאג שדות: {e}")
+
         return True
 
     except Exception as e:
