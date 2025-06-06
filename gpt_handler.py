@@ -17,11 +17,11 @@ os.makedirs(PROJECT_ROOT, exist_ok=True)
 
 # ===================== קבועים מרכזיים לעלויות GPT ושער דולר =====================
 
-# מחירים קבועים (נכון ליוני 2024) ל־GPT-4o
-COST_PROMPT_REGULAR = 0.002 / 1000    # טוקן קלט רגיל
-COST_PROMPT_CACHED = 0.0005 / 1000    # טוקן קלט קשד (cache)
-COST_COMPLETION = 0.006 / 1000        # טוקן פלט
-USD_TO_ILS = 3.8                      # שער דולר-שקל (לשינוי במקום אחד בלבד)
+# מחירים קבועים (נכון ליוני 2025) ל־GPT-4o
+COST_PROMPT_REGULAR = 0.005 / 1000    # טוקן קלט רגיל
+COST_PROMPT_CACHED = 0.0025 / 1000    # טוקן קלט קשד (cache)
+COST_COMPLETION = 0.02 / 1000        # טוקן פלט
+USD_TO_ILS = 3.6                     # שער דולר-שקל (לשינוי במקום אחד בלבד)
 
 # --- Debug state for smart logging ---
 _debug_last_cached_tokens = {}
@@ -280,8 +280,37 @@ def extract_user_profile_fields(text):
     """
     system_prompt = """אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
 
-"""
-    # ... build the prompt dynamically from FIELDS_DICT if needed ...
+age - גיל (מספר בלבד)
+pronoun_preference - לשון פניה: "את"/"אתה"/"מעורב"
+occupation_or_role - עיסוק/תפקיד
+attracted_to - משיכה: "גברים"/"נשים"/"שניהם"/"לא ברור"
+relationship_type - מצב זוגי: "רווק"/"נשוי"/"נשוי+2"/"גרוש" וכו'
+self_religious_affiliation - זהות דתית: "יהודי"/"ערבי"/"דרוזי"/"נוצרי"/"שומרוני"
+self_religiosity_level - רמת דתיות: "דתי"/"חילוני"/"מסורתי"/"חרדי"/"דתי לאומי"
+family_religiosity - רקע משפחתי: "משפחה דתית"/"משפחה חילונית"/"משפחה מעורבת"
+closet_status - מצב ארון: "בארון"/"יצא חלקית"/"יצא לכולם"
+who_knows - מי יודע עליו
+who_doesnt_know - מי לא יודע עליו
+attends_therapy - טיפול: "כן"/"לא"/"טיפול זוגי"/"קבוצת תמיכה"
+primary_conflict -  הקונפליקט המרכזי שמעסיק אותו בחייו
+trauma_history - טראומות (בעדינות)
+goal_in_course - מטרות בקורסMore actions
+language_of_strength - משפטים מחזקים
+coping_strategies - דרכי התמודדות - מה מרים אותו מה עוזר לו
+fears_concerns - פחדים וחששות - אם שיתף בפחד מסויים אתה מכניס את זה לשם
+future_vision - חזון עתיד
+
+אם הוא מבקש למחוק את כל מה שאתה יודע עליו - אז תחזיר שדות שירים שידרסו את הקיימים
+אם הוא מבקש שתמחק נתונים ספציפים אז תמחק נתונים ספציפים כמו אל תזכור בן כמה אני
+
+
+דוגמאות:
+"אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
+"גרוש עם 8 ילדים" → {"relationship_type": "נשוי+8"}
+"סיפרתי להורים, אבל לבוס לא" → {"who_knows": "הורים", "who_doesnt_know": "בוס"}
+
+רק JSON, בלי הסברים!"""
+
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
         "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,

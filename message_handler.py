@@ -267,16 +267,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
             print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
 
-            # שלח למשתמש מיד את התשובה המלאה
-            # *** שימו לב: שליחת התשובה למשתמש מתבצעת מיד, וכל שאר הפעולות (סיכום, עדכון לוגים, שמירת היסטוריה) קורות רק אחרי שליחת התשובה! זה קריטי למהירות תגובה ***
-            reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
-            print(f"[📤 הודעת בוט]: {reply_text_one_line}")
-            logging.info("📨 תשובה נשלחה למשתמש")
-            print("📨 תשובה נשלחה למשתמש")
-            print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
-            await send_message(update, chat_id, reply_text)
-
-            # עכשיו, אם צריך, בצע סיכום ברקע ועדכן לוגים/היסטוריה/גיליון
+            # --- עדכון היסטוריית שיחה (מיד, לפני שליחת התשובה) ---
             num_words = len(reply_text.split())
             if num_words > 50:
                 logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
@@ -294,101 +285,110 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 sum_prompt = sum_completion = sum_total = 0
                 sum_model = ""
 
-            # המשך עדכון לוגים/היסטוריה/גיליון (כמו קודם)
-            try:
-                logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
-                if isinstance(user_summary, str):
-                    import json
-                    try:
-                        existing_profile = json.loads(user_summary)
-                    except Exception:
-                        existing_profile = {}
-                elif isinstance(user_summary, dict):
-                    existing_profile = user_summary
-                else:
-                    existing_profile = {}
-                updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
-                identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
-                if updated_profile and updated_profile != existing_profile:
-                    print(f"[DEBUG] update_user_profile called with: {updated_profile}")
-                    logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
-                    update_user_profile(chat_id, updated_profile)
-                    logging.info("📝 ת.ז רגשית עודכנה בהצלחה")
-            except Exception as e:
-                logging.error(f"❌ שגיאה בעדכון ת.ז רגשית: {e}")
-                identity_fields = {}
-                extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""}
-                merge_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt4": 0, "model": ""}
-
-            logging.info("💰 מחשב עלויות...")
-            print("💰 מחשב עלויות...")
-            # מוחק לחלוטין את הקטע שמייצר main_usage ו-summary_usage כ-tuple (שורות 324–337)
-            # ודואג שכל קריאה ל-log_to_sheets תעבור אך ורק dict.
-            # בנוסף, ממיר כל גישה ל-extract_usage לפי אינדקס לגישה לפי שם שדה (extract_usage["prompt_tokens"] וכו').
-            logging.info("💾 מעדכן היסטוריית שיחה...")
-            print("💾 מעדכן היסטוריית שיחה...")
+            logging.info("💾 מעדכן היסטוריית שיחה..."); print("💾 מעדכן היסטוריית שיחה...")
             update_chat_history(chat_id, user_msg, reply_summary)
-            logging.info("✅ היסטוריית שיחה עודכנה")
-            print("✅ היסטוריית שיחה עודכנה")
+            logging.info("✅ היסטוריית שיחה עודכנה"); print("✅ היסטוריית שיחה עודכנה")
 
-            logging.info("💾 שומר נתוני שיחה בגיליון...")
-            print("💾 שומר נתוני שיחה בגיליון...")
-            try:
-                log_to_sheets(
-                    message_id, chat_id, user_msg, reply_text, reply_summary,
-                    main_usage, summary_usage, extract_usage,
-                    main_total_tokens, main_cost_total_usd, main_cost_total_ils
-                )
-                logging.info("✅ נתוני שיחה נשמרו בגיליון")
-                print("✅ נתוני שיחה נשמרו בגיליון")
-            except Exception as e:
-                import traceback
-                from notifications import send_error_notification
-                tb = traceback.format_exc()
-                error_msg = (
-                    f"❌ שגיאה בשמירה לגיליון:\n"
-                    f"סוג: {type(e).__name__}\n"
-                    f"שגיאה: {e}\n"
-                    f"chat_id: {chat_id}\n"
-                    f"message_id: {message_id}\n"
-                    f"user_msg: {str(user_msg)[:100]}\n"
-                    f"traceback:\n{tb}"
-                )
-                print(error_msg)
-                send_error_notification(error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
-                logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
+            # --- שליחת תשובה למשתמש ---
+            reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
+            print(f"[📤 הודעת בוט]: {reply_text_one_line}")
+            logging.info("📨 תשובה נשלחה למשתמש")
+            print("📨 תשובה נשלחה למשתמש")
+            print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
+            await send_message(update, chat_id, reply_text)
 
-            logging.info("💾 שומר לוג מפורט לקובץ...")
-            print("💾 שומר לוג מפורט לקובץ...")
-            log_payload.update({
-                "user_summary": user_summary,
-                "identity_fields": identity_fields,
-                "gpt_reply": reply_text,
-                "summary_saved": reply_summary,
-                "tokens": {
-                    "main_prompt": main_prompt_tokens,
-                    "main_completion": main_completion_tokens,
-                    "main_total": main_total_tokens,
-                    "summary_prompt": sum_prompt,
-                    "summary_completion": sum_completion,
-                    "summary_total": sum_total,
-                    "extract_prompt": extract_usage["prompt_tokens"] if isinstance(extract_usage, dict) else 0,
-                    "extract_completion": extract_usage["completion_tokens"] if isinstance(extract_usage, dict) else 0,
-                    "extract_total": extract_usage["total_tokens"] if isinstance(extract_usage, dict) else 0,
-                    "total_all": main_total_tokens,
-                    "main_cost_total_usd": main_cost_total_usd,
-                    "main_cost_total_ils": main_cost_total_ils
-                }
-            })
-            log_event_to_file(log_payload)
-            logging.info("✅ לוג מפורט נשמר לקובץ")
-            print("✅ לוג מפורט נשמר לקובץ")
+            # --- כל שאר הפעולות ירוצו ברקע ---
+            import asyncio
+            async def post_reply_tasks():
+                try:
+                    # עדכון ת.ז רגשית, גיליון, לוגים
+                    logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
+                    if isinstance(user_summary, str):
+                        import json
+                        try:
+                            existing_profile = json.loads(user_summary)
+                        except Exception:
+                            existing_profile = {}
+                    elif isinstance(user_summary, dict):
+                        existing_profile = user_summary
+                    else:
+                        existing_profile = {}
+                    updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
+                    identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
+                    if updated_profile and updated_profile != existing_profile:
+                        print(f"[DEBUG] update_user_profile called with: {updated_profile}")
+                        logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
+                        update_user_profile(chat_id, updated_profile)
+                        logging.info("📝 ת.ז רגשית עודכנה בהצלחה")
+                except Exception as e:
+                    logging.error(f"❌ שגיאה בעדכון ת.ז רגשית: {e}")
+                    identity_fields = {}
+                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""}
+                    merge_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt4": 0, "model": ""}
 
-            total_time = (datetime.now() - datetime.fromisoformat(log_payload['timestamp_start'])).total_seconds()
-            logging.info(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
-            print(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
+                logging.info("💰 מחשב עלויות..."); print("💰 מחשב עלויות...")
+                logging.info("💾 שומר נתוני שיחה בגיליון..."); print("💾 שומר נתוני שיחה בגיליון...")
+                try:
+                    log_to_sheets(
+                        message_id, chat_id, user_msg, reply_text, reply_summary,
+                        main_usage, summary_usage, extract_usage,
+                        main_total_tokens, main_cost_total_usd, main_cost_total_ils
+                    )
+                    logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
+                except Exception as e:
+                    import traceback
+                    from notifications import send_error_notification
+                    tb = traceback.format_exc()
+                    error_msg = (
+                        f"❌ שגיאה בשמירה לגיליון:\n"
+                        f"סוג: {type(e).__name__}\n"
+                        f"שגיאה: {e}\n"
+                        f"chat_id: {chat_id}\n"
+                        f"message_id: {message_id}\n"
+                        f"user_msg: {str(user_msg)[:100]}\n"
+                        f"traceback:\n{tb}"
+                    )
+                    print(error_msg)
+                    send_error_notification(error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
+                    logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
 
-            print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
+                logging.info("💾 שומר לוג מפורט לקובץ..."); print("💾 שומר לוג מפורט לקובץ...")
+                log_payload.update({
+                    "user_summary": user_summary,
+                    "identity_fields": identity_fields,
+                    "gpt_reply": reply_text,
+                    "summary_saved": reply_summary,
+                    "tokens": {
+                        "main_prompt": main_prompt_tokens,
+                        "main_completion": main_completion_tokens,
+                        "main_total": main_total_tokens,
+                        "summary_prompt": sum_prompt,
+                        "summary_completion": sum_completion,
+                        "summary_total": sum_total,
+                        "extract_prompt": extract_usage["prompt_tokens"] if isinstance(extract_usage, dict) else 0,
+                        "extract_completion": extract_usage["completion_tokens"] if isinstance(extract_usage, dict) else 0,
+                        "extract_total": extract_usage["total_tokens"] if isinstance(extract_usage, dict) else 0,
+                        "total_all": main_total_tokens,
+                        "main_cost_total_usd": main_cost_total_usd,
+                        "main_cost_total_ils": main_cost_total_ils
+                    }
+                })
+                log_event_to_file(log_payload)
+                logging.info("✅ לוג מפורט נשמר לקובץ"); print("✅ לוג מפורט נשמר לקובץ")
+
+                total_time = (datetime.now() - datetime.fromisoformat(log_payload['timestamp_start'])).total_seconds()
+                logging.info(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
+                print(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
+
+                print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
+            except Exception as critical_error:
+                logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
+                print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
+                await handle_critical_error(critical_error, chat_id, user_msg, update)
+            logging.info("---- סיום טיפול בהודעה ----"); print("---- סיום טיפול בהודעה ----")
+
+            asyncio.create_task(post_reply_tasks())
+            return
 
         except Exception as critical_error:
             logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
