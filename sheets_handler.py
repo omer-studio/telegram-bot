@@ -292,7 +292,7 @@ def log_to_sheets(
         main_total_tokens = safe_int(main_usage.get("total_tokens", 0))
         main_cached_tokens = safe_int(main_usage.get("cached_tokens", 0))
         main_model = main_usage.get("model", "")
-        main_cost_gpt1 = safe_int(main_usage.get("cost_gpt1", 0))
+        main_cost_agorot = safe_float(main_usage.get("cost_agorot", 0))
         main_cost_usd = safe_float(main_usage.get("cost_total", 0))
         main_cost_ils = safe_float(main_usage.get("cost_total_ils", 0))
 
@@ -301,12 +301,14 @@ def log_to_sheets(
         summary_completion_tokens = safe_int(summary_usage.get("completion_tokens", 0))
         summary_total_tokens = safe_int(summary_usage.get("total_tokens", 0))
         summary_model = summary_usage.get("model", "")
+        summary_cost_agorot = safe_float(summary_usage.get("cost_agorot", 0))
 
         # extract_usage תמיד dict
         extract_prompt_tokens = safe_int(extract_usage.get("prompt_tokens", 0))
         extract_completion_tokens = safe_int(extract_usage.get("completion_tokens", 0))
         extract_total_tokens = safe_int(extract_usage.get("total_tokens", 0))
         extract_model = extract_usage.get("model", "")
+        extract_cost_agorot = safe_float(extract_usage.get("cost_agorot", 0))
 
         # --- חישוב ערכים מראש כדי למנוע גישה עצמית ל-values_to_log ---
         def safe_calc(calc_func, field_name):
@@ -360,13 +362,13 @@ def log_to_sheets(
         # חישוב עלויות אם לא סופקו
         if cost_gpt1 is None:
             costs = get_gpt_costs(main_usage.get("prompt_tokens", 0), main_usage.get("completion_tokens", 0), main_usage.get("cached_tokens", 0))
-            cost_gpt1 = costs["cost_agorot"]
+            cost_gpt1 = costs["cost_total_ils"]
         if cost_gpt2 is None:
             costs = get_gpt_costs(summary_usage.get("prompt_tokens", 0), summary_usage.get("completion_tokens", 0), summary_usage.get("cached_tokens", 0))
-            cost_gpt2 = costs["cost_agorot"]
+            cost_gpt2 = costs["cost_total_ils"]
         if cost_gpt3 is None:
             costs = get_gpt_costs(extract_usage.get("prompt_tokens", 0), extract_usage.get("completion_tokens", 0), extract_usage.get("cached_tokens", 0))
-            cost_gpt3 = costs["cost_agorot"]
+            cost_gpt3 = costs["cost_total_ils"]
 
         # 🚨 תיקון 4: ניקוי ערכי עלות
         def clean_cost_value(cost_val):
@@ -387,11 +389,10 @@ def log_to_sheets(
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
-        def format_money(val):
-            try:
-                return float(val)
-            except Exception:
-                return 0
+        def format_money(value):
+            if value is None:
+                return None
+            return float(f"{value:.10f}")  # או פשוט return float(value)
 
         # --- מיפוי ערכים מלא לפי דרישת המשתמש ---
         values_to_log = {
@@ -401,19 +402,14 @@ def log_to_sheets(
             "user_summary": "",  # תמצות הודעת המשתמש (לא לגעת)
             "bot_reply": reply_text if reply_text else "",  # תשובת הבוט
             "bot_summary": reply_summary if has_summary and reply_summary else "",  # סיכום תשובת הבוט
-            "empty_1": "",  # לא לגעת
-            "empty_2": "",  # לא לגעת
-            "empty_3": "",  # לא לגעת
-            "empty_4": "",  # לא לגעת
-            "empty_5": "",  # לא לגעת
             "total_tokens": total_tokens,  # סך כל הטוקנים
             "prompt_tokens_total": prompt_tokens_total,  # סך טוקנים בפרומט
             "completion_tokens_total": completion_tokens_total,  # סך טוקנים בתשובה
             "cached_tokens": cached_tokens,  # סך טוקנים קש
             # עלות כוללת בדולר (מחושב לפי טבלת עלויות)
-            "total_cost_usd": format_money(cost_usd),
+            "total_cost_usd": format_money(main_cost_usd),
             # עלות כוללת באגורות (מחושב לפי שער דולר)
-            "total_cost_ils": format_money(float(cost_usd) * USD_TO_ILS * 100),
+            "total_cost_ils": format_money(main_cost_ils * 100),
             # --- GPT1 ---
             "usage_prompt_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT1"),
             "usage_completion_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT1"),
@@ -423,7 +419,7 @@ def log_to_sheets(
                 safe_int(main_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_GPT1"),
             "cached_tokens_gpt1": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt1"),
-            "cost_gpt1": format_money(main_usage.get("cost_gpt1", 0)),
+            "cost_gpt1": format_money(main_cost_agorot),
             "model_GPT1": str(main_usage.get("model", "")),
             # --- GPT2 ---
             "usage_prompt_tokens_GPT2": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT2"),
@@ -434,7 +430,7 @@ def log_to_sheets(
                 safe_int(summary_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_GPT2"),
             "cached_tokens_gpt2": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt2"),
-            "cost_gpt2": format_money(summary_usage.get("cost_gpt2", 0)),
+            "cost_gpt2": format_money(summary_cost_agorot),
             "model_GPT2": str(summary_usage.get("model", "")),
             # --- GPT3 ---
             "usage_prompt_tokens_GPT3": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT3"),
@@ -445,7 +441,7 @@ def log_to_sheets(
                 safe_int(extract_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_GPT3"),
             "cached_tokens_gpt3": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt3"),
-            "cost_gpt3": format_money(extract_usage.get("cost_gpt3", 0)),
+            "cost_gpt3": format_money(extract_cost_agorot),
             "model_GPT3": str(extract_usage.get("model", "")),
             # --- GPT4 ---
             "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0, "usage_prompt_tokens_GPT4"),
@@ -456,7 +452,7 @@ def log_to_sheets(
                 safe_int(merge_usage.get("prompt_tokens", 0))
             ) if 'merge_usage' in locals() else 0, "usage_total_tokens_GPT4"),
             "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0, "cached_tokens_GPT4"),
-            "cost_GPT4": format_money(merge_usage.get("cost_gpt4", 0)) if 'merge_usage' in locals() else "-",
+            "cost_GPT4": format_money(merge_usage.get("cost_agorot", 0)) if 'merge_usage' in locals() else "-",
             "model_GPT4": str(merge_usage.get("model", "")) if 'merge_usage' in locals() else "",
             # --- שדות נוספים ---
             "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if 'fields_updated_by_4gpt' in locals() else "",

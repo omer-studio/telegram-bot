@@ -164,14 +164,14 @@ def get_main_response(full_messages):
         # --- Smart debug ---
         _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "main_reply")
 
-        # חישוב עלות לפי הסוג
+        # חישוב עלות לפי המחירון המרכזי
         cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt1 = int(round(cost_total_ils * 100))  # עלות באגורות #NEW
-
+        cost_total_ils = cost_total * USD_TO_ILS
+        cost_agorot = cost_total_ils * 100
+        # כל השדות נשמרים ב-usage_log
         usage_log = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -183,7 +183,7 @@ def get_main_response(full_messages):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt1": cost_gpt1,  # עלות באגורות
+            "cost_agorot": cost_agorot,
             "model": response.model
         }
 
@@ -243,8 +243,9 @@ def summarize_bot_reply(reply_text):
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt2 = int(round(cost_total_ils * 100))  # עלות באגורות
+        cost_total_ils = cost_total * USD_TO_ILS
+        cost_agorot = cost_total_ils * 100
+        # כל השדות נשמרים ב-usage_log
         usage_log = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -256,7 +257,7 @@ def summarize_bot_reply(reply_text):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt2": cost_gpt2,  # עלות באגורות
+            "cost_agorot": cost_agorot,
             "model": response.model
         }
         write_gpt_log("reply_summary", usage_log, response.model)
@@ -311,8 +312,9 @@ def extract_user_profile_fields(text):
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt3 = int(round(cost_total_ils * 100))
+        cost_total_ils = cost_total * USD_TO_ILS
+        cost_agorot = cost_total_ils * 100
+        cost_gpt3 = cost_total_ils * 100  # עלות באגורות (float מדויק, כל הספרות)
         usage_data = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -323,6 +325,7 @@ def extract_user_profile_fields(text):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
+            "cost_agorot": cost_agorot,
             "cost_gpt3": cost_gpt3,
             "model": response.model
         }
@@ -429,6 +432,30 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
 
         content = response.choices[0].message.content.strip()
 
+        # --- DEBUG: Print all usage fields from API ---
+        try:
+            def _to_serializable(val):
+                if hasattr(val, '__dict__'):
+                    return {k: _to_serializable(v) for k, v in vars(val).items()}
+                elif isinstance(val, (list, tuple)):
+                    return [_to_serializable(x) for x in val]
+                elif isinstance(val, dict):
+                    return {k: _to_serializable(v) for k, v in val.items()}
+                else:
+                    try:
+                        json.dumps(val)
+                        return val
+                    except Exception:
+                        return str(val)
+            usage_dict = {}
+            for k in dir(response.usage):
+                if not k.startswith("_") and not callable(getattr(response.usage, k)):
+                    v = getattr(response.usage, k)
+                    usage_dict[k] = _to_serializable(v)
+            print(f"[DEBUG] API usage raw: {json.dumps(usage_dict, ensure_ascii=False)}")
+        except Exception as e:
+            print(f"[DEBUG] Failed to print API usage fields: {e}")
+
         # חישובי עלות
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
@@ -441,8 +468,9 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = round(cost_total * USD_TO_ILS, 4)
-        cost_gpt4 = int(round(cost_total_ils * 100))
+        cost_total_ils = cost_total * USD_TO_ILS
+        cost_agorot = cost_total_ils * 100
+        cost_gpt4 = cost_total_ils * 100  # עלות באגורות (float מדויק, כל הספרות)
 
         usage_data = {
             "prompt_tokens": prompt_tokens,
@@ -454,6 +482,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
+            "cost_agorot": cost_agorot,
             "cost_gpt4": cost_gpt4,
             "model": response.model
         }
