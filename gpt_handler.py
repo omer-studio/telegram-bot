@@ -20,11 +20,11 @@ gpt_handler.py
 import json
 import logging
 from datetime import datetime
-from config import client, SYSTEM_PROMPT, GPT_LOG_PATH
+from config import client, GPT_LOG_PATH
 import os
 from fields_dict import FIELDS_DICT
 import threading
-from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT, SYSTEM_PROMPT
+from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT
 import asyncio
 import re
 from gpt_usage_manager import GPTUsageManager
@@ -51,7 +51,7 @@ def write_gpt_log(call_type, usage_log, model_name):
         "model": model_name,
         **usage_log
     }
-    log_path = os.path.join("DATA", "gpt_usage_log.jsonl")
+    log_path = GPT_LOG_PATH  # במקום os.path.join("DATA", "gpt_usage_log.jsonl")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")

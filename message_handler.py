@@ -15,7 +15,6 @@ from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile, extract_user_profile_fields
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
-from prompts import SYSTEM_PROMPT
 from fields_dict import FIELDS_DICT
 import asyncio
 import time
@@ -87,6 +86,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     פלט: אין (מטפלת בכל הלוגיקה של הודעה)
     # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב GPT, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
+    from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
     try:
         log_payload = {
             "chat_id": None,

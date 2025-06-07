@@ -76,7 +76,7 @@ def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליו�
         from oauth2client.service_account import ServiceAccountCredentials
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
-        sheet = gspread.authorize(creds).open_by_key(config["GOOGLE_SHEET_ID"]).worksheet(config["SHEET_USER_TAB"])
+        sheet = gspread.authorize(creds).open_by_key(config["GOOGLE_SHEET_ID"]).worksheet(config["SHEET_USER_TAB"])  # בטוח כי SHEET_USER_TAB מוגדר ב-config.json
         sheet_states = gspread.authorize(creds).open_by_key(config["GOOGLE_SHEET_ID"]).worksheet("user_states")
         app.bot_data["sheet"] = sheet
         app.bot_data["sheet_states"] = sheet_states

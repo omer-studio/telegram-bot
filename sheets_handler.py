@@ -155,9 +155,17 @@ def increment_code_try(sheet_states, chat_id):
             logging.debug(f"[DEBUG] increment_code_try: סיום | chat_id={chat_id}")
             return 1
 
+def safe_int(val):
+    try:
+        return int(val) if val is not None else 0
+    except (ValueError, TypeError):
+        return 0
 
-
-
+def safe_float(val):
+    try:
+        return float(val) if val is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
 
 def get_user_summary(chat_id):
     """
