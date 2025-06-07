@@ -30,6 +30,21 @@ from daily_summary import send_daily_summary
 import pytz
 from message_handler import handle_message
 
+# בדיקת קיום קבצים קריטיים
+critical_files = [
+    "data/gpt_usage_log.jsonl",
+    "data/chat_history.json",
+    "data/bot_errors.jsonl"
+]
+for file_path in critical_files:
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    if not os.path.exists(file_path):
+        with open(file_path, 'w', encoding='utf-8') as f:
+            if file_path.endswith('.json'):
+                f.write('{}')
+            else:
+                f.write('')
+
 # --- קטעי התקנה והרצה לוקאלית (Windows בלבד) ---
 if os.name == 'nt':
     # 1. בדיקת venv והפעלה

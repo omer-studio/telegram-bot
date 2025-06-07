@@ -116,7 +116,10 @@ def increment_code_try(sheet_states, chat_id):
                 if current_try is None or current_try == "":
                     current_try = 0
                 else:
-                    current_try = int(current_try)
+                    try:
+                        current_try = int(current_try)
+                    except (ValueError, TypeError):
+                        current_try = 0
                 new_try = current_try + 1
                 col_index = header.index("code_try") + 1
                 sheet_states.update_cell(idx + 2, col_index, new_try)
@@ -365,10 +368,14 @@ def log_to_sheets(
                 send_error_notification(f"❌ שגיאה בחישוב שדה {field_name}: {e}")
                 return "-"
 
+        main_prompt_clean = safe_int(main_usage.get("prompt_tokens", 0)) - safe_int(main_usage.get("cached_tokens", 0))
+        summary_prompt_clean = safe_int(summary_usage.get("prompt_tokens", 0)) - safe_int(summary_usage.get("cached_tokens", 0))
+        extract_prompt_clean = safe_int(extract_usage.get("prompt_tokens", 0)) - safe_int(extract_usage.get("cached_tokens", 0))
+
         prompt_tokens_total = safe_calc(lambda: (
-            safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)) +
-            safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)) +
-            safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)) +
+            main_prompt_clean +
+            summary_prompt_clean +
+            extract_prompt_clean +
             (safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0)
         ), "prompt_tokens_total")
 

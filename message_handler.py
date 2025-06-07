@@ -18,6 +18,8 @@ from utils import log_event_to_file, update_chat_history, get_chat_history_messa
 from config import SYSTEM_PROMPT, CRITICAL_ERRORS_PATH
 from fields_dict import FIELDS_DICT
 from profile_extraction import extract_user_profile_fields
+import asyncio
+import time
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
@@ -147,7 +149,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # --- מדידת זמן: קבלת הודעה עד שליחת בקשה ל-GPT ---
-        import time
         perf_received_to_gpt_start = time.time()
 
         try:
@@ -323,7 +324,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"[PERF] זמן שליחת הודעה ל-Telegram: {perf_send_end - perf_send_start:.2f} שניות")
 
             # --- כל שאר הפעולות ירוצו ברקע ---
-            import asyncio
             async def post_reply_tasks():
                 try:
                     # עדכון ת.ז רגשית, גיליון, לוגים
@@ -436,3 +436,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         print("🏁 [DEBUG] handle_message מסיים (בהצלחה או בשגיאה)") 
         # תודה1
+
+async def send_message_with_retry(update, chat_id, text, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            await update.message.reply_text(text, parse_mode="HTML")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1)
+                continue
+            else:
+                import logging
+                logging.error(f"Failed to send message after {max_retries} attempts: {e}")
+                return False

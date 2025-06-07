@@ -13,6 +13,7 @@ import logging
 import json
 import re
 from prompts import PROFILE_EXTRACTION_PROMPT
+from config import client
 
 # --- פונקציה עיקרית: חילוץ תעודת זהות רגשית ---
 def extract_user_profile_fields(text, system_prompt=None, client=None): # שולחת את הטקסט ל-GPT ומחזירה dict עם שדות מידע אישי (גיל, דת, עיסוק וכו')
