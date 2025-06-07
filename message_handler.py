@@ -403,8 +403,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                     print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
                 except Exception as critical_error:
+                    import traceback
+                    import sys
                     logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
                     print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
+                    print("[DEBUG][post_reply_tasks][EXCEPTION] locals:")
+                    for k, v in locals().items():
+                        print(f"[DEBUG][post_reply_tasks][EXCEPTION] {k} = {v} (type: {type(v)})")
+                    print(traceback.format_exc())
                     await handle_critical_error(critical_error, chat_id, user_msg, update)
                 logging.info("---- סיום טיפול בהודעה ----"); print("---- סיום טיפול בהודעה ----")
 

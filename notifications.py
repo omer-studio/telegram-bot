@@ -283,6 +283,9 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     מטפל בשגיאות קריטיות - שגיאות שמונעות מהבוט לענות למשתמש
     """
     print(f"🚨 שגיאה קריטית: {error}")
+    print("[DEBUG][handle_critical_error][locals]:")
+    for k, v in locals().items():
+        print(f"[DEBUG][handle_critical_error][locals] {k} = {v} (type: {type(v)})")
     from utils import log_error_stat
     log_error_stat("critical_error")
     send_error_notification(
