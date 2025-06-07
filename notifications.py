@@ -1,5 +1,8 @@
 """
-מחלקת התראות - כל פונקציות ההתראות והשגיאות
+notifications.py
+----------------
+קובץ זה מרכז את כל הפונקציות להתראות, שגיאות, ודיווחים לאדמין.
+הרציונל: ריכוז כל ניהול ההתראות, שגיאות, ודיווחי מערכת במקום אחד, כולל שליחה לטלגרם ולוגים.
 """
 import json
 import os
@@ -9,6 +12,11 @@ from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, BOT_TRA
 from utils import log_error_stat
 
 def write_deploy_commit_to_log(commit):
+    """
+    שומר commit של דפלוי בקובץ לוג ייעודי.
+    קלט: commit (str)
+    פלט: אין (שומר לקובץ)
+    """
     log_file = BOT_TRACE_LOG_PATH
     with open(log_file, "a", encoding="utf-8") as f:
         entry = {
@@ -19,6 +27,10 @@ def write_deploy_commit_to_log(commit):
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 def get_last_deploy_commit_from_log():
+    """
+    מחפש את ה-commit האחרון מהלוג.
+    פלט: commit (str) או None
+    """
     log_file = BOT_TRACE_LOG_PATH
     if not os.path.exists(log_file):
         return None
@@ -45,7 +57,9 @@ def get_commit_7first(commit):
 
 def send_deploy_notification(success=True, error_message=None, deploy_duration=None):
     """
-    שולח הודעה לאדמין האם הפריסה החדשה הצליחה או לא, כולל פרטים וטיימסטמפ
+    שולח הודעה לאדמין על הצלחת/כישלון דפלוי, כולל פרטים.
+    קלט: success (bool), error_message (str), deploy_duration (int/None)
+    פלט: אין (שולח הודעה)
     """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     project = emoji_or_na(os.getenv('RENDER_SERVICE_NAME', None))
@@ -116,7 +130,9 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
 
 def send_error_notification(error_message: str, chat_id: str = None, user_msg: str = None, error_type: str = "general_error") -> None:
     """
-    שולח הודעת שגיאה לאדמין עם פירוט מלא (ללא טוקנים/סודות)
+    שולח הודעת שגיאה לאדמין עם פירוט מלא (ללא טוקנים/סודות).
+    קלט: error_message (str), chat_id (str), user_msg (str), error_type (str)
+    פלט: אין (שולח הודעה)
     """
     import traceback
     from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
@@ -127,6 +143,8 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
         import re
         msg = re.sub(r'(token|key|api|secret)[^\s\n\r:]*[:=][^\s\n\r]+', '[SECURE]', msg, flags=re.IGNORECASE)
         return msg
+    if not isinstance(error_message, str):
+        error_message = str(error_message)
     text = f"🚨 שגיאה קריטית בבוט:\n<pre>{sanitize(error_message)}</pre>"
     if chat_id:
         text += f"\nchat_id: {chat_id}"
@@ -145,7 +163,9 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
 
 def send_admin_notification(message, urgent=False):
     """
-    שולח הודעה כללית לאדמין
+    שולח הודעה כללית לאדמין (רגילה או דחופה).
+    קלט: message (str), urgent (bool)
+    פלט: אין (שולח הודעה)
     """
     try:
         prefix = "🚨 הודעה דחופה לאדמין: 🚨" if urgent else "ℹ️ הודעה לאדמין:"
@@ -170,7 +190,9 @@ def send_admin_notification(message, urgent=False):
 # === הוספה: שליחת התראת קוד סודי לאדמין ===
 def send_admin_secret_command_notification(message: str):
     """
-    שולח הודעה מיוחדת לאדמין על שימוש בקוד סודי (למחיקה וכד').
+    שולח הודעה מיוחדת לאדמין על שימוש בקוד סודי.
+    קלט: message (str)
+    פלט: אין (שולח הודעה)
     """
     try:
         notification_text = (
@@ -194,7 +216,9 @@ def send_admin_secret_command_notification(message: str):
 
 def log_error_to_file(error_data):
     """
-    רושם שגיאות לקובץ נפרד ב־data וגם שולח טלגרם לאדמין
+    רושם שגיאות לקובץ נפרד ב-data וגם שולח טלגרם לאדמין.
+    קלט: error_data (dict)
+    פלט: אין (שומר לוג)
     """
     import requests
     from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
@@ -258,7 +282,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     from utils import log_error_stat
     log_error_stat("critical_error")
     send_error_notification(
-        error_msg=error,
+        error_message=error,
         chat_id=chat_id,
         user_msg=user_msg,
         error_type="שגיאה קריטית - הבוט לא הצליח לענות למשתמש"
@@ -281,7 +305,7 @@ def handle_non_critical_error(error, chat_id, user_msg, error_type):
     from utils import log_error_stat
     log_error_stat(error_type)
     send_error_notification(
-        error_msg=error,
+        error_message=error,
         chat_id=chat_id,
         user_msg=user_msg,
         error_type=error_type

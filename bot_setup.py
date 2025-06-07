@@ -1,7 +1,13 @@
+"""
+bot_setup.py
+------------
+קובץ זה עוסק רק בהגדרות והכנות כלליות של הבוט (שאינן תלויות סביבה).
+הרציונל: אתחול סביבתי, חיבור ל-Google Sheets, תזמון דוחות, והוספת handlers.
+"""
+
 # =============================================
 # bot_setup.py — סטאפ כללי של הבוט (לא תלוי סביבה)
 # -------------------------------------------------------------
-# קובץ זה עוסק רק בהגדרות והכנות כלליות של הבוט (שאינן תלויות סביבה).
 # אין להפעיל כאן ngrok או הגדרת webhook ל-local!
 # כל קוד סביבת פיתוח לוקאלית (כולל ngrok/webhook) נמצא אך ורק ב-sandbox.py
 # =============================================
@@ -44,8 +50,11 @@ if os.name == 'nt':
 app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
 # חיבור ל-Google Sheets
-
-def connect_google_sheets():
+def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data
+    """
+    מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data.
+    פלט: אין (מעדכן app.bot_data)
+    """
     try:
         logging.info("🔗 מתחבר ל-Google Sheets...")
         import gspread
@@ -69,7 +78,11 @@ scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=38)
 scheduler.start()
 
 # === תזמון דוחות אוטומטיים לאדמין ===
-def setup_admin_reports():
+def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר
+    """
+    מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר.
+    פלט: אין (מתזמן דוחות)
+    """
     tz = pytz.timezone("Asia/Jerusalem")
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(send_error_stats_report, 'cron', hour=8, minute=0)
@@ -83,8 +96,11 @@ setup_admin_reports()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 # פונקציה שמבצעת את כל ההתקנה
-
-def setup_bot():
+def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app
+    """
+    מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app.
+    פלט: app (אפליקציית טלגרם)
+    """
     connect_google_sheets()
     send_startup_notification()
     return app 

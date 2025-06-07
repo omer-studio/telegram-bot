@@ -1,6 +1,8 @@
 """
-gpt_handler.py — כל הפונקציות לטיפול ב־GPT במקום אחד
-בגרסה זו נוסף חישוב עלות לכל סוג טוקן (רגיל, קשד, פלט) + תיעוד מלא של הטוקנים + החזר עלות באגורות לכל קריאה
+gpt_handler.py
+--------------
+קובץ זה מרכז את כל הפונקציות שמבצעות אינטראקציה עם GPT (שליחת הודעות, חישוב עלות, דיבאגינג).
+הרציונל: ריכוז כל הלוגיקה של GPT במקום אחד, כולל תיעוד מלא של טוקנים, עלויות, ולוגים.
 """
 
 import json
@@ -10,6 +12,8 @@ from config import client, SYSTEM_PROMPT, GPT_LOG_PATH
 import os
 from fields_dict import FIELDS_DICT
 import threading
+from profile_extraction import extract_user_profile_fields
+from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -60,6 +64,8 @@ def _debug_gpt_usage(model, prompt_tokens, completion_tokens, cached_tokens, tot
 def write_gpt_log(ttype, usage, model):
     """
     שומר לוג של השימוש בכל קריאה ל־GPT
+    קלט: ttype (סוג), usage (dict usage), model (שם המודל)
+    פלט: אין (שומר לקובץ לוג)
     """
     log_path = GPT_LOG_PATH
     log_entry = {
@@ -85,6 +91,8 @@ def write_gpt_log(ttype, usage, model):
 def safe_float(val):
     """
     ניסיון להמיר ערך ל-float, במקרה של כשל יחזיר 0.0 עם לוג אזהרה.
+    קלט: ערך כלשהו
+    פלט: float
     """
     try:
         return float(val)
@@ -95,7 +103,9 @@ def safe_float(val):
 def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, usd_to_ils=USD_TO_ILS):
     """
     מחשב עלות GPT (USD, ILS, אגורות) לפי מספר טוקנים, כולל טוקנים רגילים, קשד ופלט.
-    מחזיר dict עם כל הערכים.
+    קלט: prompt_tokens, completion_tokens, cached_tokens (ברירת מחדל 0), usd_to_ils (שער דולר)
+    פלט: dict עם כל הערכים.
+    # מהלך מעניין: מחשב עלות גם לאגורות וגם לשקל, כולל הפרדה בין טוקנים רגילים וקשד.
     """
     prompt_regular = prompt_tokens - cached_tokens
     cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
@@ -118,10 +128,13 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, usd_to
 
 def get_main_response(full_messages):
     """
-    GPT ראשי - נותן תשובה למשתמש
-    מחזיר גם את כל פרטי העלות (טוקנים, קשד, מחיר מדויק) במבנה dict
+    שולח הודעה ל-GPT הראשי ומחזיר את התשובה, כולל פירוט עלות וטוקנים.
+    קלט: full_messages — רשימת הודעות (כולל system prompt).
+    פלט: dict עם תשובה, usage, עלות.
+    # מהלך מעניין: שימוש בפרומט הראשי שמגדיר את האישיות של דניאל.
     """
     try:
+        # full_messages כולל את ה-SYSTEM_PROMPT כבר בתחילתו (נבנה ב-message_handler)
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=full_messages,
@@ -213,15 +226,12 @@ def get_main_response(full_messages):
 
 def summarize_bot_reply(reply_text):
     """
-    GPT מקצר - תמצות תשובת הבוט
-    (הוספנו גם כאן חישוב עלות מלא והחזרת עלות באגורות וקשד)
+    מסכם את תשובת הבוט למשפט קצר וחם, בסגנון וואטסאפ.
+    קלט: reply_text (טקסט תשובת הבוט)
+    פלט: סיכום קצר (str), usage (dict)
+    # מהלך מעניין: שימוש בפרומט תמצות שמוגדר ב-prompts.py.
     """
-    system_prompt = (
-        "סכם את ההודעה שלי כאילו אני מדבר עם חבר: "
-        "משפט אחד חם ואישי בסגנון חופשי (לא תיאור יבש), בגוף ראשון, כולל אמירה אישית קצרה על מהות התגובה שלי, "
-        "ואז את השאלה ששאלתי אם יש, בצורה חמה וזורמת, עד 20 מילים בסך הכל. תשלב אימוג'י רלוונטי אם מתאים, כמו שמדברים בווטסאפ. "
-        "אל תעשה ניתוחים טכניים או תיאור של הודעה – ממש תכתוב את זה כמו הודעת וואטסאפ קצרה, בגוף ראשון, בסגנון חופשי וקליל."
-    )
+    system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט תמצות תשובה
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -273,107 +283,11 @@ def summarize_bot_reply(reply_text):
 
 # ============================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ======================= 
 
-def extract_user_profile_fields(text):
-    """
-    GPT מחלץ מידע - מחלץ פרטים אישיים מההודעה (גרסה מעודכנת)
-    מחזיר tuple: (new_data, usage_data)
-    """
-    system_prompt = """אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
-
-age - גיל (מספר בלבד)
-pronoun_preference - לשון פניה: "את"/"אתה"/"מעורב"
-occupation_or_role - עיסוק/תפקיד
-attracted_to - משיכה: "גברים"/"נשים"/"שניהם"/"לא ברור"
-relationship_type - מצב זוגי: "רווק"/"נשוי"/"נשוי+2"/"גרוש" וכו'
-self_religious_affiliation - זהות דתית: "יהודי"/"ערבי"/"דרוזי"/"נוצרי"/"שומרוני"
-self_religiosity_level - רמת דתיות: "דתי"/"חילוני"/"מסורתי"/"חרדי"/"דתי לאומי"
-family_religiosity - רקע משפחתי: "משפחה דתית"/"משפחה חילונית"/"משפחה מעורבת"
-closet_status - מצב ארון: "בארון"/"יצא חלקית"/"יצא לכולם"
-who_knows - מי יודע עליו
-who_doesnt_know - מי לא יודע עליו
-attends_therapy - טיפול: "כן"/"לא"/"טיפול זוגי"/"קבוצת תמיכה"
-primary_conflict -  הקונפליקט המרכזי שמעסיק אותו בחייו
-trauma_history - טראומות (בעדינות)
-goal_in_course - מטרות בקורסMore actions
-language_of_strength - משפטים מחזקים
-coping_strategies - דרכי התמודדות - מה מרים אותו מה עוזר לו
-fears_concerns - פחדים וחששות - אם שיתף בפחד מסויים אתה מכניס את זה לשם
-future_vision - חזון עתיד
-
-אם הוא מבקש למחוק את כל מה שאתה יודע עליו - אז תחזיר שדות שירים שידרסו את הקיימים
-אם הוא מבקש שתמחק נתונים ספציפים אז תמחק נתונים ספציפים כמו אל תזכור בן כמה אני
-
-
-דוגמאות:
-"אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
-"גרוש עם 8 ילדים" → {"relationship_type": "נשוי+8"}
-"סיפרתי להורים, אבל לבוס לא" → {"who_knows": "הורים", "who_doesnt_know": "בוס"}
-
-רק JSON, בלי הסברים!"""
-
-    usage_data = {
-        "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
-        "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
-        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""
-    }
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ],
-            temperature=0,
-            max_tokens=200
-        )
-        content = response.choices[0].message.content.strip()
-        # חישובי עלות (ללא שינוי)
-        prompt_tokens = response.usage.prompt_tokens
-        prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details.cached_tokens
-        prompt_regular = prompt_tokens - cached_tokens
-        completion_tokens = response.usage.completion_tokens
-        total_tokens = response.usage.total_tokens
-        model_name = response.model
-        # --- Smart debug ---
-        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "identity_extraction")
-        cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
-        cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
-        cost_completion = completion_tokens * COST_COMPLETION
-        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = cost_total * USD_TO_ILS
-        cost_agorot = cost_total_ils * 100
-        cost_gpt3 = cost_total_ils * 100  # עלות באגורות (float מדויק, כל הספרות)
-        usage_data = {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
-            "cached_tokens": cached_tokens,
-            "cost_prompt_regular": cost_prompt_regular,
-            "cost_prompt_cached": cost_prompt_cached,
-            "cost_completion": cost_completion,
-            "cost_total": cost_total,
-            "cost_total_ils": cost_total_ils,
-            "cost_agorot": cost_agorot,
-            "cost_gpt3": cost_gpt3,
-            "model": response.model
-        }
-        logging.info(f"🤖 GPT מחלץ מידע החזיר: '{content}'")
-        write_gpt_log("identity_extraction", usage_data, usage_data.get("model", ""))
-        # --- שינוי עיקרי: מחזיר tuple (new_data, usage_data) ---
-        try:
-            new_data = json.loads(content)
-        except Exception:
-            new_data = {}
-        return new_data, usage_data
-    except Exception as e:
-        logging.error(f"❌ שגיאה ב-GPT מחלץ: {e}")
-        return {}, usage_data
-
-
 def validate_extracted_data(data):
     """
-    בודק רק דברים בסיסיים - לא מגביל תוכן
+    בודק אם הנתונים שחולצו מה-GPT תקינים (dict, מפתחות מסוג str בלבד).
+    קלט: data (dict)
+    פלט: True/False
     """
     validated = data.copy()
     
@@ -401,15 +315,16 @@ def validate_extracted_data(data):
                 del validated[field]
     
     return validated
-#===============================================================================
 
 
 # ============================הג'יפיטי ה-4 - מיזוג חכם של מידע רגיש ======================= 
 
 def merge_sensitive_profile_data(existing_profile, new_data, user_message):
     """
-    GPT4 - מיזוג זהיר וחכם של מידע רגיש בת.ז הרגשית
-    מטפל במיזוג מורכב של שדות כמו who_knows/who_doesnt_know, trauma_history וכו'
+    ממזג תעודת זהות רגשית קיימת עם מידע חדש, לפי כללים רגישים (מי יודע, טראומות וכו').
+    קלט: existing_profile (dict), new_data (dict), user_message (str)
+    פלט: dict ממוזג, usage (dict)
+    # מהלך מעניין: מיזוג חכם של טראומות, מי יודע/לא יודע, עדכון summary.
     """
     # שדות שצריכים מיזוג מורכב
     complex_fields = [
@@ -431,7 +346,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         logging.info("🔄 לא נדרש מיזוג מורכב, מחזיר עדכון רגיל")
         return {**existing_profile, **new_data}
 
-    system_prompt = """אתה מומחה למיזוג זהיר של מידע רגיש. קיבלת:\n1. ת.ז רגשית קיימת\n2. מידע חדש מההודעה\n3. ההודעה המקורית לקונטקסט\n\nעקרונות קריטיים:\n- אל תמחק מידע אלא אם המשתמש אמר במפורש שמשהו השתנה\n- מיזוג חכם: צבור מידע חדש עם קיים, אל תדרוס\n- who_knows ↔ who_doesnt_know: אם מישהו עבר מרשימה אחת לשנייה - הסר אותו מהרשימה הראשונה\n- trauma_history: צבור עם '; ' בין טראומות שונות, ואם יש טראומות דומות (למשל טראומה של מכות ואחריה טראומה של צבא שקשורה לאותה חוויה), תאחד אותן לאירוע אחד מתומצת. אל תיצור כפילויות.\n- attracted_to: שלב באחוזים או תיאור מדויק\n- אם יש סתירה - העדף את המידע החדש אם הוא מפורש\n\nדוגמה לאיחוד טראומות:\nאם יש 'טראומה: מכות בילדות' ו-'טראומה: מכות בצבא', תאחד ל-'טראומה: חוויות של מכות בילדות ובצבא'.\n\nלאחר המיזוג, עדכן את \"summary\" לשקף את הזהות הרגשית המעודכנת:\n- גיל, זהות דתית, מצב זוגי עכשיו\n- מצב ארון נוכחי (מי יודע/לא יודע)\n- שינויים משמעותיים שקרו\nעד 100 תווים, תמציתי ועדכני.\n\nהחזר רק JSON מעודכן מלא, בלי הסברים!"""
+    system_prompt = SENSITIVE_PROFILE_MERGE_PROMPT  # פרומט מיזוג רגיש
 
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
@@ -601,8 +516,9 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
 # פונקציית עזר - קובעת אם להפעיל GPT4
 def should_use_gpt4_merge(existing_profile, new_data):
     """
-    מחליטה אם להפעיל GPT4 למיזוג מורכב
-    רק אם יש שדה מורכב חדש ושדה זה כבר קיים בת.ז
+    מחליט האם להפעיל מיזוג חכם (GPT4) לפי סוג השינוי בפרופיל.
+    קלט: existing_profile, new_data
+    פלט: True/False
     """
     complex_fields = [
         FIELDS_DICT["attracted_to"], FIELDS_DICT["who_knows"], FIELDS_DICT["who_doesnt_know"], FIELDS_DICT["attends_therapy"], 
@@ -619,24 +535,25 @@ def should_use_gpt4_merge(existing_profile, new_data):
     
     logging.info("✅ אין צורך ב-GPT4 - עדכון פשוט מספיק")
     return False
-#===============================================================================
 
 
 # ============================פונקציה שמפעילה את הג'יפיטי הרביעי לפי היגיון -לא פועל תמיד - עדכון חכם של ת.ז הרגשית ======================= 
 
 def smart_update_profile(existing_profile, user_message):
     """
-    פונקציה מאחדת שמטפלת בכל תהליך עדכון ת.ז הרגשית:
-    1. מפעילה GPT3 לחילוץ מידע
-    2. בודקה אם צריך GPT4 למיזוג מורכב
-    3. מחזירה ת.ז מעודכנת + כל נתוני העלויות
-    
-    Returns: (updated_profile, extract_usage, merge_usage_or_none)
+    מעדכן תעודת זהות רגשית של משתמש, כולל מיזוג חכם במידת הצורך.
+    קלט: existing_profile (dict), user_message (str)
+    פלט: dict ממוזג, usage (dict)
+    # מהלך מעניין: בוחר אוטומטית האם להפעיל מיזוג חכם או רגיל.
     """
     logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
     
     # שלב 1: GPT3 - חילוץ מידע חדש
     new_data, extract_usage = extract_user_profile_fields(user_message)
+    # הגנה: ודא ש-new_data הוא dict עם מפתחות str בלבד
+    if not isinstance(new_data, dict) or not all(isinstance(k, str) for k in new_data.keys()):
+        logging.error(f"⚠️ new_data לא תקין (לפני מיזוג): {new_data}")
+        new_data = {}
     logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
     
     # אם אין מידע חדש - אין מה לעדכן
@@ -667,8 +584,9 @@ def smart_update_profile(existing_profile, user_message):
 
 def get_combined_usage_data(extract_usage, merge_usage=None):
     """
-    פונקציית עזר - מחברת את נתוני השימוש מGPT3 ו-GPT4 (אם רץ)
-    מחזירה נתונים מאוחדים לשמירה ב-sheets
+    מאחד usage של חילוץ ומיזוג (אם יש), מחזיר usage כולל לכל התהליך.
+    קלט: extract_usage (dict), merge_usage (dict או None)
+    פלט: dict usage כולל
     """
     # נתוני GPT3
     if not isinstance(extract_usage, dict):
@@ -686,20 +604,3 @@ def get_combined_usage_data(extract_usage, merge_usage=None):
         extract_data["used_gpt4"] = False
         return extract_data
 
-
-# -------------------------------------------------------------
-# הסבר בסוף הקובץ (לשימושך):
-
-"""
-מה חדש כאן?
-
-- אין שום פונקציה שמוסרת — הכל מקורי.
-- נוספו חישובי עלות וטוקנים לכל קריאה (רגיל, קשד, פלט).
-- כל קריאה שומרת לוג עם כל השדות.
-- פונקציות מחזירות עכשיו את כל הערכים — אפשר לשמור אותם ל־Google Sheets ולעשות דוחות.
-- נוסף החזר עלות באגורות (cost_gptX) וקשד (cached_tokens_gptX) לכל קריאה.
-- בכל מקום נוסף # הסבר קצר בעברית כדי שתדע מה קורה.
-- אין מחיקות — רק תוספות.
-
-תעדכן אותי כשעברת, נמשיך לחיבור ל־Google Sheets!
-"""

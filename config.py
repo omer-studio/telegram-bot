@@ -1,5 +1,8 @@
 """
-קובץ הגדרות - כל הקונפיגורציה במקום אחד
+config.py
+---------
+קובץ זה מרכז את כל ההגדרות (config) של הבוט: טוקנים, מפתחות, קבצים, Sheets, ועוד.
+הרציונל: כל קונפיגורציה במקום אחד, כולל טעינה, בדיקות, ויצירת קליינטים.
 """
 import os
 import json
@@ -11,6 +14,10 @@ from fields_dict import FIELDS_DICT
 
 # טעינת קונפיגורציה
 def load_config():
+    """
+    טוען את קובץ הקונפיגורציה (config.json) מהנתיב המתאים.
+    פלט: dict
+    """
     local_path = os.path.join("etc", "secrets", "config.json")
     print("DEBUG: cwd =", os.getcwd())
     print("DEBUG: local_path exists?", os.path.exists(local_path))
@@ -21,7 +28,10 @@ def load_config():
         return json.load(f)
 
 def load_system_prompt():
-    """טוען את ה-system prompt"""
+    """
+    טוען את ה-system prompt מקובץ טקסט חיצוני.
+    פלט: str
+    """
     with open("system_prompt.txt", encoding="utf-8") as f:
         return f.read()
 
@@ -45,7 +55,10 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # הגדרת Google Sheets
 def setup_google_sheets():
-    """מגדיר את החיבור ל-Google Sheets"""
+    """
+    מגדיר את החיבור ל-Google Sheets ומחזיר שלושה גיליונות עיקריים.
+    פלט: sheet_users, sheet_log, sheet_states
+    """
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
     gs_client = gspread.authorize(creds)
@@ -83,6 +96,10 @@ BOT_ERRORS_PATH = os.path.join(DATA_DIR, "bot_errors.jsonl")
 CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, "critical_errors.jsonl")
 
 def check_config_sanity():
+    """
+    בודק שכל משתני הקונפיגורציה הקריטיים קיימים.
+    פלט: אין (מדפיס/מתריע)
+    """
     missing = []
     sensitive_keys = [
         "TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "GOOGLE_SHEET_ID", "ADMIN_BOT_TELEGRAM_TOKEN"
@@ -97,6 +114,10 @@ def check_config_sanity():
         print("✅ [CONFIG] כל משתני הקונפיגורציה הקריטיים קיימים.")
 
 def get_config_snapshot():
+    """
+    מחזיר snapshot של קונפיגורציה ללא ערכים רגישים.
+    פלט: dict
+    """
     # מחזיר snapshot של קונפיגורציה ללא ערכים רגישים
     return {
         "GOOGLE_SHEET_ID": "***",

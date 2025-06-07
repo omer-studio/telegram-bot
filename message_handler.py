@@ -1,8 +1,8 @@
 """
-message_handler.py — טיפול בהודעות טלגרם
-
-מכיל את הפונקציה הראשית שמטפלת בכל הודעה נכנסת (handle_message), כולל כל הלוגיקה של הרשאות, רישום, מענה, לוגים ועוד.
-כל שינוי לוגי יש לעשות בזהירות! אין לשנות לוגיקה, רק להעביר קוד.
+message_handler.py
+------------------
+קובץ זה מטפל בכל הודעה נכנסת מהמשתמש בטלגרם.
+הרציונל: ריכוז כל הלוגיקה של טיפול בהודעות, הרשאות, רישום, מענה, לוגים, ושילוב GPT.
 """
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -17,9 +17,16 @@ from gpt_handler import get_main_response, summarize_bot_reply, smart_update_pro
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from config import SYSTEM_PROMPT, CRITICAL_ERRORS_PATH
 from fields_dict import FIELDS_DICT
+from profile_extraction import extract_user_profile_fields
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
+    """
+    שולחת הודעה למשתמש בטלגרם, כולל לוגים ועדכון היסטוריה.
+    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool)
+    פלט: אין (שולחת הודעה)
+    # מהלך מעניין: עדכון היסטוריה ולוגים רק אם ההודעה נשלחה בהצלחה.
+    """
     print(f"[SEND_MESSAGE] chat_id={chat_id} | text={text.replace(chr(10), ' ')[:120]}", flush=True)
     try:
         bot_id = None
@@ -46,7 +53,7 @@ async def send_message(update, chat_id, text, is_bot_message=True):
         })
         try:
             from notifications import send_error_notification
-            send_error_notification(f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=text)
+            send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=text)
         except Exception as notify_err:
             print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
             logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
@@ -62,6 +69,11 @@ async def send_message(update, chat_id, text, is_bot_message=True):
 
 # פונקציה לשליחת הודעת אישור (הועתקה מ-main.py)
 async def send_approval_message(update, chat_id):
+    """
+    שולחת הודעת אישור תנאים למשתמש, עם מקלדת מותאמת.
+    קלט: update, chat_id
+    פלט: אין (שולחת הודעה)
+    """
     await update.message.reply_text(
         approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
         reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
@@ -70,7 +82,9 @@ async def send_approval_message(update, chat_id):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     הפונקציה הראשית שמטפלת בכל הודעה נכנסת מהמשתמש.
-    אין לשנות לוגיקה! רק להעביר קוד.
+    קלט: update (אובייקט טלגרם), context (אובייקט קונטקסט)
+    פלט: אין (מטפלת בכל הלוגיקה של הודעה)
+    # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב GPT, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
     try:
         log_payload = {
@@ -131,6 +145,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
             return
+
+        # --- מדידת זמן: קבלת הודעה עד שליחת בקשה ל-GPT ---
+        import time
+        perf_received_to_gpt_start = time.time()
 
         try:
             logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
@@ -251,8 +269,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             logging.info("🤖 שולח ל-GPT הראשי...")
             print("🤖 שולח ל-GPT הראשי...")
-            
+            perf_gpt_start = time.time()
             main_response = get_main_response(full_messages)
+            perf_gpt_end = time.time()
+            print(f"[PERF] זמן קריאה ל-GPT: {perf_gpt_end - perf_gpt_start:.2f} שניות")
+            print(f"[PERF] זמן מהגעת הודעה עד שליחת בקשה ל-GPT: {perf_gpt_start - perf_received_to_gpt_start:.2f} שניות")
+            
             reply_text = main_response["bot_reply"]
             main_usage = {k: v for k, v in main_response.items() if k != "bot_reply"}
             main_prompt_tokens = main_usage.get("prompt_tokens", 0)
@@ -295,7 +317,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info("📨 תשובה נשלחה למשתמש")
             print("📨 תשובה נשלחה למשתמש")
             print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
+            perf_send_start = time.time()
             await send_message(update, chat_id, reply_text)
+            perf_send_end = time.time()
+            print(f"[PERF] זמן שליחת הודעה ל-Telegram: {perf_send_end - perf_send_start:.2f} שניות")
 
             # --- כל שאר הפעולות ירוצו ברקע ---
             import asyncio
@@ -320,72 +345,67 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
                         update_user_profile(chat_id, updated_profile)
                         logging.info("📝 ת.ז רגשית עודכנה בהצלחה")
-                except Exception as e:
-                    logging.error(f"❌ שגיאה בעדכון ת.ז רגשית: {e}")
-                    identity_fields = {}
-                    extract_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt3": 0, "model": ""}
-                    merge_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0, "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt4": 0, "model": ""}
 
-                logging.info("💰 מחשב עלויות..."); print("💰 מחשב עלויות...")
-                logging.info("💾 שומר נתוני שיחה בגיליון..."); print("💾 שומר נתוני שיחה בגיליון...")
-                try:
-                    log_to_sheets(
-                        message_id, chat_id, user_msg, reply_text, reply_summary,
-                        main_usage, summary_usage, extract_usage,
-                        main_total_tokens, main_cost_total_usd, main_cost_total_ils
-                    )
-                    logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
-                except Exception as e:
-                    import traceback
-                    from notifications import send_error_notification
-                    tb = traceback.format_exc()
-                    error_msg = (
-                        f"❌ שגיאה בשמירה לגיליון:\n"
-                        f"סוג: {type(e).__name__}\n"
-                        f"שגיאה: {e}\n"
-                        f"chat_id: {chat_id}\n"
-                        f"message_id: {message_id}\n"
-                        f"user_msg: {str(user_msg)[:100]}\n"
-                        f"traceback:\n{tb}"
-                    )
-                    print(error_msg)
-                    send_error_notification(error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
-                    logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
+                    logging.info("💰 מחשב עלויות..."); print("💰 מחשב עלויות...")
+                    logging.info("💾 שומר נתוני שיחה בגיליון..."); print("💾 שומר נתוני שיחה בגיליון...")
+                    try:
+                        log_to_sheets(
+                            message_id, chat_id, user_msg, reply_text, reply_summary,
+                            main_usage, summary_usage, extract_usage,
+                            main_total_tokens, main_cost_total_usd, main_cost_total_ils
+                        )
+                        logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
+                    except Exception as e:
+                        import traceback
+                        from notifications import send_error_notification
+                        tb = traceback.format_exc()
+                        error_msg = (
+                            f"❌ שגיאה בשמירה לגיליון:\n"
+                            f"סוג: {type(e).__name__}\n"
+                            f"שגיאה: {e}\n"
+                            f"chat_id: {chat_id}\n"
+                            f"message_id: {message_id}\n"
+                            f"user_msg: {str(user_msg)[:100]}\n"
+                            f"traceback:\n{tb}"
+                        )
+                        print(error_msg)
+                        send_error_notification(error_message=error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
+                        logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
 
-                logging.info("💾 שומר לוג מפורט לקובץ..."); print("💾 שומר לוג מפורט לקובץ...")
-                log_payload.update({
-                    "user_summary": user_summary,
-                    "identity_fields": identity_fields,
-                    "gpt_reply": reply_text,
-                    "summary_saved": reply_summary,
-                    "tokens": {
-                        "main_prompt": main_prompt_tokens,
-                        "main_completion": main_completion_tokens,
-                        "main_total": main_total_tokens,
-                        "summary_prompt": sum_prompt,
-                        "summary_completion": sum_completion,
-                        "summary_total": sum_total,
-                        "extract_prompt": extract_usage["prompt_tokens"] if isinstance(extract_usage, dict) else 0,
-                        "extract_completion": extract_usage["completion_tokens"] if isinstance(extract_usage, dict) else 0,
-                        "extract_total": extract_usage["total_tokens"] if isinstance(extract_usage, dict) else 0,
-                        "total_all": main_total_tokens,
-                        "main_cost_total_usd": main_cost_total_usd,
-                        "main_cost_total_ils": main_cost_total_ils
-                    }
-                })
-                log_event_to_file(log_payload)
-                logging.info("✅ לוג מפורט נשמר לקובץ"); print("✅ לוג מפורט נשמר לקובץ")
+                    logging.info("💾 שומר לוג מפורט לקובץ..."); print("💾 שומר לוג מפורט לקובץ...")
+                    log_payload.update({
+                        "user_summary": user_summary,
+                        "identity_fields": identity_fields,
+                        "gpt_reply": reply_text,
+                        "summary_saved": reply_summary,
+                        "tokens": {
+                            "main_prompt": main_prompt_tokens,
+                            "main_completion": main_completion_tokens,
+                            "main_total": main_total_tokens,
+                            "summary_prompt": sum_prompt,
+                            "summary_completion": sum_completion,
+                            "summary_total": sum_total,
+                            "extract_prompt": extract_usage["prompt_tokens"] if isinstance(extract_usage, dict) else 0,
+                            "extract_completion": extract_usage["completion_tokens"] if isinstance(extract_usage, dict) else 0,
+                            "extract_total": extract_usage["total_tokens"] if isinstance(extract_usage, dict) else 0,
+                            "total_all": main_total_tokens,
+                            "main_cost_total_usd": main_cost_total_usd,
+                            "main_cost_total_ils": main_cost_total_ils
+                        }
+                    })
+                    log_event_to_file(log_payload)
+                    logging.info("✅ לוג מפורט נשמר לקובץ"); print("✅ לוג מפורט נשמר לקובץ")
 
-                total_time = (datetime.now() - datetime.fromisoformat(log_payload['timestamp_start'])).total_seconds()
-                logging.info(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
-                print(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
+                    total_time = (datetime.now() - datetime.fromisoformat(log_payload['timestamp_start'])).total_seconds()
+                    logging.info(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
+                    print(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
 
-                print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
-            except Exception as critical_error:
-                logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-                print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-                await handle_critical_error(critical_error, chat_id, user_msg, update)
-            logging.info("---- סיום טיפול בהודעה ----"); print("---- סיום טיפול בהודעה ----")
+                    print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
+                except Exception as critical_error:
+                    logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
+                    print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
+                    await handle_critical_error(critical_error, chat_id, user_msg, update)
+                logging.info("---- סיום טיפול בהודעה ----"); print("---- סיום טיפול בהודעה ----")
 
             asyncio.create_task(post_reply_tasks())
             return
@@ -409,7 +429,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_msg = update.message.text if update and update.message else None
         except Exception:
             pass
-        send_error_notification(f"שגיאה בטיפול בהודעה:\n{e}\n{tb}", chat_id=chat_id, user_msg=user_msg)
+        send_error_notification(error_message=f"שגיאה בטיפול בהודעה:\n{e}\n{tb}", chat_id=chat_id, user_msg=user_msg)
         if update and update.message:
             await update.message.reply_text(error_human_funny_message())
     finally:

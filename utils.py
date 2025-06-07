@@ -1,5 +1,8 @@
 """
-פונקציות עזר כלליות - לוגים, היסטוריה וכלים נוספים
+utils.py
+--------
+קובץ זה מרכז פונקציות עזר כלליות: לוגים, היסטוריה, דוחות, בדיקות תקינות, ועוד.
+הרציונל: כלים שימושיים לכל חלקי הבוט, מופרדים מהלוגיקה הראשית.
 """
 import json
 import os
@@ -7,9 +10,11 @@ from datetime import datetime
 from config import LOG_FILE_PATH, LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH
 
 
-def log_event_to_file(log_data: dict) -> None:
+def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
     """
-    רושם אירועים לקובץ הלוגים הראשי
+    רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
+    קלט: log_data (dict)
+    פלט: אין (שומר לקובץ)
     """
     try:
         file_path = BOT_TRACE_LOG_PATH
@@ -39,9 +44,11 @@ def log_event_to_file(log_data: dict) -> None:
 
 
 
-def update_chat_history(chat_id, user_msg, bot_summary):
+def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את היסטוריית השיחה של המשתמש בקובץ JSON ייעודי
     """
-    מעדכן את היסטוריית השיחה של המשתמש
+    מעדכן את היסטוריית השיחה של המשתמש בקובץ JSON ייעודי.
+    קלט: chat_id (str/int), user_msg (str), bot_summary (str)
+    פלט: אין (שומר בקובץ)
     """
     try:
         file_path = CHAT_HISTORY_PATH
@@ -80,9 +87,11 @@ def update_chat_history(chat_id, user_msg, bot_summary):
 
 
 
-def get_chat_history_messages(chat_id: str) -> list:
+def get_chat_history_messages(chat_id: str) -> list: # מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT (רשימת הודעות)
     """
-    מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT
+    מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT (רשימת הודעות).
+    קלט: chat_id (str)
+    פלט: list של dict (role, content)
     """
     try:
         with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
@@ -111,9 +120,11 @@ def get_chat_history_messages(chat_id: str) -> list:
     return messages
 
 
-def get_user_stats(chat_id: str) -> dict:
+def get_user_stats(chat_id: str) -> dict: # מחזיר סטטיסטיקות על המשתמש (מספר הודעות, תאריכים)
     """
-    מחזיר סטטיסטיקות על המשתמש
+    מחזיר סטטיסטיקות על המשתמש (מספר הודעות, תאריכים).
+    קלט: chat_id (str)
+    פלט: dict
     """
     try:
         with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
@@ -136,9 +147,10 @@ def get_user_stats(chat_id: str) -> dict:
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
 
 
-def clean_old_logs() -> None:
+def clean_old_logs() -> None: # מנקה לוגים ישנים (משאיר עד 1000 שורות אחרונות)
     """
-    מנקה לוגים ישנים (ניתן לקרוא מעת לעת)
+    מנקה לוגים ישנים (משאיר עד 1000 שורות אחרונות).
+    פלט: אין (מנקה קבצים)
     """
     try:
         files_to_clean = ["bot_trace_log.jsonl", "bot_errors.jsonl"]
@@ -158,10 +170,10 @@ def clean_old_logs() -> None:
         print(f"❌ שגיאה בניקוי לוגים: {e}")
 
 
-def health_check() -> dict:
+def health_check() -> dict: # בדיקת תקינות המערכת (config, sheets, openai, כתיבה לקבצים)
     """
-    בדיקת תקינות המערכת (config, sheets, openai, כתיבה לקבצים)
-    שולחת התראה לאדמין אם משהו לא תקין
+    בדיקת תקינות המערכת (config, sheets, openai, כתיבה לקבצים).
+    פלט: dict עם סטטוס לכל רכיב.
     """
     from config import check_config_sanity, get_config_snapshot
     from notifications import send_error_notification
@@ -193,9 +205,11 @@ def health_check() -> dict:
     return health
 
 
-def format_error_message(error: Exception, context: str = "") -> str:
+def format_error_message(error: Exception, context: str = "") -> str: # מעצב הודעת שגיאה בצורה ברורה (כולל traceback)
     """
-    מעצב הודעת שגיאה בצורה ברורה
+    מעצב הודעת שגיאה בצורה ברורה (כולל traceback).
+    קלט: error (Exception), context (str)
+    פלט: str
     """
     import traceback
     

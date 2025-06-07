@@ -1,5 +1,8 @@
 """
-main.py — קובץ ראשי רזה
+main.py
+-------
+קובץ ראשי רזה שמריץ את הבוט כ-webhook (FastAPI).
+הרציונל: רק אתחול, חיבור והרצה. כל הלוגיקה נמצאת בקבצים ייעודיים.
 
 *** שים לב: הבוט עובד עם webhook בלבד (ולא polling)! ***
 כל שינוי במבנה חייב לשמור על endpoint של FastAPI ל-webhook.
@@ -24,6 +27,10 @@ app = setup_bot()
 
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
+    """
+    נקודת הכניסה של FastAPI לכל הודעה מהטלגרם (webhook).
+    קולט עדכון, יוצר Update, ומעביר ל-handle_message.
+    """
     try:
         data = await request.json()
         update = Update.de_json(data, app.bot)
@@ -39,10 +46,16 @@ async def webhook(request: Request):
 
 @app_fastapi.get("/")
 def root():
+    """
+    בדיקת חיים (health check) לשרת FastAPI.
+    """
     return {"status": "ok"}
 
 @app_fastapi.on_event("startup")
 async def on_startup():
+    """
+    פונקציית אתחול שרת — בודקת תקינות ושולחת התראה אם יש בעיה.
+    """
     from utils import health_check
     from notifications import send_error_notification
     try:
@@ -54,6 +67,9 @@ async def on_startup():
         send_error_notification(f"[STARTUP] שגיאה בבדיקת תקינות: {e}\n{format_exc()}")
 
 async def main():
+    """
+    מריץ את הבוט (אתחול והרצה).
+    """
     await app.initialize()
     await app.start()
     print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")

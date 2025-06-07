@@ -1,5 +1,8 @@
 """
-sheets_handler.py — ניהול גישה, הרשאות ולוגים ב-Google Sheets
+sheets_handler.py
+-----------------
+קובץ זה אחראי על כל האינטראקציה בין הבוט לגיליונות Google Sheets.
+הרציונל: ריכוז כל ניהול המשתמשים, הרשאות, לוגים, עדכונים, רישום, וסיכומים מול Sheets במקום אחד.
 
 למה הקובץ הזה קיים?
 ==================
@@ -30,6 +33,11 @@ from fields_dict import FIELDS_DICT
 sheet_users, sheet_log, sheet_states = setup_google_sheets()
 
 def find_chat_id_in_sheet(sheet, chat_id, col=1):
+    """
+    בודק אם chat_id קיים בעמודה מסוימת בגיליון.
+    קלט: sheet (אובייקט גיליון), chat_id (str/int), col (int)
+    פלט: True/False
+    """
     print(f"[DEBUG] find_chat_id_in_sheet: chat_id={chat_id}, col={col}")
     logging.debug(f"[DEBUG] find_chat_id_in_sheet: chat_id={chat_id}, col={col}")
     try:
@@ -51,6 +59,11 @@ def find_chat_id_in_sheet(sheet, chat_id, col=1):
         return False
 
 def ensure_user_state_row(sheet_users, sheet_states, chat_id):
+    """
+    בודק אם המשתמש קיים בגיליונות, ואם לא — מוסיף אותו ל-user_states.
+    קלט: sheet_users, sheet_states, chat_id
+    פלט: True אם זו פנייה ראשונה, אחרת False
+    """
     print(f"[DEBUG] ensure_user_state_row: chat_id={chat_id}")
     logging.debug(f"[DEBUG] ensure_user_state_row: chat_id={chat_id}")
     # בדיקה בגיליון 1 (access_codes) — עמודה 1
@@ -84,6 +97,11 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
 
 
 def increment_code_try(sheet_states, chat_id):
+    """
+    מגדיל את מונה הניסיונות של המשתמש להזין קוד בגיליון user_states.
+    קלט: sheet_states, chat_id
+    פלט: מספר הניסיון הנוכחי (int)
+    """
     print(f"[DEBUG] increment_code_try: chat_id={chat_id}")
     logging.debug(f"[DEBUG] increment_code_try: chat_id={chat_id}")
     try:
@@ -136,6 +154,11 @@ def increment_code_try(sheet_states, chat_id):
 
 
 def get_user_summary(chat_id):
+    """
+    מחזיר את סיכום המשתמש מהגיליון (summary).
+    קלט: chat_id
+    פלט: summary (str)
+    """
     print(f"[DEBUG] get_user_summary: chat_id={chat_id}")
     logging.debug(f"[DEBUG] get_user_summary: chat_id={chat_id}")
     try:
@@ -159,6 +182,11 @@ def get_user_summary(chat_id):
         return ""
 
 def update_user_profile(chat_id, field_values):
+    """
+    מעדכן את הפרופיל של המשתמש בגיליון לפי field_values.
+    קלט: chat_id, field_values (dict)
+    פלט: אין (מעדכן בגיליון)
+    """
     print(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
     logging.debug(f"[DEBUG] update_user_profile: chat_id={chat_id}, field_values={field_values}")
     if not isinstance(field_values, dict):
@@ -509,7 +537,7 @@ def log_to_sheets(
             f"traceback:\n{tb}"
         )
         print(error_msg)
-        send_error_notification(error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
+        send_error_notification(error_message=error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
         return False
 
 
