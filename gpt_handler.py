@@ -454,7 +454,6 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             logging.info(f"🔧 לאחר validation: הוסרו/תוקנו שדות")
 
         return {
-            "merged_profile": validated_profile,
             "prompt_tokens": prompt_tokens,
             "cached_tokens": cached_tokens,
             "prompt_regular": prompt_regular,
@@ -467,7 +466,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_total_ils": cost_total_ils,
             "cost_agorot": cost_agorot,
             "model": usage_data.get("model", "")
-        }
+        }, validated_profile
 
     except json.JSONDecodeError as e:
         logging.error(f"❌ שגיאה בפרסור JSON במיזוג GPT4: {e}")
@@ -478,7 +477,6 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         logging.warning("🔧 משתמש במיזוג fallback פשוט")
         
         return {
-            "merged_profile": fallback_merge,
             "prompt_tokens": 0,
             "cached_tokens": 0,
             "prompt_regular": 0,
@@ -491,7 +489,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_total_ils": 0.0,
             "cost_agorot": 0,
             "model": "fallback"
-        }
+        }, fallback_merge
 
     except Exception as e:
         logging.error(f"❌ שגיאה כללית ב-GPT4 מיזוג: {e}")
@@ -500,7 +498,6 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         fallback_merge = {**existing_profile, **new_data}
         
         return {
-            "merged_profile": fallback_merge,
             "prompt_tokens": 0,
             "cached_tokens": 0,
             "prompt_regular": 0,
@@ -513,7 +510,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_total_ils": 0.0,
             "cost_agorot": 0,
             "model": "error"
-        }
+        }, fallback_merge
 
 
 # פונקציית עזר - קובעת אם להפעיל GPT4
@@ -569,10 +566,7 @@ def smart_update_profile(existing_profile, user_message):
         logging.info("🎯 מפעיל GPT4 למיזוג מורכב")
         
         # שלב 3: GPT4 - מיזוג חכם
-        merge_result = merge_sensitive_profile_data(existing_profile, new_data, user_message)
-        updated_profile = merge_result["merged_profile"]
-        merge_usage = merge_result["usage"]
-        
+        merge_usage, updated_profile = merge_sensitive_profile_data(existing_profile, new_data, user_message)
         logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
         return updated_profile, extract_usage, merge_usage
         

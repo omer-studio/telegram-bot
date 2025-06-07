@@ -511,8 +511,35 @@ def log_to_sheets(
             "time_only": time_only,
         }
 
+        # 🚨 דיבאגים חזקים לפני שמירה
+        def debug_usage_dict(name, usage):
+            print(f"[DEBUG] ---- {name} ----")
+            if usage is None:
+                print(f"[DEBUG] {name} is None")
+                return
+            for k, v in usage.items():
+                print(f"[DEBUG] {name}[{k}] = {v} (type: {type(v)})")
+                if isinstance(v, (dict, list)):
+                    print(f"[DEBUG][ALERT] {name}[{k}] הוא {type(v)}! ערך: {v}")
+        debug_usage_dict('main_usage', main_usage)
+        debug_usage_dict('summary_usage', summary_usage)
+        debug_usage_dict('extract_usage', extract_usage)
+        debug_usage_dict('merge_usage', merge_usage)
+        # דיבאג על values_to_log לפני ניקוי
+        print("[DEBUG] ---- values_to_log BEFORE clean_for_storage ----")
+        for k, v in values_to_log.items():
+            print(f"[DEBUG] values_to_log[{k}] = {v} (type: {type(v)})")
+            if isinstance(v, (dict, list)):
+                print(f"[DEBUG][ALERT] values_to_log[{k}] הוא {type(v)}! ערך: {v}")
+
         # 🚨 ניקוי עדין: המרת dict/list ל-json string לפני הכנסת row_data
         values_to_log = clean_for_storage(values_to_log)
+        # דיבאג על values_to_log אחרי ניקוי
+        print("[DEBUG] ---- values_to_log AFTER clean_for_storage ----")
+        for k, v in values_to_log.items():
+            print(f"[DEBUG] values_to_log[{k}] = {v} (type: {type(v)})")
+            if isinstance(v, (dict, list)):
+                print(f"[DEBUG][ALERT] values_to_log[{k}] הוא {type(v)}! ערך: {v}")
 
         # בדיקת assert שאין dict/list אחרי הניקוי (למניעת באגים עתידיים)
         for k, v in values_to_log.items():
@@ -561,6 +588,7 @@ def log_to_sheets(
         import traceback
         from notifications import send_error_notification
         tb = traceback.format_exc()
+        print(f"[DEBUG][EXCEPTION] {tb}")
         error_msg = (
             f"❌ שגיאה בשמירה לגיליון:\n"
             f"סוג: {type(e).__name__}\n"
