@@ -17,6 +17,11 @@ def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקו�
     פלט: אין (שומר לקובץ)
     """
     try:
+        print("[DEBUG][log_event_to_file] --- START ---")
+        for k, v in log_data.items():
+            print(f"[DEBUG][log_event_to_file] {k} = {v} (type: {type(v)})")
+            if isinstance(v, (dict, list)):
+                print(f"[DEBUG][log_event_to_file][ALERT] {k} הוא {type(v)}! ערך: {v}")
         file_path = BOT_TRACE_LOG_PATH
         log_data["timestamp_end"] = datetime.now().isoformat()
 
@@ -40,7 +45,12 @@ def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקו�
         print(f"📝 לוג נשמר: {file_path}")
 
     except Exception as e:
+        import traceback
         print(f"❌ שגיאה בשמירת לוג: {e}")
+        print("[DEBUG][log_event_to_file][EXCEPTION] log_data:")
+        for k, v in log_data.items():
+            print(f"[DEBUG][log_event_to_file][EXCEPTION] {k} = {v} (type: {type(v)})")
+        print(traceback.format_exc())
 
 
 
@@ -241,16 +251,23 @@ def log_error_stat(error_type: str) -> None:
     if not os.path.exists("data"):
         os.makedirs("data")
     try:
+        print(f"[DEBUG][log_error_stat] error_type = {error_type} (type: {type(error_type)})")
         if os.path.exists(stats_path):
             with open(stats_path, "r", encoding="utf-8") as f:
                 stats = json.load(f)
         else:
             stats = {}
+        for k, v in stats.items():
+            print(f"[DEBUG][log_error_stat] stats[{k}] = {v} (type: {type(v)})")
+            if isinstance(k, (dict, list)) or isinstance(v, (dict, list)):
+                print(f"[DEBUG][log_error_stat][ALERT] {k} או הערך שלו הוא dict/list!")
         stats[error_type] = stats.get(error_type, 0) + 1
         with open(stats_path, "w", encoding="utf-8") as f:
             json.dump(stats, f, ensure_ascii=False, indent=2)
     except Exception as e:
+        import traceback
         print(f"[log_error_stat] שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
+        print(traceback.format_exc())
 
 
 def send_error_stats_report():

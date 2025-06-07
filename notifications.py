@@ -214,27 +214,29 @@ def send_admin_secret_command_notification(message: str):
     except Exception as e:
         print(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")
 
-def log_error_to_file(error_data):
+def log_error_to_file(error_data, send_telegram=True):
     """
-    רושם שגיאות לקובץ נפרד ב-data וגם שולח טלגרם לאדמין.
-    קלט: error_data (dict)
+    רושם שגיאות לקובץ נפרד ב-data וגם שולח טלגרם לאדמין (אם send_telegram=True).
+    קלט: error_data (dict), send_telegram (bool)
     פלט: אין (שומר לוג)
     """
     import requests
     from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
 
     try:
+        print("[DEBUG][log_error_to_file] --- START ---")
+        for k, v in error_data.items():
+            print(f"[DEBUG][log_error_to_file] {k} = {v} (type: {type(v)})")
+            if isinstance(v, (dict, list)):
+                print(f"[DEBUG][log_error_to_file][ALERT] {k} הוא {type(v)}! ערך: {v}")
         error_file = BOT_ERRORS_PATH
         error_data["timestamp"] = datetime.now().isoformat()
-
         # יצירה אוטומטית של הקובץ אם לא קיים
         if not os.path.exists(error_file):
             with open(error_file, "w", encoding="utf-8") as f:
                 pass
-
         with open(error_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(error_data, ensure_ascii=False) + "\n")
-
         # מגביל ל־500 שורות
         if os.path.exists(error_file):
             with open(error_file, "r", encoding="utf-8") as f:
@@ -242,28 +244,30 @@ def log_error_to_file(error_data):
             if len(lines) > 500:
                 with open(error_file, "w", encoding="utf-8") as f:
                     f.writelines(lines[-500:])
-
         print(f"📝 שגיאה נרשמה בקובץ: {error_file}")
-
         # --- שולח גם טלגרם עם פירוט ---
-        msg = (
-            "🛑 שגיאה חדשה נרשמה בקובץ:\n\n"
-            f"⏰ {error_data.get('timestamp', '')}\n"
-            f"סוג שגיאה: {error_data.get('error_type', 'לא ידוע')}\n"
-            f"פרטי שגיאה: {str(error_data.get('error', ''))[:300]}\n"
-            f"משתמש: {error_data.get('chat_id', '')}\n"
-            f"הודעה: {str(error_data.get('user_msg', ''))[:80]}\n"
-        )
-
-        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-        data = {
-            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
-            "text": msg
-        }
-        requests.post(url, data=data)
-
+        if send_telegram:
+            msg = (
+                "🛑 שגיאה חדשה נרשמה בקובץ:\n\n"
+                f"⏰ {error_data.get('timestamp', '')}\n"
+                f"סוג שגיאה: {error_data.get('error_type', 'לא ידוע')}\n"
+                f"פרטי שגיאה: {str(error_data.get('error', ''))[:300]}\n"
+                f"משתמש: {error_data.get('chat_id', '')}\n"
+                f"הודעה: {str(error_data.get('user_msg', ''))[:80]}\n"
+            )
+            url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
+            data = {
+                "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
+                "text": msg
+            }
+            requests.post(url, data=data)
     except Exception as e:
+        import traceback
         print(f"💥 שגיאה ברישום שגיאה לקובץ: {e}")
+        print("[DEBUG][log_error_to_file][EXCEPTION] error_data:")
+        for k, v in error_data.items():
+            print(f"[DEBUG][log_error_to_file][EXCEPTION] {k} = {v} (type: {type(v)})")
+        print(traceback.format_exc())
 
 
 def send_startup_notification():
@@ -293,7 +297,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
         "chat_id": chat_id,
         "user_msg": user_msg,
         "critical": True
-    })
+    }, send_telegram=False)
 
 
 
