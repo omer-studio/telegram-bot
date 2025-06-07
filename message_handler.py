@@ -17,7 +17,6 @@ from gpt_handler import get_main_response, summarize_bot_reply, smart_update_pro
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from prompts import SYSTEM_PROMPT
 from fields_dict import FIELDS_DICT
-from profile_extraction import extract_user_profile_fields
 import asyncio
 import time
 
