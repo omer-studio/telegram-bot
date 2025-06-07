@@ -17,6 +17,8 @@ from fastapi import FastAPI, Request
 from telegram import Update
 from bot_setup import setup_bot
 from message_handler import handle_message
+import os
+import requests
 
 class DummyContext:
     def __init__(self, bot_data):
@@ -54,7 +56,7 @@ def root():
 @app_fastapi.on_event("startup")
 async def on_startup():
     """
-    פונקציית אתחול שרת — בודקת תקינות ושולחת התראה אם יש בעיה.
+    פונקציית אתחול שרת — בודקת תקינות, שולחת התראה אם יש בעיה, ומגדירה webhook בטלגרם אם צריך.
     """
     from utils import health_check
     from notifications import send_error_notification
@@ -65,6 +67,18 @@ async def on_startup():
     except Exception as e:
         from traceback import format_exc
         send_error_notification(f"[STARTUP] שגיאה בבדיקת תקינות: {e}\n{format_exc()}")
+    # --- הגדרת webhook בטלגרם ---
+    try:
+        from config import TELEGRAM_BOT_TOKEN
+        webhook_url = os.getenv("WEBHOOK_URL")
+        if webhook_url:
+            set_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
+            resp = requests.post(set_url, json={"url": webhook_url})
+            print(f"[STARTUP] Telegram setWebhook status: {resp.status_code}, resp: {resp.text}")
+        else:
+            print("[STARTUP] לא הוגדר WEBHOOK_URL - לא מגדיר webhook בטלגרם.")
+    except Exception as e:
+        print(f"[STARTUP] שגיאה בהגדרת webhook בטלגרם: {e}")
 
 async def main():
     """

@@ -364,9 +364,8 @@ def log_to_sheets(
             try:
                 return calc_func()
             except Exception as e:
-                from notifications import send_error_notification
-                send_error_notification(f"❌ שגיאה בחישוב שדה {field_name}: {e}")
-                return "-"
+                print(f"[safe_calc] שגיאה בחישוב {field_name}: {e}")
+                return 0
 
         main_prompt_clean = safe_int(main_usage.get("prompt_tokens", 0)) - safe_int(main_usage.get("cached_tokens", 0))
         summary_prompt_clean = safe_int(summary_usage.get("prompt_tokens", 0)) - safe_int(summary_usage.get("cached_tokens", 0))
@@ -491,16 +490,16 @@ def log_to_sheets(
             "cached_tokens_gpt3": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt3"),
             "cost_gpt3": format_money(extract_cost_agorot),
             "model_GPT3": str(extract_usage.get("model", "")),
-            "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0, "usage_prompt_tokens_GPT4"),
-            "usage_completion_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None else 0, "usage_completion_tokens_GPT4"),
+            "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_prompt_tokens_GPT4"),
+            "usage_completion_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_completion_tokens_GPT4"),
             "usage_total_tokens_GPT4": safe_calc(lambda: (
                 safe_int(merge_usage.get("cached_tokens", 0)) +
                 safe_int(merge_usage.get("completion_tokens", 0)) +
                 safe_int(merge_usage.get("prompt_tokens", 0))
-            ) if merge_usage is not None else 0, "usage_total_tokens_GPT4"),
-            "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0, "cached_tokens_GPT4"),
-            "cost_GPT4": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None else "-",
-            "model_GPT4": str(merge_usage.get("model", "")) if merge_usage is not None else "",
+            ) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_total_tokens_GPT4"),
+            "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "cached_tokens_GPT4"),
+            "cost_GPT4": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0,
+            "model_GPT4": str(merge_usage.get("model", "")) if merge_usage is not None and "cost_agorot" in merge_usage else "",
             "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if fields_updated_by_4gpt is not None else "",
             "timestamp": timestamp_full,
             "date_only": date_only,

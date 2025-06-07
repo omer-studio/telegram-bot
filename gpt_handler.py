@@ -14,6 +14,7 @@ from fields_dict import FIELDS_DICT
 import threading
 from profile_extraction import extract_user_profile_fields
 from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT
+import asyncio
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -219,7 +220,9 @@ def get_main_response(full_messages):
         logging.error(f"❌ שגיאה ב-GPT ראשי: {e}")
         raise
 
-
+def get_main_response_async(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, get_main_response, *args, **kwargs)
 
 # ============================הג'יפיטי ה-2 - מקצר את תשובת הבוט אם היא ארוכה מדי כדי לחסוך בהיסטוריה ======================= 
 
@@ -279,7 +282,9 @@ def summarize_bot_reply(reply_text):
         logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
         raise
 
-
+def summarize_bot_reply_async(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, summarize_bot_reply, *args, **kwargs)
 
 # ============================הג'יפיטי ה-3 - פועל תמיד ומחלץ מידע לת.ז הרגשית ======================= 
 
@@ -351,7 +356,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
     usage_data = {
         "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
         "cached_tokens": 0, "cost_prompt_regular": 0, "cost_prompt_cached": 0,
-        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "cost_gpt4": 0, "model": ""
+        "cost_completion": 0, "cost_total": 0, "cost_total_ils": 0, "model": ""
     }
 
     try:
@@ -413,8 +418,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         cost_completion = completion_tokens * COST_COMPLETION
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = cost_total * USD_TO_ILS
-        cost_agorot = cost_total_ils * 100
-        cost_gpt4 = cost_total_ils * 100  # עלות באגורות (float מדויק, כל הספרות)
+        cost_agorot = int(round(cost_total_ils * 100))
 
         usage_data = {
             "prompt_tokens": prompt_tokens,
@@ -427,7 +431,6 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
             "cost_agorot": cost_agorot,
-            "cost_gpt4": cost_gpt4,
             "model": response.model
         }
 
@@ -462,7 +465,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_completion": cost_completion,
             "cost_total": cost_total,
             "cost_total_ils": cost_total_ils,
-            "cost_gpt4": cost_gpt4,
+            "cost_agorot": cost_agorot,
             "model": usage_data.get("model", "")
         }
 
@@ -486,12 +489,12 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_completion": 0.0,
             "cost_total": 0.0,
             "cost_total_ils": 0.0,
-            "cost_gpt4": 0,
+            "cost_agorot": 0,
             "model": "fallback"
         }
 
     except Exception as e:
-        logging.error(f"�� שגיאה כללית ב-GPT4 מיזוג: {e}")
+        logging.error(f"❌ שגיאה כללית ב-GPT4 מיזוג: {e}")
         
         # fallback - מיזוג פשוט במקרה של כשל
         fallback_merge = {**existing_profile, **new_data}
@@ -508,7 +511,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "cost_completion": 0.0,
             "cost_total": 0.0,
             "cost_total_ils": 0.0,
-            "cost_gpt4": 0,
+            "cost_agorot": 0,
             "model": "error"
         }
 
@@ -581,6 +584,9 @@ def smart_update_profile(existing_profile, user_message):
         
         return updated_profile, extract_usage, None
 
+def smart_update_profile_async(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, smart_update_profile, *args, **kwargs)
 
 def get_combined_usage_data(extract_usage, merge_usage=None):
     """
@@ -598,9 +604,7 @@ def get_combined_usage_data(extract_usage, merge_usage=None):
         if not isinstance(merge_usage, dict):
             raise ValueError("merge_usage חייב להיות dict!")
         merge_data = merge_usage.copy()
-        merge_data["used_gpt4"] = True
         return {**extract_data, **merge_data}
     else:
-        extract_data["used_gpt4"] = False
         return extract_data
 

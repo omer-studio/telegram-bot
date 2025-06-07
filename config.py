@@ -19,12 +19,20 @@ def load_config():
     טוען את קובץ הקונפיגורציה (config.json) מהנתיב המתאים.
     פלט: dict
     """
-    local_path = os.path.join("etc", "secrets", "config.json")
-    print("DEBUG: cwd =", os.getcwd())
-    print("DEBUG: local_path exists?", os.path.exists(local_path))
-    abs_path = "/etc/secrets/config.json"
-    path = local_path if os.path.exists(local_path) else abs_path
-    print("DEBUG: using path", path)
+    env_path = os.getenv("CONFIG_PATH")
+    if env_path and os.path.exists(env_path):
+        path = env_path
+    else:
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        local_path = os.path.join(project_root, "etc", "secrets", "config.json")
+        abs_path = "/etc/secrets/config.json"
+        if os.path.exists(local_path):
+            path = local_path
+        elif os.path.exists(abs_path):
+            path = abs_path
+        else:
+            raise FileNotFoundError("config.json לא נמצא בנתיבים הידועים")
+    print("DEBUG: using config path:", path)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
