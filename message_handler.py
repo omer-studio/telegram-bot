@@ -394,9 +394,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "summary_prompt": sum_prompt,
                             "summary_completion": sum_completion,
                             "summary_total": sum_total,
-                            "extract_prompt": extract_usage["prompt_tokens"] if isinstance(extract_usage, dict) else 0,
-                            "extract_completion": extract_usage["completion_tokens"] if isinstance(extract_usage, dict) else 0,
-                            "extract_total": extract_usage["total_tokens"] if isinstance(extract_usage, dict) else 0,
+                            "extract_prompt": extract_usage.get("prompt_tokens", 0) if isinstance(extract_usage, dict) else 0,
+                            "extract_completion": extract_usage.get("completion_tokens", 0) if isinstance(extract_usage, dict) else 0,
+                            "extract_total": extract_usage.get("total_tokens", 0) if isinstance(extract_usage, dict) else 0,
                             "total_all": main_total_tokens,
                             "main_cost_total_usd": main_cost_total_usd,
                             "main_cost_total_ils": main_cost_total_ils

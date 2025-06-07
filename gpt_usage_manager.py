@@ -108,6 +108,6 @@ class GPTUsageManager:
             for k in fields:
                 result[k] += usage.get(k, 0)
             if usage.get("model"):
-                models.append(usage["model"])
+                models.append(usage.get("model", ""))
         result["model"] = ",".join(models)
         return result 
