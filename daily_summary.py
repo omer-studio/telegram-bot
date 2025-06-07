@@ -27,13 +27,14 @@ async def send_daily_summary(days_back=1):
 
     try:
         import pytz
-        thailand_tz = pytz.timezone("Asia/Bangkok")
-        today = datetime.now(thailand_tz).date()
+        # החלף ל-Europe/Berlin (UTC+1, כולל שעון קיץ)
+        tz = pytz.timezone("Europe/Berlin")
+        today = datetime.now(tz).date()
         target_date = today - timedelta(days=days_back)
         target_str = target_date.strftime("%Y-%m-%d")
         
-        target_start = thailand_tz.localize(datetime.combine(target_date, datetime.min.time()))
-        target_end = thailand_tz.localize(datetime.combine(target_date + timedelta(days=1), datetime.min.time()))
+        target_start = tz.localize(datetime.combine(target_date, datetime.min.time()))
+        target_end = tz.localize(datetime.combine(target_date + timedelta(days=1), datetime.min.time()))
         start_time_unix = int(target_start.timestamp())
         end_time_unix = int(target_end.timestamp())
 
@@ -161,11 +162,11 @@ async def send_daily_summary(days_back=1):
                             entry_dt = parse_dt(timestamp)
                         except Exception:
                             continue
-                        # המרה לאזור זמן של תאילנד להשוואה נכונה
+                        # המרה לאזור זמן של UTC+1 (Europe/Berlin)
                         if entry_dt.tzinfo is None:
-                            entry_dt = thailand_tz.localize(entry_dt)
+                            entry_dt = tz.localize(entry_dt)
                         else:
-                            entry_dt = entry_dt.astimezone(thailand_tz)
+                            entry_dt = entry_dt.astimezone(tz)
                             
                         entry_date = entry_dt.date()
                         if entry_date != target_date:

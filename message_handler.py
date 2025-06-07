@@ -326,25 +326,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # --- כל שאר הפעולות ירוצו ברקע ---
             async def post_reply_tasks():
                 try:
+                    print("[DEBUG][post_reply_tasks] --- START ---")
                     # עדכון ת.ז רגשית, גיליון, לוגים
-                    logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
+                    logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית..."); print("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
+                    print(f"[DEBUG][post_reply_tasks] user_summary: {user_summary} (type: {type(user_summary)})")
                     if isinstance(user_summary, str):
                         import json
                         try:
                             existing_profile = json.loads(user_summary)
-                        except Exception:
+                        except Exception as e:
+                            print(f"[DEBUG][post_reply_tasks] Failed to json.loads user_summary: {e}")
                             existing_profile = {}
                     elif isinstance(user_summary, dict):
                         existing_profile = user_summary
                     else:
                         existing_profile = {}
+                    print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
                     updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
+                    print(f"[DEBUG][post_reply_tasks] updated_profile: {updated_profile} (type: {type(updated_profile)})")
+                    print(f"[DEBUG][post_reply_tasks] extract_usage: {extract_usage} (type: {type(extract_usage)})")
+                    print(f"[DEBUG][post_reply_tasks] merge_usage: {merge_usage} (type: {type(merge_usage)})")
                     identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
+                    print(f"[DEBUG][post_reply_tasks] identity_fields: {identity_fields} (type: {type(identity_fields)})")
                     if updated_profile and updated_profile != existing_profile:
-                        print(f"[DEBUG] update_user_profile called with: {updated_profile}")
+                        print(f"[DEBUG][post_reply_tasks] update_user_profile called with: {updated_profile}")
                         logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
                         update_user_profile(chat_id, updated_profile)
-                        logging.info("📝 ת.ז רגשית עודכנה בהצלחה")
+                        logging.info("📝 ת.ז רגשית עודכנה בהצלחה"); print("📝 ת.ז רגשית עודכנה בהצלחה")
 
                     logging.info("💰 מחשב עלויות..."); print("💰 מחשב עלויות...")
                     logging.info("💾 שומר נתוני שיחה בגיליון..."); print("💾 שומר נתוני שיחה בגיליון...")
@@ -374,6 +382,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
 
                     logging.info("💾 שומר לוג מפורט לקובץ..."); print("💾 שומר לוג מפורט לקובץ...")
+                    print(f"[DEBUG][post_reply_tasks] log_payload BEFORE update: {log_payload}")
                     log_payload.update({
                         "user_summary": user_summary,
                         "identity_fields": identity_fields,
@@ -394,6 +403,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "main_cost_total_ils": main_cost_total_ils
                         }
                     })
+                    print(f"[DEBUG][post_reply_tasks] log_payload AFTER update: {log_payload}")
                     log_event_to_file(log_payload)
                     logging.info("✅ לוג מפורט נשמר לקובץ"); print("✅ לוג מפורט נשמר לקובץ")
 

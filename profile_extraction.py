@@ -23,6 +23,7 @@ def extract_user_profile_fields(text, system_prompt=None, client=None): # שול
     פלט: (new_data: dict, usage_data: dict)
     # מהלך מעניין: ניקוי אוטומטי של בלוק ```json ... ``` מהתשובה של GPT, בדיקת תקינות, ולוגים מפורטים.
     """
+    print("[DEBUG][extract_user_profile_fields] CALLED")
     if system_prompt is None:
         system_prompt = PROFILE_EXTRACTION_PROMPT  # פרומט חילוץ תעודת זהות
     if client is None:
@@ -38,30 +39,28 @@ def extract_user_profile_fields(text, system_prompt=None, client=None): # שול
             max_tokens=200
         )
         content = response.choices[0].message.content.strip()
+        print(f"[DEBUG][extract_user_profile_fields] raw GPT content: {content}")
         # --- ניקוי בלוק ```json ... ``` אם קיים ---
         if content.startswith("```"):
             match = re.search(r"```(?:json)?\\s*({.*?})\\s*```", content, re.DOTALL)
             if match:
-                logging.debug("[DEBUG] ניקוי בלוק ```json ... ``` מהתשובה של GPT לפני json.loads")
+                logging.debug(f"[DEBUG][extract_user_profile_fields] found ```json block, extracting only JSON...")
                 content = match.group(1)
-            else:
-                # fallback: חפש את ה-{ הראשון וה-} האחרון
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                if start != -1 and end != -1:
-                    logging.debug("[DEBUG] fallback: חיתוך JSON מתוך בלוק ``` ... ``` בתשובת GPT")
-                    content = content[start:end]
+                print(f"[DEBUG][extract_user_profile_fields] cleaned content: {content}")
         logging.info(f"[DEBUG] GPT3 identity_extraction raw: '{content}'")
         try:
             new_data = json.loads(content)
-            if not isinstance(new_data, dict):
-                logging.warning(f"⚠️ new_data אינו dict: {type(new_data)} | value: {new_data}")
-                new_data = {}
-            elif not all(isinstance(k, str) for k in new_data.keys()):
-                logging.warning(f"⚠️ new_data מכיל מפתחות לא str: {list(new_data.keys())}")
-                new_data = {}
-        except Exception as ex:
-            logging.error(f"❌ שגיאה בפרסור JSON identity_extraction: {ex} | content: {content}")
+            print(f"[DEBUG][extract_user_profile_fields] after json.loads: {new_data} (type: {type(new_data)})")
+            if isinstance(new_data, dict):
+                print(f"[DEBUG][extract_user_profile_fields] new_data keys: {list(new_data.keys())}")
+                if not new_data:
+                    print("[ALERT][extract_user_profile_fields] new_data is an EMPTY dict!")
+            else:
+                print("[ALERT][extract_user_profile_fields] new_data is NOT a dict!")
+        except Exception as e:
+            import traceback
+            print(f"[ERROR][extract_user_profile_fields] Exception: {e}")
+            print(traceback.format_exc())
             new_data = {}
         # --- usage/cost ---
         usage_data = {}
@@ -75,6 +74,7 @@ def extract_user_profile_fields(text, system_prompt=None, client=None): # שול
             }
         except Exception as ex:
             logging.warning(f"[DEBUG] לא הצלחתי לחלץ usage_data: {ex}")
+        print(f"[DEBUG][extract_user_profile_fields] returning new_data: {new_data}")
         return new_data, usage_data
     except Exception as critical_error:
         logging.error(f"❌ שגיאה קריטית ב-extract_user_profile_fields: {critical_error}")

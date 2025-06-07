@@ -552,40 +552,65 @@ def smart_update_profile(existing_profile, user_message):
     פלט: dict ממוזג, usage (dict)
     # מהלך מעניין: בוחר אוטומטית האם להפעיל מיזוג חכם או רגיל.
     """
-    logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
-    # שלב 1: GPT3 - חילוץ מידע חדש
-    new_data, extract_usage = extract_user_profile_fields(user_message)
-    # הגנה: ודא ש-new_data הוא dict עם מפתחות str בלבד
-    print(f"[DEBUG][smart_update_profile] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-    print(f"[DEBUG][smart_update_profile] new_data: {new_data} (type: {type(new_data)})")
-    if not isinstance(new_data, dict) or not all(isinstance(k, str) for k in new_data.keys()):
-        logging.error(f"⚠️ new_data לא תקין (לפני מיזוג): {new_data}")
-        new_data = {}
-    logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
-    print(f"[DEBUG][smart_update_profile] new_data keys: {list(new_data.keys())}")
-    # אם אין מידע חדש - אין מה לעדכן
-    if not new_data:
-        logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
-        print("[DEBUG][smart_update_profile] אין מידע חדש, מחזיר ת.ז ללא שינוי")
-        return existing_profile, extract_usage, None
-    # שלב 2: בדיקה אם צריך GPT4
-    print(f"[DEBUG][smart_update_profile] קורא ל-should_use_gpt4_merge עם existing_profile: {existing_profile}, new_data: {new_data}")
-    if should_use_gpt4_merge(existing_profile, new_data):
-        logging.info("🎯 מפעיל GPT4 למיזוג מורכב")
-        print("[DEBUG][smart_update_profile] מפעיל GPT4 למיזוג מורכב!")
-        # שלב 3: GPT4 - מיזוג חכם
-        merge_usage, updated_profile = merge_sensitive_profile_data(existing_profile, new_data, user_message)
-        logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
-        print(f"[DEBUG][smart_update_profile] merge_usage: {merge_usage}")
-        print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
-        return updated_profile, extract_usage, merge_usage
-    else:
-        logging.info("✅ עדכון פשוט ללא GPT4")
-        print("[DEBUG][smart_update_profile] עדכון פשוט ללא GPT4")
-        # עדכון פשוט - מיזוג רגיל
-        updated_profile = {**existing_profile, **new_data}
-        print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
-        return updated_profile, extract_usage, None
+    print("[DEBUG][smart_update_profile] CALLED")
+    try:
+        logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
+        print(f"[DEBUG][smart_update_profile] --- START ---")
+        print(f"[DEBUG][smart_update_profile] existing_profile: {existing_profile} (type: {type(existing_profile)})")
+        # שלב 1: GPT3 - חילוץ מידע חדש
+        new_data, extract_usage = extract_user_profile_fields(user_message)
+        print(f"[DEBUG][smart_update_profile] new_data: {new_data} (type: {type(new_data)})")
+        print(f"[DEBUG][smart_update_profile] extract_usage: {extract_usage} (type: {type(extract_usage)})")
+        # הגנה: ודא ש-new_data הוא dict עם מפתחות str בלבד
+        if not isinstance(new_data, dict) or not all(isinstance(k, str) for k in new_data.keys()):
+            logging.error(f"⚠️ new_data לא תקין (לפני מיזוג): {new_data}")
+            print(f"[ALERT][smart_update_profile] new_data לא תקין (לפני מיזוג): {new_data}")
+            new_data = {}
+        logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
+        print(f"[DEBUG][smart_update_profile] new_data keys: {list(new_data.keys())}")
+        # אם אין מידע חדש - אין מה לעדכן
+        if not new_data:
+            logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
+            print("[DEBUG][smart_update_profile] אין מידע חדש, מחזיר ת.ז ללא שינוי")
+            return existing_profile, extract_usage, None
+        # שלב 2: בדיקה אם צריך GPT4
+        print(f"[DEBUG][smart_update_profile] קורא ל-should_use_gpt4_merge עם existing_profile: {existing_profile}, new_data: {new_data}")
+        if should_use_gpt4_merge(existing_profile, new_data):
+            logging.info("🎯 מפעיל GPT4 למיזוג מורכב")
+            print("[DEBUG][smart_update_profile] מפעיל GPT4 למיזוג מורכב!")
+            # שלב 3: GPT4 - מיזוג חכם
+            print(f"[DEBUG][smart_update_profile] לפני merge_sensitive_profile_data: existing_profile={existing_profile}, new_data={new_data}, user_message={user_message}")
+            merge_usage, updated_profile = merge_sensitive_profile_data(existing_profile, new_data, user_message)
+            print(f"[DEBUG][smart_update_profile] אחרי merge_sensitive_profile_data: updated_profile={updated_profile}, merge_usage={merge_usage}")
+            logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
+            print(f"[DEBUG][smart_update_profile] merge_usage: {merge_usage}")
+            print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
+            # print diff
+            if existing_profile != updated_profile:
+                diff_keys = set(updated_profile.keys()) - set(existing_profile.keys())
+                print(f"[DEBUG][smart_update_profile] profile diff (new keys): {diff_keys}")
+            else:
+                print(f"[DEBUG][smart_update_profile] profile unchanged after merge")
+            print(f"[DEBUG][smart_update_profile] returning: profile_updated={updated_profile}, extract_usage={extract_usage}")
+            return updated_profile, extract_usage, merge_usage
+        else:
+            logging.info("✅ עדכון פשוט ללא GPT4")
+            print("[DEBUG][smart_update_profile] עדכון פשוט ללא GPT4")
+            # עדכון פשוט - מיזוג רגיל
+            updated_profile = {**existing_profile, **new_data}
+            print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
+            if existing_profile != updated_profile:
+                diff_keys = set(updated_profile.keys()) - set(existing_profile.keys())
+                print(f"[DEBUG][smart_update_profile] profile diff (new keys): {diff_keys}")
+            else:
+                print(f"[DEBUG][smart_update_profile] profile unchanged after simple merge")
+            print(f"[DEBUG][smart_update_profile] returning: profile_updated={updated_profile}, extract_usage={extract_usage}")
+            return updated_profile, extract_usage, None
+    except Exception as e:
+        import traceback
+        print(f"[ERROR][smart_update_profile] Exception: {e}")
+        print(traceback.format_exc())
+        return existing_profile, {}, None
 
 def smart_update_profile_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
