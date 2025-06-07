@@ -1,0 +1,43 @@
+{
+  "_comment": "OpenAI GPT token prices as of June 2025. All prices are in USD per token.",
+  "gpt-4o": {
+    "prompt": 0.000005,
+    "cached": 0.0000025,
+    "completion": 0.00002
+  },
+  "gpt-4o-mini": {
+    "prompt": 0.0000006,
+    "cached": 0.0000003,
+    "completion": 0.0000024
+  },
+  "gpt-4o-nano": {
+    "prompt": 0.0000001,
+    "cached": 0.000000025,
+    "completion": 0.0000004
+  },
+  "gpt-4.1": {
+    "prompt": 0.000002,
+    "cached": 0.0000005,
+    "completion": 0.000008
+  },
+  "gpt-4.1-mini": {
+    "prompt": 0.0000004,
+    "cached": 0.0000001,
+    "completion": 0.0000016
+  },
+  "gpt-4.1-nano": {
+    "prompt": 0.0000001,
+    "cached": 0.000000025,
+    "completion": 0.0000004
+  },
+  "openai-o3": {
+    "prompt": 0.00001,
+    "cached": 0.0000025,
+    "completion": 0.00004
+  },
+  "openai-o4-mini": {
+    "prompt": 0.0000011,
+    "cached": 0.000000275,
+    "completion": 0.0000044
+  }
+} 

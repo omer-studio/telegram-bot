@@ -3,6 +3,18 @@ gpt_handler.py
 --------------
 קובץ זה מרכז את כל הפונקציות שמבצעות אינטראקציה עם GPT (שליחת הודעות, חישוב עלות, דיבאגינג).
 הרציונל: ריכוז כל הלוגיקה של GPT במקום אחד, כולל תיעוד מלא של טוקנים, עלויות, ולוגים.
+
+מערכת חישוב עלות GPT דינאמית (יוני 2025)
+--------------------------------------------------
+- כל חישוב עלות טוקנים מתבצע דינאמית לפי קובץ gpt_pricing.json.
+- כל מודל (gpt-4o, nano, mini וכו') מוגדר עם מחירי prompt/cached/completion בקובץ JSON זה.
+- כל שינוי מחירון או הוספת מודל חדש – יש לעדכן אך ורק את gpt_pricing.json (אין צורך לשנות קוד).
+- אם שם המודל לא קיים במחירון – תוחזר עלות 0 ותירשם שגיאה בלוג.
+
+# דוקומנטציה:
+# - לעדכון מחירים: ערוך את gpt_pricing.json בלבד.
+# - להוסף מודל: הוסף ערך חדש ל-gpt_pricing.json עם שם המודל והמחירים.
+# - חובה לשמור על שמות תואמים בין usage (response.model) לבין המפתחות ב-JSON.
 """
 
 import json
@@ -20,98 +32,61 @@ import re
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(PROJECT_ROOT, exist_ok=True)
 
-# ===================== קבועים מרכזיים לעלויות GPT ושער דולר =====================
+# ===================== טעינת מחירון דינאמי לכל המודלים (יוני 2025) =====================
 
-# מחירים קבועים (נכון ליוני 2025) ל־GPT-4o
-COST_PROMPT_REGULAR = 0.005 / 1000    # טוקן קלט רגיל
-COST_PROMPT_CACHED = 0.0025 / 1000    # טוקן קלט קשד (cache)
-COST_COMPLETION = 0.02 / 1000        # טוקן פלט
-USD_TO_ILS = 3.6                     # שער דולר-שקל (לשינוי במקום אחד בלבד)
+# טוען את המחירון מהקובץ פעם אחת בלבד
+PRICING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gpt_pricing.json')
+try:
+    with open(PRICING_PATH, encoding='utf-8') as f:
+        GPT_PRICING = json.load(f)
+except Exception as e:
+    print(f"[ERROR] לא הצלחתי לטעון את gpt_pricing.json: {e}")
+    GPT_PRICING = {}
 
-# --- Debug state for smart logging ---
-_debug_last_cached_tokens = {}
-_debug_last_gpt3_usages = []
-_debug_printed_models = set()
-_debug_lock = threading.Lock()
+# פונקציה שמביאה את מחירי הטוקנים לפי שם המודל
+# מחזירה מילון עם prompt/cached/completion, או None אם לא קיים
+# מבצעת normalization לשם המודל (למשל gpt-4o-2024-08-06 -> gpt-4o)
+def get_model_prices(model_name):
+    if not model_name:
+        return None
+    # ניקוי גרסאות מהשם (למשל gpt-4o-2024-08-06 -> gpt-4o)
+    base_name = model_name.split("-")[0]
+    # חיפוש מדויק
+    if model_name in GPT_PRICING:
+        return GPT_PRICING[model_name]
+    # חיפוש לפי base_name
+    for key in GPT_PRICING:
+        if model_name.startswith(key):
+            return GPT_PRICING[key]
+    if base_name in GPT_PRICING:
+        return GPT_PRICING[base_name]
+    # לא נמצא מחירון
+    print(f"[ERROR] לא נמצא מחירון למודל: {model_name}")
+    return None
 
-# --- Smart debug function ---
-def _debug_gpt_usage(model, prompt_tokens, completion_tokens, cached_tokens, total_tokens, usage_type):
-    with _debug_lock:
-        # Print raw usage once per model per run
-        if model not in _debug_printed_models:
-            print(f"[DEBUG] שימוש ב-GPT ({usage_type}) | model: {model} | prompt: {prompt_tokens} | completion: {completion_tokens} | cached: {cached_tokens} | total: {total_tokens}")
-            _debug_printed_models.add(model)
-        # Track last 3 cached_tokens per model
-        if model not in _debug_last_cached_tokens:
-            _debug_last_cached_tokens[model] = []
-        _debug_last_cached_tokens[model].append(cached_tokens)
-        if len(_debug_last_cached_tokens[model]) > 3:
-            _debug_last_cached_tokens[model].pop(0)
-        if len(_debug_last_cached_tokens[model]) == 3 and len(set(_debug_last_cached_tokens[model])) == 1:
-            print(f"⚠️ [ALERT] cached_tokens עבור המודל {model} ({usage_type}) חזר 3 פעמים ברצף אותו ערך: {cached_tokens}")
-        # Check token sum
-        if None not in (prompt_tokens, completion_tokens, cached_tokens, total_tokens):
-            calc_total = prompt_tokens + completion_tokens + cached_tokens
-            if calc_total != total_tokens:
-                print(f"⚠️ [ALERT] סכום טוקנים לא תואם ({usage_type}, {model}): prompt({prompt_tokens}) + completion({completion_tokens}) + cached({cached_tokens}) = {calc_total} != total({total_tokens})")
-        # Special: GPT3 always zero
-        if model and 'gpt-3' in model:
-            _debug_last_gpt3_usages.append((prompt_tokens, completion_tokens, cached_tokens))
-            if len(_debug_last_gpt3_usages) > 3:
-                _debug_last_gpt3_usages.pop(0)
-            if len(_debug_last_gpt3_usages) == 3 and all(x == (0,0,0) for x in _debug_last_gpt3_usages):
-                print("⚠️ [ALERT] GPT3 usage תמיד 0 בשלוש קריאות אחרונות! בדוק אינטגרציה.")
+# ===================== פונקציה מרכזית לחישוב עלות דינאמית =====================
 
-def write_gpt_log(ttype, usage, model):
+def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS):
     """
-    שומר לוג של השימוש בכל קריאה ל־GPT
-    קלט: ttype (סוג), usage (dict usage), model (שם המודל)
-    פלט: אין (שומר לקובץ לוג)
-    """
-    log_path = GPT_LOG_PATH
-    log_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "type": ttype,
-        "model": model,
-        "tokens_prompt": usage.get("prompt_tokens", 0),
-        "tokens_completion": usage.get("completion_tokens", 0),
-        "tokens_total": usage.get("total_tokens", 0),
-        "tokens_cached": usage.get("cached_tokens", 0),  # נוסף: כמות קשד
-        "cost_prompt_regular": usage.get("cost_prompt_regular", 0),
-        "cost_prompt_cached": usage.get("cost_prompt_cached", 0),
-        "cost_completion": usage.get("cost_completion", 0),
-        "cost_total": usage.get("cost_total", 0),
-        "cost_total_ils": usage.get("cost_total_ils", 0),
-    }
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-    except Exception as e:
-        logging.error(f"שגיאה בכתיבה לקובץ gpt_usage_log: {e}")
-
-def safe_float(val):
-    """
-    ניסיון להמיר ערך ל-float, במקרה של כשל יחזיר 0.0 עם לוג אזהרה.
-    קלט: ערך כלשהו
-    פלט: float
-    """
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        logging.warning(f"safe_float: value '{val}' could not be converted to float. Using 0.0 instead.")
-        return 0.0
-
-def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, usd_to_ils=USD_TO_ILS):
-    """
-    מחשב עלות GPT (USD, ILS, אגורות) לפי מספר טוקנים, כולל טוקנים רגילים, קשד ופלט.
-    קלט: prompt_tokens, completion_tokens, cached_tokens (ברירת מחדל 0), usd_to_ils (שער דולר)
+    מחשב עלות GPT (USD, ILS, אגורות) לפי מספר טוקנים, כולל טוקנים רגילים, קשד ופלט, ולפי שם המודל.
+    קלט: prompt_tokens, completion_tokens, cached_tokens, model_name, usd_to_ils
     פלט: dict עם כל הערכים.
-    # מהלך מעניין: מחשב עלות גם לאגורות וגם לשקל, כולל הפרדה בין טוקנים רגילים וקשד.
     """
     prompt_regular = prompt_tokens - cached_tokens
-    cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
-    cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
-    cost_completion = completion_tokens * COST_COMPLETION
+    prices = get_model_prices(model_name)
+    if not prices:
+        # fallback: מחזיר 0 עלות, עם לוג שגיאה
+        return {
+            "cost_prompt_regular": 0.0,
+            "cost_prompt_cached": 0.0,
+            "cost_completion": 0.0,
+            "cost_total": 0.0,
+            "cost_total_ils": 0.0,
+            "cost_agorot": 0
+        }
+    cost_prompt_regular = prompt_regular * prices["prompt"]
+    cost_prompt_cached = cached_tokens * prices["cached"]
+    cost_completion = completion_tokens * prices["completion"]
     cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
     cost_total_ils = round(cost_total * usd_to_ils, 4)
     cost_agorot = int(round(cost_total_ils * 100))
@@ -178,13 +153,8 @@ def get_main_response(full_messages):
         # --- Smart debug ---
         _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "main_reply")
 
-        # חישוב עלות לפי המחירון המרכזי
-        cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
-        cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
-        cost_completion = completion_tokens * COST_COMPLETION
-        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = cost_total * USD_TO_ILS
-        cost_agorot = cost_total_ils * 100
+        # חישוב עלות דינאמי לפי המודל
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
         # כל השדות נשמרים ב-usage_log
         usage_log = {
             "prompt_tokens": prompt_tokens,
@@ -192,12 +162,7 @@ def get_main_response(full_messages):
             "total_tokens": total_tokens,
             "cached_tokens": cached_tokens,
             "prompt_regular": prompt_regular,
-            "cost_prompt_regular": cost_prompt_regular,
-            "cost_prompt_cached": cost_prompt_cached,
-            "cost_completion": cost_completion,
-            "cost_total": cost_total,
-            "cost_total_ils": cost_total_ils,
-            "cost_agorot": cost_agorot,
+            **cost_data,
             "model": response.model
         }
 
@@ -237,7 +202,7 @@ def summarize_bot_reply(reply_text):
     system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט תמצות תשובה
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-nano",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": reply_text}],
             temperature=1,
         )
@@ -252,25 +217,15 @@ def summarize_bot_reply(reply_text):
         # --- Smart debug ---
         _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "reply_summary")
 
-        cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
-        cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
-        cost_completion = completion_tokens * COST_COMPLETION
-        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = cost_total * USD_TO_ILS
-        cost_agorot = cost_total_ils * 100
-        # כל השדות נשמרים ב-usage_log
+        # חישוב עלות דינאמי לפי המודל
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
         usage_log = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
             "cached_tokens": cached_tokens,
             "prompt_regular": prompt_regular,
-            "cost_prompt_regular": cost_prompt_regular,
-            "cost_prompt_cached": cost_prompt_cached,
-            "cost_completion": cost_completion,
-            "cost_total": cost_total,
-            "cost_total_ils": cost_total_ils,
-            "cost_agorot": cost_agorot,
+            **cost_data,
             "model": response.model
         }
         write_gpt_log("reply_summary", usage_log, response.model)
@@ -373,7 +328,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         ]
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-nano",
             messages=messages,
             temperature=0,  # דיוק מקסימלי למידע רגיש
             max_tokens=400   # מספיק לכל השדות + summary
@@ -405,32 +360,21 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         except Exception as e:
             print(f"[DEBUG] Failed to print API usage fields: {e}")
 
-        # חישובי עלות
+        # חישובי עלות דינאמי לפי המודל
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
         cached_tokens = prompt_tokens_details.cached_tokens
         prompt_regular = prompt_tokens - cached_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
-
-        cost_prompt_regular = prompt_regular * COST_PROMPT_REGULAR
-        cost_prompt_cached = cached_tokens * COST_PROMPT_CACHED
-        cost_completion = completion_tokens * COST_COMPLETION
-        cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-        cost_total_ils = cost_total * USD_TO_ILS
-        cost_agorot = int(round(cost_total_ils * 100))
-
+        model_name = response.model
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
         usage_data = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
             "cached_tokens": cached_tokens,
-            "cost_prompt_regular": cost_prompt_regular,
-            "cost_prompt_cached": cost_prompt_cached,
-            "cost_completion": cost_completion,
-            "cost_total": cost_total,
-            "cost_total_ils": cost_total_ils,
-            "cost_agorot": cost_agorot,
+            **cost_data,
             "model": response.model
         }
 
@@ -459,12 +403,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "prompt_regular": prompt_regular,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
-            "cost_prompt_regular": cost_prompt_regular,
-            "cost_prompt_cached": cost_prompt_cached,
-            "cost_completion": cost_completion,
-            "cost_total": cost_total,
-            "cost_total_ils": cost_total_ils,
-            "cost_agorot": cost_agorot,
+            **cost_data,
             "model": usage_data.get("model", "")
         }, validated_profile
 
@@ -650,7 +589,7 @@ def extract_user_profile_fields(text, system_prompt=None, client=None):
         from gpt_handler import client
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-nano",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text}
@@ -683,20 +622,47 @@ def extract_user_profile_fields(text, system_prompt=None, client=None):
             print(traceback.format_exc())
             new_data = {}
         # --- usage/cost ---
-        usage_data = {}
-        try:
-            usage_data = {
-                'prompt_tokens': response.usage.prompt_tokens,
-                'completion_tokens': response.usage.completion_tokens,
-                'total_tokens': response.usage.total_tokens,
-                'cached_tokens': getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0),
-                'model': response.model
-            }
-        except Exception as ex:
-            logging.warning(f"[DEBUG] לא הצלחתי לחלץ usage_data: {ex}")
+        prompt_tokens = response.usage.prompt_tokens
+        prompt_tokens_details = getattr(response.usage, 'prompt_tokens_details', None)
+        cached_tokens = getattr(prompt_tokens_details, 'cached_tokens', 0) if prompt_tokens_details else 0
+        prompt_regular = prompt_tokens - cached_tokens
+        completion_tokens = response.usage.completion_tokens
+        total_tokens = response.usage.total_tokens
+        model_name = response.model
+        # חישוב עלות דינאמי לפי המודל
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        usage_data = {
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'total_tokens': total_tokens,
+            'cached_tokens': cached_tokens,
+            **cost_data,
+            'model': response.model
+        }
         print(f"[DEBUG][extract_user_profile_fields] returning new_data: {new_data}")
         return new_data, usage_data
     except Exception as critical_error:
         logging.error(f"❌ שגיאה קריטית ב-extract_user_profile_fields: {critical_error}")
         return {}, {}
+
+# ===================== בדיקת בריאות למחירון =====================
+def check_gpt_pricing_health(required_models=None):
+    """
+    בודקת שהמחירון נטען כראוי וכולל את כל המודלים הקריטיים.
+    קלט: רשימת שמות מודלים (או None – בדיקה בסיסית בלבד)
+    פלט: dict עם סטטוס, שגיאות, ומודלים חסרים
+    """
+    health = {"loaded": False, "missing_models": [], "error": None}
+    try:
+        if not GPT_PRICING or not isinstance(GPT_PRICING, dict):
+            health["error"] = "מחירון לא נטען או לא תקין!"
+            return health
+        health["loaded"] = True
+        if required_models:
+            for model in required_models:
+                if model not in GPT_PRICING:
+                    health["missing_models"].append(model)
+    except Exception as e:
+        health["error"] = str(e)
+    return health
 
