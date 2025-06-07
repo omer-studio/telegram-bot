@@ -28,6 +28,9 @@ from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITI
 import asyncio
 import re
 
+# ===================== הגדרת שער החליפין =====================
+USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
+
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(PROJECT_ROOT, exist_ok=True)
