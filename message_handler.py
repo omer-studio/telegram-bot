@@ -352,7 +352,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         log_to_sheets(
                             message_id, chat_id, user_msg, reply_text, reply_summary,
                             main_usage, summary_usage, extract_usage,
-                            main_total_tokens, main_cost_total_usd, main_cost_total_ils
+                            main_total_tokens, main_cost_total_usd, main_cost_total_ils,
+                            merge_usage=merge_usage, fields_updated_by_4gpt=None
                         )
                         logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
                     except Exception as e:

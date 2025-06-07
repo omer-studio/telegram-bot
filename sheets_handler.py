@@ -28,6 +28,8 @@ import logging
 from gpt_handler import calculate_gpt_cost, USD_TO_ILS
 from fields_dict import FIELDS_DICT
 import json
+from dataclasses import dataclass, asdict
+from typing import Optional
 
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
@@ -269,6 +271,20 @@ def compose_emotional_summary(row):
     logging.debug(f"[DEBUG] compose_emotional_summary: סיום")
     return summary
 
+def clean_for_storage(data):
+    """
+    מקבלת dict ומחזירה dict חדש שבו כל ערך שהוא dict או list מומר ל-json string (רק ברמה הראשונה).
+    שאר הערכים נשארים כמו שהם.
+    """
+    import json
+    clean = {}
+    for k, v in data.items():
+        if isinstance(v, (dict, list)):
+            clean[k] = json.dumps(v, ensure_ascii=False)
+        else:
+            clean[k] = v
+    return clean
+
 def log_to_sheets(
     message_id, chat_id, user_msg, reply_text, reply_summary,
     main_usage, summary_usage, extract_usage, total_tokens,
@@ -276,7 +292,8 @@ def log_to_sheets(
     prompt_tokens_total=None, completion_tokens_total=None, cached_tokens=None,
     cached_tokens_gpt1=None, cost_gpt1=None,
     cached_tokens_gpt2=None, cost_gpt2=None,
-    cached_tokens_gpt3=None, cost_gpt3=None
+    cached_tokens_gpt3=None, cost_gpt3=None,
+    merge_usage=None, fields_updated_by_4gpt=None
 ):
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
@@ -352,21 +369,21 @@ def log_to_sheets(
             safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)) +
             safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)) +
             safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)) +
-            (safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0)
+            (safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0)
         ), "prompt_tokens_total")
 
         completion_tokens_total = safe_calc(lambda: (
             safe_int(main_usage.get("completion_tokens", 0)) +
             safe_int(summary_usage.get("completion_tokens", 0)) +
             safe_int(extract_usage.get("completion_tokens", 0)) +
-            (safe_int(merge_usage.get("completion_tokens", 0)) if 'merge_usage' in locals() else 0)
+            (safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None else 0)
         ), "completion_tokens_total")
 
         cached_tokens = safe_calc(lambda: (
             safe_int(main_usage.get("cached_tokens", 0)) +
             safe_int(summary_usage.get("cached_tokens", 0)) +
             safe_int(extract_usage.get("cached_tokens", 0)) +
-            (safe_int(merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0)
+            (safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0)
         ), "cached_tokens")
 
         total_tokens = safe_calc(lambda: (
@@ -425,21 +442,18 @@ def log_to_sheets(
 
         # --- מיפוי ערכים מלא לפי דרישת המשתמש ---
         values_to_log = {
-            "message_id": str(message_id),  # מזהה ייחודי להודעה
-            "chat_id": str(chat_id),  # מזהה ייחודי למשתמש
-            "user_msg": user_msg if user_msg else "",  # הודעת המשתמש
-            "user_summary": "",  # תמצות הודעת המשתמש (לא לגעת)
-            "bot_reply": reply_text if reply_text else "",  # תשובת הבוט
-            "bot_summary": reply_summary if has_summary and reply_summary else "",  # סיכום תשובת הבוט
-            "total_tokens": total_tokens,  # סך כל הטוקנים
-            "prompt_tokens_total": prompt_tokens_total,  # סך טוקנים בפרומט
-            "completion_tokens_total": completion_tokens_total,  # סך טוקנים בתשובה
-            "cached_tokens": cached_tokens,  # סך טוקנים קש
-            # עלות כוללת בדולר (מחושב לפי טבלת עלויות)
+            "message_id": str(message_id),
+            "chat_id": str(chat_id),
+            "user_msg": user_msg if user_msg else "",
+            "user_summary": "",
+            "bot_reply": reply_text if reply_text else "",
+            "bot_summary": reply_summary if has_summary and reply_summary else "",
+            "total_tokens": total_tokens,
+            "prompt_tokens_total": prompt_tokens_total,
+            "completion_tokens_total": completion_tokens_total,
+            "cached_tokens": cached_tokens,
             "total_cost_usd": format_money(main_cost_usd),
-            # עלות כוללת באגורות (מחושב לפי שער דולר)
             "total_cost_ils": format_money(main_cost_ils * 100),
-            # --- GPT1 ---
             "usage_prompt_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT1"),
             "usage_completion_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT1"),
             "usage_total_tokens_GPT1": safe_calc(lambda: (
@@ -450,7 +464,6 @@ def log_to_sheets(
             "cached_tokens_gpt1": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt1"),
             "cost_gpt1": format_money(main_cost_agorot),
             "model_GPT1": str(main_usage.get("model", "")),
-            # --- GPT2 ---
             "usage_prompt_tokens_GPT2": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT2"),
             "usage_completion_tokens_GPT2": safe_calc(lambda: safe_int(summary_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT2"),
             "usage_total_tokens_GPT2": safe_calc(lambda: (
@@ -461,7 +474,6 @@ def log_to_sheets(
             "cached_tokens_gpt2": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt2"),
             "cost_gpt2": format_money(summary_cost_agorot),
             "model_GPT2": str(summary_usage.get("model", "")),
-            # --- GPT3 ---
             "usage_prompt_tokens_GPT3": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT3"),
             "usage_completion_tokens_GPT3": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT3"),
             "usage_total_tokens_GPT3": safe_calc(lambda: (
@@ -472,23 +484,33 @@ def log_to_sheets(
             "cached_tokens_gpt3": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt3"),
             "cost_gpt3": format_money(extract_cost_agorot),
             "model_GPT3": str(extract_usage.get("model", "")),
-            # --- GPT4 ---
-            "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0, "usage_prompt_tokens_GPT4"),
-            "usage_completion_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if 'merge_usage' in locals() else 0, "usage_completion_tokens_GPT4"),
+            "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0, "usage_prompt_tokens_GPT4"),
+            "usage_completion_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None else 0, "usage_completion_tokens_GPT4"),
             "usage_total_tokens_GPT4": safe_calc(lambda: (
                 safe_int(merge_usage.get("cached_tokens", 0)) +
                 safe_int(merge_usage.get("completion_tokens", 0)) +
                 safe_int(merge_usage.get("prompt_tokens", 0))
-            ) if 'merge_usage' in locals() else 0, "usage_total_tokens_GPT4"),
-            "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if 'merge_usage' in locals() else 0, "cached_tokens_GPT4"),
-            "cost_GPT4": format_money(merge_usage.get("cost_agorot", 0)) if 'merge_usage' in locals() else "-",
-            "model_GPT4": str(merge_usage.get("model", "")) if 'merge_usage' in locals() else "",
-            # --- שדות נוספים ---
-            "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if 'fields_updated_by_4gpt' in locals() else "",
-            "timestamp": timestamp_full,  # טיימסטפ מלא
-            "date_only": date_only,  # תאריך בלבד
-            "time_only": time_only,  # שעה בלבד
+            ) if merge_usage is not None else 0, "usage_total_tokens_GPT4"),
+            "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None else 0, "cached_tokens_GPT4"),
+            "cost_GPT4": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None else "-",
+            "model_GPT4": str(merge_usage.get("model", "")) if merge_usage is not None else "",
+            "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if fields_updated_by_4gpt is not None else "",
+            "timestamp": timestamp_full,
+            "date_only": date_only,
+            "time_only": time_only,
         }
+
+        # 🚨 ניקוי עדין: המרת dict/list ל-json string לפני הכנסת row_data
+        values_to_log = clean_for_storage(values_to_log)
+
+        # בדיקת assert שאין dict/list אחרי הניקוי (למניעת באגים עתידיים)
+        for k, v in values_to_log.items():
+            if isinstance(v, (dict, list)):
+                # לוג אזהרה בעברית
+                print(f"# ⚠️ אזהרה: ערך לשדה '{k}' נשאר dict/list אחרי ניקוי! זה באג מסוכן. הערך: {v}")
+                import logging
+                logging.warning(f"# ⚠️ אזהרה: ערך לשדה '{k}' נשאר dict/list אחרי ניקוי! זה באג מסוכן. הערך: {v}")
+                raise AssertionError(f"אסור לשמור dict/list ישירות! שדה: {k}, ערך: {v}")
 
         # 🚨 תיקון 6: וידוא שכל הכותרות קיימות וההכנסה תקינה
         missing_headers = []
@@ -504,10 +526,6 @@ def log_to_sheets(
         for key, val in values_to_log.items():
             if key in header:
                 idx = header.index(key)
-                # הגנה: אם הערך הוא dict או list, המר אותו ל-str (json)
-                if isinstance(val, (dict, list)):
-                    print(f"[DEBUG] המרת ערך לשדה '{key}' מטיפוס {type(val)} ל-str (json)")
-                    val = json.dumps(val, ensure_ascii=False)
                 row_data[idx] = val
         # שמירה בגיליון
         sheet_log.insert_row(row_data, 3)
@@ -639,3 +657,37 @@ def delete_row_by_chat_id(sheet_name, chat_id):
     return False
 
 # תודה1
+
+# =============================================
+# ⚠️⚠️⚠️  אזהרה קריטית למפתח  ⚠️⚠️⚠️
+# כל שמירה חדשה של נתונים לגיליון/לוג (Google Sheets, JSONL וכו')
+# חייבת לעבור דרך הפונקציה clean_for_storage או להשתמש ב-dataclass/פונקציה קיימת שמבצעת ניקוי!
+# אסור בתכלית האיסור לשמור dict או list ישירות – זה יגרום לבאגים קשים (unhashable type: 'dict')!
+# אם אתה מוסיף שמירה חדשה – תוודא שהיא עוברת ניקוי כמו בדוגמאות הקיימות.
+#
+# CRITICAL WARNING FOR DEVELOPERS:
+# Any new data save (to Sheets/logs/JSONL/etc) MUST go through clean_for_storage or an existing dataclass/cleaning function!
+# Never save dict or list directly – always sanitize first, or you will get hard-to-debug errors (unhashable type: 'dict')!
+# =============================================
+
+# דוגמה ל-dataclass לייצוג שורת לוג
+@dataclass
+class LogRow:
+    message_id: str
+    chat_id: str
+    user_msg: str
+    user_summary: str
+    bot_reply: str
+    bot_summary: str
+    total_tokens: int
+    prompt_tokens_total: int
+    completion_tokens_total: int
+    cached_tokens: int
+    total_cost_usd: float
+    total_cost_ils: float
+    # ... הוסף שדות נוספים לפי הצורך ...
+
+# דוגמה לשימוש:
+# log_row = LogRow(...)
+# values_to_log = clean_for_storage(asdict(log_row))
+# (המשך שמירה כרגיל)
