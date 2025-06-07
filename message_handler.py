@@ -15,7 +15,7 @@ from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
-from config import SYSTEM_PROMPT, CRITICAL_ERRORS_PATH
+from prompts import SYSTEM_PROMPT
 from fields_dict import FIELDS_DICT
 from profile_extraction import extract_user_profile_fields
 import asyncio

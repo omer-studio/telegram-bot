@@ -13,7 +13,7 @@ import os
 from fields_dict import FIELDS_DICT
 import threading
 from profile_extraction import extract_user_profile_fields
-from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT
+from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT, SYSTEM_PROMPT
 import asyncio
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
