@@ -10,6 +10,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from openai import OpenAI
 from fields_dict import FIELDS_DICT
+from prompts import SYSTEM_PROMPT  # ייבוא ישיר של הפרומט הראשי
 
 
 # טעינת קונפיגורציה
@@ -27,17 +28,8 @@ def load_config():
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
-def load_system_prompt():
-    """
-    טוען את ה-system prompt מקובץ טקסט חיצוני.
-    פלט: str
-    """
-    with open("system_prompt.txt", encoding="utf-8") as f:
-        return f.read()
-
 # הגדרות גלובליות
 config = load_config()
-SYSTEM_PROMPT = load_system_prompt()
 
 # טוקנים וזיהויים
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
