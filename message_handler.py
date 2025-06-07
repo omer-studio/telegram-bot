@@ -13,7 +13,7 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
-from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile
+from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile, extract_user_profile_fields
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from prompts import SYSTEM_PROMPT
 from fields_dict import FIELDS_DICT
