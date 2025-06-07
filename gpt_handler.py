@@ -525,14 +525,20 @@ def should_use_gpt4_merge(existing_profile, new_data):
         FIELDS_DICT["primary_conflict"], FIELDS_DICT["trauma_history"], FIELDS_DICT["goal_in_course"], 
         FIELDS_DICT["language_of_strength"], FIELDS_DICT["coping_strategies"], FIELDS_DICT["fears_concerns"], FIELDS_DICT["future_vision"]
     ]
-    
-    for field in complex_fields:
+    print("[DEBUG][should_use_gpt4_merge] complex_fields:")
+    for idx, field in enumerate(complex_fields):
+        print(f"[DEBUG][should_use_gpt4_merge] complex_fields[{idx}] = {field} (type: {type(field)})")
+        if not isinstance(field, str):
+            print(f"[DEBUG][should_use_gpt4_merge][ALERT] complex_fields[{idx}] הוא {type(field)}! ערך: {field}")
+            continue  # דלג על שדות לא תקינים
         if field in new_data:  # GPT3 מצא שדה מורכב חדש
             existing_value = existing_profile.get(field, "")
-            if existing_value and existing_value.strip():  # והשדה קיים בת.ז
+            print(f"[DEBUG][should_use_gpt4_merge] בדיקה: field='{field}', existing_value='{existing_value}'")
+            if existing_value and isinstance(existing_value, str) and existing_value.strip():  # והשדה קיים בת.ז
                 logging.info(f"🎯 GPT4 נדרש - שדה '{field}' מצריך מיזוג")
+                print(f"[DEBUG][should_use_gpt4_merge] נמצא שדה מורכב חדש: {field}")
                 return True
-    
+    print("[DEBUG][should_use_gpt4_merge] אין צורך ב-GPT4 - עדכון פשוט מספיק")
     logging.info("✅ אין צורך ב-GPT4 - עדכון פשוט מספיק")
     return False
 
@@ -547,35 +553,38 @@ def smart_update_profile(existing_profile, user_message):
     # מהלך מעניין: בוחר אוטומטית האם להפעיל מיזוג חכם או רגיל.
     """
     logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
-    
     # שלב 1: GPT3 - חילוץ מידע חדש
     new_data, extract_usage = extract_user_profile_fields(user_message)
     # הגנה: ודא ש-new_data הוא dict עם מפתחות str בלבד
+    print(f"[DEBUG][smart_update_profile] existing_profile: {existing_profile} (type: {type(existing_profile)})")
+    print(f"[DEBUG][smart_update_profile] new_data: {new_data} (type: {type(new_data)})")
     if not isinstance(new_data, dict) or not all(isinstance(k, str) for k in new_data.keys()):
         logging.error(f"⚠️ new_data לא תקין (לפני מיזוג): {new_data}")
         new_data = {}
     logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
-    
+    print(f"[DEBUG][smart_update_profile] new_data keys: {list(new_data.keys())}")
     # אם אין מידע חדש - אין מה לעדכן
     if not new_data:
         logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
+        print("[DEBUG][smart_update_profile] אין מידע חדש, מחזיר ת.ז ללא שינוי")
         return existing_profile, extract_usage, None
-    
     # שלב 2: בדיקה אם צריך GPT4
+    print(f"[DEBUG][smart_update_profile] קורא ל-should_use_gpt4_merge עם existing_profile: {existing_profile}, new_data: {new_data}")
     if should_use_gpt4_merge(existing_profile, new_data):
         logging.info("🎯 מפעיל GPT4 למיזוג מורכב")
-        
+        print("[DEBUG][smart_update_profile] מפעיל GPT4 למיזוג מורכב!")
         # שלב 3: GPT4 - מיזוג חכם
         merge_usage, updated_profile = merge_sensitive_profile_data(existing_profile, new_data, user_message)
         logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
+        print(f"[DEBUG][smart_update_profile] merge_usage: {merge_usage}")
+        print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
         return updated_profile, extract_usage, merge_usage
-        
     else:
         logging.info("✅ עדכון פשוט ללא GPT4")
-        
+        print("[DEBUG][smart_update_profile] עדכון פשוט ללא GPT4")
         # עדכון פשוט - מיזוג רגיל
         updated_profile = {**existing_profile, **new_data}
-        
+        print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
         return updated_profile, extract_usage, None
 
 def smart_update_profile_async(*args, **kwargs):
