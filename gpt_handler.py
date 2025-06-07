@@ -27,6 +27,7 @@ import threading
 from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT, SYSTEM_PROMPT
 import asyncio
 import re
+from gpt_usage_manager import GPTUsageManager
 
 # ===================== פונקציות עזר ללוגים ודיבאג =====================
 
@@ -94,40 +95,18 @@ def get_model_prices(model_name):
     print(f"[ERROR] לא נמצא מחירון למודל: {model_name}")
     return None
 
-# ===================== פונקציה מרכזית לחישוב עלות דינאמית =====================
+# יצירת מופע גלובלי של מנהל usage (טעינה חד פעמית של המחירון)
+gpt_usage_manager = GPTUsageManager()
+
+# עדכון calculate_gpt_cost להשתמש במנהל החדש
 
 def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS):
     """
     מחשב עלות GPT (USD, ILS, אגורות) לפי מספר טוקנים, כולל טוקנים רגילים, קשד ופלט, ולפי שם המודל.
     קלט: prompt_tokens, completion_tokens, cached_tokens, model_name, usd_to_ils
-    פלט: dict עם כל הערכים.
+    פלט: dict usage אחיד עם כל הערכים.
     """
-    prompt_regular = prompt_tokens - cached_tokens
-    prices = get_model_prices(model_name)
-    if not prices:
-        # fallback: מחזיר 0 עלות, עם לוג שגיאה
-        return {
-            "cost_prompt_regular": 0.0,
-            "cost_prompt_cached": 0.0,
-            "cost_completion": 0.0,
-            "cost_total": 0.0,
-            "cost_total_ils": 0.0,
-            "cost_agorot": 0
-        }
-    cost_prompt_regular = prompt_regular * prices["prompt"]
-    cost_prompt_cached = cached_tokens * prices["cached"]
-    cost_completion = completion_tokens * prices["completion"]
-    cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
-    cost_total_ils = round(cost_total * usd_to_ils, 4)
-    cost_agorot = int(round(cost_total_ils * 100))
-    return {
-        "cost_prompt_regular": cost_prompt_regular,
-        "cost_prompt_cached": cost_prompt_cached,
-        "cost_completion": cost_completion,
-        "cost_total": cost_total,
-        "cost_total_ils": cost_total_ils,
-        "cost_agorot": cost_agorot
-    }
+    return gpt_usage_manager.calculate(model_name, prompt_tokens, completion_tokens, cached_tokens, usd_to_ils)
 
 # ============================הג'יפיטי ה-1 - פועל תמיד ועונה תשובה למשתמש ======================= 
 
