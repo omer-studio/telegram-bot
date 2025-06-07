@@ -27,6 +27,7 @@ from datetime import datetime
 import logging
 from gpt_handler import calculate_gpt_cost, USD_TO_ILS
 from fields_dict import FIELDS_DICT
+import json
 
 
 # יצירת חיבור לגיליונות — הפונקציה חייבת להחזיר 3 גיליונות!
@@ -503,6 +504,10 @@ def log_to_sheets(
         for key, val in values_to_log.items():
             if key in header:
                 idx = header.index(key)
+                # הגנה: אם הערך הוא dict או list, המר אותו ל-str (json)
+                if isinstance(val, (dict, list)):
+                    print(f"[DEBUG] המרת ערך לשדה '{key}' מטיפוס {type(val)} ל-str (json)")
+                    val = json.dumps(val, ensure_ascii=False)
                 row_data[idx] = val
         # שמירה בגיליון
         sheet_log.insert_row(row_data, 3)
