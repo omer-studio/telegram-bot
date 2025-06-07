@@ -28,6 +28,33 @@ from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITI
 import asyncio
 import re
 
+# ===================== פונקציות עזר ללוגים ודיבאג =====================
+
+def _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, call_type):
+    """
+    מדפיס מידע דיבאג על שימוש ב-GPT (לוגים פנימיים בלבד).
+    """
+    print(f"[DEBUG][{call_type}] מודל: {model_name}, prompt: {prompt_tokens}, completion: {completion_tokens}, cached: {cached_tokens}, total: {total_tokens}")
+
+import os
+import json
+from datetime import datetime
+
+def write_gpt_log(call_type, usage_log, model_name):
+    """
+    שומר usage log לקובץ DATA/gpt_usage_log.jsonl (שורה אחת לכל קריאה).
+    """
+    log_entry = {
+        "timestamp": datetime.now().isoformat(timespec="microseconds"),
+        "type": call_type,
+        "model": model_name,
+        **usage_log
+    }
+    log_path = os.path.join("DATA", "gpt_usage_log.jsonl")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
 # ===================== הגדרת שער החליפין =====================
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
 
