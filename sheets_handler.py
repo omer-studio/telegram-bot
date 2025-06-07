@@ -224,7 +224,12 @@ def update_user_profile(chat_id, field_values):
                     print(f"[DEBUG] updated fields: {updated_fields}")
                     logging.info(f"[DEBUG] updated fields: {updated_fields}")
                     updated_row = sheet_users.row_values(idx + 2)
-                    row_dict = dict(zip(header, updated_row))
+                    row_dict = {}
+                    for i, key in enumerate(header):
+                        if i < len(updated_row):
+                            row_dict[key] = str(updated_row[i]) if updated_row[i] is not None else ""
+                        else:
+                            row_dict[key] = ""
                     summary = compose_emotional_summary(row_dict)
                     if SUMMARY_FIELD in header:
                         summary_col = header.index(SUMMARY_FIELD) + 1
