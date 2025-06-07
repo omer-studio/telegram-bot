@@ -311,12 +311,39 @@ SYSTEM_PROMPT = (
 # משמש ל-GPT שמחלץ מהודעת המשתמש גיל, דת, עיסוק, מי יודע/לא יודע וכו'.
 PROFILE_EXTRACTION_PROMPT = (
     """
-    אתה מחלץ מידע אישי מהודעה חופשית של משתמש. החזר תמיד JSON תקני בלבד, ללא הסברים.
-    שדות אפשריים: age (גיל), self_religiosity_level (רמת דתיות), who_knows (מי יודע), who_doesnt_know (מי לא יודע), occupation_or_role (עיסוק/תפקיד).
-    דוגמה:
-    "אני בן 25, יהודי דתי" → {"age": 25, "self_religiosity_level": "דתי"}
-    "אמא שלי לא יודעת עלי, אני עובד בבנק" → {"who_doesnt_know": "אמא", "occupation_or_role": "עובד בבנק"}
-    גם אם יש רק גיל, החזר תמיד: {"age": 34}
+   אתה מחלץ מידע אישי מטקסט. החזר JSON עם השדות הבאים רק אם הם מוזכרים:
+
+
+age גיל (מספר)
+pronoun_preference לשון פניה את אתה מעורב
+occupation_or_role עיסוק או תפקיד עובד סטודנט מובטל עצמאי
+attracted_to משיכה גברים נשים שניהם לא ברור
+relationship_type מצב זוגי רווק נשוי גרוש אלמן
+self_religious_affiliation זהות דתית יהודי ערבי נוצרי דרוזי
+self_religiosity_level רמת דתיות חילוני דתי מסורתי חרדי דתי לאומי
+family_religiosity רקע משפחתי משפחה דתית חילונית או אחר
+closet_status מצב ארון בארון יצא חלקית יצא לגמרי
+who_knows מי יודע עליו
+who_doesnt_know מי לא יודע עליו
+attends_therapy האם בטיפול פסיכולוג טיפול זוגי מעגל גברים קבוצת תמיכה
+primary_conflict הקונפליקט המרכזי סביב הנטייה
+trauma_history טראומות שעבר
+goal_in_course מטרות בקורס
+language_of_strength משפטים שמחזקים אותו
+coping_strategies דרכי התמודדות מה עוזר לו
+fears_concerns פחדים וחששות אם ציין
+future_vision חזון עתידי משפחה ילדים מגורים ועוד 
+
+אם הוא מבקש למחוק את כל מה שאתה יודע עליו - אז תחזיר שדות ריקים שידרסו את הקיימים
+אם הוא מבקש שתמחק נתונים ספציפים אז תמחק נתונים ספציפים כמו אל תזכור בן כמה אני
+
+
+דוגמאות:
+"אני בן 25, יהודי דתי" → {"age": 25, "self_religious_affiliation": "יהודי", "self_religiosity_level": "דתי"}
+"נשוי עם שני ילדים" → {"relationship_type": "נשוי+2"}
+"סיפרתי להורים, אבל לבוס לא" → {"who_knows": "אבא, אמא", "who_doesnt_know": "בוס"}
+
+רק JSON, בלי הסברים!
     """
 )
 
