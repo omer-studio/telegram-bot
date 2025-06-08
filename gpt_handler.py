@@ -211,7 +211,7 @@ def summarize_bot_reply(reply_text):
     system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט תמצות תשובה
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-nano",
+            model="gpt-4.1-nano",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": reply_text}],
             temperature=1,
         )
@@ -337,7 +337,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         ]
 
         response = client.chat.completions.create(
-            model="gpt-4o-nano",
+            model="gpt-4.1-nano",
             messages=messages,
             temperature=0,  # דיוק מקסימלי למידע רגיש
             max_tokens=400   # מספיק לכל השדות + summary
@@ -598,7 +598,7 @@ def extract_user_profile_fields(text, system_prompt=None, client=None):
         from gpt_handler import client
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-nano",
+            model="gpt-4.1-nano",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text}

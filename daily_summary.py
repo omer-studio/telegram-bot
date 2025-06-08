@@ -7,6 +7,7 @@ import json
 import time
 from dateutil.parser import parse as parse_dt  # שים לב - זה צריך להיות מותקן ב־requirements.txt
 from gpt_handler import USD_TO_ILS
+import pytz  # הוספתי לוודא שיש pytz
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +27,6 @@ async def send_daily_summary(days_back=1):
     """
 
     try:
-        import pytz
         # החלף ל-Europe/Berlin (UTC+1, כולל שעון קיץ)
         tz = pytz.timezone("Europe/Berlin")
         today = datetime.now(tz).date()
@@ -160,16 +160,14 @@ async def send_daily_summary(days_back=1):
                             continue
                         try:
                             entry_dt = parse_dt(timestamp)
+                            if entry_dt.tzinfo is None:
+                                entry_dt = entry_dt.replace(tzinfo=pytz.UTC)
+                            else:
+                                entry_dt = entry_dt.astimezone(pytz.UTC)
                         except Exception:
                             continue
-                        # המרה לאזור זמן של UTC+1 (Europe/Berlin)
-                        if entry_dt.tzinfo is None:
-                            entry_dt = tz.localize(entry_dt)
-                        else:
-                            entry_dt = entry_dt.astimezone(tz)
-                            
-                        entry_date = entry_dt.date()
-                        if entry_date != target_date:
+                        entry_date_utc = entry_dt.date()
+                        if entry_date_utc != target_date:
                             continue
                         
                         matched_lines += 1
