@@ -266,16 +266,27 @@ def update_user_profile(chat_id, field_values):
     logging.debug(f"[DEBUG] update_user_profile: סיום | chat_id={chat_id}")
 
 def compose_emotional_summary(row):
+    summary_fields = [
+        "age", "pronoun_preference", "occupation_or_role", "attracted_to", "relationship_type",
+        "self_religious_affiliation", "self_religiosity_level", "family_religiosity", "closet_status",
+        "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", "trauma_history",
+        "goal_in_course", "language_of_strength", "date_first_seen", "coping_strategies",
+        "fears_concerns", "future_vision", "last_update"
+    ]
     print(f"[DEBUG] compose_emotional_summary: row keys={list(row.keys())}")
     logging.debug(f"[DEBUG] compose_emotional_summary: row keys={list(row.keys())}")
     parts = []
-    for key, value in row.items():
-        v = str(value).strip()
-        if v and key != "chat_id":
-            field_name = FIELDS_DICT.get(key, key)
-            if isinstance(field_name, dict):
-                field_name = field_name.get("label", key)
-            parts.append(f"{field_name}: {v}")
+    for key in summary_fields:
+        value = str(row.get(key, "")).strip()
+        if value:
+            field_info = FIELDS_DICT.get(key, {})
+            show_in_summary = field_info.get("show_in_summary", "")
+            if show_in_summary:  # אם הוגדר show_in_summary
+                part = f"{show_in_summary} {value}"
+            else:  # fallback ל-label
+                field_name = field_info.get("label", key)
+                part = f"{field_name}: {value}"
+            parts.append(part)
     if not parts:
         print(f"[DEBUG] compose_emotional_summary: סיום")
         logging.debug(f"[DEBUG] compose_emotional_summary: סיום")

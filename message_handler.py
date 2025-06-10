@@ -263,7 +263,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             full_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             if user_summary:
-                full_messages.append({"role": "system", "content": f"מידע על המשתמש: {user_summary}"})
+                full_messages.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {user_summary}"})
             full_messages.extend(history_messages)
             full_messages.append({"role": "user", "content": user_msg})
 
