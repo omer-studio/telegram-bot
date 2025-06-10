@@ -87,11 +87,6 @@ def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליו�
         print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
         raise
 
-# תזמון דוח יומי אוטומטי
-scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Bangkok"))
-scheduler.add_job(send_daily_summary, 'cron', hour=10, minute=38)
-scheduler.start()
-
 # === תזמון דוחות אוטומטיים לאדמין ===
 def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר
     """
@@ -102,6 +97,8 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
     scheduler = BackgroundScheduler(timezone=tz)
     scheduler.add_job(send_error_stats_report, 'cron', hour=8, minute=0)
     scheduler.add_job(lambda: send_usage_report(1), 'cron', hour=8, minute=0)
+    scheduler.add_job(lambda: send_daily_summary(days_back=1), 'cron', hour=8, minute=0)  #לא למחוק!! דוח כספים יומי על אתמול לא למחוק לעולם לא משנה מה
+
     scheduler.start()
     print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
 

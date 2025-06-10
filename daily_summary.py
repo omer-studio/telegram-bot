@@ -267,16 +267,6 @@ def setup_daily_reports():
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח באתחול: {e}")
     
-    # דוח יומי אוטומטי
-    try:
-        thailand_tz = pytz.timezone("Asia/Bangkok")
-        scheduler = BackgroundScheduler(timezone=thailand_tz)
-        scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=28)
-        scheduler.start()
-        print("✅ [DAILY] תזמון דוח יומי הופעל ב-12:28 תאילנד")
-    except Exception as e:
-        print(f"❌ [DAILY] שגיאה בהגדרת תזמון: {e}")
-    
     # הפעל דוח מיידי
     threading.Thread(target=startup_report, daemon=True).start()
 
