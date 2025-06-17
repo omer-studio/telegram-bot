@@ -121,7 +121,7 @@ def get_main_response(full_messages):
     try:
         # full_messages כולל את ה-SYSTEM_PROMPT כבר בתחילתו (נבנה ב-message_handler)
         response = client.chat.completions.create(
-            model="gpt-4.1",
+            model="gpt-4o",
             messages=full_messages,
             temperature=1,
         )
