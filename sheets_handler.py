@@ -319,8 +319,8 @@ def log_to_sheets(
     prompt_tokens_total=None, completion_tokens_total=None, cached_tokens=None,
     cached_tokens_gpt_a=None, cost_gpt_a=None,
     cached_tokens_gpt_b=None, cost_gpt_b=None,
-    cached_tokens_gpt_c=None, cost_gpt_c=None,
-    merge_usage=None, fields_updated_by_gpt_d=None
+    cached_tokens_gpt_e=None, cost_gpt_e=None,
+    merge_usage=None, fields_updated_by_gpt_e=None
 ):
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
@@ -427,8 +427,8 @@ def log_to_sheets(
             cached_tokens_gpt_a = 0
         if cached_tokens_gpt_b is None:
             cached_tokens_gpt_b = 0
-        if cached_tokens_gpt_c is None:
-            cached_tokens_gpt_c = 0
+        if cached_tokens_gpt_e is None:
+            cached_tokens_gpt_e = 0
 
         # 🚨 תיקון 3: חישוב עלויות מפורטות
         # שימוש בפונקציה המרכזית מ-gpt_handler במקום חישוב פנימי
@@ -442,9 +442,9 @@ def log_to_sheets(
         if cost_gpt_b is None:
             costs = get_gpt_costs(summary_usage.get("prompt_tokens", 0), summary_usage.get("completion_tokens", 0), summary_usage.get("cached_tokens", 0))
             cost_gpt_b = costs["cost_total_ils"]
-        if cost_gpt_c is None:
+        if cost_gpt_e is None:
             costs = get_gpt_costs(extract_usage.get("prompt_tokens", 0), extract_usage.get("completion_tokens", 0), extract_usage.get("cached_tokens", 0))
-            cost_gpt_c = costs["cost_total_ils"]
+            cost_gpt_e = costs["cost_total_ils"]
 
         # 🚨 תיקון 4: ניקוי ערכי עלות
         def clean_cost_value(cost_val):
@@ -504,16 +504,16 @@ def log_to_sheets(
             "cached_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt_b"),
             "cost_gpt_b": format_money(summary_cost_agorot),
             "model_gpt_b": str(summary_usage.get("model", "")),
-            "usage_prompt_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_c"),
-            "usage_completion_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_c"),
-            "usage_total_tokens_gpt_c": safe_calc(lambda: (
+            "usage_prompt_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_e"),
+            "usage_completion_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_e"),
+            "usage_total_tokens_gpt_e": safe_calc(lambda: (
                 safe_int(extract_usage.get("cached_tokens", 0)) +
                 safe_int(extract_usage.get("completion_tokens", 0)) +
                 safe_int(extract_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_gpt_c"),
-            "cached_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_c"),
-            "cost_gpt_c": format_money(extract_cost_agorot),
-            "model_gpt_c": str(extract_usage.get("model", "")),
+            ), "usage_total_tokens_gpt_e"),
+            "cached_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_e"),
+            "cost_gpt_e": format_money(extract_cost_agorot),
+            "model_gpt_e": str(extract_usage.get("model", "")),
             "usage_prompt_tokens_gpt_d": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_prompt_tokens_gpt_d"),
             "usage_completion_tokens_gpt_d": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_completion_tokens_gpt_d"),
             "usage_total_tokens_gpt_d": safe_calc(lambda: (
@@ -524,7 +524,7 @@ def log_to_sheets(
             "cached_tokens_gpt_d": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "cached_tokens_gpt_d"),
             "cost_gpt_d": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0,
             "model_gpt_d": str(merge_usage.get("model", "")) if merge_usage is not None and "cost_agorot" in merge_usage else "",
-            "fields_updated_by_gpt_d": str(fields_updated_by_gpt_d) if fields_updated_by_gpt_d is not None else "",
+            "fields_updated_by_gpt_d": str(fields_updated_by_gpt_e) if fields_updated_by_gpt_e is not None else "",
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only,

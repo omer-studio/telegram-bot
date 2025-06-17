@@ -13,7 +13,7 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
-from gpt_handler import get_main_response, summarize_bot_reply, update_user_summary_enhanced
+from gpt_handler import get_main_response, summarize_bot_reply, gpt_e
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from fields_dict import FIELDS_DICT
 import asyncio
@@ -341,12 +341,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         existing_profile = {}
                     print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-                    updated_profile, extract_usage = update_user_summary_enhanced(existing_profile, user_msg)
+                    # קריאה ל-gpt_e עם הסיכום הקיים
+                    existing_summary = existing_profile.get("summary", "") if isinstance(existing_profile, dict) else ""
+                    gpt_e_result = gpt_e(existing_summary, user_msg)
+                    
+                    if gpt_e_result is None:
+                        # אין שינוי - משתמשים בפרופיל הקיים
+                        updated_profile = existing_profile
+                        extract_usage = {}
+                    else:
+                        # יש שינוי - מעדכנים את הפרופיל
+                        updated_summary = gpt_e_result.get("updated_summary", "")
+                        full_data = gpt_e_result.get("full_data", {})
+                        updated_profile = {**existing_profile, **full_data}
+                        if updated_summary:
+                            updated_profile["summary"] = updated_summary
+                        extract_usage = {k: v for k, v in gpt_e_result.items() if k not in ["updated_summary", "full_data"]}
+                    
                     print(f"[DEBUG][post_reply_tasks] updated_profile: {updated_profile} (type: {type(updated_profile)})")
                     print(f"[DEBUG][post_reply_tasks] extract_usage: {extract_usage} (type: {type(extract_usage)})")
-                    # GPT-E לא מחזיר merge_usage כי הוא עושה הכל בשלב אחד
-                    merge_usage = None
-                    print(f"[DEBUG][post_reply_tasks] merge_usage: {merge_usage} (type: {type(merge_usage)})")
                     identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
                     print(f"[DEBUG][post_reply_tasks] identity_fields: {identity_fields} (type: {type(identity_fields)})")
                     if updated_profile and updated_profile != existing_profile:
@@ -362,7 +375,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             message_id, chat_id, user_msg, reply_text, reply_summary,
                             main_usage, summary_usage, extract_usage,
                             main_total_tokens, main_cost_total_usd, main_cost_total_ils,
-                            merge_usage=merge_usage, fields_updated_by_gpt_d=None
+                            merge_usage=None, fields_updated_by_gpt_e=None
                         )
                         logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
                     except Exception as e:
