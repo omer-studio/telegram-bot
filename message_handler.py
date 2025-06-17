@@ -13,7 +13,7 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
-from gpt_handler import get_main_response, summarize_bot_reply, smart_update_profile, extract_user_profile_fields
+from gpt_handler import get_main_response, summarize_bot_reply, update_user_summary_enhanced
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from fields_dict import FIELDS_DICT
 import asyncio
@@ -341,9 +341,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         existing_profile = {}
                     print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-                    updated_profile, extract_usage, merge_usage = smart_update_profile(existing_profile, user_msg)
+                    updated_profile, extract_usage = update_user_summary_enhanced(existing_profile, user_msg)
                     print(f"[DEBUG][post_reply_tasks] updated_profile: {updated_profile} (type: {type(updated_profile)})")
                     print(f"[DEBUG][post_reply_tasks] extract_usage: {extract_usage} (type: {type(extract_usage)})")
+                    # GPT-E לא מחזיר merge_usage כי הוא עושה הכל בשלב אחד
+                    merge_usage = None
                     print(f"[DEBUG][post_reply_tasks] merge_usage: {merge_usage} (type: {type(merge_usage)})")
                     identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
                     print(f"[DEBUG][post_reply_tasks] identity_fields: {identity_fields} (type: {type(identity_fields)})")

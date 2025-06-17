@@ -567,6 +567,167 @@ def smart_update_profile_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, smart_update_profile, *args, **kwargs)
 
+# ============================ GPT-E - פונקציה חדשה לשיפור הזיכרון ============================
+def update_user_summary_enhanced(existing_profile, user_message):
+    """
+    GPT-E: מעדכן תעודת זהות רגשית של משתמש עם סיכום קריא במקום JSON מורכב.
+    קלט: existing_profile (dict), user_message (str)
+    פלט: dict ממוזג, usage (dict)
+    """
+    print("[DEBUG][update_user_summary_enhanced] CALLED - GPT-E")
+    try:
+        logging.info("🔄 מתחיל עדכון משופר של ת.ז הרגשית עם GPT-E")
+        print(f"[DEBUG][update_user_summary_enhanced] --- START ---")
+        print(f"[DEBUG][update_user_summary_enhanced] existing_profile: {existing_profile} (type: {type(existing_profile)})")
+        
+        # שלב 1: GPT-E - חילוץ ועדכון בסיכום קריא
+        enhanced_data, extract_usage = extract_user_profile_fields_enhanced(user_message, existing_profile)
+        print(f"[DEBUG][update_user_summary_enhanced] enhanced_data: {enhanced_data} (type: {type(enhanced_data)})")
+        print(f"[DEBUG][update_user_summary_enhanced] extract_usage: {extract_usage} (type: {type(extract_usage)})")
+        
+        # הגנה: ודא ש-enhanced_data הוא dict עם מפתחות str בלבד
+        if not isinstance(enhanced_data, dict) or not all(isinstance(k, str) for k in enhanced_data.keys()):
+            logging.error(f"⚠️ enhanced_data לא תקין: {enhanced_data}")
+            print(f"[ALERT][update_user_summary_enhanced] enhanced_data לא תקין: {enhanced_data}")
+            enhanced_data = {}
+        
+        logging.info(f"🤖 GPT-E עדכן: {list(enhanced_data.keys())}")
+        print(f"[DEBUG][update_user_summary_enhanced] enhanced_data keys: {list(enhanced_data.keys())}")
+        
+        # אם אין מידע חדש - אין מה לעדכן
+        if not enhanced_data:
+            logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
+            print("[DEBUG][update_user_summary_enhanced] אין מידע חדש, מחזיר ת.ז ללא שינוי")
+            return existing_profile, extract_usage
+        
+        # עדכון הפרופיל
+        updated_profile = {**existing_profile, **enhanced_data}
+        print(f"[DEBUG][update_user_summary_enhanced] updated_profile: {updated_profile}")
+        
+        if existing_profile != updated_profile:
+            diff_keys = set(updated_profile.keys()) - set(existing_profile.keys())
+            print(f"[DEBUG][update_user_summary_enhanced] profile diff (new keys): {diff_keys}")
+        else:
+            print(f"[DEBUG][update_user_summary_enhanced] profile unchanged")
+        
+        logging.info(f"✅ GPT-E עדכן ת.ז עם {len(enhanced_data)} שדות חדשים")
+        print(f"[DEBUG][update_user_summary_enhanced] returning: profile_updated={updated_profile}, extract_usage={extract_usage}")
+        return updated_profile, extract_usage
+        
+    except Exception as e:
+        import traceback
+        print(f"[ERROR][update_user_summary_enhanced] Exception: {e}")
+        print(traceback.format_exc())
+        return existing_profile, {}
+
+def update_user_summary_enhanced_async(*args, **kwargs):
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, update_user_summary_enhanced, *args, **kwargs)
+
+def extract_user_profile_fields_enhanced(text, existing_profile=None, system_prompt=None, client=None):
+    """
+    GPT-E: שולחת את הטקסט ל-GPT-E ומחזירה dict עם שדות מידע אישי בסיכום קריא.
+    קלט: text (טקסט חופשי מהמשתמש), existing_profile (dict קיים), system_prompt (פרומט ייעודי), client (אופציונלי).
+    פלט: (enhanced_data: dict, usage_data: dict)
+    """
+    print("[DEBUG][extract_user_profile_fields_enhanced] CALLED - GPT-E")
+    if system_prompt is None:
+        system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT  # פרומט GPT-E
+    if client is None:
+        from gpt_handler import client
+    if existing_profile is None:
+        existing_profile = {}
+    
+    try:
+        # הכנת הפרומט עם הפרופיל הקיים
+        profile_context = ""
+        if existing_profile:
+            profile_context = f"\n\nפרופיל קיים:\n{json.dumps(existing_profile, ensure_ascii=False, indent=2)}"
+        
+        response = client.chat.completions.create(
+            model="gpt-4.1-nano",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"הודעה חדשה: {text}{profile_context}"}
+            ],
+            temperature=0,
+            max_tokens=300
+        )
+        content = response.choices[0].message.content.strip()
+        print(f"[DEBUG][extract_user_profile_fields_enhanced] raw GPT-E content: {content}")
+        
+        # --- ניקוי בלוק ```json ... ``` אם קיים ---
+        if content.startswith("```"):
+            match = re.search(r"```(?:json)?\\s*({.*?})\\s*```", content, re.DOTALL)
+            if match:
+                logging.debug(f"[DEBUG][extract_user_profile_fields_enhanced] found ```json block, extracting only JSON...")
+                content = match.group(1)
+                print(f"[DEBUG][extract_user_profile_fields_enhanced] cleaned content: {content}")
+        
+        logging.info(f"[DEBUG] GPT-E enhanced extraction raw: '{content}'")
+        
+        try:
+            enhanced_data = json.loads(content)
+            print(f"[DEBUG][extract_user_profile_fields_enhanced] after json.loads: {enhanced_data} (type: {type(enhanced_data)})")
+            if isinstance(enhanced_data, dict):
+                print(f"[DEBUG][extract_user_profile_fields_enhanced] enhanced_data keys: {list(enhanced_data.keys())}")
+                if not enhanced_data:
+                    print("[ALERT][extract_user_profile_fields_enhanced] enhanced_data is an EMPTY dict!")
+            else:
+                print("[ALERT][extract_user_profile_fields_enhanced] enhanced_data is NOT a dict!")
+        except Exception as e:
+            import traceback
+            print(f"[ERROR][extract_user_profile_fields_enhanced] Exception: {e}")
+            print(traceback.format_exc())
+            enhanced_data = {}
+        
+        # --- usage/cost ---
+        prompt_tokens = response.usage.prompt_tokens
+        prompt_tokens_details = getattr(response.usage, 'prompt_tokens_details', None)
+        cached_tokens = getattr(prompt_tokens_details, 'cached_tokens', 0) if prompt_tokens_details else 0
+        prompt_regular = prompt_tokens - cached_tokens
+        completion_tokens = response.usage.completion_tokens
+        total_tokens = response.usage.total_tokens
+        model_name = response.model
+        
+        # חישוב עלות דינאמי לפי המודל
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        usage_data = {
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'total_tokens': total_tokens,
+            'cached_tokens': cached_tokens,
+            **cost_data,
+            'model': response.model
+        }
+        
+        print(f"[DEBUG][extract_user_profile_fields_enhanced] returning enhanced_data: {enhanced_data}")
+        return enhanced_data, usage_data
+        
+    except Exception as critical_error:
+        logging.error(f"❌ שגיאה קריטית ב-extract_user_profile_fields_enhanced: {critical_error}")
+        return {}, {}
+
+# ============================ בית קברות - קוד ישן מושבת ============================
+"""
+בית קברות - הקוד הישן (GPT-C + GPT-D) מושבת אבל נשמר למקרה הצורך
+
+# פונקציה ישנה - smart_update_profile (GPT-C + GPT-D)
+def smart_update_profile_GRAVEYARD(existing_profile, user_message):
+    # ... הקוד הישן מושבת ...
+    pass
+
+# פונקציה ישנה - extract_user_profile_fields (GPT-C)
+def extract_user_profile_fields_GRAVEYARD(text, system_prompt=None, client=None):
+    # ... הקוד הישן מושבת ...
+    pass
+
+# פונקציה ישנה - merge_sensitive_profile_data (GPT-D)
+def merge_sensitive_profile_data_GRAVEYARD(existing_profile, new_data, user_message):
+    # ... הקוד הישן מושבת ...
+    pass
+"""
+
 def get_combined_usage_data(extract_usage, merge_usage=None):
     """
     מאחד usage של חילוץ ומיזוג (אם יש), מחזיר usage כולל לכל התהליך.
