@@ -24,7 +24,7 @@ from config import client, GPT_LOG_PATH
 import os
 from fields_dict import FIELDS_DICT
 import threading
-from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT
+from prompts import PROFILE_EXTRACTION_PROMPT, BOT_REPLY_SUMMARY_PROMPT, SENSITIVE_PROFILE_MERGE_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
 import asyncio
 import re
 from gpt_usage_manager import GPTUsageManager
