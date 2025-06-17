@@ -108,12 +108,12 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
     """
     return gpt_usage_manager.calculate(model_name, prompt_tokens, completion_tokens, cached_tokens, usd_to_ils)
 
-# ============================הג'יפיטי ה-1 - פועל תמיד ועונה תשובה למשתמש ======================= 
+# ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש ======================= 
 
 
 def get_main_response(full_messages):
     """
-    שולח הודעה ל-GPT הראשי ומחזיר את התשובה, כולל פירוט עלות וטוקנים.
+    שולח הודעה ל-GPT-A הראשי ומחזיר את התשובה, כולל פירוט עלות וטוקנים.
     קלט: full_messages — רשימת הודעות (כולל system prompt).
     פלט: dict עם תשובה, usage, עלות.
     # מהלך מעניין: שימוש בפרומט הראשי שמגדיר את האישיות של דניאל.
@@ -191,30 +191,31 @@ def get_main_response(full_messages):
             **usage_log
         }
     except Exception as e:
-        logging.error(f"❌ שגיאה ב-GPT ראשי: {e}")
+        logging.error(f"❌ שגיאה ב-GPT-A ראשי: {e}")
         raise
 
 def get_main_response_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, get_main_response, *args, **kwargs)
 
-# ============================הג'יפיטי ה-2 - מקצר את תשובת הבוט אם היא ארוכה מדי כדי לחסוך בהיסטוריה ======================= 
-
+# ============================הג'יפיטי ה-B - תמצית תשובה להיסטוריה ======================= 
 
 def summarize_bot_reply(reply_text):
     """
-    מסכם את תשובת הבוט למשפט קצר וחם, בסגנון וואטסאפ.
-    קלט: reply_text (טקסט תשובת הבוט)
-    פלט: סיכום קצר (str), usage (dict)
-    # מהלך מעניין: שימוש בפרומט תמצות שמוגדר ב-prompts.py.
+    שולח תשובה של הבוט ל-GPT-B ומקבל תמצית קצרה להיסטוריה.
+    קלט: reply_text — התשובה המלאה של הבוט.
+    פלט: dict עם תמצית, usage, עלות.
+    # מהלך מעניין: תמצית חכמה שמשמרת את המהות אבל מקצרת משמעותית.
     """
-    system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט תמצות תשובה
     try:
+        system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט לתמצית
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": reply_text}],
             temperature=1,
         )
+
+        # שליפת נתוני usage
         prompt_tokens = response.usage.prompt_tokens
         prompt_tokens_details = response.usage.prompt_tokens_details
         cached_tokens = prompt_tokens_details.cached_tokens
@@ -224,7 +225,7 @@ def summarize_bot_reply(reply_text):
         model_name = response.model
 
         # --- Smart debug ---
-        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "reply_summary")
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "summary")
 
         # חישוב עלות דינאמי לפי המודל
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
@@ -237,13 +238,15 @@ def summarize_bot_reply(reply_text):
             **cost_data,
             "model": response.model
         }
-        write_gpt_log("reply_summary", usage_log, response.model)
+
+        write_gpt_log("summary", usage_log, response.model)
+
         return {
-            "bot_summary": response.choices[0].message.content.strip(),
+            "summary": response.choices[0].message.content.strip(),
             **usage_log
         }
     except Exception as e:
-        logging.error(f"❌ שגיאה ב-GPT מקצר: {e}")
+        logging.error(f"❌ שגיאה ב-GPT-B תמצית: {e}")
         raise
 
 def summarize_bot_reply_async(*args, **kwargs):
@@ -286,7 +289,7 @@ def validate_extracted_data(data):
     return validated
 
 
-# ============================הג'יפיטי ה-4 - מיזוג חכם של מידע רגיש ======================= 
+# ============================הג'יפיטי ה-D - מיזוג חכם של מידע רגיש ======================= 
 
 def merge_sensitive_profile_data(existing_profile, new_data, user_message):
     """
@@ -302,7 +305,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         FIELDS_DICT["language_of_strength"], FIELDS_DICT["coping_strategies"], FIELDS_DICT["fears_concerns"], FIELDS_DICT["future_vision"]
     ]
     
-    # בדיקה אם באמת צריך GPT4
+    # בדיקה אם באמת צריך GPT-D
     needs_merge = False
     for field in complex_fields:
         if field in new_data:
@@ -387,7 +390,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
             "model": response.model
         }
 
-        logging.info(f"🤖 GPT4 מיזוג החזיר: '{content[:200]}...'")
+        logging.info(f"🤖 GPT-D מיזוג החזיר: '{content[:200]}...'")
         write_gpt_log("sensitive_merge", usage_data, response.model)
 
         # פרסור התשובה
@@ -402,7 +405,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         # validation על התוצאה הסופית
         validated_profile = validate_extracted_data(merged_profile)
         
-        logging.info(f"✅ GPT4 עדכן ת.ז עם {len(validated_profile)} שדות")
+        logging.info(f"✅ GPT-D עדכן ת.ז עם {len(validated_profile)} שדות")
         if validated_profile != merged_profile:
             logging.info(f"🔧 לאחר validation: הוסרו/תוקנו שדות")
 
@@ -417,7 +420,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         }, validated_profile
 
     except json.JSONDecodeError as e:
-        logging.error(f"❌ שגיאה בפרסור JSON במיזוג GPT4: {e}")
+        logging.error(f"❌ שגיאה בפרסור JSON במיזוג GPT-D: {e}")
         logging.error(f"📄 התוכן: '{content}'")
         
         # fallback - מיזוג פשוט במקרה של כשל
@@ -440,7 +443,7 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         }, fallback_merge
 
     except Exception as e:
-        logging.error(f"❌ שגיאה כללית ב-GPT4 מיזוג: {e}")
+        logging.error(f"❌ שגיאה כללית ב-GPT-D מיזוג: {e}")
         
         # fallback - מיזוג פשוט במקרה של כשל
         fallback_merge = {**existing_profile, **new_data}
@@ -461,10 +464,10 @@ def merge_sensitive_profile_data(existing_profile, new_data, user_message):
         }, fallback_merge
 
 
-# פונקציית עזר - קובעת אם להפעיל GPT4
-def should_use_gpt4_merge(existing_profile, new_data):
+# פונקציית עזר - קובעת אם להפעיל GPT-D
+def should_use_gpt_d_merge(existing_profile, new_data):
     """
-    מחליט האם להפעיל מיזוג חכם (GPT4) לפי סוג השינוי בפרופיל.
+    מחליט האם להפעיל מיזוג חכם (GPT-D) לפי סוג השינוי בפרופיל.
     קלט: existing_profile, new_data
     פלט: True/False
     """
@@ -473,21 +476,21 @@ def should_use_gpt4_merge(existing_profile, new_data):
         FIELDS_DICT["primary_conflict"], FIELDS_DICT["trauma_history"], FIELDS_DICT["goal_in_course"], 
         FIELDS_DICT["language_of_strength"], FIELDS_DICT["coping_strategies"], FIELDS_DICT["fears_concerns"], FIELDS_DICT["future_vision"]
     ]
-    print("[DEBUG][should_use_gpt4_merge] complex_fields:")
+    print("[DEBUG][should_use_gpt_d_merge] complex_fields:")
     for idx, field in enumerate(complex_fields):
-        print(f"[DEBUG][should_use_gpt4_merge] complex_fields[{idx}] = {field} (type: {type(field)})")
+        print(f"[DEBUG][should_use_gpt_d_merge] complex_fields[{idx}] = {field} (type: {type(field)})")
         if not isinstance(field, str):
-            print(f"[DEBUG][should_use_gpt4_merge][ALERT] complex_fields[{idx}] הוא {type(field)}! ערך: {field}")
+            print(f"[DEBUG][should_use_gpt_d_merge][ALERT] complex_fields[{idx}] הוא {type(field)}! ערך: {field}")
             continue  # דלג על שדות לא תקינים
-        if field in new_data:  # GPT3 מצא שדה מורכב חדש
+        if field in new_data:  # GPT-C מצא שדה מורכב חדש
             existing_value = existing_profile.get(field, "")
-            print(f"[DEBUG][should_use_gpt4_merge] בדיקה: field='{field}', existing_value='{existing_value}'")
+            print(f"[DEBUG][should_use_gpt_d_merge] בדיקה: field='{field}', existing_value='{existing_value}'")
             if existing_value and isinstance(existing_value, str) and existing_value.strip():  # והשדה קיים בת.ז
-                logging.info(f"🎯 GPT4 נדרש - שדה '{field}' מצריך מיזוג")
-                print(f"[DEBUG][should_use_gpt4_merge] נמצא שדה מורכב חדש: {field}")
+                logging.info(f"🎯 GPT-D נדרש - שדה '{field}' מצריך מיזוג")
+                print(f"[DEBUG][should_use_gpt_d_merge] נמצא שדה מורכב חדש: {field}")
                 return True
-    print("[DEBUG][should_use_gpt4_merge] אין צורך ב-GPT4 - עדכון פשוט מספיק")
-    logging.info("✅ אין צורך ב-GPT4 - עדכון פשוט מספיק")
+    print("[DEBUG][should_use_gpt_d_merge] אין צורך ב-GPT-D - עדכון פשוט מספיק")
+    logging.info("✅ אין צורך ב-GPT-D - עדכון פשוט מספיק")
     return False
 
 
@@ -505,7 +508,7 @@ def smart_update_profile(existing_profile, user_message):
         logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
         print(f"[DEBUG][smart_update_profile] --- START ---")
         print(f"[DEBUG][smart_update_profile] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-        # שלב 1: GPT3 - חילוץ מידע חדש
+        # שלב 1: GPT-C - חילוץ מידע חדש
         new_data, extract_usage = extract_user_profile_fields(user_message)
         print(f"[DEBUG][smart_update_profile] new_data: {new_data} (type: {type(new_data)})")
         print(f"[DEBUG][smart_update_profile] extract_usage: {extract_usage} (type: {type(extract_usage)})")
@@ -514,23 +517,23 @@ def smart_update_profile(existing_profile, user_message):
             logging.error(f"⚠️ new_data לא תקין (לפני מיזוג): {new_data}")
             print(f"[ALERT][smart_update_profile] new_data לא תקין (לפני מיזוג): {new_data}")
             new_data = {}
-        logging.info(f"🤖 GPT3 חילץ: {list(new_data.keys())}")
+        logging.info(f"🤖 GPT-C חילץ: {list(new_data.keys())}")
         print(f"[DEBUG][smart_update_profile] new_data keys: {list(new_data.keys())}")
         # אם אין מידע חדש - אין מה לעדכן
         if not new_data:
             logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
             print("[DEBUG][smart_update_profile] אין מידע חדש, מחזיר ת.ז ללא שינוי")
             return existing_profile, extract_usage, None
-        # שלב 2: בדיקה אם צריך GPT4
-        print(f"[DEBUG][smart_update_profile] קורא ל-should_use_gpt4_merge עם existing_profile: {existing_profile}, new_data: {new_data}")
-        if should_use_gpt4_merge(existing_profile, new_data):
-            logging.info("🎯 מפעיל GPT4 למיזוג מורכב")
-            print("[DEBUG][smart_update_profile] מפעיל GPT4 למיזוג מורכב!")
-            # שלב 3: GPT4 - מיזוג חכם
+        # שלב 2: בדיקה אם צריך GPT-D
+        print(f"[DEBUG][smart_update_profile] קורא ל-should_use_gpt_d_merge עם existing_profile: {existing_profile}, new_data: {new_data}")
+        if should_use_gpt_d_merge(existing_profile, new_data):
+            logging.info("🎯 מפעיל GPT-D למיזוג מורכב")
+            print("[DEBUG][smart_update_profile] מפעיל GPT-D למיזוג מורכב!")
+            # שלב 3: GPT-D - מיזוג חכם
             print(f"[DEBUG][smart_update_profile] לפני merge_sensitive_profile_data: existing_profile={existing_profile}, new_data={new_data}, user_message={user_message}")
             merge_usage, updated_profile = merge_sensitive_profile_data(existing_profile, new_data, user_message)
             print(f"[DEBUG][smart_update_profile] אחרי merge_sensitive_profile_data: updated_profile={updated_profile}, merge_usage={merge_usage}")
-            logging.info(f"✅ GPT4 עדכן ת.ז עם {len(updated_profile)} שדות")
+            logging.info(f"✅ GPT-D עדכן ת.ז עם {len(updated_profile)} שדות")
             print(f"[DEBUG][smart_update_profile] merge_usage: {merge_usage}")
             print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
             # print diff
@@ -542,8 +545,8 @@ def smart_update_profile(existing_profile, user_message):
             print(f"[DEBUG][smart_update_profile] returning: profile_updated={updated_profile}, extract_usage={extract_usage}")
             return updated_profile, extract_usage, merge_usage
         else:
-            logging.info("✅ עדכון פשוט ללא GPT4")
-            print("[DEBUG][smart_update_profile] עדכון פשוט ללא GPT4")
+            logging.info("✅ עדכון פשוט ללא GPT-D")
+            print("[DEBUG][smart_update_profile] עדכון פשוט ללא GPT-D")
             # עדכון פשוט - מיזוג רגיל
             updated_profile = {**existing_profile, **new_data}
             print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
@@ -570,12 +573,12 @@ def get_combined_usage_data(extract_usage, merge_usage=None):
     קלט: extract_usage (dict), merge_usage (dict או None)
     פלט: dict usage כולל
     """
-    # נתוני GPT3
+    # נתוני GPT-C
     if not isinstance(extract_usage, dict):
         raise ValueError("extract_usage חייב להיות dict!")
     extract_data = extract_usage.copy()
     
-    # אם GPT4 רץ - הוסף את הנתונים שלו
+    # אם GPT-D רץ - הוסף את הנתונים שלו
     if merge_usage:
         if not isinstance(merge_usage, dict):
             raise ValueError("merge_usage חייב להיות dict!")
@@ -586,7 +589,7 @@ def get_combined_usage_data(extract_usage, merge_usage=None):
 
 def extract_user_profile_fields(text, system_prompt=None, client=None):
     """
-    שולחת את הטקסט ל-GPT (identity_extraction) ומחזירה dict עם שדות מידע אישי (גיל, דת, עיסוק וכו').
+    שולחת את הטקסט ל-GPT-C (identity_extraction) ומחזירה dict עם שדות מידע אישי (גיל, דת, עיסוק וכו').
     קלט: text (טקסט חופשי מהמשתמש), system_prompt (פרומט ייעודי, ברירת מחדל: PROFILE_EXTRACTION_PROMPT), client (אופציונלי).
     פלט: (new_data: dict, usage_data: dict)
     # מהלך מעניין: ניקוי אוטומטי של בלוק ```json ... ``` מהתשובה של GPT, בדיקת תקינות, ולוגים מפורטים.
@@ -615,7 +618,7 @@ def extract_user_profile_fields(text, system_prompt=None, client=None):
                 logging.debug(f"[DEBUG][extract_user_profile_fields] found ```json block, extracting only JSON...")
                 content = match.group(1)
                 print(f"[DEBUG][extract_user_profile_fields] cleaned content: {content}")
-        logging.info(f"[DEBUG] GPT3 identity_extraction raw: '{content}'")
+        logging.info(f"[DEBUG] GPT-C identity_extraction raw: '{content}'")
         try:
             new_data = json.loads(content)
             print(f"[DEBUG][extract_user_profile_fields] after json.loads: {new_data} (type: {type(new_data)})")

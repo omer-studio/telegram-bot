@@ -317,10 +317,10 @@ def log_to_sheets(
     main_usage, summary_usage, extract_usage, total_tokens,
     cost_usd, cost_ils,
     prompt_tokens_total=None, completion_tokens_total=None, cached_tokens=None,
-    cached_tokens_gpt1=None, cost_gpt1=None,
-    cached_tokens_gpt2=None, cost_gpt2=None,
-    cached_tokens_gpt3=None, cost_gpt3=None,
-    merge_usage=None, fields_updated_by_4gpt=None
+    cached_tokens_gpt_a=None, cost_gpt_a=None,
+    cached_tokens_gpt_b=None, cost_gpt_b=None,
+    cached_tokens_gpt_c=None, cost_gpt_c=None,
+    merge_usage=None, fields_updated_by_gpt_d=None
 ):
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
@@ -423,12 +423,12 @@ def log_to_sheets(
         # חישוב cached tokens (כרגע 0 כי OpenAI לא מחזיר)
         if cached_tokens is None:
             cached_tokens = 0
-        if cached_tokens_gpt1 is None:
-            cached_tokens_gpt1 = 0
-        if cached_tokens_gpt2 is None:
-            cached_tokens_gpt2 = 0
-        if cached_tokens_gpt3 is None:
-            cached_tokens_gpt3 = 0
+        if cached_tokens_gpt_a is None:
+            cached_tokens_gpt_a = 0
+        if cached_tokens_gpt_b is None:
+            cached_tokens_gpt_b = 0
+        if cached_tokens_gpt_c is None:
+            cached_tokens_gpt_c = 0
 
         # 🚨 תיקון 3: חישוב עלויות מפורטות
         # שימוש בפונקציה המרכזית מ-gpt_handler במקום חישוב פנימי
@@ -436,15 +436,15 @@ def log_to_sheets(
             return calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens)
 
         # חישוב עלויות אם לא סופקו
-        if cost_gpt1 is None:
+        if cost_gpt_a is None:
             costs = get_gpt_costs(main_usage.get("prompt_tokens", 0), main_usage.get("completion_tokens", 0), main_usage.get("cached_tokens", 0))
-            cost_gpt1 = costs["cost_total_ils"]
-        if cost_gpt2 is None:
+            cost_gpt_a = costs["cost_total_ils"]
+        if cost_gpt_b is None:
             costs = get_gpt_costs(summary_usage.get("prompt_tokens", 0), summary_usage.get("completion_tokens", 0), summary_usage.get("cached_tokens", 0))
-            cost_gpt2 = costs["cost_total_ils"]
-        if cost_gpt3 is None:
+            cost_gpt_b = costs["cost_total_ils"]
+        if cost_gpt_c is None:
             costs = get_gpt_costs(extract_usage.get("prompt_tokens", 0), extract_usage.get("completion_tokens", 0), extract_usage.get("cached_tokens", 0))
-            cost_gpt3 = costs["cost_total_ils"]
+            cost_gpt_c = costs["cost_total_ils"]
 
         # 🚨 תיקון 4: ניקוי ערכי עלות
         def clean_cost_value(cost_val):
@@ -461,7 +461,7 @@ def log_to_sheets(
         clean_cost_usd = clean_cost_value(cost_usd)
         clean_cost_ils = clean_cost_value(cost_ils)
 
-        # האם הופעל סיכום (GPT2)?
+        # האם הופעל סיכום (GPT-B)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
@@ -484,47 +484,47 @@ def log_to_sheets(
             "cached_tokens": cached_tokens,
             "total_cost_usd": format_money(main_cost_usd),
             "total_cost_ils": format_money(main_cost_ils * 100),
-            "usage_prompt_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT1"),
-            "usage_completion_tokens_GPT1": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT1"),
-            "usage_total_tokens_GPT1": safe_calc(lambda: (
+            "usage_prompt_tokens_GPT-A": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT-A"),
+            "usage_completion_tokens_GPT-A": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT-A"),
+            "usage_total_tokens_GPT-A": safe_calc(lambda: (
                 safe_int(main_usage.get("cached_tokens", 0)) +
                 safe_int(main_usage.get("completion_tokens", 0)) +
                 safe_int(main_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_GPT1"),
-            "cached_tokens_gpt1": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt1"),
-            "cost_gpt1": format_money(main_cost_agorot),
-            "model_GPT1": str(main_usage.get("model", "")),
-            "usage_prompt_tokens_GPT2": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT2"),
-            "usage_completion_tokens_GPT2": safe_calc(lambda: safe_int(summary_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT2"),
-            "usage_total_tokens_GPT2": safe_calc(lambda: (
+            ), "usage_total_tokens_GPT-A"),
+            "cached_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt_a"),
+            "cost_gpt_a": format_money(main_cost_agorot),
+            "model_GPT-A": str(main_usage.get("model", "")),
+            "usage_prompt_tokens_GPT-B": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT-B"),
+            "usage_completion_tokens_GPT-B": safe_calc(lambda: safe_int(summary_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT-B"),
+            "usage_total_tokens_GPT-B": safe_calc(lambda: (
                 safe_int(summary_usage.get("cached_tokens", 0)) +
                 safe_int(summary_usage.get("completion_tokens", 0)) +
                 safe_int(summary_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_GPT2"),
-            "cached_tokens_gpt2": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt2"),
-            "cost_gpt2": format_money(summary_cost_agorot),
-            "model_GPT2": str(summary_usage.get("model", "")),
-            "usage_prompt_tokens_GPT3": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT3"),
-            "usage_completion_tokens_GPT3": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT3"),
-            "usage_total_tokens_GPT3": safe_calc(lambda: (
+            ), "usage_total_tokens_GPT-B"),
+            "cached_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt_b"),
+            "cost_gpt_b": format_money(summary_cost_agorot),
+            "model_GPT-B": str(summary_usage.get("model", "")),
+            "usage_prompt_tokens_GPT-C": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_GPT-C"),
+            "usage_completion_tokens_GPT-C": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_GPT-C"),
+            "usage_total_tokens_GPT-C": safe_calc(lambda: (
                 safe_int(extract_usage.get("cached_tokens", 0)) +
                 safe_int(extract_usage.get("completion_tokens", 0)) +
                 safe_int(extract_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_GPT3"),
-            "cached_tokens_gpt3": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt3"),
-            "cost_gpt3": format_money(extract_cost_agorot),
-            "model_GPT3": str(extract_usage.get("model", "")),
-            "usage_prompt_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_prompt_tokens_GPT4"),
-            "usage_completion_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_completion_tokens_GPT4"),
-            "usage_total_tokens_GPT4": safe_calc(lambda: (
+            ), "usage_total_tokens_GPT-C"),
+            "cached_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_c"),
+            "cost_gpt_c": format_money(extract_cost_agorot),
+            "model_GPT-C": str(extract_usage.get("model", "")),
+            "usage_prompt_tokens_GPT-D": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_prompt_tokens_GPT-D"),
+            "usage_completion_tokens_GPT-D": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_completion_tokens_GPT-D"),
+            "usage_total_tokens_GPT-D": safe_calc(lambda: (
                 safe_int(merge_usage.get("cached_tokens", 0)) +
                 safe_int(merge_usage.get("completion_tokens", 0)) +
                 safe_int(merge_usage.get("prompt_tokens", 0))
-            ) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_total_tokens_GPT4"),
-            "cached_tokens_GPT4": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "cached_tokens_GPT4"),
-            "cost_GPT4": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0,
-            "model_GPT4": str(merge_usage.get("model", "")) if merge_usage is not None and "cost_agorot" in merge_usage else "",
-            "fields_updated_by_4gpt": str(fields_updated_by_4gpt) if fields_updated_by_4gpt is not None else "",
+            ) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_total_tokens_GPT-D"),
+            "cached_tokens_GPT-D": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "cached_tokens_GPT-D"),
+            "cost_GPT-D": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0,
+            "model_GPT-D": str(merge_usage.get("model", "")) if merge_usage is not None and "cost_agorot" in merge_usage else "",
+            "fields_updated_by_gpt_d": str(fields_updated_by_gpt_d) if fields_updated_by_gpt_d is not None else "",
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only,

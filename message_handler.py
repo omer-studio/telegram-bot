@@ -282,7 +282,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             main_total_tokens = main_usage.get("total_tokens", 0)
             main_cached_tokens = main_usage.get("cached_tokens", 0)
             main_model = main_usage.get("model", "")
-            main_cost_gpt1 = main_usage.get("cost_gpt1", 0)
+            main_cost_gpt_a = main_usage.get("cost_gpt_a", 0)
             main_cost_total_usd = main_usage.get("cost_total", 0)
             main_cost_total_ils = main_usage.get("cost_total_ils", 0)
 
@@ -360,7 +360,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             message_id, chat_id, user_msg, reply_text, reply_summary,
                             main_usage, summary_usage, extract_usage,
                             main_total_tokens, main_cost_total_usd, main_cost_total_ils,
-                            merge_usage=merge_usage, fields_updated_by_4gpt=None
+                            merge_usage=merge_usage, fields_updated_by_gpt_d=None
                         )
                         logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
                     except Exception as e:
