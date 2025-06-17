@@ -461,7 +461,7 @@ def log_to_sheets(
         clean_cost_usd = clean_cost_value(cost_usd)
         clean_cost_ils = clean_cost_value(cost_ils)
 
-        # האם הופעל סיכום (GPT-B)?
+        # האם הופעל סיכום (gpt_b)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
@@ -514,17 +514,6 @@ def log_to_sheets(
             "cached_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_e"),
             "cost_gpt_e": format_money(extract_cost_agorot),
             "model_gpt_e": str(extract_usage.get("model", "")),
-            "usage_prompt_tokens_gpt_d": safe_calc(lambda: safe_int(merge_usage.get("prompt_tokens", 0) - merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_prompt_tokens_gpt_d"),
-            "usage_completion_tokens_gpt_d": safe_calc(lambda: safe_int(merge_usage.get("completion_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_completion_tokens_gpt_d"),
-            "usage_total_tokens_gpt_d": safe_calc(lambda: (
-                safe_int(merge_usage.get("cached_tokens", 0)) +
-                safe_int(merge_usage.get("completion_tokens", 0)) +
-                safe_int(merge_usage.get("prompt_tokens", 0))
-            ) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "usage_total_tokens_gpt_d"),
-            "cached_tokens_gpt_d": safe_calc(lambda: safe_int(merge_usage.get("cached_tokens", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0, "cached_tokens_gpt_d"),
-            "cost_gpt_d": format_money(merge_usage.get("cost_agorot", 0)) if merge_usage is not None and "cost_agorot" in merge_usage else 0,
-            "model_gpt_d": str(merge_usage.get("model", "")) if merge_usage is not None and "cost_agorot" in merge_usage else "",
-            "fields_updated_by_gpt_d": str(fields_updated_by_gpt_e) if fields_updated_by_gpt_e is not None else "",
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only,
