@@ -343,14 +343,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
                     # קריאה ל-gpt_e עם הסיכום הקיים
                     existing_summary = existing_profile.get("summary", "") if isinstance(existing_profile, dict) else ""
-                    
                     # הוספת הקשר מההיסטוריה - ההודעה האחרונה של הבוט
                     last_bot_message = ""
-                    if history_messages and len(history_messages) >= 2:
-                        # ההודעה האחרונה של הבוט היא לפני האחרונה (user, bot, user, bot...)
-                        last_bot_message = history_messages[-2].get("content", "") if history_messages[-2].get("role") == "assistant" else ""
-                    
+                    for msg in reversed(history_messages):
+                        if msg.get("role") == "assistant":
+                            last_bot_message = msg.get("content", "")
+                            break
+                    print(f"[DEBUG][post_reply_tasks] לפני קריאה ל-gpt_e:")
+                    print(f"[DEBUG][post_reply_tasks] existing_summary: {existing_summary}")
+                    print(f"[DEBUG][post_reply_tasks] user_msg: {user_msg}")
+                    print(f"[DEBUG][post_reply_tasks] last_bot_message: {last_bot_message}")
+                    print(f"[DEBUG][post_reply_tasks] קורא ל-gpt_e...")
                     gpt_e_result = gpt_e(existing_summary, user_msg, last_bot_message)
+                    
+                    print(f"[DEBUG][post_reply_tasks] אחרי קריאה ל-gpt_e:")
+                    print(f"[DEBUG][post_reply_tasks] gpt_e_result: {gpt_e_result}")
                     
                     if gpt_e_result is None:
                         # אין שינוי - משתמשים בפרופיל הקיים

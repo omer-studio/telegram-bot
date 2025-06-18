@@ -502,8 +502,8 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
         system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT
         
         # הכנת ההודעה למשתמש עם הקשר
-        context_part = f"הקשר: {last_bot_message}\n\n" if last_bot_message else ""
-        user_content = f"סיכום קיים: {existing_summary}\n\n{context_part}הודעה חדשה: {user_message}"
+        context_part = f"הודעה אחרונה של הבוט (להקשר בלבד - אל תחלץ ממנה מידע!):\n{last_bot_message}\n\n" if last_bot_message else ""
+        user_content = f"סיכום קיים: {existing_summary}\n\n{context_part}הודעה חדשה של המשתמש: {user_message}\n\nהנחיה: השתמש בהודעת הבוט רק להבנת ההקשר של תשובת המשתמש. חלץ מידע אך ורק מהודעת המשתמש עצמה!"
         
         response = client.chat.completions.create(
             model="gpt-4.1-nano",  # המודל הכי זול
@@ -529,29 +529,23 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
         try:
             result = json.loads(content)
             print(f"[DEBUG][gpt_e] parsed result: {result}")
-            
             # בדיקה אם התשובה ריקה (אין מידע חדש)
-            if not result.get("summary") and not result.get("full_data"):
-                logging.info("ℹ️ GPT-E החזיר תשובה ריקה - אין מידע חדש")
-                print("[DEBUG][gpt_e] GPT-E החזיר תשובה ריקה - אין מידע חדש")
-                return None
-                
+            # במקום להחזיר None, נחזיר usage בלבד עם שדות חילוץ ריקים
+            is_empty = not result.get("summary") and not result.get("full_data")
         except Exception as e:
             print(f"[ERROR][gpt_e] JSON parsing error: {e}")
             print(f"[ERROR][gpt_e] content that failed to parse: {content}")
-            # אם נכשל פרסור JSON, נחזיר None
-            return None
-        
+            # אם נכשל פרסור JSON, נחזיר usage בלבד עם שדות חילוץ ריקים
+            result = {"summary": "", "full_data": {}}
+            is_empty = True
         # הכנת usage data
         prompt_tokens = response.usage.prompt_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
         cached_tokens = getattr(response.usage, 'cached_tokens', 0)
         model_name = response.model
-        
         # חישוב עלות
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
-        
         # הכנת התוצאה הסופית
         final_result = {
             "updated_summary": result.get("summary", existing_summary),
@@ -563,10 +557,8 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
             "model": model_name,
             **cost_data
         }
-        
         print(f"[DEBUG][gpt_e] final_result: {final_result}")
         logging.info(f"✅ GPT-E הושלם בהצלחה")
-        
         return final_result
         
     except Exception as e:

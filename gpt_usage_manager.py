@@ -69,7 +69,7 @@ class GPTUsageManager:
                 "cost_completion": 0.0,
                 "cost_total": 0.0,
                 "cost_total_ils": 0.0,
-                "cost_agorot": 0,
+                "cost_agorot": 0.0,
                 "model": model_name or ""
             }
         cost_prompt_regular = prompt_regular * prices["prompt"]
@@ -77,7 +77,7 @@ class GPTUsageManager:
         cost_completion = completion_tokens * prices["completion"]
         cost_total = cost_prompt_regular + cost_prompt_cached + cost_completion
         cost_total_ils = round(cost_total * usd_to_ils, 4)
-        cost_agorot = int(round(cost_total_ils * 100))
+        cost_agorot = cost_total_ils * 100  # לא מעגל - מציג את העלות המלאה
         return {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,

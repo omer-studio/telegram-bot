@@ -231,25 +231,16 @@ def update_user_profile(chat_id, field_values):
                 if updated_fields:
                     print(f"[DEBUG] updated fields: {updated_fields}")
                     logging.info(f"[DEBUG] updated fields: {updated_fields}")
-                    updated_row = sheet_users.row_values(idx + 2)
-                    row_dict = {}
-                    for i, key in enumerate(header):
-                        if i < len(updated_row):
-                            row_dict[key] = str(updated_row[i]) if updated_row[i] is not None else ""
-                        else:
-                            row_dict[key] = ""
-                    summary = compose_emotional_summary(row_dict)
-                    if SUMMARY_FIELD in header:
+                    # שמור את summary בדיוק כפי שהוחזר מה-GPT
+                    if "summary" in field_values and SUMMARY_FIELD in header:
                         summary_col = header.index(SUMMARY_FIELD) + 1
-                        print(f"📊 מעדכן סיכום בעמודה {summary_col}: '{summary}'")
+                        summary_val = field_values["summary"]
+                        print(f"📊 מעדכן סיכום בעמודה {summary_col}: '{summary_val}' (מה-GPT)")
                         try:
-                            sheet_users.update_cell(idx + 2, summary_col, summary)
+                            sheet_users.update_cell(idx + 2, summary_col, summary_val)
                         except Exception as e:
                             print(f"❌ שגיאה בעדכון סיכום: {e}")
                             logging.error(f"❌ שגיאה בעדכון סיכום: {e}")
-                    else:
-                        print(f"⚠️ לא נמצאה עמודת סיכום: {SUMMARY_FIELD}")
-                        logging.warning(f"⚠️ לא נמצאה עמודת סיכום: {SUMMARY_FIELD}")
                 else:
                     print("⚠️ לא עודכנו שדות - אין ערכים תקינים")
                     logging.info("⚠️ לא עודכנו שדות - אין ערכים תקינים")
@@ -467,8 +458,8 @@ def log_to_sheets(
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
         def format_money(value):
             if value is None:
-                return None
-            return float(f"{value:.10f}")  # או פשוט return float(value)
+                return ""
+            return f"{value:.5f}"
 
         # --- מיפוי ערכים מלא לפי דרישת המשתמש ---
         values_to_log = {
