@@ -294,8 +294,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if num_words > 50:
                 logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
                 sum_response = summarize_bot_reply(reply_text)
-                summary_usage = {k: v for k, v in sum_response.items() if k != "bot_summary"}
-                reply_summary = sum_response.get("bot_summary", reply_text)
+                summary_usage = {k: v for k, v in sum_response.items() if k != "summary"}
+                reply_summary = sum_response.get("summary", reply_text)
                 sum_prompt = summary_usage.get("prompt_tokens", 0)
                 sum_completion = summary_usage.get("completion_tokens", 0)
                 sum_total = summary_usage.get("total_tokens", 0)

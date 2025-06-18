@@ -366,6 +366,7 @@ def log_to_sheets(
         summary_total_tokens = safe_int(summary_usage.get("total_tokens", 0))
         summary_model = summary_usage.get("model", "")
         summary_cost_agorot = safe_float(summary_usage.get("cost_agorot", 0))
+        summary_cost_ils = safe_float(summary_usage.get("cost_total_ils", 0))
 
         # extract_usage תמיד dict
         extract_prompt_tokens = safe_int(extract_usage.get("prompt_tokens", 0))
@@ -373,6 +374,7 @@ def log_to_sheets(
         extract_total_tokens = safe_int(extract_usage.get("total_tokens", 0))
         extract_model = extract_usage.get("model", "")
         extract_cost_agorot = safe_float(extract_usage.get("cost_agorot", 0))
+        extract_cost_ils = safe_float(extract_usage.get("cost_total_ils", 0))
 
         # --- חישוב ערכים מראש כדי למנוע גישה עצמית ל-values_to_log ---
         def safe_calc(calc_func, field_name):
@@ -458,8 +460,12 @@ def log_to_sheets(
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
         def format_money(value):
             if value is None:
-                return ""
-            return f"{value:.5f}"
+                return None
+            return round(float(value), 5)
+
+        # חישוב אגורות מדויק לפי ערך בדולרים
+        def agorot_from_usd(cost_usd):
+            return round(float(cost_usd) * USD_TO_ILS * 100, 5)
 
         # --- מיפוי ערכים מלא לפי דרישת המשתמש ---
         values_to_log = {
@@ -468,13 +474,13 @@ def log_to_sheets(
             "user_msg": user_msg if user_msg else "",
             "user_summary": "",
             "bot_reply": reply_text if reply_text else "",
-            "bot_summary": reply_summary if has_summary and reply_summary else "",
+            "bot_summary": reply_summary if reply_summary else "",
             "total_tokens": total_tokens,
             "prompt_tokens_total": prompt_tokens_total,
             "completion_tokens_total": completion_tokens_total,
             "cached_tokens": cached_tokens,
             "total_cost_usd": format_money(main_cost_usd),
-            "total_cost_ils": format_money(main_cost_ils * 100),
+            "total_cost_ils": agorot_from_usd(main_cost_usd),
             "usage_prompt_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_a"),
             "usage_completion_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_a"),
             "usage_total_tokens_gpt_a": safe_calc(lambda: (
@@ -483,18 +489,8 @@ def log_to_sheets(
                 safe_int(main_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_gpt_a"),
             "cached_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt_a"),
-            "cost_gpt_a": format_money(main_cost_agorot),
+            "cost_gpt_a": agorot_from_usd(main_usage.get("cost_total", 0)),
             "model_gpt_a": str(main_usage.get("model", "")),
-            "usage_prompt_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_b"),
-            "usage_completion_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_b"),
-            "usage_total_tokens_gpt_b": safe_calc(lambda: (
-                safe_int(summary_usage.get("cached_tokens", 0)) +
-                safe_int(summary_usage.get("completion_tokens", 0)) +
-                safe_int(summary_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_gpt_b"),
-            "cached_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt_b"),
-            "cost_gpt_b": format_money(summary_cost_agorot),
-            "model_gpt_b": str(summary_usage.get("model", "")),
             "usage_prompt_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_e"),
             "usage_completion_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_e"),
             "usage_total_tokens_gpt_e": safe_calc(lambda: (
@@ -503,12 +499,26 @@ def log_to_sheets(
                 safe_int(extract_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_gpt_e"),
             "cached_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_e"),
-            "cost_gpt_e": format_money(extract_cost_agorot),
+            "cost_gpt_e": agorot_from_usd(extract_usage.get("cost_total", 0)),
             "model_gpt_e": str(extract_usage.get("model", "")),
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only,
         }
+        # הוספת שדות gpt_b רק אם יש סיכום
+        if has_summary:
+            values_to_log.update({
+                "usage_prompt_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("prompt_tokens", 0) - summary_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_b"),
+                "usage_completion_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_b"),
+                "usage_total_tokens_gpt_b": safe_calc(lambda: (
+                    safe_int(summary_usage.get("cached_tokens", 0)) +
+                    safe_int(summary_usage.get("completion_tokens", 0)) +
+                    safe_int(summary_usage.get("prompt_tokens", 0))
+                ), "usage_total_tokens_gpt_b"),
+                "cached_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt_b"),
+                "cost_gpt_b": agorot_from_usd(summary_usage.get("cost_total", 0)),
+                "model_gpt_b": str(summary_usage.get("model", "")),
+            })
 
         # 🚨 דיבאגים חזקים לפני שמירה
         def debug_usage_dict(name, usage):
