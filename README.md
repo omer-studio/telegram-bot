@@ -58,11 +58,16 @@
 ---
 
 ## 🧠 ניהול פרומטים (Prompts)
-כל הפרומטים של הבוט (system prompt, חילוץ תעודת זהות, תמצות תשובה, מיזוג רגיש) מרוכזים בקובץ `prompts.py` בלבד. שינוי פרומט מתבצע שם, בלי לפזר טקסטים בקוד. כל פרומט מתועד בעברית עם הסבר קצר לידו.
+כל הפרומטים של הבוט מרוכזים בקובץ `prompts.py` בלבד. המערכת כוללת 3 פרומטים עיקריים:
+- **SYSTEM_PROMPT** (GPT-A) — פרומט ראשי לשיחה עם המשתמש
+- **BOT_REPLY_SUMMARY_PROMPT** (GPT-B) — תמצות תשובת הבוט להיסטוריה
+- **PROFILE_EXTRACTION_ENHANCED_PROMPT** (GPT-E) — חילוץ ועדכון פרופיל משתמש
+
+שינוי פרומט מתבצע שם, בלי לפזר טקסטים בקוד. כל פרומט מתועד בעברית עם הסבר קצר לידו.
 
 **דוגמה לייבוא ושימוש בפרומט:**
 ```python
-from prompts import SYSTEM_PROMPT, PROFILE_EXTRACTION_PROMPT
+from prompts import SYSTEM_PROMPT
 ```
 
 ---
