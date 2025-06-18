@@ -343,7 +343,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
                     # קריאה ל-gpt_e עם הסיכום הקיים
                     existing_summary = existing_profile.get("summary", "") if isinstance(existing_profile, dict) else ""
-                    gpt_e_result = gpt_e(existing_summary, user_msg)
+                    
+                    # הוספת הקשר מההיסטוריה - ההודעה האחרונה של הבוט
+                    last_bot_message = ""
+                    if history_messages and len(history_messages) >= 2:
+                        # ההודעה האחרונה של הבוט היא לפני האחרונה (user, bot, user, bot...)
+                        last_bot_message = history_messages[-2].get("content", "") if history_messages[-2].get("role") == "assistant" else ""
+                    
+                    gpt_e_result = gpt_e(existing_summary, user_msg, last_bot_message)
                     
                     if gpt_e_result is None:
                         # אין שינוי - משתמשים בפרופיל הקיים

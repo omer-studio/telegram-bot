@@ -4,6 +4,12 @@ main.py
 קובץ ראשי רזה שמריץ את הבוט כ-webhook (FastAPI).
 הרציונל: רק אתחול, חיבור והרצה. כל הלוגיקה נמצאת בקבצים ייעודיים.
 
+⚠️  חשוב: אל תפעיל ישירות את הקובץ הזה!
+   הפעל את הבוט רק דרך sandbox.py
+
+📝 הערה: הקובץ הזה מיועד לסביבת פיתוח לוקאלית (Cursor IDE).
+   בסביבת ייצור יש להשתמש בהגדרות שרת מתאימות.
+
 *** שים לב: הבוט עובד עם webhook בלבד (ולא polling)! ***
 כל שינוי במבנה חייב לשמור על endpoint של FastAPI ל-webhook.
 

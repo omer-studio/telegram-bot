@@ -356,7 +356,7 @@ def update_user_summary_enhanced(existing_profile, user_message):
         # שלב 1: GPT-E - חילוץ ועדכון בסיכום קריא
         # שימוש ב-gpt_e החדשה במקום extract_user_profile_fields_enhanced
         existing_summary = existing_profile.get("summary", "")
-        gpt_e_result = gpt_e(existing_summary, user_message)
+        gpt_e_result = gpt_e(existing_summary, user_message, "")
         
         if gpt_e_result is None:
             # אין שינוי - מחזיר את הפרופיל הקיים
@@ -483,11 +483,11 @@ def extract_user_profile_fields_enhanced_async(*args, **kwargs):
 
 # ============================ GPT-E - הפונקציה הראשית ============================
 
-def gpt_e(existing_summary, user_message):
+def gpt_e(existing_summary, user_message, last_bot_message=""):
     """
     GPT-E: הפונקציה הראשית שמחליפה את GPT-C ו-GPT-D.
     מעדכנת סיכום קיים עם מידע חדש מהודעה.
-    קלט: existing_summary (str), user_message (str)
+    קלט: existing_summary (str), user_message (str), last_bot_message (str) - ההודעה האחרונה של הבוט
     פלט: dict עם updated_summary, full_data, ו-usage info
     """
     print("[DEBUG][gpt_e] CALLED - הפונקציה הראשית")
@@ -496,23 +496,14 @@ def gpt_e(existing_summary, user_message):
         print(f"[DEBUG][gpt_e] --- START ---")
         print(f"[DEBUG][gpt_e] existing_summary: {existing_summary} (type: {type(existing_summary)})")
         print(f"[DEBUG][gpt_e] user_message: {user_message} (type: {type(user_message)})")
-        
-        # בדיקה מהירה אם יש מידע חדש בהודעה
-        # אם ההודעה קצרה מדי או מכילה רק מילים כלליות - לא לשלוח בקשה
-        short_messages = ["תודה", "אוקיי", "בסדר", "הבנתי", "זה מעניין", "נכון", "כן", "לא", "אה", "וואו"]
-        user_message_lower = user_message.lower().strip()
-        
-        # אם ההודעה קצרה מדי או מכילה רק מילים כלליות
-        if len(user_message) < 10 or any(word in user_message_lower for word in short_messages):
-            logging.info("ℹ️ הודעה קצרה מדי או כללית, לא שולח בקשה ל-GPT")
-            print("[DEBUG][gpt_e] הודעה קצרה מדי או כללית, לא שולח בקשה ל-GPT")
-            return None
+        print(f"[DEBUG][gpt_e] last_bot_message: {last_bot_message} (type: {type(last_bot_message)})")
         
         # הכנת הפרומט
         system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT
         
-        # הכנת ההודעה למשתמש
-        user_content = f"סיכום קיים: {existing_summary}\n\nהודעה חדשה: {user_message}"
+        # הכנת ההודעה למשתמש עם הקשר
+        context_part = f"הקשר: {last_bot_message}\n\n" if last_bot_message else ""
+        user_content = f"סיכום קיים: {existing_summary}\n\n{context_part}הודעה חדשה: {user_message}"
         
         response = client.chat.completions.create(
             model="gpt-4.1-nano",  # המודל הכי זול
