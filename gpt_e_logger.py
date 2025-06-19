@@ -35,7 +35,7 @@ def append_gpt_e_html_update(
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # Check if there's a change in the summary
-    has_change = old_summary != new_summary
+    has_change = old_summary != new_summary and new_summary.strip() != ""
     
     # Format metadata
     metadata = []
@@ -55,7 +55,7 @@ def append_gpt_e_html_update(
     # Always show Old Summary, even if empty
     old_summary_html = old_summary if old_summary is not None else "<i>(empty)</i>"
     
-    # Determine card styling based on whether there's a change
+    # Determine card styling based on whether there's a meaningful change
     if has_change:
         card_style = "width:85%;margin:18px auto;max-width:none;background:#fff3cd;border:2px solid #ffc107;box-shadow:0 4px 12px rgba(255,193,7,0.3);"
         new_summary_style = "background:#e8f5e8;border:2px solid #28a745;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;font-weight:bold;"
