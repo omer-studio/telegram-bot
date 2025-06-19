@@ -24,6 +24,8 @@ def append_gpt_e_html_update(
     Keeps only the latest 100 updates.
     Creates the file and directory if they do not exist.
     Shows cost in both USD and ILS if both are provided, or just one if only one is present.
+    Always displays Old Summary (even if empty).
+    Inserts new entry at the top, preserving all previous entries.
     """
     html_file = os.path.join("data", "gpt_e_results.html")
     # התיקייה data תמיד קיימת לפי דרישת המשתמש
@@ -46,29 +48,24 @@ def append_gpt_e_html_update(
     
     metadata_html = f"<div class='metadata'>{' | '.join(metadata)}</div>" if metadata else ""
     
+    # Always show Old Summary, even if empty
+    old_summary_html = old_summary if old_summary is not None else "<i>(empty)</i>"
+    
     entry_html = f"""
     <div class=\"gpt-e-card\">
         <div class=\"gpt-e-meta\">
             <span>{timestamp}</span>
             {metadata_html}
         </div>
-        <div class=\"gpt-e-section\"><b>Old Summary:</b><div class=\"gpt-e-summary\">{old_summary}</div></div>
-        <div class=\"gpt-e-section\"><b>User Message:</b><div class=\"gpt-e-summary\">{user_message}</div></div>
-        <div class=\"gpt-e-section\"><b>New Summary:</b><div class=\"gpt-e-summary\">{new_summary}</div></div>
+        <div class=\"gpt-e-section-row\"><span class=\"gpt-e-label\">Old Summary:</span><div class=\"gpt-e-summary\">{old_summary_html}</div></div>
+        <div class=\"gpt-e-section-row\"><span class=\"gpt-e-label\">User Message:</span><div class=\"gpt-e-summary\">{user_message}</div></div>
+        <div class=\"gpt-e-section-row\"><span class=\"gpt-e-label\">New Summary:</span><div class=\"gpt-e-summary\">{new_summary}</div></div>
     </div>
     """
     
-    existing_entries = []
-    if os.path.exists(html_file):
-        with open(html_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-            import re
-            entries = re.findall(r'<div class=\\"gpt-e-card\\">.*?</div>', content, re.DOTALL)
-            existing_entries = entries[:99]  # Keep only 99 existing entries (100 total with new one)
-    # else: existing_entries stays empty
-    
-    # Create the full HTML content
-    html_content = f"""<!DOCTYPE html>
+    # If file does not exist, create with skeleton
+    if not os.path.exists(html_file):
+        html_content = f"""<!DOCTYPE html>
 <html lang=\"en\">
 <head>
     <meta charset=\"UTF-8\">
@@ -96,28 +93,35 @@ def append_gpt_e_html_update(
             color: #666;
             margin-bottom: 7px;
         }}
-        .gpt-e-section {{
-            margin-bottom: 10px;
+        .gpt-e-section-row {{
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 7px;
+        }}
+        .gpt-e-label {{
+            min-width: 110px;
+            font-weight: bold;
+            color: #4b5fc0;
+            margin-right: 8px;
+            flex-shrink: 0;
         }}
         .gpt-e-summary {{
             background: #f2f4f8;
             border-radius: 5px;
             padding: 5px 8px;
-            margin: 2px 0 6px 0;
             font-size: 1em;
             word-break: break-word;
-        }}
-        .gpt-e-card b {{
-            color: #4b5fc0;
+            flex: 1;
         }}
         .gpt-e-header {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 18px;
+            padding: 18px 18px 10px 18px;
             border-radius: 10px;
             margin-bottom: 18px;
             box-shadow: 0 2px 6px #0002;
             text-align: center;
+            position: relative;
         }}
         .gpt-e-header h2 {{
             margin: 0;
@@ -129,30 +133,104 @@ def append_gpt_e_html_update(
             opacity: 0.93;
             font-size: 1em;
         }}
+        .gpt-e-clear-btn {{
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: #fff;
+            color: #764ba2;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 16px;
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 1px 4px #0001;
+            transition: background 0.2s, color 0.2s;
+        }}
+        .gpt-e-clear-btn:hover {{
+            background: #f2f4f8;
+            color: #667eea;
+        }}
     </style>
+    <script>
+    function clearGptELog() {{
+        if (confirm('האם אתה בטוח שברצונך למחוק את כל ההיסטוריה?')) {{
+            fetch(window.location.pathname + '?clear=1', {{ method: 'POST' }}).then(() => window.location.reload());
+        }}
+    }}
+    </script>
 </head>
 <body>
     <div class=\"gpt-e-header\">
+        <button class=\"gpt-e-clear-btn\" onclick=\"clearGptELog()\">נקה הכל</button>
         <h2>GPT-E Updates Log</h2>
         <p>היסטוריית עדכונים של כל סיכומי GPT-E. כל עדכון נשמר ככרטיסיה חדשה.</p>
     </div>
     <div id=\"gpt-e-log\">
-"""
-    
-    # Add the new entry first, then existing entries
-    all_entries = [entry_html] + existing_entries
-    
-    # Add all entries to HTML content
-    if all_entries:
-        html_content += "\n".join(all_entries)
-    else:
-        html_content += '<div class=\"no-updates\">No updates yet.</div>'
-    
-    html_content += """
+{entry_html}
     </div>
 </body>
 </html>"""
-    
-    # Write the file
+        with open(html_file, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        return
+
+    # If file exists, insert new entry after <div id="gpt-e-log">
+    with open(html_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Find the insertion point
+    insert_point = content.find('<div id="gpt-e-log">')
+    if insert_point == -1:
+        # fallback: just append at the end
+        insert_point = len(content)
+        before = content
+        after = ''
+    else:
+        insert_point += len('<div id="gpt-e-log">')
+        before = content[:insert_point]
+        after = content[insert_point:]
+
+    # Insert the new entry at the top
+    new_content = before + '\n' + entry_html + after
+
+    # Limit to 100 cards
+    import re
+    cards = re.findall(r'<div class=\\?"gpt-e-card\\?">.*?</div>', new_content, re.DOTALL)
+    if len(cards) > 100:
+        # Keep only the first 100
+        # Remove all after the 100th
+        split = new_content.split('<div id="gpt-e-log">', 1)
+        if len(split) == 2:
+            head, rest = split
+            # Find the 100th card's end
+            card_positions = [m.start() for m in re.finditer(r'<div class=\\?"gpt-e-card\\?">', rest)]
+            if len(card_positions) > 100:
+                cut_pos = card_positions[100]
+                rest = rest[:cut_pos]
+            new_content = head + '<div id="gpt-e-log">' + rest
+
     with open(html_file, 'w', encoding='utf-8') as f:
-        f.write(html_content) 
+        f.write(new_content) 
+
+def clear_gpt_e_html_log():
+    """
+    Clears all entries from the HTML log except the header and the 'gpt-e-log' div.
+    """
+    html_file = os.path.join("data", "gpt_e_results.html")
+    if not os.path.exists(html_file):
+        return
+    with open(html_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+    # Find the header and the start of the log div
+    start = content.find('<div id="gpt-e-log">')
+    if start == -1:
+        return
+    end = content.find('</div>', start)
+    if end == -1:
+        return
+    # Keep everything up to the opening of the log div, then close it immediately
+    new_content = content[:start] + '<div id="gpt-e-log">\n    </div>\n</body>\n</html>'
+    with open(html_file, 'w', encoding='utf-8') as f:
+        f.write(new_content) 

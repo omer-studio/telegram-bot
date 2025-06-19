@@ -341,8 +341,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         existing_profile = {}
                     print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
+                    # --- תיקון: ודא שהסיכום הקיים של המשתמש נשמר ---
+                    if user_summary:
+                        print(f"[DEBUG][post_reply_tasks] user_summary (הסיכום הקיים של המשתמש) נכנס ל-existing_profile['summary']: {user_summary}")
+                        existing_profile['summary'] = user_summary
+                    else:
+                        print(f"[DEBUG][post_reply_tasks] אין user_summary לעדכן ב-existing_profile['summary']")
                     # קריאה ל-gpt_e עם הסיכום הקיים
                     existing_summary = existing_profile.get("summary", "") if isinstance(existing_profile, dict) else ""
+                    print(f"[DEBUG][post_reply_tasks] current_summary שישלח ל-gpt_e: {existing_summary}")
                     # הוספת הקשר מההיסטוריה - ההודעה האחרונה של הבוט
                     last_bot_message = ""
                     for msg in reversed(history_messages):
@@ -353,11 +360,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"[DEBUG][post_reply_tasks] existing_summary: {existing_summary}")
                     print(f"[DEBUG][post_reply_tasks] user_msg: {user_msg}")
                     print(f"[DEBUG][post_reply_tasks] last_bot_message: {last_bot_message}")
+                    print(f"[DEBUG][post_reply_tasks] --- PAYLOAD ל-gpt_e ---\ncurrent_summary: {existing_summary}\nuser_msg: {user_msg}\nlast_bot_message: {last_bot_message}")
                     print(f"[DEBUG][post_reply_tasks] קורא ל-gpt_e...")
                     gpt_e_result = gpt_e(existing_summary, user_msg, last_bot_message)
-                    
-                    print(f"[DEBUG][post_reply_tasks] אחרי קריאה ל-gpt_e:")
-                    print(f"[DEBUG][post_reply_tasks] gpt_e_result: {gpt_e_result}")
+                    print(f"[DEBUG][post_reply_tasks] gpt_e_result (תוצאה מלאה): {gpt_e_result}")
                     
                     if gpt_e_result is None:
                         # אין שינוי - משתמשים בפרופיל הקיים
@@ -380,6 +386,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         print(f"[DEBUG][post_reply_tasks] update_user_profile called with: {updated_profile}")
                         logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
                         update_user_profile(chat_id, updated_profile)
+                        print(f"[DEBUG][post_reply_tasks] summary שנשמר בגיליון: {updated_profile.get('summary', '') if isinstance(updated_profile, dict) else ''}")
                         logging.info("📝 ת.ז רגשית עודכנה בהצלחה"); print("📝 ת.ז רגשית עודכנה בהצלחה")
 
                     logging.info("💰 מחשב עלויות..."); print("💰 מחשב עלויות...")

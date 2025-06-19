@@ -101,5 +101,41 @@ async def main():
     print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    from http.server import SimpleHTTPRequestHandler, HTTPServer
+    import urllib.parse
+    from gpt_e_logger import clear_gpt_e_html_log
+
+    class GptELogHandler(SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.startswith("/data/gpt_e_results.html") or self.path == "/":
+                # Serve the HTML file
+                self.send_response(200)
+                self.send_header("Content-type", "text/html; charset=utf-8")
+                self.end_headers()
+                with open(os.path.join("data", "gpt_e_results.html"), "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                super().do_GET()
+
+        def do_POST(self):
+            parsed = urllib.parse.urlparse(self.path)
+            if parsed.path.startswith("/data/gpt_e_results.html") or parsed.path == "/":
+                qs = urllib.parse.parse_qs(parsed.query)
+                if "clear" in qs and qs["clear"] == ["1"]:
+                    clear_gpt_e_html_log()
+                    self.send_response(204)
+                    self.end_headers()
+                    return
+            self.send_response(404)
+            self.end_headers()
+
+    port = 8000
+    print(f"Serving GPT-E log at http://localhost:{port}/data/gpt_e_results.html (or just http://localhost:{port}/)")
+    httpd = HTTPServer(("", port), GptELogHandler)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nServer stopped.")
+        httpd.server_close()
 # תודה1
