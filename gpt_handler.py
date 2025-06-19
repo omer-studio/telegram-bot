@@ -28,6 +28,7 @@ from prompts import BOT_REPLY_SUMMARY_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
 import asyncio
 import re
 from gpt_usage_manager import GPTUsageManager
+from gpt_e_logger import append_gpt_e_html_update
 
 # ===================== פונקציות עזר ללוגים ודיבאג =====================
 
@@ -559,6 +560,17 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
         }
         print(f"[DEBUG][gpt_e] final_result: {final_result}")
         logging.info(f"✅ GPT-E הושלם בהצלחה")
+        
+        # הוספת עדכון ל-HTML
+        append_gpt_e_html_update(
+            old_summary=existing_summary,
+            user_message=user_message,
+            new_summary=final_result["updated_summary"],
+            tokens_used=total_tokens,
+            cost=final_result.get("cost_total_usd", 0),
+            model=model_name
+        )
+        
         return final_result
         
     except Exception as e:
