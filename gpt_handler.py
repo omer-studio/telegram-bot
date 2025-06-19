@@ -367,26 +367,27 @@ def update_user_summary_enhanced(existing_profile, user_message):
         
         # יש שינוי - מעדכן את הפרופיל
         updated_summary = gpt_e_result.get("updated_summary", "")
-        full_data = gpt_e_result.get("full_data", {})
         
+        # --- הוספת בדיקה: אם אין שינוי, לא לעדכן ---
+        if updated_summary == existing_summary:
+            logging.info("ℹ️ אין שינוי בסיכום, מחזיר ת.ז ללא שינוי")
+            print("[DEBUG][update_user_summary_enhanced] אין שינוי בסיכום, מחזיר ת.ז ללא שינוי")
+            return existing_profile, {}
+        
+        full_data = gpt_e_result.get("full_data", {})
         # עדכון הפרופיל עם הנתונים החדשים
         updated_profile = {**existing_profile, **full_data}
-        
         # וידוא שהסיכום מעודכן
         if updated_summary:
             updated_profile["summary"] = updated_summary
-        
         print(f"[DEBUG][update_user_summary_enhanced] updated_profile: {updated_profile}")
-        
         if existing_profile != updated_profile:
             diff_keys = set(updated_profile.keys()) - set(existing_profile.keys())
             print(f"[DEBUG][update_user_summary_enhanced] profile diff (new keys): {diff_keys}")
         else:
             print(f"[DEBUG][update_user_summary_enhanced] profile unchanged")
-        
         # הכנת usage data
         usage_data = {k: v for k, v in gpt_e_result.items() if k not in ["updated_summary", "full_data"]}
-        
         logging.info(f"✅ GPT-E עדכן ת.ז עם {len(full_data)} שדות חדשים")
         print(f"[DEBUG][update_user_summary_enhanced] returning: profile_updated={updated_profile}, extract_usage={usage_data}")
         return updated_profile, usage_data
@@ -503,21 +504,22 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
         system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT
         
         # הכנת ההודעה למשתמש עם הקשר
+        current_summary_json = json.dumps({"summary": existing_summary}, ensure_ascii=False)
         if last_bot_message:
             user_message_json = json.dumps({
                 "last_bot_message": last_bot_message,
                 "user_reply": user_message
             }, ensure_ascii=False, indent=2)
             user_content = (
-                f"סיכום קיים: {existing_summary}\n\n"
-                f"הודעת משתמש בפורמט JSON:\n{user_message_json}\n\n"
+                f"current_summary = {current_summary_json}\n\n"
+                f"user_message = {user_message_json}\n\n"
                 f"נתח את הערך של user_reply בלבד, תוך הבנה שהוא תגובה ל־last_bot_message.\n"
                 f"חלץ רק מידע שנאמר במפורש בתוך user_reply."
             )
         else:
             user_content = (
-                f"סיכום קיים: {existing_summary}\n\n"
-                f"הודעה חדשה של המשתמש: {user_message}\n\n"
+                f"current_summary = {current_summary_json}\n\n"
+                f"user_message = {json.dumps(user_message, ensure_ascii=False)}\n\n"
                 f"נתח רק את ההודעה של המשתמש כפי שהיא מופיעה כאן."
             )
 
@@ -527,7 +529,7 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
             ],
-            temperature=0,
+            temperature=0.7,
             max_tokens=500
         )
         
@@ -586,6 +588,8 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
             new_summary=final_result["updated_summary"],
             tokens_used=total_tokens,
             cost=final_result.get("cost_total_usd", 0),
+            cost_ils=final_result.get("cost_total_ils", 0),
+            cost_agorot=final_result.get("cost_agorot", 0),
             model=model_name
         )
         

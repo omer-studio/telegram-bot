@@ -17,13 +17,14 @@ def append_gpt_e_html_update(
     tokens_used: Optional[int] = None,
     cost: Optional[float] = None,
     cost_ils: Optional[float] = None,
+    cost_agorot: Optional[float] = None,
     model: Optional[str] = None
 ) -> None:
     """
     Append a GPT-E update to the HTML log file in the data directory.
     Keeps only the latest 100 updates.
     Creates the file and directory if they do not exist.
-    Shows cost in both USD and ILS if both are provided, or just one if only one is present.
+    Shows cost in agorot (אגורות) exactly as in the sheets, if provided.
     Always displays Old Summary (even if empty).
     Inserts new entry at the top, preserving all previous entries.
     """
@@ -33,16 +34,19 @@ def append_gpt_e_html_update(
     # Create the HTML entry
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
+    # Check if there's a change in the summary
+    has_change = old_summary != new_summary
+    
     # Format metadata
     metadata = []
     if tokens_used is not None:
         metadata.append(f"Tokens: {tokens_used}")
-    if cost is not None and cost_ils is not None:
-        metadata.append(f"Cost: ${cost:.4f} / ₪{cost_ils:.3f}")
-    elif cost is not None:
-        metadata.append(f"Cost: ${cost:.4f}")
+    if cost_agorot is not None:
+        metadata.append(f"עלות באגורות: {cost_agorot:.2f}")
     elif cost_ils is not None:
         metadata.append(f"Cost: ₪{cost_ils:.3f}")
+    elif cost is not None:
+        metadata.append(f"Cost: ${cost:.4f}")
     if model is not None:
         metadata.append(f"Model: {model}")
     
@@ -51,15 +55,24 @@ def append_gpt_e_html_update(
     # Always show Old Summary, even if empty
     old_summary_html = old_summary if old_summary is not None else "<i>(empty)</i>"
     
+    # Determine card styling based on whether there's a change
+    if has_change:
+        card_style = "width:85%;margin:18px auto;max-width:none;background:#fff3cd;border:2px solid #ffc107;box-shadow:0 4px 12px rgba(255,193,7,0.3);"
+        new_summary_style = "background:#e8f5e8;border:2px solid #28a745;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;font-weight:bold;"
+    else:
+        card_style = "width:85%;margin:18px auto;max-width:none;"
+        new_summary_style = "background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;"
+    
+    # NEW: Improved card layout (wider, shorter, label+value on same row, 85% width)
     entry_html = f"""
-    <div class=\"gpt-e-card\">
+    <div class=\"gpt-e-card\" style=\"{card_style}\">
         <div class=\"gpt-e-meta\">
             <span>{timestamp}</span>
             {metadata_html}
         </div>
-        <div class=\"gpt-e-section-row\"><span class=\"gpt-e-label\">Old Summary:</span><div class=\"gpt-e-summary\">{old_summary_html}</div></div>
-        <div class=\"gpt-e-section-row\"><span class=\"gpt-e-label\">User Message:</span><div class=\"gpt-e-summary\">{user_message}</div></div>
-        <div class=\"gpt-e-section-row\"><span class=\"gpt-e-label\">New Summary:</span><div class=\"gpt-e-summary\">{new_summary}</div></div>
+        <div class=\"gpt-e-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt-e-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">Old Summary:</span><div class=\"gpt-e-summary\" style=\"background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;\">{old_summary_html}</div></div>
+        <div class=\"gpt-e-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt-e-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">User Message:</span><div class=\"gpt-e-summary\" style=\"background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;\">{user_message}</div></div>
+        <div class=\"gpt-e-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt-e-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">New Summary:</span><div class=\"gpt-e-summary\" style=\"{new_summary_style}\">{new_summary}</div></div>
     </div>
     """
     
