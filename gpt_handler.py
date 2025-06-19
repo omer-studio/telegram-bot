@@ -503,9 +503,24 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
         system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT
         
         # הכנת ההודעה למשתמש עם הקשר
-        context_part = f"הודעה אחרונה של הבוט (להקשר בלבד - אל תחלץ ממנה מידע!):\n{last_bot_message}\n\n" if last_bot_message else ""
-        user_content = f"סיכום קיים: {existing_summary}\n\n{context_part}הודעה חדשה של המשתמש: {user_message}\n\nהנחיה: השתמש בהודעת הבוט רק להבנת ההקשר של תשובת המשתמש. חלץ מידע אך ורק מהודעת המשתמש עצמה!"
-        
+        if last_bot_message:
+            user_message_json = json.dumps({
+                "last_bot_message": last_bot_message,
+                "user_reply": user_message
+            }, ensure_ascii=False, indent=2)
+            user_content = (
+                f"סיכום קיים: {existing_summary}\n\n"
+                f"הודעת משתמש בפורמט JSON:\n{user_message_json}\n\n"
+                f"נתח את הערך של user_reply בלבד, תוך הבנה שהוא תגובה ל־last_bot_message.\n"
+                f"חלץ רק מידע שנאמר במפורש בתוך user_reply."
+            )
+        else:
+            user_content = (
+                f"סיכום קיים: {existing_summary}\n\n"
+                f"הודעה חדשה של המשתמש: {user_message}\n\n"
+                f"נתח רק את ההודעה של המשתמש כפי שהיא מופיעה כאן."
+            )
+
         response = client.chat.completions.create(
             model="gpt-4.1-nano",  # המודל הכי זול
             messages=[
@@ -539,14 +554,17 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
             # אם נכשל פרסור JSON, נחזיר usage בלבד עם שדות חילוץ ריקים
             result = {"summary": "", "full_data": {}}
             is_empty = True
+        
         # הכנת usage data
         prompt_tokens = response.usage.prompt_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
         cached_tokens = getattr(response.usage, 'cached_tokens', 0)
         model_name = response.model
+        
         # חישוב עלות
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        
         # הכנת התוצאה הסופית
         final_result = {
             "updated_summary": result.get("summary", existing_summary),

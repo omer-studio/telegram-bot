@@ -3,6 +3,12 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+# Try to import USD_TO_ILS from gpt_handler, fallback to 3.7 if not found
+try:
+    from gpt_handler import USD_TO_ILS
+except Exception:
+    USD_TO_ILS = 3.7
+
 
 def append_gpt_e_html_update(
     old_summary: str,
@@ -10,12 +16,14 @@ def append_gpt_e_html_update(
     new_summary: str,
     tokens_used: Optional[int] = None,
     cost: Optional[float] = None,
+    cost_ils: Optional[float] = None,
     model: Optional[str] = None
 ) -> None:
     """
     Append a GPT-E update to the HTML log file in the data directory.
     Keeps only the latest 100 updates.
     Creates the file and directory if they do not exist.
+    Shows cost in both USD and ILS if both are provided, or just one if only one is present.
     """
     html_file = os.path.join("data", "gpt_e_results.html")
     # התיקייה data תמיד קיימת לפי דרישת המשתמש
@@ -27,30 +35,26 @@ def append_gpt_e_html_update(
     metadata = []
     if tokens_used is not None:
         metadata.append(f"Tokens: {tokens_used}")
-    if cost is not None:
+    if cost is not None and cost_ils is not None:
+        metadata.append(f"Cost: ${cost:.4f} / ₪{cost_ils:.3f}")
+    elif cost is not None:
         metadata.append(f"Cost: ${cost:.4f}")
+    elif cost_ils is not None:
+        metadata.append(f"Cost: ₪{cost_ils:.3f}")
     if model is not None:
         metadata.append(f"Model: {model}")
     
     metadata_html = f"<div class='metadata'>{' | '.join(metadata)}</div>" if metadata else ""
     
     entry_html = f"""
-    <div class=\"entry\">
-        <div class=\"timestamp\">{timestamp}</div>
-        {metadata_html}
-        <div class=\"section\">
-            <h3>Old Summary:</h3>
-            <div class=\"content\">{old_summary}</div>
+    <div class=\"gpt-e-card\">
+        <div class=\"gpt-e-meta\">
+            <span>{timestamp}</span>
+            {metadata_html}
         </div>
-        <div class=\"section\">
-            <h3>User Message:</h3>
-            <div class=\"content\">{user_message}</div>
-        </div>
-        <div class=\"section\">
-            <h3>New Summary:</h3>
-            <div class=\"content\">{new_summary}</div>
-        </div>
-        <hr>
+        <div class=\"gpt-e-section\"><b>Old Summary:</b><div class=\"gpt-e-summary\">{old_summary}</div></div>
+        <div class=\"gpt-e-section\"><b>User Message:</b><div class=\"gpt-e-summary\">{user_message}</div></div>
+        <div class=\"gpt-e-section\"><b>New Summary:</b><div class=\"gpt-e-summary\">{new_summary}</div></div>
     </div>
     """
     
@@ -59,7 +63,7 @@ def append_gpt_e_html_update(
         with open(html_file, 'r', encoding='utf-8') as f:
             content = f.read()
             import re
-            entries = re.findall(r'<div class=\"entry\">.*?</div>\\s*<hr>', content, re.DOTALL)
+            entries = re.findall(r'<div class=\\"gpt-e-card\\">.*?</div>', content, re.DOTALL)
             existing_entries = entries[:99]  # Keep only 99 existing entries (100 total with new one)
     # else: existing_entries stays empty
     
@@ -73,91 +77,66 @@ def append_gpt_e_html_update(
     <style>
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1200px;
+            max-width: 700px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            padding: 10px;
+            background-color: #f7f7fa;
         }}
-        .header {{
+        .gpt-e-card {{
+            background: #fff;
+            border: 1px solid #d0d7e2;
+            border-radius: 10px;
+            margin: 18px auto;
+            max-width: 600px;
+            padding: 12px 16px;
+            box-shadow: 0 2px 8px #0001;
+        }}
+        .gpt-e-meta {{
+            font-size: 0.92em;
+            color: #666;
+            margin-bottom: 7px;
+        }}
+        .gpt-e-section {{
+            margin-bottom: 10px;
+        }}
+        .gpt-e-summary {{
+            background: #f2f4f8;
+            border-radius: 5px;
+            padding: 5px 8px;
+            margin: 2px 0 6px 0;
+            font-size: 1em;
+            word-break: break-word;
+        }}
+        .gpt-e-card b {{
+            color: #4b5fc0;
+        }}
+        .gpt-e-header {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
+            padding: 18px;
             border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }}
-        .header h1 {{
-            margin: 0;
-            font-size: 2.5em;
-            font-weight: 300;
-        }}
-        .header p {{
-            margin: 10px 0 0 0;
-            opacity: 0.9;
-            font-size: 1.1em;
-        }}
-        .entry {{
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #667eea;
-        }}
-        .timestamp {{
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 10px;
-            font-weight: 500;
-        }}
-        .metadata {{
-            background: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            font-size: 0.85em;
-            color: #495057;
-            border-left: 3px solid #667eea;
-        }}
-        .section {{
-            margin-bottom: 20px;
-        }}
-        .section h3 {{
-            color: #333;
-            margin: 0 0 10px 0;
-            font-size: 1.1em;
-            font-weight: 600;
-        }}
-        .content {{
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-            border: 1px solid #e9ecef;
-            white-space: pre-wrap;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.4;
-        }}
-        hr {{
-            border: none;
-            height: 1px;
-            background: linear-gradient(to right, transparent, #ddd, transparent);
-            margin: 20px 0;
-        }}
-        .no-updates {{
+            margin-bottom: 18px;
+            box-shadow: 0 2px 6px #0002;
             text-align: center;
-            color: #666;
-            font-style: italic;
-            padding: 40px;
+        }}
+        .gpt-e-header h2 {{
+            margin: 0;
+            font-size: 2em;
+            font-weight: 400;
+        }}
+        .gpt-e-header p {{
+            margin: 8px 0 0 0;
+            opacity: 0.93;
+            font-size: 1em;
         }}
     </style>
 </head>
 <body>
-    <div class=\"header\">
-        <h1>GPT-E Updates Log</h1>
-        <p>This file automatically logs all GPT-E summary updates. It is excluded from Git tracking (.gitignore).</p>
-        <p>Shows the old summary, user message, and new summary for each update.</p>
+    <div class=\"gpt-e-header\">
+        <h2>GPT-E Updates Log</h2>
+        <p>היסטוריית עדכונים של כל סיכומי GPT-E. כל עדכון נשמר ככרטיסיה חדשה.</p>
     </div>
+    <div id=\"gpt-e-log\">
 """
     
     # Add the new entry first, then existing entries
@@ -170,6 +149,7 @@ def append_gpt_e_html_update(
         html_content += '<div class=\"no-updates\">No updates yet.</div>'
     
     html_content += """
+    </div>
 </body>
 </html>"""
     
