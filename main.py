@@ -131,7 +131,7 @@ if __name__ == "__main__":
             self.end_headers()
 
     port = 8000
-    print(f"Serving GPT-E log at http://localhost:{port}/data/gpt_e_results.html (or just http://localhost:{port}/)")
+    print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_e_results.html (or just http://localhost:{port}/)")
     httpd = HTTPServer(("", port), GptELogHandler)
     try:
         httpd.serve_forever()

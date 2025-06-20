@@ -13,7 +13,7 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
-from gpt_handler import get_main_response, summarize_bot_reply, gpt_e
+from gpt_handler import get_main_response, summarize_bot_reply, gpt_c
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from fields_dict import FIELDS_DICT
 import asyncio
@@ -222,15 +222,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"📝 משתמש {chat_id} קיים אך לא מאושר, תוכן ההודעה: {user_msg!r}")
             print(f"📝 משתמש {chat_id} קיים אך לא מאושר, תוכן ההודעה: {user_msg!r}")
             try:
-                if user_msg.strip() == "✅קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי":
+                if user_msg.strip() == APPROVE_BUTTON_TEXT:
                     approve_user(context.bot_data["sheet"], chat_id)
                     await update.message.reply_text(nice_keyboard_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
                     await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
                     await update.message.reply_text(full_access_message(), parse_mode="HTML")
                     logging.info("📤 נשלחה הודעת גישה מלאה למשתמש")
                     print("📤 נשלחה הודעת גישה מלאה למשתמש")
-                elif user_msg.strip() == "❌לא מאשר":
-                    await update.message.reply_text(DECLINE_BUTTON_TEXT())
+                elif user_msg.strip() == DECLINE_BUTTON_TEXT:
+                    await update.message.reply_text("כדי להמשיך, יש לאשר את התנאים.")
                     await send_approval_message(update, chat_id)
                     return
                 else:
@@ -248,247 +248,95 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logging.info("👨‍💻 משתמש מאושר, מתחיל תהליך מענה...")
         print("👨‍💻 משתמש מאושר, מתחיל תהליך מענה...")
-        try:
-            logging.info("📚 שולף סיכום משתמש מהגיליון...")
-            print("📚 שולף סיכום משתמש מהגיליון...")
-            user_summary = get_user_summary(chat_id)
-            logging.info(f"סיכום משתמש: {user_summary!r}")
-            print(f"סיכום משתמש: {user_summary!r}")
 
-            logging.info("📚 שולף היסטוריית שיחה...")
-            print("📚 שולף היסטוריית שיחה...")
+        try:
+            # שלב 1: איסוף היסטוריה ונתונים
+            user_summary_data = get_user_summary(context.bot_data["sheet"], chat_id) or {}
+            current_summary = user_summary_data.get("summary", "")
             history_messages = get_chat_history_messages(chat_id)
-            logging.info(f"היסטוריית שיחה: (נשלחו {len(history_messages)} הודעות אחרונות משני הצדדים)")
-            print(f"היסטוריית שיחה: (נשלחו {len(history_messages)} הודעות אחרונות משני הצדדים)")
-
-            full_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-            if user_summary:
-                full_messages.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {user_summary}"})
-            full_messages.extend(history_messages)
-            full_messages.append({"role": "user", "content": user_msg})
-
-            logging.info("🤖 שולח ל-GPT הראשי...")
-            print("🤖 שולח ל-GPT הראשי...")
-            perf_gpt_start = time.time()
-            main_response = get_main_response(full_messages)
-            perf_gpt_end = time.time()
-            print(f"[PERF] זמן קריאה ל-GPT: {perf_gpt_end - perf_gpt_start:.2f} שניות")
-            print(f"[PERF] זמן מהגעת הודעה עד שליחת בקשה ל-GPT: {perf_gpt_start - perf_received_to_gpt_start:.2f} שניות")
             
-            reply_text = main_response["bot_reply"]
-            main_usage = {k: v for k, v in main_response.items() if k != "bot_reply"}
-            main_prompt_tokens = main_usage.get("prompt_tokens", 0)
-            main_completion_tokens = main_usage.get("completion_tokens", 0)
-            main_total_tokens = main_usage.get("total_tokens", 0)
-            main_cached_tokens = main_usage.get("cached_tokens", 0)
-            main_model = main_usage.get("model", "")
-            main_cost_gpt_a = main_usage.get("cost_gpt_a", 0)
-            main_cost_total_usd = main_usage.get("cost_total", 0)
-            main_cost_total_ils = main_usage.get("cost_total_ils", 0)
+            # בניית ההודעות ל-GPT-A
+            messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
+            if current_summary:
+                messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}"})
+            messages_for_gpt.extend(history_messages)
+            messages_for_gpt.append({"role": "user", "content": user_msg})
 
-            logging.info(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
-            print(f"✅ התקבלה תשובה מה-GPT. אורך תשובה: {len(reply_text)} תווים")
+            last_bot_message = next((msg.get("content", "") for msg in reversed(history_messages) if msg.get("role") == "assistant"), "")
 
-            # --- עדכון היסטוריית שיחה (מיד, לפני שליחת התשובה) ---
-            num_words = len(reply_text.split())
-            if num_words > 50:
-                logging.info(f"✂️ התשובה מעל 50 מילים - מבצע סיכום ({num_words} מילים)")
-                sum_response = summarize_bot_reply(reply_text)
-                summary_usage = {k: v for k, v in sum_response.items() if k != "summary"}
-                reply_summary = sum_response.get("summary", reply_text)
-                sum_prompt = summary_usage.get("prompt_tokens", 0)
-                sum_completion = summary_usage.get("completion_tokens", 0)
-                sum_total = summary_usage.get("total_tokens", 0)
-                sum_model = summary_usage.get("model", "")
-            else:
-                logging.info(f"✂️ התשובה קצרה - לא מבצע סיכום ({num_words} מילים)")
-                reply_summary = reply_text
-                summary_usage = {}
-                sum_prompt = sum_completion = sum_total = 0
-                sum_model = ""
+            # שלב 2: קריאה ל-GPT-A למענה ראשי
+            gpt_response = await asyncio.to_thread(
+                get_main_response,
+                full_messages=messages_for_gpt,
+                chat_id=chat_id,
+                message_id=message_id
+            )
+            bot_reply = gpt_response["bot_reply"]
 
-            logging.info("💾 מעדכן היסטוריית שיחה..."); print("💾 מעדכן היסטוריית שיחה...")
-            update_chat_history(chat_id, user_msg, reply_summary)
-            logging.info("✅ היסטוריית שיחה עודכנה"); print("✅ היסטוריית שיחה עודכנה")
+            # שלב 3: שליחת התשובה למשתמש ועדכון היסטוריה ראשוני
+            await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
+            update_chat_history(chat_id, "user", user_msg) 
 
-            # --- שליחת תשובה למשתמש ---
-            reply_text_one_line = reply_text.replace("\n", " ").replace("\r", " ")
-            print(f"[📤 הודעת בוט]: {reply_text_one_line}")
-            logging.info("📨 תשובה נשלחה למשתמש")
-            print("📨 תשובה נשלחה למשתמש")
-            print(f"[DEBUG] about to send reply from bot to user: chat_id={chat_id}")
-            perf_send_start = time.time()
-            await send_message(update, chat_id, reply_text)
-            perf_send_end = time.time()
-            print(f"[PERF] זמן שליחת הודעה ל-Telegram: {perf_send_end - perf_send_start:.2f} שניות")
-
-            # --- כל שאר הפעולות ירוצו ברקע ---
-            async def post_reply_tasks():
+            # שלב 4: הפעלת משימות רקע (GPT-B, gpt_c, עדכון היסטוריה סופי, לוגים)
+            async def post_reply_tasks(reply_from_bot, summary_before_update):
+                # GPT-B: יצירת תמצית לתשובת הבוט
+                new_summary_for_history = None
                 try:
-                    print("[DEBUG][post_reply_tasks] --- START ---")
-                    # עדכון ת.ז רגשית, גיליון, לוגים
-                    logging.info("🔍 מתחיל עדכון חכם של ת.ז הרגשית..."); print("🔍 מתחיל עדכון חכם של ת.ז הרגשית...")
-                    print(f"[DEBUG][post_reply_tasks] user_summary: {user_summary} (type: {type(user_summary)})")
-                    if isinstance(user_summary, str):
-                        import json
-                        try:
-                            existing_profile = json.loads(user_summary)
-                        except Exception as e:
-                            print(f"[DEBUG][post_reply_tasks] Failed to json.loads user_summary: {e}")
-                            existing_profile = {}
-                    elif isinstance(user_summary, dict):
-                        existing_profile = user_summary
-                    else:
-                        existing_profile = {}
-                    print(f"[DEBUG][post_reply_tasks] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-                    # --- תיקון: ודא שהסיכום הקיים של המשתמש נשמר ---
-                    if user_summary:
-                        print(f"[DEBUG][post_reply_tasks] user_summary (הסיכום הקיים של המשתמש) נכנס ל-existing_profile['summary']: {user_summary}")
-                        existing_profile['summary'] = user_summary
-                    else:
-                        print(f"[DEBUG][post_reply_tasks] אין user_summary לעדכן ב-existing_profile['summary']")
-                    # קריאה ל-gpt_e עם הסיכום הקיים
-                    existing_summary = existing_profile.get("summary", "") if isinstance(existing_profile, dict) else ""
-                    print(f"[DEBUG][post_reply_tasks] current_summary שישלח ל-gpt_e: {existing_summary}")
-                    # הוספת הקשר מההיסטוריה - ההודעה האחרונה של הבוט
-                    last_bot_message = ""
-                    for msg in reversed(history_messages):
-                        if msg.get("role") == "assistant":
-                            last_bot_message = msg.get("content", "")
-                            break
-                    print(f"[DEBUG][post_reply_tasks] לפני קריאה ל-gpt_e:")
-                    print(f"[DEBUG][post_reply_tasks] existing_summary: {existing_summary}")
-                    print(f"[DEBUG][post_reply_tasks] user_msg: {user_msg}")
-                    print(f"[DEBUG][post_reply_tasks] last_bot_message: {last_bot_message}")
-                    print(f"[DEBUG][post_reply_tasks] --- PAYLOAD ל-gpt_e ---\ncurrent_summary: {existing_summary}\nuser_msg: {user_msg}\nlast_bot_message: {last_bot_message}")
-                    print(f"[DEBUG][post_reply_tasks] קורא ל-gpt_e...")
-                    gpt_e_result = gpt_e(existing_summary, user_msg, last_bot_message)
-                    print(f"[DEBUG][post_reply_tasks] gpt_e_result (תוצאה מלאה): {gpt_e_result}")
-                    
-                    if gpt_e_result is None:
-                        # אין שינוי - משתמשים בפרופיל הקיים
-                        updated_profile = existing_profile
-                        extract_usage = {}
-                    else:
-                        # יש שינוי - מעדכנים את הפרופיל
-                        updated_summary = gpt_e_result.get("updated_summary", "")
-                        full_data = gpt_e_result.get("full_data", {})
-                        updated_profile = {**existing_profile, **full_data}
-                        if updated_summary:
-                            updated_profile["summary"] = updated_summary
-                        extract_usage = {k: v for k, v in gpt_e_result.items() if k not in ["updated_summary", "full_data"]}
-                    
-                    print(f"[DEBUG][post_reply_tasks] updated_profile: {updated_profile} (type: {type(updated_profile)})")
-                    print(f"[DEBUG][post_reply_tasks] extract_usage: {extract_usage} (type: {type(extract_usage)})")
-                    identity_fields = updated_profile if updated_profile and updated_profile != existing_profile else {}
-                    print(f"[DEBUG][post_reply_tasks] identity_fields: {identity_fields} (type: {type(identity_fields)})")
-                    if updated_profile and updated_profile != existing_profile:
-                        print(f"[DEBUG][post_reply_tasks] update_user_profile called with: {updated_profile}")
-                        logging.info(f"[DEBUG] update_user_profile called with: {updated_profile}")
+                    summary_response = await asyncio.to_thread(
+                        summarize_bot_reply,
+                        reply_text=reply_from_bot,
+                        chat_id=chat_id,
+                        original_message_id=message_id
+                    )
+                    new_summary_for_history = summary_response.get("summary")
+                except Exception as e:
+                    logging.error(f"Error in GPT-B (summary): {e}")
+
+                # עדכון היסטוריה סופי עם תמצית או תשובה מלאה
+                if new_summary_for_history:
+                    update_chat_history(chat_id, "bot_summary", new_summary_for_history)
+                else:
+                    update_chat_history(chat_id, "bot", reply_from_bot)
+
+                # gpt_c: עדכון פרופיל משתמש
+                try:
+                    gpt_e_response = await asyncio.to_thread(
+                        gpt_c,
+                        user_message=user_msg,
+                        last_bot_message=last_bot_message,
+                        chat_id=chat_id,
+                        message_id=message_id
+                    )
+                    if gpt_e_response and gpt_e_response.get("full_data"):
+                        updated_profile = user_summary_data.copy()
+                        updated_profile.update(gpt_e_response.get("full_data", {}))
+                        if gpt_e_response.get("updated_summary"):
+                            updated_profile["summary"] = gpt_e_response.get("updated_summary")
+                        
                         update_user_profile(chat_id, updated_profile)
-                        print(f"[DEBUG][post_reply_tasks] summary שנשמר בגיליון: {updated_profile.get('summary', '') if isinstance(updated_profile, dict) else ''}")
-                        logging.info("📝 ת.ז רגשית עודכנה בהצלחה"); print("📝 ת.ז רגשית עודכנה בהצלחה")
+                        log_payload["gpt_e_data"] = {k: v for k, v in gpt_e_response.items() if k not in ["updated_summary", "full_data"]}
+                except Exception as e:
+                    logging.error(f"Error in gpt_c (profile update): {e}")
 
-                    logging.info("💰 מחשב עלויות..."); print("💰 מחשב עלויות...")
-                    logging.info("💾 שומר נתוני שיחה בגיליון..."); print("💾 שומר נתוני שיחה בגיליון...")
-                    try:
-                        log_to_sheets(
-                            message_id, chat_id, user_msg, reply_text, reply_summary,
-                            main_usage, summary_usage, extract_usage,
-                            main_total_tokens, main_cost_total_usd, main_cost_total_ils,
-                            merge_usage=None, fields_updated_by_gpt_e=None
-                        )
-                        logging.info("✅ נתוני שיחה נשמרו בגיליון"); print("✅ נתוני שיחה נשמרו בגיליון")
-                    except Exception as e:
-                        import traceback
-                        from notifications import send_error_notification
-                        tb = traceback.format_exc()
-                        error_msg = (
-                            f"❌ שגיאה בשמירה לגיליון:\n"
-                            f"סוג: {type(e).__name__}\n"
-                            f"שגיאה: {e}\n"
-                            f"chat_id: {chat_id}\n"
-                            f"message_id: {message_id}\n"
-                            f"user_msg: {str(user_msg)[:100]}\n"
-                            f"traceback:\n{tb}"
-                        )
-                        print(error_msg)
-                        send_error_notification(error_message=error_msg, chat_id=chat_id, user_msg=user_msg, error_type="sheets_log_error")
-                        logging.error("❌ שגיאה בשמירה לגיליון (נשלחה התראה לאדמין בלבד, המשתמש לא רואה כלום)")
+                # שמירת לוגים ונתונים נוספים
+                log_payload.update({
+                    "gpt_a_response": reply_from_bot,
+                    "gpt_a_usage": {k: v for k, v in gpt_response.items() if k != "bot_reply"},
+                    "timestamp_end": datetime.now().isoformat()
+                })
+                log_event_to_file(log_payload)
+                logging.info("---- סיום טיפול בהודעה (משתמש מאושר) ----")
+                print("---- סיום טיפול בהודעה (משתמש מאושר) ----")
 
-                    logging.info("💾 שומר לוג מפורט לקובץ..."); print("💾 שומר לוג מפורט לקובץ...")
-                    print(f"[DEBUG][post_reply_tasks] log_payload BEFORE update: {log_payload}")
-                    log_payload.update({
-                        "user_summary": user_summary,
-                        "identity_fields": identity_fields,
-                        "gpt_reply": reply_text,
-                        "summary_saved": reply_summary,
-                        "tokens": {
-                            "main_prompt": main_prompt_tokens,
-                            "main_completion": main_completion_tokens,
-                            "main_total": main_total_tokens,
-                            "summary_prompt": sum_prompt,
-                            "summary_completion": sum_completion,
-                            "summary_total": sum_total,
-                            "extract_prompt": extract_usage.get("prompt_tokens", 0) if isinstance(extract_usage, dict) else 0,
-                            "extract_completion": extract_usage.get("completion_tokens", 0) if isinstance(extract_usage, dict) else 0,
-                            "extract_total": extract_usage.get("total_tokens", 0) if isinstance(extract_usage, dict) else 0,
-                            "total_all": main_total_tokens,
-                            "main_cost_total_usd": main_cost_total_usd,
-                            "main_cost_total_ils": main_cost_total_ils
-                        }
-                    })
-                    print(f"[DEBUG][post_reply_tasks] log_payload AFTER update: {log_payload}")
-                    log_event_to_file(log_payload)
-                    logging.info("✅ לוג מפורט נשמר לקובץ"); print("✅ לוג מפורט נשמר לקובץ")
+            asyncio.create_task(post_reply_tasks(bot_reply, current_summary))
 
-                    total_time = (datetime.now() - datetime.fromisoformat(log_payload['timestamp_start'])).total_seconds()
-                    logging.info(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
-                    print(f"🏁 סה״כ זמן עיבוד: {total_time:.2f} שניות")
+        except Exception as ex:
+            await handle_critical_error(ex, chat_id, user_msg, update)
 
-                    print(f"[HIST] נשלח פרומט + {len(history_messages)} הודעות היסטוריה + הודעה חדשה: {user_msg.replace(chr(10), ' ')[:80]}")
-                except Exception as critical_error:
-                    import traceback
-                    import sys
-                    logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-                    print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-                    print("[DEBUG][post_reply_tasks][EXCEPTION] locals:")
-                    for k, v in locals().items():
-                        print(f"[DEBUG][post_reply_tasks][EXCEPTION] {k} = {v} (type: {type(v)})")
-                    print(traceback.format_exc())
-                    await handle_critical_error(critical_error, chat_id, user_msg, update)
-                logging.info("---- סיום טיפול בהודעה ----"); print("---- סיום טיפול בהודעה ----")
+    except Exception as ex:
+        await handle_critical_error(ex, locals().get('chat_id'), locals().get('user_msg'), update)
 
-            asyncio.create_task(post_reply_tasks())
-            return
-
-        except Exception as critical_error:
-            logging.error(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-            print(f"❌ שגיאה קריטית במהלך טיפול בהודעה: {critical_error}")
-            await handle_critical_error(critical_error, chat_id, user_msg, update)
-
-        logging.info("---- סיום טיפול בהודעה ----")
-        print("---- סיום טיפול בהודעה ----")
-
-    except Exception as e:
-        import traceback
-        from notifications import send_error_notification
-        tb = traceback.format_exc()
-        chat_id = None
-        user_msg = None
-        try:
-            chat_id = update.effective_chat.id if update and update.effective_chat else None
-            user_msg = update.message.text if update and update.message else None
-        except Exception:
-            pass
-        send_error_notification(error_message=f"שגיאה בטיפול בהודעה:\n{e}\n{tb}", chat_id=chat_id, user_msg=user_msg)
-        if update and update.message:
-            await update.message.reply_text(error_human_funny_message())
-    finally:
-        print("🏁 [DEBUG] handle_message מסיים (בהצלחה או בשגיאה)") 
-        # תודה1
-
-async def send_message_with_retry(update, chat_id, text, max_retries=3):
+async def send_message_with_retry(update, chat_id, text, is_bot_message=True, max_retries=3):
     for attempt in range(max_retries):
         try:
             await update.message.reply_text(text, parse_mode="HTML")

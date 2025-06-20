@@ -112,19 +112,28 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
 # ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש ======================= 
 
 
-def get_main_response(full_messages):
+def get_main_response(full_messages, chat_id=None, message_id=None):
     """
     שולח הודעה ל-gpt_a הראשי ומחזיר את התשובה, כולל פירוט עלות וטוקנים.
     קלט: full_messages — רשימת הודעות (כולל system prompt).
+         chat_id, message_id — אופציונלי, לשימוש ב-metadata.
     פלט: dict עם תשובה, usage, עלות.
     # מהלך מעניין: שימוש בפרומט הראשי שמגדיר את האישיות של דניאל.
     """
     try:
+        metadata = {"gpt_identifier": "gpt_a"}
+        if chat_id:
+            metadata["chat_id"] = chat_id
+        if message_id:
+            metadata["message_id"] = message_id
+
         # full_messages כולל את ה-SYSTEM_PROMPT כבר בתחילתו (נבנה ב-message_handler)
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=full_messages,
             temperature=1,
+            metadata=metadata,
+            store=True
         )
 
         # --- DEBUG: Print all usage fields from API ---
@@ -201,19 +210,28 @@ def get_main_response_async(*args, **kwargs):
 
 # ============================הג'יפיטי ה-B - תמצית תשובה להיסטוריה ======================= 
 
-def summarize_bot_reply(reply_text):
+def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
     """
     שולח תשובה של הבוט ל-gpt_b ומקבל תמצית קצרה להיסטוריה.
     קלט: reply_text — התשובה המלאה של הבוט.
+         chat_id, original_message_id — אופציונלי, לשימוש ב-metadata.
     פלט: dict עם תמצית, usage, עלות.
     # מהלך מעניין: תמצית חכמה שמשמרת את המהות אבל מקצרת משמעותית.
     """
     try:
+        metadata = {"gpt_identifier": "gpt_b"}
+        if chat_id:
+            metadata["chat_id"] = chat_id
+        if original_message_id:
+            metadata["original_message_id"] = original_message_id
+
         system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט לתמצית
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": reply_text}],
             temperature=1,
+            metadata=metadata,
+            store=True
         )
 
         # שליפת נתוני usage
@@ -304,7 +322,7 @@ def smart_update_profile(existing_profile, user_message):
         logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
         print(f"[DEBUG][smart_update_profile] --- START ---")
         print(f"[DEBUG][smart_update_profile] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-        # שלב 1: gpt_e - חילוץ מידע חדש
+        # שלב 1: gpt_c - חילוץ מידע חדש
         new_data, extract_usage = extract_user_profile_fields_enhanced(user_message, existing_profile)
         print(f"[DEBUG][smart_update_profile] new_data: {new_data} (type: {type(new_data)})")
         print(f"[DEBUG][smart_update_profile] extract_usage: {extract_usage} (type: {type(extract_usage)})")
@@ -340,44 +358,33 @@ def smart_update_profile_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, smart_update_profile, *args, **kwargs)
 
-# ============================ GPT-E - מערכת הזיכרון המשופרת ============================
+# ============================ gpt_c - מערכת הזיכרון המשופרת ============================
 
 def update_user_summary_enhanced(existing_profile, user_message):
     """
-    GPT-E: מעדכן תעודת זהות רגשית של משתמש עם סיכום קריא במקום JSON מורכב.
+    gpt_c: מעדכן תעודת זהות רגשית של משתמש עם סיכום קריא במקום JSON מורכב.
     קלט: existing_profile (dict), user_message (str)
     פלט: dict ממוזג, usage (dict)
     """
-    print("[DEBUG][update_user_summary_enhanced] CALLED - GPT-E")
+    print("[DEBUG][update_user_summary_enhanced] CALLED - gpt_c")
     try:
-        logging.info("🔄 מתחיל עדכון משופר של ת.ז הרגשית עם GPT-E")
+        logging.info("🔄 מתחיל עדכון משופר של ת.ז הרגשית עם gpt_c")
         print(f"[DEBUG][update_user_summary_enhanced] --- START ---")
         print(f"[DEBUG][update_user_summary_enhanced] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-        
-        # שלב 1: GPT-E - חילוץ ועדכון בסיכום קריא
-        # שימוש ב-gpt_e החדשה במקום extract_user_profile_fields_enhanced
-        existing_summary = existing_profile.get("summary", "")
-        gpt_e_result = gpt_e(existing_summary, user_message, "")
-        
+        # שלב 1: gpt_c - חילוץ ועדכון בסיכום קריא
+        # שימוש ב-gpt_c החדשה במקום extract_user_profile_fields_enhanced
+        gpt_e_result = gpt_c(user_message, "")
         if gpt_e_result is None:
-            # אין שינוי - מחזיר את הפרופיל הקיים
             logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
             print("[DEBUG][update_user_summary_enhanced] אין מידע חדש, מחזיר ת.ז ללא שינוי")
             return existing_profile, {}
-        
-        # יש שינוי - מעדכן את הפרופיל
         updated_summary = gpt_e_result.get("updated_summary", "")
-        
-        # --- הוספת בדיקה: אם אין שינוי, לא לעדכן ---
-        if updated_summary == existing_summary:
+        if "summary" in existing_profile and updated_summary == existing_profile["summary"]:
             logging.info("ℹ️ אין שינוי בסיכום, מחזיר ת.ז ללא שינוי")
             print("[DEBUG][update_user_summary_enhanced] אין שינוי בסיכום, מחזיר ת.ז ללא שינוי")
             return existing_profile, {}
-        
         full_data = gpt_e_result.get("full_data", {})
-        # עדכון הפרופיל עם הנתונים החדשים
         updated_profile = {**existing_profile, **full_data}
-        # וידוא שהסיכום מעודכן
         if updated_summary:
             updated_profile["summary"] = updated_summary
         print(f"[DEBUG][update_user_summary_enhanced] updated_profile: {updated_profile}")
@@ -386,12 +393,10 @@ def update_user_summary_enhanced(existing_profile, user_message):
             print(f"[DEBUG][update_user_summary_enhanced] profile diff (new keys): {diff_keys}")
         else:
             print(f"[DEBUG][update_user_summary_enhanced] profile unchanged")
-        # הכנת usage data
         usage_data = {k: v for k, v in gpt_e_result.items() if k not in ["updated_summary", "full_data"]}
-        logging.info(f"✅ GPT-E עדכן ת.ז עם {len(full_data)} שדות חדשים")
+        logging.info(f"✅ gpt_c עדכן ת.ז עם {len(full_data)} שדות חדשים")
         print(f"[DEBUG][update_user_summary_enhanced] returning: profile_updated={updated_profile}, extract_usage={usage_data}")
         return updated_profile, usage_data
-        
     except Exception as e:
         import traceback
         print(f"[ERROR][update_user_summary_enhanced] Exception: {e}")
@@ -404,13 +409,13 @@ def update_user_summary_enhanced_async(*args, **kwargs):
 
 def extract_user_profile_fields_enhanced(text, existing_profile=None, system_prompt=None, client=None):
     """
-    GPT-E: שולחת את הטקסט ל-GPT-E ומחזירה dict עם שדות מידע אישי בסיכום קריא.
+    gpt_c: שולחת את הטקסט ל-gpt_c ומחזירה dict עם שדות מידע אישי בסיכום קריא.
     קלט: text (טקסט חופשי מהמשתמש), existing_profile (dict קיים), system_prompt (פרומט ייעודי), client (אופציונלי).
     פלט: (enhanced_data: dict, usage_data: dict)
     """
-    print("[DEBUG][extract_user_profile_fields_enhanced] CALLED - GPT-E")
+    print("[DEBUG][extract_user_profile_fields_enhanced] CALLED - gpt_c")
     if system_prompt is None:
-        system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT  # פרומט GPT-E
+        system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT  # פרומט gpt_c
     if client is None:
         from gpt_handler import client
     if existing_profile is None:
@@ -429,10 +434,12 @@ def extract_user_profile_fields_enhanced(text, existing_profile=None, system_pro
                 {"role": "user", "content": f"הודעה חדשה: {text}{profile_context}"}
             ],
             temperature=0,
-            max_tokens=300
+            max_tokens=300,
+            metadata={"gpt_identifier": "gpt_c"},
+            store=True
         )
         content = response.choices[0].message.content.strip()
-        print(f"[DEBUG][extract_user_profile_fields_enhanced] raw GPT-E content: {content}")
+        print(f"[DEBUG][extract_user_profile_fields_enhanced] raw gpt_c content: {content}")
         
         # --- ניקוי בלוק ```json ... ``` אם קיים ---
         if content.startswith("```"):
@@ -483,93 +490,76 @@ def extract_user_profile_fields_enhanced_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, extract_user_profile_fields_enhanced, *args, **kwargs)
 
-# ============================ GPT-E - הפונקציה הראשית ============================
+# ============================ gpt_c - הפונקציה הראשית ============================
 
-def gpt_e(existing_summary, user_message, last_bot_message=""):
+def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
     """
-    GPT-E: הפונקציה הראשית שמחליפה את GPT-C ו-GPT-D.
-    מעדכנת סיכום קיים עם מידע חדש מהודעה.
-    קלט: existing_summary (str), user_message (str), last_bot_message (str) - ההודעה האחרונה של הבוט
+    gpt_c: 
+    מעדכנת סיכום שדות של ת.ז של בן אדם.
+    קלט: user_message (str), last_bot_message (str) - ההודעה האחרונה של הבוט,
+         chat_id, message_id - אופציונלי, לשימוש ב-metadata
     פלט: dict עם updated_summary, full_data, ו-usage info
     """
-    print("[DEBUG][gpt_e] CALLED - הפונקציה הראשית")
+    print("[DEBUG][gpt_c] CALLED - הפונקציה הראשית")
     try:
-        logging.info("🔄 מתחיל GPT-E - עדכון סיכום עם מידע חדש")
-        print(f"[DEBUG][gpt_e] --- START ---")
-        print(f"[DEBUG][gpt_e] existing_summary: {existing_summary} (type: {type(existing_summary)})")
-        print(f"[DEBUG][gpt_e] user_message: {user_message} (type: {type(user_message)})")
-        print(f"[DEBUG][gpt_e] last_bot_message: {last_bot_message} (type: {type(last_bot_message)})")
-        
-        # הכנת הפרומט
+        logging.info("🔄 מתחיל gpt_c - עדכון סיכום עם מידע חדש")
+        print(f"[DEBUG][gpt_c] --- START ---")
+        print(f"[DEBUG][gpt_c] user_message: {user_message} (type: {type(user_message)})")
+        print(f"[DEBUG][gpt_c] last_bot_message: {last_bot_message} (type: {type(last_bot_message)})")
+        metadata = {"gpt_identifier": "gpt_c"}
+        if chat_id:
+            metadata["chat_id"] = chat_id
+        if message_id:
+            metadata["message_id"] = message_id
         system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT
-        
-        # הכנת ההודעה למשתמש עם הקשר
-        current_summary_json = json.dumps({"summary": existing_summary}, ensure_ascii=False)
         if last_bot_message:
             user_message_json = json.dumps({
                 "last_bot_message": last_bot_message,
                 "user_reply": user_message
             }, ensure_ascii=False, indent=2)
             user_content = (
-                f"current_summary = {current_summary_json}\n\n"
                 f"user_message = {user_message_json}\n\n"
                 f"נתח את הערך של user_reply בלבד, תוך הבנה שהוא תגובה ל־last_bot_message.\n"
                 f"חלץ רק מידע שנאמר במפורש בתוך user_reply."
             )
         else:
             user_content = (
-                f"current_summary = {current_summary_json}\n\n"
                 f"user_message = {json.dumps(user_message, ensure_ascii=False)}\n\n"
                 f"נתח רק את ההודעה של המשתמש כפי שהיא מופיעה כאן."
             )
-
         response = client.chat.completions.create(
-            model="gpt-4.1-nano",  # המודל הכי זול
+            model="gpt-4.1-nano",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
             ],
             temperature=0.7,
-            max_tokens=500
+            max_tokens=500,
+            metadata=metadata,
+            store=True
         )
-        
         content = response.choices[0].message.content.strip()
-        print(f"[DEBUG][gpt_e] raw GPT-E response: {content}")
-        
-        # --- ניקוי בלוק ```json ... ``` אם קיים ---
+        print(f"[DEBUG][gpt_c] raw gpt_c response: {content}")
         if content.startswith("```"):
             match = re.search(r"```(?:json)?\s*({.*?})\s*```", content, re.DOTALL)
             if match:
                 content = match.group(1)
-                print(f"[DEBUG][gpt_e] cleaned content: {content}")
-        
-        # פרסור התשובה
+                print(f"[DEBUG][gpt_c] cleaned content: {content}")
         try:
             result = json.loads(content)
-            print(f"[DEBUG][gpt_e] parsed result: {result}")
-            # בדיקה אם התשובה ריקה (אין מידע חדש)
-            # במקום להחזיר None, נחזיר usage בלבד עם שדות חילוץ ריקים
-            is_empty = not result.get("summary") and not result.get("full_data")
+            print(f"[DEBUG][gpt_c] parsed result: {result}")
         except Exception as e:
-            print(f"[ERROR][gpt_e] JSON parsing error: {e}")
-            print(f"[ERROR][gpt_e] content that failed to parse: {content}")
-            # אם נכשל פרסור JSON, נחזיר usage בלבד עם שדות חילוץ ריקים
+            print(f"[ERROR][gpt_c] JSON parsing error: {e}")
+            print(f"[ERROR][gpt_c] content that failed to parse: {content}")
             result = {"summary": "", "full_data": {}}
-            is_empty = True
-        
-        # הכנת usage data
         prompt_tokens = response.usage.prompt_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
         cached_tokens = getattr(response.usage, 'cached_tokens', 0)
         model_name = response.model
-        
-        # חישוב עלות
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
-        
-        # הכנת התוצאה הסופית
         final_result = {
-            "updated_summary": result.get("summary", existing_summary),
+            "updated_summary": result.get("summary", ""),
             "full_data": result.get("full_data", {}),
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -578,12 +568,11 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
             "model": model_name,
             **cost_data
         }
-        print(f"[DEBUG][gpt_e] final_result: {final_result}")
-        logging.info(f"✅ GPT-E הושלם בהצלחה")
-        
+        print(f"[DEBUG][gpt_c] final_result: {final_result}")
+        logging.info(f"✅ gpt_c הושלם בהצלחה")
         # הוספת עדכון ל-HTML
         append_gpt_e_html_update(
-            old_summary=existing_summary,
+            old_summary=None,
             user_message=user_message,
             new_summary=final_result["updated_summary"],
             tokens_used=total_tokens,
@@ -592,17 +581,15 @@ def gpt_e(existing_summary, user_message, last_bot_message=""):
             cost_agorot=final_result.get("cost_agorot", 0),
             model=model_name
         )
-        
         return final_result
-        
     except Exception as e:
         import traceback
-        print(f"[ERROR][gpt_e] Exception: {e}")
+        print(f"[ERROR][gpt_c] Exception: {e}")
         print(traceback.format_exc())
-        logging.error(f"❌ שגיאה ב-GPT-E: {e}")
+        logging.error(f"❌ שגיאה ב-gpt_c: {e}")
         return None
 
 def gpt_e_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, gpt_e, *args, **kwargs)
+    return loop.run_in_executor(None, gpt_c, *args, **kwargs)
 

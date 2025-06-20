@@ -21,7 +21,7 @@ def append_gpt_e_html_update(
     model: Optional[str] = None
 ) -> None:
     """
-    Append a GPT-E update to the HTML log file in the data directory.
+    Append a gpt_c update to the HTML log file in the data directory.
     Keeps only the latest 100 updates.
     Creates the file and directory if they do not exist.
     Shows cost in agorot (אגורות) exactly as in the sheets, if provided.
@@ -65,14 +65,14 @@ def append_gpt_e_html_update(
     
     # NEW: Improved card layout (wider, shorter, label+value on same row, 85% width)
     entry_html = f"""
-    <div class=\"gpt-e-card\" style=\"{card_style}\">
-        <div class=\"gpt-e-meta\">
+    <div class=\"gpt_c-card\" style=\"{card_style}\">
+        <div class=\"gpt_c-meta\">
             <span>{timestamp}</span>
             {metadata_html}
         </div>
-        <div class=\"gpt-e-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt-e-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">Old Summary:</span><div class=\"gpt-e-summary\" style=\"background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;\">{old_summary_html}</div></div>
-        <div class=\"gpt-e-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt-e-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">User Message:</span><div class=\"gpt-e-summary\" style=\"background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;\">{user_message}</div></div>
-        <div class=\"gpt-e-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt-e-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">New Summary:</span><div class=\"gpt-e-summary\" style=\"{new_summary_style}\">{new_summary}</div></div>
+        <div class=\"gpt_c-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt_c-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">Old Summary:</span><div class=\"gpt_c-summary\" style=\"background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;\">{old_summary_html}</div></div>
+        <div class=\"gpt_c-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt_c-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">User Message:</span><div class=\"gpt_c-summary\" style=\"background:#f2f4f8;border-radius:5px;padding:5px 8px;font-size:1em;word-break:break-word;flex:1;\">{user_message}</div></div>
+        <div class=\"gpt_c-section-row\" style=\"display:flex;align-items:center;margin-bottom:4px;\"><span class=\"gpt_c-label\" style=\"min-width:110px;font-weight:bold;color:#4b5fc0;margin-right:8px;flex-shrink:0;\">New Summary:</span><div class=\"gpt_c-summary\" style=\"{new_summary_style}\">{new_summary}</div></div>
     </div>
     """
     
@@ -83,7 +83,7 @@ def append_gpt_e_html_update(
 <head>
     <meta charset=\"UTF-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-    <title>GPT-E Updates Log</title>
+    <title>gpt_c Updates Log</title>
     <style>
         body {{
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -92,7 +92,7 @@ def append_gpt_e_html_update(
             padding: 10px;
             background-color: #f7f7fa;
         }}
-        .gpt-e-card {{
+        .gpt_c-card {{
             background: #fff;
             border: 1px solid #d0d7e2;
             border-radius: 10px;
@@ -101,24 +101,24 @@ def append_gpt_e_html_update(
             padding: 12px 16px;
             box-shadow: 0 2px 8px #0001;
         }}
-        .gpt-e-meta {{
+        .gpt_c-meta {{
             font-size: 0.92em;
             color: #666;
             margin-bottom: 7px;
         }}
-        .gpt-e-section-row {{
+        .gpt_c-section-row {{
             display: flex;
             align-items: flex-start;
             margin-bottom: 7px;
         }}
-        .gpt-e-label {{
+        .gpt_c-label {{
             min-width: 110px;
             font-weight: bold;
             color: #4b5fc0;
             margin-right: 8px;
             flex-shrink: 0;
         }}
-        .gpt-e-summary {{
+        .gpt_c-summary {{
             background: #f2f4f8;
             border-radius: 5px;
             padding: 5px 8px;
@@ -126,7 +126,7 @@ def append_gpt_e_html_update(
             word-break: break-word;
             flex: 1;
         }}
-        .gpt-e-header {{
+        .gpt_c-header {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 18px 18px 10px 18px;
@@ -136,17 +136,17 @@ def append_gpt_e_html_update(
             text-align: center;
             position: relative;
         }}
-        .gpt-e-header h2 {{
+        .gpt_c-header h2 {{
             margin: 0;
             font-size: 2em;
             font-weight: 400;
         }}
-        .gpt-e-header p {{
+        .gpt_c-header p {{
             margin: 8px 0 0 0;
             opacity: 0.93;
             font-size: 1em;
         }}
-        .gpt-e-clear-btn {{
+        .gpt_c-clear-btn {{
             position: absolute;
             top: 16px;
             left: 16px;
@@ -161,7 +161,7 @@ def append_gpt_e_html_update(
             box-shadow: 0 1px 4px #0001;
             transition: background 0.2s, color 0.2s;
         }}
-        .gpt-e-clear-btn:hover {{
+        .gpt_c-clear-btn:hover {{
             background: #f2f4f8;
             color: #667eea;
         }}
@@ -175,12 +175,12 @@ def append_gpt_e_html_update(
     </script>
 </head>
 <body>
-    <div class=\"gpt-e-header\">
-        <button class=\"gpt-e-clear-btn\" onclick=\"clearGptELog()\">נקה הכל</button>
-        <h2>GPT-E Updates Log</h2>
-        <p>היסטוריית עדכונים של כל סיכומי GPT-E. כל עדכון נשמר ככרטיסיה חדשה.</p>
+    <div class=\"gpt_c-header\">
+        <button class=\"gpt_c-clear-btn\" onclick=\"clearGptELog()\">נקה הכל</button>
+        <h2>gpt_c Updates Log</h2>
+        <p>היסטוריית עדכונים של כל סיכומי gpt_c. כל עדכון נשמר ככרטיסיה חדשה.</p>
     </div>
-    <div id=\"gpt-e-log\">
+    <div id=\"gpt_c-log\">
 {entry_html}
     </div>
 </body>
@@ -189,19 +189,19 @@ def append_gpt_e_html_update(
             f.write(html_content)
         return
 
-    # If file exists, insert new entry after <div id="gpt-e-log">
+    # If file exists, insert new entry after <div id="gpt_c-log">
     with open(html_file, 'r', encoding='utf-8') as f:
         content = f.read()
 
     # Find the insertion point
-    insert_point = content.find('<div id="gpt-e-log">')
+    insert_point = content.find('<div id="gpt_c-log">')
     if insert_point == -1:
         # fallback: just append at the end
         insert_point = len(content)
         before = content
         after = ''
     else:
-        insert_point += len('<div id="gpt-e-log">')
+        insert_point += len('<div id="gpt_c-log">')
         before = content[:insert_point]
         after = content[insert_point:]
 
@@ -210,26 +210,26 @@ def append_gpt_e_html_update(
 
     # Limit to 100 cards
     import re
-    cards = re.findall(r'<div class=\\?"gpt-e-card\\?">.*?</div>', new_content, re.DOTALL)
+    cards = re.findall(r'<div class=\\?"gpt_c-card\\?">.*?</div>', new_content, re.DOTALL)
     if len(cards) > 100:
         # Keep only the first 100
         # Remove all after the 100th
-        split = new_content.split('<div id="gpt-e-log">', 1)
+        split = new_content.split('<div id="gpt_c-log">', 1)
         if len(split) == 2:
             head, rest = split
             # Find the 100th card's end
-            card_positions = [m.start() for m in re.finditer(r'<div class=\\?"gpt-e-card\\?">', rest)]
+            card_positions = [m.start() for m in re.finditer(r'<div class=\\?"gpt_c-card\\?">', rest)]
             if len(card_positions) > 100:
                 cut_pos = card_positions[100]
                 rest = rest[:cut_pos]
-            new_content = head + '<div id="gpt-e-log">' + rest
+            new_content = head + '<div id="gpt_c-log">' + rest
 
     with open(html_file, 'w', encoding='utf-8') as f:
         f.write(new_content) 
 
 def clear_gpt_e_html_log():
     """
-    Clears all entries from the HTML log except the header and the 'gpt-e-log' div.
+    Clears all entries from the HTML log except the header and the 'gpt_c-log' div.
     """
     html_file = os.path.join("data", "gpt_e_results.html")
     if not os.path.exists(html_file):
@@ -237,13 +237,13 @@ def clear_gpt_e_html_log():
     with open(html_file, 'r', encoding='utf-8') as f:
         content = f.read()
     # Find the header and the start of the log div
-    start = content.find('<div id="gpt-e-log">')
+    start = content.find('<div id="gpt_c-log">')
     if start == -1:
         return
     end = content.find('</div>', start)
     if end == -1:
         return
     # Keep everything up to the opening of the log div, then close it immediately
-    new_content = content[:start] + '<div id="gpt-e-log">\n    </div>\n</body>\n</html>'
+    new_content = content[:start] + '<div id="gpt_c-log">\n    </div>\n</body>\n</html>'
     with open(html_file, 'w', encoding='utf-8') as f:
         f.write(new_content) 
