@@ -4,110 +4,133 @@ gpt_handler.py
 קובץ זה מרכז את כל הפונקציות שמבצעות אינטראקציה עם GPT (שליחת הודעות, חישוב עלות, דיבאגינג).
 הרציונל: ריכוז כל הלוגיקה של GPT במקום אחד, כולל תיעוד מלא של טוקנים, עלויות, ולוגים.
 
-מערכת חישוב עלות GPT דינאמית (יוני 2025)
+🔄 עדכון: מעבר ל-LiteLLM עם מעקב עלויות מובנה
 --------------------------------------------------
-- כל חישוב עלות טוקנים מתבצע דינאמית לפי קובץ gpt_pricing.json.
-- כל מודל (gpt-4o, nano, mini וכו') מוגדר עם מחירי prompt/cached/completion בקובץ JSON זה.
-- כל שינוי מחירון או הוספת מודל חדש – יש לעדכן אך ורק את gpt_pricing.json (אין צורך לשנות קוד).
-- אם שם המודל לא קיים במחירון – תוחזר עלות 0 ותירשם שגיאה בלוג.
-לפני השינוי הגדול של הGPTS ----------------------------
-# דוקומנטציה:
-# - לעדכון מחירים: ערוך את gpt_pricing.json בלבד.
-# - להוסף מודל: הוסף ערך חדש ל-gpt_pricing.json עם שם המודל והמחירים.
-# - חובה לשמור על שמות תואמים בין usage (response.model) לבין המפתחות ב-JSON.
+- LiteLLM מספק מעקב עלויות אוטומטי ומדויק
+- אין צורך בקובץ מחירון חיצוני
+- עלויות מחושבות אוטומטית לפי המודל והטוקנים
+- תמיכה במודלים מרובים עם עלויות שונות
 """
 
 import json
 import logging
-from datetime import datetime
-from config import client, GPT_LOG_PATH
 import os
-from fields_dict import FIELDS_DICT
-import threading
-from prompts import BOT_REPLY_SUMMARY_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
 import asyncio
 import re
-from gpt_usage_manager import GPTUsageManager
+import threading
+from datetime import datetime
+from config import client, GPT_LOG_PATH
+from fields_dict import FIELDS_DICT
+from prompts import BOT_REPLY_SUMMARY_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
 from gpt_e_logger import append_gpt_e_html_update
 
-# ===================== פונקציות עזר ללוגים ודיבאג =====================
-
-def _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, call_type):
-    """
-    מדפיס מידע דיבאג על שימוש ב-GPT (לוגים פנימיים בלבד).
-    """
-    print(f"[DEBUG][{call_type}] מודל: {model_name}, prompt: {prompt_tokens}, completion: {completion_tokens}, cached: {cached_tokens}, total: {total_tokens}")
-
-import os
-import json
-from datetime import datetime
-
-def write_gpt_log(call_type, usage_log, model_name):
-    """
-    שומר usage log לקובץ DATA/gpt_usage_log.jsonl (שורה אחת לכל קריאה).
-    """
-    log_entry = {
-        "timestamp": datetime.now().isoformat(timespec="microseconds"),
-        "type": call_type,
-        "model": model_name,
-        **usage_log
-    }
-    log_path = GPT_LOG_PATH  # במקום os.path.join("DATA", "gpt_usage_log.jsonl")
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-
-# ===================== הגדרת שער החליפין =====================
+# קבועים
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(PROJECT_ROOT, exist_ok=True)
 
-# ===================== טעינת מחירון דינאמי לכל המודלים (יוני 2025) =====================
+# ===================== פונקציות עזר ללוגים ודיבאג =====================
 
-# טוען את המחירון מהקובץ פעם אחת בלבד
-PRICING_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gpt_pricing.json')
-try:
-    with open(PRICING_PATH, encoding='utf-8') as f:
-        GPT_PRICING = json.load(f)
-except Exception as e:
-    print(f"[ERROR] לא הצלחתי לטעון את gpt_pricing.json: {e}")
-    GPT_PRICING = {}
+def _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, call_type):
+    """
+    הדפסת debug info על usage של GPT.
+    """
+    print(f"[DEBUG] {call_type} - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache = {total_tokens}total")
 
-# פונקציה שמביאה את מחירי הטוקנים לפי שם המודל
-# מחזירה מילון עם prompt/cached/completion, או None אם לא קיים
-# מבצעת normalization לשם המודל (למשל gpt-4o-2024-08-06 -> gpt-4o)
-def get_model_prices(model_name):
-    if not model_name:
-        return None
-    # ניקוי גרסאות מהשם (למשל gpt-4o-2024-08-06 -> gpt-4o)
-    base_name = model_name.split("-")[0]
-    # חיפוש מדויק
-    if model_name in GPT_PRICING:
-        return GPT_PRICING[model_name]
-    # חיפוש לפי base_name
-    for key in GPT_PRICING:
-        if model_name.startswith(key):
-            return GPT_PRICING[key]
-    if base_name in GPT_PRICING:
-        return GPT_PRICING[base_name]
-    # לא נמצא מחירון
-    print(f"[ERROR] לא נמצא מחירון למודל: {model_name}")
-    return None
+def write_gpt_log(call_type, usage_log, model_name):
+    """
+    כותב לוג של קריאת GPT לקובץ JSON.
+    קלט: call_type (main_reply/summary/identity_extraction), usage_log (dict), model_name (str)
+    """
+    try:
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "type": call_type,
+            "model": model_name,
+            **usage_log
+        }
+        
+        # וידוא שהתיקייה קיימת
+        os.makedirs(os.path.dirname(GPT_LOG_PATH), exist_ok=True)
+        
+        with open(GPT_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            
+    except Exception as e:
+        logging.error(f"שגיאה בכתיבת לוג GPT: {e}")
 
-# יצירת מופע גלובלי של מנהל usage (טעינה חד פעמית של המחירון)
-gpt_usage_manager = GPTUsageManager()
-
-# עדכון calculate_gpt_cost להשתמש במנהל החדש
-
+# 🔄 עדכון: פונקציה חדשה לחישוב עלויות עם LiteLLM
 def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS):
     """
-    מחשב עלות GPT (USD, ILS, אגורות) לפי מספר טוקנים, כולל טוקנים רגילים, קשד ופלט, ולפי שם המודל.
+    מחשב עלות GPT באמצעות LiteLLM.
     קלט: prompt_tokens, completion_tokens, cached_tokens, model_name, usd_to_ils
     פלט: dict usage אחיד עם כל הערכים.
     """
-    return gpt_usage_manager.calculate(model_name, prompt_tokens, completion_tokens, cached_tokens, usd_to_ils)
+    try:
+        import litellm
+        
+        # 🔍 דיבאג חכם: הדפסת פרטי הקלט
+        print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
+        
+        # יצירת response mock לחישוב עלות
+        class MockUsage:
+            def __init__(self, prompt_tokens, completion_tokens, total_tokens):
+                self.prompt_tokens = prompt_tokens
+                self.completion_tokens = completion_tokens
+                self.total_tokens = total_tokens
+        
+        class MockResponse:
+            def __init__(self, model, usage):
+                self.model = model
+                self.usage = usage
+        
+        # יצירת response mock
+        mock_usage = MockUsage(prompt_tokens, completion_tokens, prompt_tokens + completion_tokens)
+        mock_response = MockResponse(model_name, mock_usage)
+        
+        # חישוב עלות באמצעות LiteLLM
+        cost_usd = litellm.completion_cost(completion_response=mock_response)
+        cost_ils = cost_usd * usd_to_ils
+        cost_agorot = cost_ils * 100
+        
+        # 🔍 דיבאג חכם: הדפסת תוצאות החישוב
+        print(f"[DEBUG] calculate_gpt_cost - Cost: ${cost_usd:.6f} = ₪{cost_ils:.4f} = {cost_agorot:.2f} אגורות")
+        
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "cached_tokens": cached_tokens,
+            "prompt_regular": prompt_tokens - cached_tokens,
+            "cost_prompt_regular": 0.0,  # LiteLLM לא מפריד בין prompt רגיל לקאש
+            "cost_prompt_cached": 0.0,
+            "cost_completion": 0.0,
+            "cost_total": cost_usd,
+            "cost_total_ils": cost_ils,
+            "cost_agorot": cost_agorot,
+            "model": model_name
+        }
+    except Exception as e:
+        logging.error(f"שגיאה בחישוב עלות LiteLLM: {e}")
+        print(f"[ERROR] calculate_gpt_cost failed: {e}")
+        # fallback לערכים 0
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "cached_tokens": cached_tokens,
+            "prompt_regular": prompt_tokens - cached_tokens,
+            "cost_prompt_regular": 0.0,
+            "cost_prompt_cached": 0.0,
+            "cost_completion": 0.0,
+            "cost_total": 0.0,
+            "cost_total_ils": 0.0,
+            "cost_agorot": 0.0,
+            "model": model_name
+        }
 
 # ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש ======================= 
 

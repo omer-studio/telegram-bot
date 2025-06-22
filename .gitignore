@@ -36,3 +36,6 @@ ngrok-v3-stable-windows-amd64/ngrok.exe
 # Ignore HTML log files
 gpt_e_results.html
 summary_updates.html
+
+# Ignore recycle bin folder
+/recycle_bin/

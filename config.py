@@ -8,7 +8,7 @@ import os
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from openai import OpenAI
+from litellm import completion
 from fields_dict import FIELDS_DICT
 from prompts import SYSTEM_PROMPT  # ייבוא ישיר של הפרומט הראשי
 
@@ -50,8 +50,64 @@ GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 ADMIN_BOT_TELEGRAM_TOKEN = config.get("ADMIN_BOT_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
 ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
 
-# יצירת קליינטים
-client = OpenAI(api_key=OPENAI_API_KEY)
+# הגדרת LiteLLM
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
+# פונקציה ליצירת קליינט LiteLLM (לשמירה על תאימות)
+def get_client():
+    """
+    מחזיר פונקציה שמדמה את הקליינט המקורי של OpenAI אבל משתמשת ב-LiteLLM.
+    פלט: פונקציה שמדמה OpenAI client
+    """
+    class LiteLLMClient:
+        def __init__(self):
+            self.chat = self.Chat()
+        
+        class Chat:
+            def __init__(self):
+                self.completions = self.Completions()
+            
+            class Completions:
+                def create(self, model, messages, temperature=1, metadata=None, store=True, max_tokens=None):
+                    # המרת metadata ל-litellm format
+                    litellm_kwargs = {
+                        "model": model,
+                        "messages": messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens
+                    }
+                    if metadata:
+                        litellm_kwargs["metadata"] = metadata
+                    response = completion(**litellm_kwargs)
+                    return self._convert_response(response)
+                
+                def _convert_response(self, litellm_response):
+                    class MockResponse:
+                        def __init__(self, litellm_response):
+                            self.choices = [self.MockChoice(litellm_response)]
+                            self.usage = self.MockUsage(litellm_response)
+                            self.model = litellm_response.get("model", "unknown")
+                        class MockChoice:
+                            def __init__(self, response):
+                                self.message = self.MockMessage(response)
+                            class MockMessage:
+                                def __init__(self, response):
+                                    self.content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        class MockUsage:
+                            def __init__(self, response):
+                                usage_data = response.get("usage", {})
+                                self.prompt_tokens = usage_data.get("prompt_tokens", 0)
+                                self.completion_tokens = usage_data.get("completion_tokens", 0)
+                                self.total_tokens = usage_data.get("total_tokens", 0)
+                                self.prompt_tokens_details = self.MockPromptTokensDetails(usage_data)
+                            class MockPromptTokensDetails:
+                                def __init__(self, usage_data):
+                                    self.cached_tokens = usage_data.get("cached_tokens", 0)
+                    return MockResponse(litellm_response)
+    return LiteLLMClient()
+
+# יצירת קליינט (לשמירה על תאימות)
+client = get_client()
 
 # הגדרת Google Sheets
 def setup_google_sheets():
