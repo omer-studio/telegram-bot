@@ -39,10 +39,10 @@ def _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens
     """
     print(f"[DEBUG] {call_type} - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache = {total_tokens}total")
 
-def write_gpt_log(call_type, usage_log, model_name):
+def write_gpt_log(call_type, usage_log, model_name, interaction_id=None):
     """
     כותב לוג של קריאת GPT לקובץ JSON.
-    קלט: call_type (main_reply/summary/identity_extraction), usage_log (dict), model_name (str)
+    קלט: call_type (main_reply/summary/identity_extraction), usage_log (dict), model_name (str), interaction_id (str, optional)
     """
     try:
         timestamp = datetime.now().isoformat()
@@ -52,6 +52,8 @@ def write_gpt_log(call_type, usage_log, model_name):
             "model": model_name,
             **usage_log
         }
+        if interaction_id:
+            log_entry["interaction_id"] = str(interaction_id)
         
         # וידוא שהתיקייה קיימת
         os.makedirs(os.path.dirname(GPT_LOG_PATH), exist_ok=True)
@@ -134,23 +136,12 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
 
 # ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש ======================= 
 
-
 def get_main_response(full_messages, chat_id=None, message_id=None):
     """
     שולח הודעה ל-gpt_a הראשי ומחזיר את התשובה, כולל פירוט עלות וטוקנים.
-    קלט: full_messages — רשימת הודעות (כולל system prompt).
-         chat_id, message_id — אופציונלי, לשימוש ב-metadata.
-    פלט: dict עם תשובה, usage, עלות.
-    # מהלך מעניין: שימוש בפרומט הראשי שמגדיר את האישיות של דניאל.
     """
     try:
-        metadata = {"gpt_identifier": "gpt_a"}
-        if chat_id:
-            metadata["chat_id"] = chat_id
-        if message_id:
-            metadata["message_id"] = message_id
-
-        # full_messages כולל את ה-SYSTEM_PROMPT כבר בתחילתו (נבנה ב-message_handler)
+        metadata = {"gpt_identifier": "gpt_a", "chat_id": chat_id, "message_id": message_id}
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=full_messages,
@@ -159,70 +150,19 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
             store=True
         )
 
-        # --- DEBUG: Print all usage fields from API ---
-        try:
-            def _to_serializable(val):
-                if hasattr(val, '__dict__'):
-                    return {k: _to_serializable(v) for k, v in vars(val).items()}
-                elif isinstance(val, (list, tuple)):
-                    return [_to_serializable(x) for x in val]
-                elif isinstance(val, dict):
-                    return {k: _to_serializable(v) for k, v in val.items()}
-                else:
-                    try:
-                        json.dumps(val)
-                        return val
-                    except Exception:
-                        return str(val)
-            usage_dict = {}
-            for k in dir(response.usage):
-                if not k.startswith("_") and not callable(getattr(response.usage, k)):
-                    v = getattr(response.usage, k)
-                    usage_dict[k] = _to_serializable(v)
-            print(f"[DEBUG] API usage raw: {json.dumps(usage_dict, ensure_ascii=False)}")
-        except Exception as e:
-            print(f"[DEBUG] Failed to print API usage fields: {e}")
-
-        # שליפת נתוני usage
         prompt_tokens = response.usage.prompt_tokens
-        prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details.cached_tokens
-        prompt_regular = prompt_tokens - cached_tokens
+        cached_tokens = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0)
         completion_tokens = response.usage.completion_tokens
-        total_tokens = response.usage.total_tokens
         model_name = response.model
 
-        # --- Smart debug ---
-        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "main_reply")
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, "main_reply")
 
-        # חישוב עלות דינאמי לפי המודל
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
-        # כל השדות נשמרים ב-usage_log
-        usage_log = {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
-            "cached_tokens": cached_tokens,
-            "prompt_regular": prompt_regular,
-            **cost_data,
-            "model": response.model
-        }
-
-        from utils import log_event_to_file
-        log_event_to_file({
-            "event": "gpt_main_call",
-            "gpt_input": full_messages,
-            "gpt_reply": response.choices[0].message.content,
-            "model": response.model,
-            "usage": usage_log
-        })
-
-        write_gpt_log("main_reply", usage_log, response.model)
-
-        return {
-            "bot_reply": response.choices[0].message.content,
-            **usage_log
-        }
+        
+        write_gpt_log("main_reply", cost_data, model_name, interaction_id=message_id)
+        
+        return {"text": response.choices[0].message.content, "usage": cost_data}
+        
     except Exception as e:
         logging.error(f"❌ שגיאה ב-gpt_a ראשי: {e}")
         raise
@@ -236,57 +176,30 @@ def get_main_response_async(*args, **kwargs):
 def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
     """
     שולח תשובה של הבוט ל-gpt_b ומקבל תמצית קצרה להיסטוריה.
-    קלט: reply_text — התשובה המלאה של הבוט.
-         chat_id, original_message_id — אופציונלי, לשימוש ב-metadata.
-    פלט: dict עם תמצית, usage, עלות.
-    # מהלך מעניין: תמצית חכמה שמשמרת את המהות אבל מקצרת משמעותית.
     """
     try:
-        metadata = {"gpt_identifier": "gpt_b"}
-        if chat_id:
-            metadata["chat_id"] = chat_id
-        if original_message_id:
-            metadata["original_message_id"] = original_message_id
-
-        system_prompt = BOT_REPLY_SUMMARY_PROMPT  # פרומט לתמצית
+        metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "original_message_id": original_message_id}
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": reply_text}],
+            messages=[{"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT}, {"role": "user", "content": reply_text}],
             temperature=1,
             metadata=metadata,
             store=True
         )
 
-        # שליפת נתוני usage
         prompt_tokens = response.usage.prompt_tokens
-        prompt_tokens_details = response.usage.prompt_tokens_details
-        cached_tokens = prompt_tokens_details.cached_tokens
-        prompt_regular = prompt_tokens - cached_tokens
+        cached_tokens = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0)
         completion_tokens = response.usage.completion_tokens
-        total_tokens = response.usage.total_tokens
         model_name = response.model
 
-        # --- Smart debug ---
-        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, "summary")
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, "summary")
 
-        # חישוב עלות דינאמי לפי המודל
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
-        usage_log = {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
-            "cached_tokens": cached_tokens,
-            "prompt_regular": prompt_regular,
-            **cost_data,
-            "model": response.model
-        }
+        
+        write_gpt_log("reply_summary", cost_data, model_name, interaction_id=original_message_id)
 
-        write_gpt_log("summary", usage_log, response.model)
+        return {"summary": response.choices[0].message.content, "usage": cost_data}
 
-        return {
-            "summary": response.choices[0].message.content.strip(),
-            **usage_log
-        }
     except Exception as e:
         logging.error(f"❌ שגיאה ב-gpt_b תמצית: {e}")
         raise
@@ -333,53 +246,32 @@ def validate_extracted_data(data):
 
 # ============================פונקציה שמפעילה את הג'יפיטי הרביעי לפי היגיון -לא פועל תמיד - עדכון חכם של ת.ז הרגשית ======================= 
 
-def smart_update_profile(existing_profile, user_message):
+def smart_update_profile(existing_profile, user_message, interaction_id=None):
     """
-    מעדכן תעודת זהות רגשית של משתמש, כולל מיזוג חכם במידת הצורך.
-    קלט: existing_profile (dict), user_message (str)
-    פלט: dict ממוזג, usage (dict)
-    # מהלך מעניין: בוחר אוטומטית האם להפעיל מיזוג חכם או רגיל.
+    מעדכן תעודת זהות רגשית של משתמש על ידי חילוץ פרטים מהודעתו.
+    זוהי פונקציית מעטפת שקוראת ל-extract_user_profile_fields_enhanced.
     """
-    print("[DEBUG][smart_update_profile] CALLED")
+    print(f"[DEBUG][smart_update_profile] - interaction_id: {interaction_id}")
     try:
-        logging.info("🔄 מתחיל עדכון חכם של ת.ז הרגשית")
-        print(f"[DEBUG][smart_update_profile] --- START ---")
-        print(f"[DEBUG][smart_update_profile] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-        # שלב 1: gpt_c - חילוץ מידע חדש
-        new_data, extract_usage = extract_user_profile_fields_enhanced(user_message, existing_profile)
-        print(f"[DEBUG][smart_update_profile] new_data: {new_data} (type: {type(new_data)})")
-        print(f"[DEBUG][smart_update_profile] extract_usage: {extract_usage} (type: {type(extract_usage)})")
-        # הגנה: ודא ש-new_data הוא dict עם מפתחות str בלבד
-        if not isinstance(new_data, dict) or not all(isinstance(k, str) for k in new_data.keys()):
-            logging.error(f"⚠️ new_data לא תקין (לפני מיזוג): {new_data}")
-            print(f"[ALERT][smart_update_profile] new_data לא תקין (לפני מיזוג): {new_data}")
-            new_data = {}
-        logging.info(f"🤖 gpt_c חילץ: {list(new_data.keys())}")
-        print(f"[DEBUG][smart_update_profile] new_data keys: {list(new_data.keys())}")
-        # אם אין מידע חדש - אין מה לעדכן
-        if not new_data:
-            logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
-            print("[DEBUG][smart_update_profile] אין מידע חדש, מחזיר ת.ז ללא שינוי")
-            return existing_profile, extract_usage, None
-        # עדכון פשוט - מיזוג רגיל
-        updated_profile = {**existing_profile, **new_data}
-        print(f"[DEBUG][smart_update_profile] updated_profile: {updated_profile}")
-        if existing_profile != updated_profile:
-            diff_keys = set(updated_profile.keys()) - set(existing_profile.keys())
-            print(f"[DEBUG][smart_update_profile] profile diff (new keys): {diff_keys}")
-        else:
-            print(f"[DEBUG][smart_update_profile] profile unchanged after simple merge")
-        print(f"[DEBUG][smart_update_profile] returning: profile_updated={updated_profile}, extract_usage={extract_usage}")
-        return updated_profile, extract_usage, None
-    except Exception as e:
-        import traceback
-        print(f"[ERROR][smart_update_profile] Exception: {e}")
-        print(traceback.format_exc())
-        return existing_profile, {}, None
+        new_data, extract_usage = extract_user_profile_fields_enhanced(
+            text=user_message,
+            existing_profile=existing_profile,
+            interaction_id=interaction_id
+        )
 
-def smart_update_profile_async(*args, **kwargs):
+        if not new_data:
+            return existing_profile, extract_usage
+
+        updated_profile = {**existing_profile, **new_data}
+        return updated_profile, extract_usage
+
+    except Exception as e:
+        logging.error(f"❌ שגיאה ב-smart_update_profile: {e}")
+        return existing_profile, {}
+
+def smart_update_profile_async(existing_profile, user_message, interaction_id=None):
     loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, smart_update_profile, *args, **kwargs)
+    return loop.run_in_executor(None, smart_update_profile, existing_profile, user_message, interaction_id)
 
 # ============================ gpt_c - מערכת הזיכרון המשופרת ============================
 
@@ -430,83 +322,55 @@ def update_user_summary_enhanced_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, update_user_summary_enhanced, *args, **kwargs)
 
-def extract_user_profile_fields_enhanced(text, existing_profile=None, system_prompt=None, client=None):
+def extract_user_profile_fields_enhanced(text, existing_profile=None, interaction_id=None):
     """
-    gpt_c: שולחת את הטקסט ל-gpt_c ומחזירה dict עם שדות מידע אישי בסיכום קריא.
-    קלט: text (טקסט חופשי מהמשתמש), existing_profile (dict קיים), system_prompt (פרומט ייעודי), client (אופציונלי).
-    פלט: (enhanced_data: dict, usage_data: dict)
+    gpt_c: שולחת את הטקסט ל-gpt_c כדי לחלץ שדות פרופיל.
     """
-    print("[DEBUG][extract_user_profile_fields_enhanced] CALLED - gpt_c")
-    if system_prompt is None:
-        system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT  # פרומט gpt_c
-    if client is None:
-        from gpt_handler import client
-    if existing_profile is None:
-        existing_profile = {}
-    
     try:
-        # הכנת הפרומט עם הפרופיל הקיים
         profile_context = ""
         if existing_profile:
             profile_context = f"\n\nפרופיל קיים:\n{json.dumps(existing_profile, ensure_ascii=False, indent=2)}"
+
+        messages = [
+            {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
+            {"role": "user", "content": f"הודעה חדשה: {text}{profile_context}"}
+        ]
         
         response = client.chat.completions.create(
-            model="gpt-4.1-nano",  # המודל הכי זול
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"הודעה חדשה: {text}{profile_context}"}
-            ],
+            model="gpt-4.1-nano",
+            messages=messages,
             temperature=0,
             max_tokens=300,
-            metadata={"gpt_identifier": "gpt_c"},
+            metadata={"gpt_identifier": "gpt_c", "interaction_id": interaction_id},
             store=True
         )
-        content = response.choices[0].message.content.strip()
-        print(f"[DEBUG][extract_user_profile_fields_enhanced] raw gpt_c content: {content}")
+
+        prompt_tokens = response.usage.prompt_tokens
+        completion_tokens = response.usage.completion_tokens
+        model_name = response.model
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, 0, model_name)
         
-        # --- ניקוי בלוק ```json ... ``` אם קיים ---
+        write_gpt_log("identity_extraction", cost_data, model_name, interaction_id=interaction_id)
+
+        content = response.choices[0].message.content.strip()
         if content.startswith("```"):
             match = re.search(r"```(?:json)?\s*({.*?})\s*```", content, re.DOTALL)
             if match:
                 content = match.group(1)
-                print(f"[DEBUG][extract_user_profile_fields_enhanced] cleaned content: {content}")
-        
+
         try:
-            enhanced_data = json.loads(content)
-            print(f"[DEBUG][extract_user_profile_fields_enhanced] after json.loads: {enhanced_data}")
-            # החזרת full_data במקום enhanced_data ישירות
-            full_data = enhanced_data.get("full_data", {})
-            print(f"[DEBUG][extract_user_profile_fields_enhanced] extracted full_data: {full_data}")
-        except Exception as e:
-            print(f"[ERROR][extract_user_profile_fields_enhanced] JSON parsing error: {e}")
-            print(f"[ERROR][extract_user_profile_fields_enhanced] content that failed to parse: {content}")
-            full_data = {}
+            extracted_data = json.loads(content)
+            if not isinstance(extracted_data, dict):
+                extracted_data = {}
+        except json.JSONDecodeError:
+            extracted_data = {}
         
-        # --- usage/cost ---
-        prompt_tokens = response.usage.prompt_tokens
-        prompt_tokens_details = getattr(response.usage, 'prompt_tokens_details', None)
-        cached_tokens = getattr(prompt_tokens_details, 'cached_tokens', 0) if prompt_tokens_details else 0
-        prompt_regular = prompt_tokens - cached_tokens
-        completion_tokens = response.usage.completion_tokens
-        total_tokens = response.usage.total_tokens
-        model_name = response.model
+        validated_data = validate_extracted_data(extracted_data)
         
-        # חישוב עלות דינאמי לפי המודל
-        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
-        usage_data = {
-            'prompt_tokens': prompt_tokens,
-            'completion_tokens': completion_tokens,
-            'total_tokens': total_tokens,
-            'cached_tokens': cached_tokens,
-            **cost_data,
-            'model': response.model
-        }
-        
-        print(f"[DEBUG][extract_user_profile_fields_enhanced] returning full_data: {full_data}")
-        return full_data, usage_data
+        return validated_data, cost_data
         
     except Exception as e:
-        logging.error(f"❌ שגיאה קריטית ב-extract_user_profile_fields_enhanced: {e}")
+        logging.error(f"❌ שגיאה ב-gpt_c חילוץ פרטים: {e}")
         return {}, {}
 
 def extract_user_profile_fields_enhanced_async(*args, **kwargs):
@@ -517,11 +381,7 @@ def extract_user_profile_fields_enhanced_async(*args, **kwargs):
 
 def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
     """
-    gpt_c: 
-    מעדכנת סיכום שדות של ת.ז של בן אדם.
-    קלט: user_message (str), last_bot_message (str) - ההודעה האחרונה של הבוט,
-         chat_id, message_id - אופציונלי, לשימוש ב-metadata
-    פלט: dict עם updated_summary, full_data, ו-usage info
+    מפעיל את כל זרימת ה-GPT: gpt_a, gpt_b, ו-smart_update_profile (שקורא ל-gpt_c).
     """
     print("[DEBUG][gpt_c] CALLED - הפונקציה הראשית")
     try:
@@ -529,12 +389,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         print(f"[DEBUG][gpt_c] --- START ---")
         print(f"[DEBUG][gpt_c] user_message: {user_message} (type: {type(user_message)})")
         print(f"[DEBUG][gpt_c] last_bot_message: {last_bot_message} (type: {type(last_bot_message)})")
-        metadata = {"gpt_identifier": "gpt_c"}
-        if chat_id:
-            metadata["chat_id"] = chat_id
-        if message_id:
-            metadata["message_id"] = message_id
-        system_prompt = PROFILE_EXTRACTION_ENHANCED_PROMPT
+        metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
         if last_bot_message:
             user_message_json = json.dumps({
                 "last_bot_message": last_bot_message,
@@ -553,7 +408,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT},
                 {"role": "user", "content": user_content}
             ],
             temperature=0.7,
