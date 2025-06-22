@@ -155,7 +155,7 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
         
         write_gpt_log("main_reply", cost_data, model_name, interaction_id=message_id)
         
-        return {"text": response.choices[0].message.content, "usage": cost_data}
+        return {"bot_reply": response.choices[0].message.content, "usage": cost_data}
         
     except Exception as e:
         logging.error(f"❌ שגיאה ב-gpt_a ראשי: {e}")
@@ -267,110 +267,6 @@ def smart_update_profile_async(existing_profile, user_message, interaction_id=No
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, smart_update_profile, existing_profile, user_message, interaction_id)
 
-# ============================ gpt_c - מערכת הזיכרון המשופרת ============================
-
-def update_user_summary_enhanced(existing_profile, user_message):
-    """
-    gpt_c: מעדכן תעודת זהות רגשית של משתמש עם סיכום קריא במקום JSON מורכב.
-    קלט: existing_profile (dict), user_message (str)
-    פלט: dict ממוזג, usage (dict)
-    """
-    print("[DEBUG][update_user_summary_enhanced] CALLED - gpt_c")
-    try:
-        logging.info("🔄 מתחיל עדכון משופר של ת.ז הרגשית עם gpt_c")
-        print(f"[DEBUG][update_user_summary_enhanced] --- START ---")
-        print(f"[DEBUG][update_user_summary_enhanced] existing_profile: {existing_profile} (type: {type(existing_profile)})")
-        # שלב 1: gpt_c - חילוץ ועדכון בסיכום קריא
-        # שימוש ב-gpt_c החדשה במקום extract_user_profile_fields_enhanced
-        gpt_e_result = gpt_c(user_message, "")
-        if gpt_e_result is None:
-            logging.info("ℹ️ אין מידע חדש, מחזיר ת.ז ללא שינוי")
-            print("[DEBUG][update_user_summary_enhanced] אין מידע חדש, מחזיר ת.ז ללא שינוי")
-            return existing_profile, {}
-        updated_summary = gpt_e_result.get("updated_summary", "")
-        if "summary" in existing_profile and updated_summary == existing_profile["summary"]:
-            logging.info("ℹ️ אין שינוי בסיכום, מחזיר ת.ז ללא שינוי")
-            print("[DEBUG][update_user_summary_enhanced] אין שינוי בסיכום, מחזיר ת.ז ללא שינוי")
-            return existing_profile, {}
-        full_data = gpt_e_result.get("full_data", {})
-        updated_profile = {**existing_profile, **full_data}
-        if updated_summary:
-            updated_profile["summary"] = updated_summary
-        print(f"[DEBUG][update_user_summary_enhanced] updated_profile: {updated_profile}")
-        if existing_profile != updated_profile:
-            diff_keys = set(updated_profile.keys()) - set(existing_profile.keys())
-            print(f"[DEBUG][update_user_summary_enhanced] profile diff (new keys): {diff_keys}")
-        else:
-            print(f"[DEBUG][update_user_summary_enhanced] profile unchanged")
-        usage_data = {k: v for k, v in gpt_e_result.items() if k not in ["updated_summary", "full_data"]}
-        logging.info(f"✅ gpt_c עדכן ת.ז עם {len(full_data)} שדות חדשים")
-        print(f"[DEBUG][update_user_summary_enhanced] returning: profile_updated={updated_profile}, extract_usage={usage_data}")
-        return updated_profile, usage_data
-    except Exception as e:
-        import traceback
-        print(f"[ERROR][update_user_summary_enhanced] Exception: {e}")
-        print(traceback.format_exc())
-        return existing_profile, {}
-
-def update_user_summary_enhanced_async(*args, **kwargs):
-    loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, update_user_summary_enhanced, *args, **kwargs)
-
-def extract_user_profile_fields_enhanced(text, existing_profile=None, interaction_id=None):
-    """
-    gpt_c: שולחת את הטקסט ל-gpt_c כדי לחלץ שדות פרופיל.
-    """
-    try:
-        profile_context = ""
-        if existing_profile:
-            profile_context = f"\n\nפרופיל קיים:\n{json.dumps(existing_profile, ensure_ascii=False, indent=2)}"
-
-        messages = [
-            {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
-            {"role": "user", "content": f"הודעה חדשה: {text}{profile_context}"}
-        ]
-        
-        response = client.chat.completions.create(
-            model="gpt-4.1-nano",
-            messages=messages,
-            temperature=0,
-            max_tokens=300,
-            metadata={"gpt_identifier": "gpt_c", "interaction_id": interaction_id},
-            store=True
-        )
-
-        prompt_tokens = response.usage.prompt_tokens
-        completion_tokens = response.usage.completion_tokens
-        model_name = response.model
-        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, 0, model_name)
-        
-        write_gpt_log("identity_extraction", cost_data, model_name, interaction_id=interaction_id)
-
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            match = re.search(r"```(?:json)?\s*({.*?})\s*```", content, re.DOTALL)
-            if match:
-                content = match.group(1)
-
-        try:
-            extracted_data = json.loads(content)
-            if not isinstance(extracted_data, dict):
-                extracted_data = {}
-        except json.JSONDecodeError:
-            extracted_data = {}
-        
-        validated_data = validate_extracted_data(extracted_data)
-        
-        return validated_data, cost_data
-        
-    except Exception as e:
-        logging.error(f"❌ שגיאה ב-gpt_c חילוץ פרטים: {e}")
-        return {}, {}
-
-def extract_user_profile_fields_enhanced_async(*args, **kwargs):
-    loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, extract_user_profile_fields_enhanced, *args, **kwargs)
-
 # ============================ gpt_c - הפונקציה הראשית ============================
 
 def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
@@ -384,55 +280,62 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         print(f"[DEBUG][gpt_c] user_message: {user_message} (type: {type(user_message)})")
         print(f"[DEBUG][gpt_c] last_bot_message: {last_bot_message} (type: {type(last_bot_message)})")
         metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
-        if last_bot_message:
-            user_message_json = json.dumps({
-                "last_bot_message": last_bot_message,
-                "user_reply": user_message
-            }, ensure_ascii=False, indent=2)
-            user_content = (
-                f"user_message = {user_message_json}\n\n"
-                f"נתח את הערך של user_reply בלבד, תוך הבנה שהוא תגובה ל־last_bot_message.\n"
-                f"חלץ רק מידע שנאמר במפורש בתוך user_reply."
-            )
-        else:
-            user_content = (
-                f"user_message = {json.dumps(user_message, ensure_ascii=False)}\n\n"
-                f"נתח רק את ההודעה של המשתמש כפי שהיא מופיעה כאן."
-            )
+        
+        user_content = f"הודעה חדשה: {user_message}"
+        
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
             messages=[
-                {"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT},
+                {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
                 {"role": "user", "content": user_content}
             ],
-            temperature=0.7,
-            max_tokens=500,
+            temperature=0,
+            max_tokens=300,
             metadata=metadata,
             store=True
         )
+        
         content = response.choices[0].message.content.strip()
         print(f"[DEBUG][gpt_c] raw gpt_c response: {content}")
+        
         if content.startswith("```"):
             match = re.search(r"```(?:json)?\s*({.*?})\s*```", content, re.DOTALL)
             if match:
                 content = match.group(1)
                 print(f"[DEBUG][gpt_c] cleaned content: {content}")
+        
         try:
             result = json.loads(content)
             print(f"[DEBUG][gpt_c] parsed result: {result}")
         except Exception as e:
             print(f"[ERROR][gpt_c] JSON parsing error: {e}")
             print(f"[ERROR][gpt_c] content that failed to parse: {content}")
-            result = {"summary": "", "full_data": {}}
+            result = {}
+        
+        # המר את התוצאה למבנה הנכון
+        if isinstance(result, dict):
+            # אם יש שדות פרופיל, צור סיכום מהם
+            profile_fields = []
+            for key, value in result.items():
+                if value and value != "null" and key in ["age", "pronoun_preference", "attracted_to", "relationship_type", "occupation_or_role"]:
+                    profile_fields.append(f"{key}: {value}")
+            
+            summary = "; ".join(profile_fields) if profile_fields else ""
+            full_data = result
+        else:
+            summary = ""
+            full_data = {}
+        
         prompt_tokens = response.usage.prompt_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
         cached_tokens = getattr(response.usage, 'cached_tokens', 0)
         model_name = response.model
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        
         final_result = {
-            "updated_summary": result.get("summary", ""),
-            "full_data": result.get("full_data", {}),
+            "updated_summary": summary,
+            "full_data": full_data,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
@@ -440,20 +343,15 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
             "model": model_name,
             **cost_data
         }
+        
         print(f"[DEBUG][gpt_c] final_result: {final_result}")
         logging.info(f"✅ gpt_c הושלם בהצלחה")
-        # הוספת עדכון ל-HTML
-        append_gpt_e_html_update(
-            old_summary=None,
-            user_message=user_message,
-            new_summary=final_result["updated_summary"],
-            tokens_used=total_tokens,
-            cost=final_result.get("cost_total_usd", 0),
-            cost_ils=final_result.get("cost_total_ils", 0),
-            cost_agorot=final_result.get("cost_agorot", 0),
-            model=model_name
-        )
+        
+        # כתיבה ללוג
+        write_gpt_log("identity_extraction", cost_data, model_name, interaction_id=message_id)
+        
         return final_result
+        
     except Exception as e:
         import traceback
         print(f"[ERROR][gpt_c] Exception: {e}")
