@@ -36,9 +36,10 @@ def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
                 if entry_dt.date() != target_date:
                     continue
                 
+                # שימוש ב-interaction_id אם קיים, אחרת שימוש ב-timestamp כ-identifier
                 interaction_id = entry.get("interaction_id")
                 if not interaction_id:
-                    continue
+                    interaction_id = entry["timestamp"]  # fallback ל-timestamp
 
                 if interaction_id not in interactions:
                     interactions[interaction_id] = {"cost_total_ils": 0}
@@ -104,7 +105,7 @@ async def send_daily_summary(days_back=1):
                 f"ממוצע: {today_summary_data['avg_cost_agorot']:.2f} אגורות"
             )
 
-        await bot.send_message(chat_id=ADMIN_NOTIFICATION_CHAT_ID, text=summary, parse_mode='Markdown')
+        await bot.send_message(chat_id=ADMIN_NOTIFICATION_CHAT_ID, text=summary)
         print(f"✅  הדוח ל-{yesterday_date.strftime('%Y-%m-%d')} (כולל היום) נשלח בהצלחה.")
 
     except Exception as e:
@@ -152,6 +153,24 @@ def setup_daily_reports():
             print("✅ [DAILY] דוח באתחול נשלח בהצלחה!")
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח באתחול: {e}")
+    
+    # תזמון יומי קבוע ל-8:00 בבוקר
+    def scheduled_daily_report():
+        print("🔥 [DAILY] שולח דוח יומי מתוזמן...")
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(send_daily_summary())
+            print("✅ [DAILY] דוח מתוזמן נשלח בהצלחה!")
+        except Exception as e:
+            print(f"❌ [DAILY] שגיאה בדוח מתוזמן: {e}")
+    
+    # הגדרת תזמון
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(scheduled_daily_report, 'cron', hour=8, minute=0, timezone=pytz.timezone("Europe/Berlin"))
+    scheduler.start()
+    print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
     
     # הפעל דוח מיידי
     threading.Thread(target=startup_report, daemon=True).start()

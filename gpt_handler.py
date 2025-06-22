@@ -149,7 +149,7 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
         completion_tokens = response.usage.completion_tokens
         model_name = response.model
 
-        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, "main_reply")
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, prompt_tokens + completion_tokens, "main_reply")
 
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
         
@@ -186,7 +186,7 @@ def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
         completion_tokens = response.usage.completion_tokens
         model_name = response.model
 
-        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, "summary")
+        _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, prompt_tokens + completion_tokens, "summary")
 
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
         
