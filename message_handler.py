@@ -256,6 +256,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         
         # GPT-B: יצירת תמצית לתשובת הבוט
         new_summary_for_history = None
+        summary_response = None
         try:
             summary_response = await asyncio.to_thread(
                 summarize_bot_reply,
@@ -274,6 +275,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             update_chat_history(chat_id, "bot", bot_reply)
 
         # gpt_c: עדכון פרופיל משתמש
+        gpt_c_response = None
         try:
             print(f"[DEBUG] קורא ל-gpt_c עם user_msg: {user_msg}")
             gpt_c_response = await asyncio.to_thread(
@@ -308,26 +310,14 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         
         # רישום לגיליון Google Sheets
         try:
-            print("[DEBUG] ---- log_to_sheets DEBUG ----")
-            print(f"[DEBUG] message_id: {message_id}")
-            print(f"[DEBUG] chat_id: {chat_id}")
-            print(f"[DEBUG] user_msg: {user_msg}")
-            print(f"[DEBUG] bot_reply: {bot_reply}")
-            print(f"[DEBUG] reply_summary: {new_summary_for_history}")
-            print(f"[DEBUG] gpt_a_usage: {gpt_a_usage}")
-            print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
-            print(f"[DEBUG] gpt_e_usage: {gpt_e_usage}")
-            print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
-            print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
-            print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
             # חילוץ נתונים מ-gpt_response
-            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", ""))
+            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("usage", {}).get("model", "gpt-4o"))
             
-            # חילוץ נתונים מ-summary_response
-            gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("model", ""))
+            # חילוץ נתונים מ-summary_response (עם בדיקת None)
+            gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}) if summary_response else {}, summary_response.get("usage", {}).get("model", "gpt-4.1-nano") if summary_response else "gpt-4.1-nano")
             
-            # חילוץ נתונים מ-gpt_c_response
-            gpt_e_usage = normalize_usage_dict(gpt_c_response.get("usage", {}), gpt_c_response.get("model", ""))
+            # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
+            gpt_e_usage = normalize_usage_dict(gpt_c_response if gpt_c_response else {}, gpt_c_response.get("model", "gpt-4.1-nano") if gpt_c_response else "gpt-4.1-nano")
             
             # חישוב סכומים
             total_tokens_calc = (
@@ -347,6 +337,19 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 gpt_b_usage.get("cost_total_ils", 0) + 
                 gpt_e_usage.get("cost_total_ils", 0)
             )
+            
+            print("[DEBUG] ---- log_to_sheets DEBUG ----")
+            print(f"[DEBUG] message_id: {message_id}")
+            print(f"[DEBUG] chat_id: {chat_id}")
+            print(f"[DEBUG] user_msg: {user_msg}")
+            print(f"[DEBUG] bot_reply: {bot_reply}")
+            print(f"[DEBUG] reply_summary: {new_summary_for_history}")
+            print(f"[DEBUG] gpt_a_usage: {gpt_a_usage}")
+            print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
+            print(f"[DEBUG] gpt_e_usage: {gpt_e_usage}")
+            print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
+            print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
+            print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
             
             # קריאה ל-log_to_sheets
             log_to_sheets(

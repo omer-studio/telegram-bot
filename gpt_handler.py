@@ -384,6 +384,7 @@ def normalize_usage_dict(usage, model_name=""):
             "cached_tokens": 0,
             "cost_total": 0.0,
             "cost_total_ils": 0.0,
+            "cost_agorot": 0.0,
             "model": model_name
         }
     # mapping for litellm
@@ -393,6 +394,7 @@ def normalize_usage_dict(usage, model_name=""):
     cached = usage.get("cached_tokens", 0)
     cost_total = usage.get("cost_total", 0.0)
     cost_total_ils = usage.get("cost_total_ils", 0.0)
+    cost_agorot = usage.get("cost_agorot", cost_total_ils * 100 if cost_total_ils else 0.0)
     model = usage.get("model", model_name)
     return {
         "prompt_tokens": prompt,
@@ -401,6 +403,7 @@ def normalize_usage_dict(usage, model_name=""):
         "cached_tokens": cached,
         "cost_total": cost_total,
         "cost_total_ils": cost_total_ils,
+        "cost_agorot": cost_agorot,
         "model": model
     }
 
