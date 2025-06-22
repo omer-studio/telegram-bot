@@ -251,8 +251,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             # שלב 1: איסוף היסטוריה ונתונים
-            user_summary_data = get_user_summary(context.bot_data["sheet"], chat_id) or {}
-            current_summary = user_summary_data.get("summary", "")
+            current_summary = get_user_summary(chat_id) or ""
             history_messages = get_chat_history_messages(chat_id)
             
             # בניית ההודעות ל-GPT-A
@@ -308,7 +307,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         message_id=message_id
                     )
                     if gpt_e_response and gpt_e_response.get("full_data"):
-                        updated_profile = user_summary_data.copy()
+                        updated_profile = {}
                         updated_profile.update(gpt_e_response.get("full_data", {}))
                         if gpt_e_response.get("updated_summary"):
                             updated_profile["summary"] = gpt_e_response.get("updated_summary")

@@ -77,21 +77,15 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
         # 🔍 דיבאג חכם: הדפסת פרטי הקלט
         print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
         
-        # יצירת response mock לחישוב עלות
-        class MockUsage:
-            def __init__(self, prompt_tokens, completion_tokens, total_tokens):
-                self.prompt_tokens = prompt_tokens
-                self.completion_tokens = completion_tokens
-                self.total_tokens = total_tokens
-        
-        class MockResponse:
-            def __init__(self, model, usage):
-                self.model = model
-                self.usage = usage
-        
-        # יצירת response mock
-        mock_usage = MockUsage(prompt_tokens, completion_tokens, prompt_tokens + completion_tokens)
-        mock_response = MockResponse(model_name, mock_usage)
+        # יצירת response mock לחישוב עלות - מבנה נכון ל-LiteLLM
+        mock_response = {
+            "model": model_name,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens
+            }
+        }
         
         # חישוב עלות באמצעות LiteLLM
         cost_usd = litellm.completion_cost(completion_response=mock_response)
