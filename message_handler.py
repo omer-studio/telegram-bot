@@ -14,7 +14,7 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet
-from gpt_handler import get_main_response, summarize_bot_reply, gpt_c
+from gpt_handler import get_main_response, summarize_bot_reply, gpt_c, normalize_usage_dict
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from fields_dict import FIELDS_DICT
 import time
@@ -305,6 +305,68 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             "gpt_a_usage": {k: v for k, v in gpt_response.items() if k != "bot_reply"},
             "timestamp_end": datetime.now().isoformat()
         })
+        
+        # רישום לגיליון Google Sheets
+        try:
+            print("[DEBUG] ---- log_to_sheets DEBUG ----")
+            print(f"[DEBUG] message_id: {message_id}")
+            print(f"[DEBUG] chat_id: {chat_id}")
+            print(f"[DEBUG] user_msg: {user_msg}")
+            print(f"[DEBUG] bot_reply: {bot_reply}")
+            print(f"[DEBUG] reply_summary: {new_summary_for_history}")
+            print(f"[DEBUG] gpt_a_usage: {gpt_a_usage}")
+            print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
+            print(f"[DEBUG] gpt_e_usage: {gpt_e_usage}")
+            print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
+            print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
+            print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
+            # חילוץ נתונים מ-gpt_response
+            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", ""))
+            
+            # חילוץ נתונים מ-summary_response
+            gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("model", ""))
+            
+            # חילוץ נתונים מ-gpt_c_response
+            gpt_e_usage = normalize_usage_dict(gpt_c_response.get("usage", {}), gpt_c_response.get("model", ""))
+            
+            # חישוב סכומים
+            total_tokens_calc = (
+                gpt_a_usage.get("total_tokens", 0) + 
+                gpt_b_usage.get("total_tokens", 0) + 
+                gpt_e_usage.get("total_tokens", 0)
+            )
+            
+            total_cost_usd_calc = (
+                gpt_a_usage.get("cost_total", 0) + 
+                gpt_b_usage.get("cost_total", 0) + 
+                gpt_e_usage.get("cost_total", 0)
+            )
+            
+            total_cost_ils_calc = (
+                gpt_a_usage.get("cost_total_ils", 0) + 
+                gpt_b_usage.get("cost_total_ils", 0) + 
+                gpt_e_usage.get("cost_total_ils", 0)
+            )
+            
+            # קריאה ל-log_to_sheets
+            log_to_sheets(
+                message_id=message_id,
+                chat_id=chat_id,
+                user_msg=user_msg,
+                reply_text=bot_reply,
+                reply_summary=new_summary_for_history or "",
+                main_usage=gpt_a_usage,
+                summary_usage=gpt_b_usage,
+                extract_usage=gpt_e_usage,
+                total_tokens=total_tokens_calc,
+                cost_usd=total_cost_usd_calc,
+                cost_ils=total_cost_ils_calc
+            )
+            print("[DEBUG] ---- END log_to_sheets DEBUG ----")
+        except Exception as e:
+            print(f"[ERROR] שגיאה ב-log_to_sheets: {e}")
+            logging.error(f"Error in log_to_sheets: {e}")
+        
         log_event_to_file(log_payload)
         logging.info("---- סיום טיפול בהודעה (משתמש מאושר) ----")
         print("---- סיום טיפול בהודעה (משתמש מאושר) ----")

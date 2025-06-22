@@ -318,6 +318,10 @@ def log_to_sheets(
     מחשב את כל הפרמטרים החסרים אוטומטית אם לא סופקו.
     """
     try:
+        # גישה לגיליון הלוגים
+        from config import setup_google_sheets
+        _, sheet_log, _ = setup_google_sheets()
+        
         now = datetime.now()
         timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")
         date_only = now.strftime("%d/%m/%Y")

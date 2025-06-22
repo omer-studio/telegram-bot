@@ -372,3 +372,35 @@ def gpt_e_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, gpt_c, *args, **kwargs)
 
+def normalize_usage_dict(usage, model_name=""):
+    """
+    ממפה usage מכל פורמט (litellm/openai) לפורמט אחיד.
+    """
+    if not usage:
+        return {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cached_tokens": 0,
+            "cost_total": 0.0,
+            "cost_total_ils": 0.0,
+            "model": model_name
+        }
+    # mapping for litellm
+    prompt = usage.get("prompt_tokens", usage.get("input_tokens", 0))
+    completion = usage.get("completion_tokens", usage.get("output_tokens", 0))
+    total = usage.get("total_tokens", prompt + completion)
+    cached = usage.get("cached_tokens", 0)
+    cost_total = usage.get("cost_total", 0.0)
+    cost_total_ils = usage.get("cost_total_ils", 0.0)
+    model = usage.get("model", model_name)
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": total,
+        "cached_tokens": cached,
+        "cost_total": cost_total,
+        "cost_total_ils": cost_total_ils,
+        "model": model
+    }
+
