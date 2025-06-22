@@ -1,4 +1,25 @@
 """
+================================================================================
+🚨 חשוב מאוד - שתי סביבות נפרדות! 🚨
+================================================================================
+
+סביבה 1 - רנדר (ייצור):
+   - הקובץ הזה רץ ישירות: python main.py
+   - לא משתמש ב-ngrok
+   - לא משתמש ב-sandbox.py
+   - רץ על פורט 8000 עם HTTP server פשוט
+
+סביבה 2 - לוקאלית (פיתוח):
+   - הקובץ הזה רץ דרך sandbox.py: python sandbox.py
+   - משתמש ב-ngrok
+   - רץ על פורט 10000 עם uvicorn
+
+⚠️  אל תשנה את הקובץ הזה כדי שיתאים לסביבה לוקאלית!
+   הסביבה ברנדר לא אמורה לדעת בכלל על sandbox.py!
+   כל שינוי כאן ישפיע על הסביבה ברנדר!
+
+================================================================================
+
 main.py
 -------
 קובץ ראשי רזה שמריץ את הבוט כ-webhook (FastAPI).
@@ -38,6 +59,9 @@ class DummyContext:
 
 app_fastapi = FastAPI()
 app = setup_bot()
+
+# הוספת app_fastapi כדי שיהיה זמין ל-uvicorn
+__all__ = ['app_fastapi']
 
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
