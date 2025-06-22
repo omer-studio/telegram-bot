@@ -276,23 +276,23 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         # gpt_c: עדכון פרופיל משתמש
         try:
             print(f"[DEBUG] קורא ל-gpt_c עם user_msg: {user_msg}")
-            gpt_e_response = await asyncio.to_thread(
+            gpt_c_response = await asyncio.to_thread(
                 gpt_c,
                 user_message=user_msg,
                 last_bot_message=last_bot_message,
                 chat_id=chat_id,
                 message_id=message_id
             )
-            print(f"[DEBUG] gpt_c החזיר: {gpt_e_response}")
-            if gpt_e_response and gpt_e_response.get("full_data"):
+            print(f"[DEBUG] gpt_c החזיר: {gpt_c_response}")
+            if gpt_c_response and gpt_c_response.get("full_data"):
                 updated_profile = {}
-                updated_profile.update(gpt_e_response.get("full_data", {}))
-                if gpt_e_response.get("updated_summary"):
-                    updated_profile["summary"] = gpt_e_response.get("updated_summary")
+                updated_profile.update(gpt_c_response.get("full_data", {}))
+                if gpt_c_response.get("updated_summary"):
+                    updated_profile["summary"] = gpt_c_response.get("updated_summary")
                 
                 print(f"[DEBUG] מעדכן פרופיל עם: {updated_profile}")
                 update_user_profile(chat_id, updated_profile)
-                log_payload["gpt_e_data"] = {k: v for k, v in gpt_e_response.items() if k not in ["updated_summary", "full_data"]}
+                log_payload["gpt_c_data"] = {k: v for k, v in gpt_c_response.items() if k not in ["updated_summary", "full_data"]}
             else:
                 print(f"[DEBUG] gpt_c לא החזיר נתונים תקינים")
         except Exception as e:

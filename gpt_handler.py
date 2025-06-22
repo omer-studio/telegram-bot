@@ -243,15 +243,20 @@ def validate_extracted_data(data):
 def smart_update_profile(existing_profile, user_message, interaction_id=None):
     """
     מעדכן תעודת זהות רגשית של משתמש על ידי חילוץ פרטים מהודעתו.
-    זוהי פונקציית מעטפת שקוראת ל-extract_user_profile_fields_enhanced.
+    זוהי פונקציית מעטפת שקוראת ל-gpt_c.
     """
     print(f"[DEBUG][smart_update_profile] - interaction_id: {interaction_id}")
     try:
-        new_data, extract_usage = extract_user_profile_fields_enhanced(
-            text=user_message,
-            existing_profile=existing_profile,
-            interaction_id=interaction_id
+        gpt_c_response = gpt_c(
+            user_message=user_message,
+            chat_id=interaction_id
         )
+
+        if not gpt_c_response or not gpt_c_response.get("full_data"):
+            return existing_profile, {}
+
+        new_data = gpt_c_response.get("full_data", {})
+        extract_usage = {k: v for k, v in gpt_c_response.items() if k not in ["updated_summary", "full_data"]}
 
         if not new_data:
             return existing_profile, extract_usage
@@ -279,6 +284,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         print(f"[DEBUG][gpt_c] --- START ---")
         print(f"[DEBUG][gpt_c] user_message: {user_message} (type: {type(user_message)})")
         print(f"[DEBUG][gpt_c] last_bot_message: {last_bot_message} (type: {type(last_bot_message)})")
+        print(f"[DEBUG][gpt_c] PROFILE_EXTRACTION_ENHANCED_PROMPT: {PROFILE_EXTRACTION_ENHANCED_PROMPT}")
         metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
         
         user_content = f"הודעה חדשה: {user_message}"
@@ -297,6 +303,9 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         
         content = response.choices[0].message.content.strip()
         print(f"[DEBUG][gpt_c] raw gpt_c response: {content}")
+        
+        # דיבאג: הדפסה של התגובה הגולמית מה-API
+        print(f"[DEBUG][gpt_c] FULL API RESPONSE: {response}")
         
         if content.startswith("```"):
             match = re.search(r"```(?:json)?\s*({.*?})\s*```", content, re.DOTALL)
