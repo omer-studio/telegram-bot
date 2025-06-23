@@ -19,7 +19,7 @@ import asyncio
 import re
 import threading
 from datetime import datetime
-from config import client, GPT_LOG_PATH
+from config import GPT_LOG_PATH
 from fields_dict import FIELDS_DICT
 from prompts import BOT_REPLY_SUMMARY_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
 from gpt_c_logger import append_gpt_c_html_update
@@ -65,50 +65,54 @@ def write_gpt_log(call_type, usage_log, model_name, interaction_id=None):
         logging.error(f"שגיאה בכתיבת לוג GPT: {e}")
 
 # 🔄 עדכון: פונקציה חדשה לחישוב עלויות עם LiteLLM
-def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS):
+def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS, completion_response=None):
     """
-    מחשב עלות GPT באמצעות LiteLLM עם פרמטרים ישירים.
-    קלט: prompt_tokens, completion_tokens, cached_tokens, model_name, usd_to_ils
-    פלט: dict usage אחיד עם כל הערכים.
+    מחשב את העלות של שימוש ב-GPT לפי מספר הטוקנים והמודל.
+    משתמש אך ורק ב-LiteLLM עם completion_response.
     """
+    print(f"[DEBUG] 🔥 calculate_gpt_cost CALLED! 🔥")
+    print(f"[DEBUG] Input: prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, cached_tokens={cached_tokens}, model_name={model_name}")
+    print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
+    
     try:
         import litellm
         
-        # 🔍 דיבאג חכם: הדפסת פרטי הקלט
-        print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
-        
-        # חישוב עלות באמצעות LiteLLM עם פרמטרים ישירים
-        cost_usd = litellm.completion_cost(
-            model=model_name,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cached_tokens=cached_tokens
-        )
-        
+        # אם יש completion_response, נשתמש בו לחישוב העלות
+        if completion_response:
+            print(f"[DEBUG] Using completion_response for cost calculation")
+            cost_usd = litellm.completion_cost(completion_response=completion_response)
+            print(f"[DEBUG] LiteLLM completion_cost returned: {cost_usd}")
+        else:
+            print(f"[DEBUG] No completion_response provided, cannot calculate cost with LiteLLM")
+            cost_usd = 0.0
+            
         cost_ils = cost_usd * usd_to_ils
         cost_agorot = cost_ils * 100
         
-        # 🔍 דיבאג חכם: הדפסת תוצאות החישוב
-        print(f"[DEBUG] calculate_gpt_cost - LiteLLM Cost: ${cost_usd:.6f} = ₪{cost_ils:.4f} = {cost_agorot:.2f} אגורות")
+        prompt_regular = prompt_tokens - cached_tokens
         
-        return {
+        result = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
             "cached_tokens": cached_tokens,
-            "prompt_regular": prompt_tokens - cached_tokens,
-            "cost_prompt_regular": 0.0,  # LiteLLM לא מפריד בין prompt רגיל לקאש
+            "prompt_regular": prompt_regular,
+            "cost_prompt_regular": cost_usd * (prompt_regular / (prompt_regular + completion_tokens)) if (prompt_regular + completion_tokens) > 0 else 0,
             "cost_prompt_cached": 0.0,
-            "cost_completion": 0.0,
+            "cost_completion": cost_usd * (completion_tokens / (prompt_regular + completion_tokens)) if (prompt_regular + completion_tokens) > 0 else 0,
             "cost_total": cost_usd,
             "cost_total_ils": cost_ils,
             "cost_agorot": cost_agorot,
             "model": model_name
         }
+        
+        print(f"[DEBUG] calculate_gpt_cost returning: {result}")
+        return result
+        
     except Exception as e:
-        logging.error(f"שגיאה בחישוב עלות LiteLLM: {e}")
         print(f"[ERROR] calculate_gpt_cost failed: {e}")
-        # fallback לערכים 0
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
         return {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -124,7 +128,7 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
             "model": model_name
         }
 
-# ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש ======================= 
+# ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש =======================
 
 def get_main_response(full_messages, chat_id=None, message_id=None):
     """
@@ -175,7 +179,10 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
 
         _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, prompt_tokens + completion_tokens, "main_reply")
 
-        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        print(f"[DEBUG] === CALLING calculate_gpt_cost ===")
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name, completion_response=response)
+        print(f"[DEBUG] calculate_gpt_cost returned: {cost_data}")
+        print(f"[DEBUG] === END calculate_gpt_cost ===")
         
         write_gpt_log("main_reply", cost_data, model_name, interaction_id=message_id)
         
@@ -240,7 +247,10 @@ def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
 
         _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, prompt_tokens + completion_tokens, "summary")
 
-        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        print(f"[DEBUG] === CALLING calculate_gpt_cost (gpt_b) ===")
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name, completion_response=response)
+        print(f"[DEBUG] calculate_gpt_cost (gpt_b) returned: {cost_data}")
+        print(f"[DEBUG] === END calculate_gpt_cost (gpt_b) ===")
         
         write_gpt_log("reply_summary", cost_data, model_name, interaction_id=original_message_id)
 
@@ -420,7 +430,11 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         total_tokens = response.usage.total_tokens
         cached_tokens = getattr(getattr(response.usage, 'prompt_tokens_details', None), 'cached_tokens', 0)
         model_name = response.model
-        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
+        
+        print(f"[DEBUG] === CALLING calculate_gpt_cost (gpt_c) ===")
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name, completion_response=response)
+        print(f"[DEBUG] calculate_gpt_cost (gpt_c) returned: {cost_data}")
+        print(f"[DEBUG] === END calculate_gpt_cost (gpt_c) ===")
         
         final_result = {
             "updated_summary": summary,

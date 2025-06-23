@@ -417,45 +417,6 @@ def log_to_sheets(
             safe_int(prompt_tokens_total) + safe_int(completion_tokens_total) + safe_int(cached_tokens)
         ), "total_tokens")
 
-        # חישוב cached tokens (כרגע 0 כי OpenAI לא מחזיר)
-        if cached_tokens is None:
-            cached_tokens = 0
-        if cached_tokens_gpt_a is None:
-            cached_tokens_gpt_a = 0
-        if cached_tokens_gpt_b is None:
-            cached_tokens_gpt_b = 0
-        if cached_tokens_gpt_c is None:
-            cached_tokens_gpt_c = 0
-
-        # 🚨 תיקון 3: חישוב עלויות מפורטות
-        # שימוש בפונקציה המרכזית מ-gpt_handler במקום חישוב פנימי
-        def get_gpt_costs(prompt_tokens, completion_tokens, cached_tokens=0):
-            return calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens)
-
-        # פונקציה אחידה לחישוב עלויות
-        def calculate_costs_unified(usage_dict):
-            """חישוב אחיד של כל העלויות"""
-            cost_usd = usage_dict.get("cost_total", 0)
-            cost_ils = cost_usd * USD_TO_ILS
-            cost_agorot = cost_ils * 100
-            
-            return {
-                "cost_usd": round(cost_usd, 6),
-                "cost_ils": round(cost_ils, 4),
-                "cost_agorot": round(cost_agorot, 2)
-            }
-
-        # חישוב עלויות אם לא סופקו
-        if cost_gpt_a is None:
-            costs = get_gpt_costs(main_usage.get("prompt_tokens", 0), main_usage.get("completion_tokens", 0), main_usage.get("cached_tokens", 0))
-            cost_gpt_a = costs["cost_total_ils"]
-        if cost_gpt_b is None:
-            costs = get_gpt_costs(summary_usage.get("prompt_tokens", 0), summary_usage.get("completion_tokens", 0), summary_usage.get("cached_tokens", 0))
-            cost_gpt_b = costs["cost_total_ils"]
-        if cost_gpt_c is None:
-            costs = get_gpt_costs(extract_usage.get("prompt_tokens", 0), extract_usage.get("completion_tokens", 0), extract_usage.get("cached_tokens", 0))
-            cost_gpt_c = costs["cost_total_ils"]
-
         # חישוב עלויות אחידות
         main_costs = calculate_costs_unified(main_usage)
         summary_costs = calculate_costs_unified(summary_usage)
@@ -770,3 +731,30 @@ class LogRow:
 # log_row = LogRow(...)
 # values_to_log = clean_for_storage(asdict(log_row))
 # (המשך שמירה כרגיל)
+
+def calculate_costs_unified(usage_dict):
+    """חישוב אחיד של כל העלויות"""
+    # בדיקה אם יש כבר עלויות מחושבות
+    cost_total = usage_dict.get("cost_total", 0)
+    
+    # אם אין עלות מחושבת, נחשב אותה
+    if cost_total == 0:
+        prompt_tokens = usage_dict.get("prompt_tokens", 0)
+        completion_tokens = usage_dict.get("completion_tokens", 0)
+        cached_tokens = usage_dict.get("cached_tokens", 0)
+        model = usage_dict.get("model", "gpt-4o")
+        
+        # קריאה לפונקציה המרכזית לחישוב עלויות (ללא completion_response)
+        from gpt_handler import calculate_gpt_cost
+        cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model)
+        cost_total = cost_data.get("cost_total", 0)
+        print(f"[DEBUG] calculate_costs_unified recalculated cost: {cost_total} for {model}")
+    
+    cost_ils = cost_total * USD_TO_ILS
+    cost_agorot = cost_ils * 100
+    
+    return {
+        "cost_usd": round(cost_total, 6),
+        "cost_ils": round(cost_ils, 4),
+        "cost_agorot": round(cost_agorot, 2)
+    }

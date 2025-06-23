@@ -198,8 +198,6 @@ def health_check() -> dict: # בדיקת תקינות המערכת (config, shee
         health["config_loaded"] = True
         from sheets_handler import sheet_users, sheet_log
         health["sheets_connected"] = True
-        from config import client
-        health["openai_connected"] = True
         # בדיקת כתיבה לקבצים
         test_log = {"test": "health_check", "timestamp": datetime.now().isoformat()}
         with open("health_test.json", "w") as f:

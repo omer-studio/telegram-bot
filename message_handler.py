@@ -176,12 +176,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             last_bot_message = next((msg.get("content", "") for msg in reversed(history_messages) if msg.get("role") == "assistant"), "")
 
             # שלב 2: קריאה ל-GPT-A למענה ראשי (זה מה שיקבע את איכות התשובה)
+            print(f"[DEBUG] 🔥 Calling get_main_response...")
             gpt_response = await asyncio.to_thread(
                 get_main_response,
                 full_messages=messages_for_gpt,
                 chat_id=chat_id,
                 message_id=message_id
             )
+            print(f"[DEBUG] get_main_response returned: {gpt_response}")
             bot_reply = gpt_response["bot_reply"]
 
             # שלב 3: שליחת התשובה למשתמש ועדכון היסטוריה ראשוני
@@ -317,13 +319,31 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         # רישום לגיליון Google Sheets
         try:
             # חילוץ נתונים מ-gpt_response
-            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("usage", {}).get("model", "gpt-4o"))
+            gpt_a_usage = gpt_response.get("usage", {})  # ישירות מה-usage המחושב
+            if not gpt_a_usage:
+                gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("usage", {}).get("model", "gpt-4o"))
             
             # חילוץ נתונים מ-summary_response (עם בדיקת None)
-            gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}) if summary_response else {}, summary_response.get("usage", {}).get("model", "gpt-4.1-nano") if summary_response else "gpt-4.1-nano")
+            gpt_b_usage = summary_response.get("usage", {}) if summary_response else {}
+            if not gpt_b_usage and summary_response:
+                gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", "gpt-4.1-nano"))
             
             # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
-            gpt_c_usage = normalize_usage_dict(gpt_c_response if gpt_c_response else {}, gpt_c_response.get("model", "gpt-4.1-nano") if gpt_c_response else "gpt-4.1-nano")
+            gpt_c_usage = {}
+            if gpt_c_response:
+                # gpt_c מחזיר את העלויות ישירות בתוך האובייקט הראשי
+                gpt_c_usage = {
+                    "prompt_tokens": gpt_c_response.get("prompt_tokens", 0),
+                    "completion_tokens": gpt_c_response.get("completion_tokens", 0),
+                    "total_tokens": gpt_c_response.get("total_tokens", 0),
+                    "cached_tokens": gpt_c_response.get("cached_tokens", 0),
+                    "cost_total": gpt_c_response.get("cost_total", 0.0),
+                    "cost_total_ils": gpt_c_response.get("cost_total_ils", 0.0),
+                    "cost_agorot": gpt_c_response.get("cost_agorot", 0.0),
+                    "model": gpt_c_response.get("model", "gpt-4.1-nano")
+                }
+            if not gpt_c_usage and gpt_c_response:
+                gpt_c_usage = normalize_usage_dict(gpt_c_response, gpt_c_response.get("model", "gpt-4.1-nano"))
             
             # חישוב סכומים
             total_tokens_calc = (
