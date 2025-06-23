@@ -254,19 +254,25 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
     try:
         bot_reply = gpt_response["bot_reply"]
         
-        # GPT-B: יצירת תמצית לתשובת הבוט
+        # GPT-B: יצירת תמצית לתשובת הבוט (רק אם ההודעה ארוכה)
         new_summary_for_history = None
         summary_response = None
-        try:
-            summary_response = await asyncio.to_thread(
-                summarize_bot_reply,
-                reply_text=bot_reply,
-                chat_id=chat_id,
-                original_message_id=message_id
-            )
-            new_summary_for_history = summary_response.get("summary")
-        except Exception as e:
-            logging.error(f"Error in GPT-B (summary): {e}")
+        
+        # בדיקה אם ההודעה ארוכה מספיק כדי להצדיק סיכום
+        if len(bot_reply) > 150:  # סף של 150 תווים
+            try:
+                print(f"[DEBUG] הודעת הבוט ארוכה ({len(bot_reply)} תווים), קורא ל-gpt_b לסיכום")
+                summary_response = await asyncio.to_thread(
+                    summarize_bot_reply,
+                    reply_text=bot_reply,
+                    chat_id=chat_id,
+                    original_message_id=message_id
+                )
+                new_summary_for_history = summary_response.get("summary")
+            except Exception as e:
+                logging.error(f"Error in GPT-B (summary): {e}")
+        else:
+            print(f"[DEBUG] הודעת הבוט קצרה ({len(bot_reply)} תווים), לא קורא ל-gpt_b")
 
         # עדכון היסטוריה סופי עם תמצית או תשובה מלאה
         if new_summary_for_history:
@@ -317,25 +323,25 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}) if summary_response else {}, summary_response.get("usage", {}).get("model", "gpt-4.1-nano") if summary_response else "gpt-4.1-nano")
             
             # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
-            gpt_e_usage = normalize_usage_dict(gpt_c_response if gpt_c_response else {}, gpt_c_response.get("model", "gpt-4.1-nano") if gpt_c_response else "gpt-4.1-nano")
+            gpt_c_usage = normalize_usage_dict(gpt_c_response if gpt_c_response else {}, gpt_c_response.get("model", "gpt-4.1-nano") if gpt_c_response else "gpt-4.1-nano")
             
             # חישוב סכומים
             total_tokens_calc = (
                 gpt_a_usage.get("total_tokens", 0) + 
                 gpt_b_usage.get("total_tokens", 0) + 
-                gpt_e_usage.get("total_tokens", 0)
+                gpt_c_usage.get("total_tokens", 0)
             )
             
             total_cost_usd_calc = (
                 gpt_a_usage.get("cost_total", 0) + 
                 gpt_b_usage.get("cost_total", 0) + 
-                gpt_e_usage.get("cost_total", 0)
+                gpt_c_usage.get("cost_total", 0)
             )
             
             total_cost_ils_calc = (
                 gpt_a_usage.get("cost_total_ils", 0) + 
                 gpt_b_usage.get("cost_total_ils", 0) + 
-                gpt_e_usage.get("cost_total_ils", 0)
+                gpt_c_usage.get("cost_total_ils", 0)
             )
             
             print("[DEBUG] ---- log_to_sheets DEBUG ----")
@@ -346,7 +352,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             print(f"[DEBUG] reply_summary: {new_summary_for_history}")
             print(f"[DEBUG] gpt_a_usage: {gpt_a_usage}")
             print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
-            print(f"[DEBUG] gpt_e_usage: {gpt_e_usage}")
+            print(f"[DEBUG] gpt_c_usage: {gpt_c_usage}")
             print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
             print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
             print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
@@ -360,7 +366,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 reply_summary=new_summary_for_history or "",
                 main_usage=gpt_a_usage,
                 summary_usage=gpt_b_usage,
-                extract_usage=gpt_e_usage,
+                extract_usage=gpt_c_usage,
                 total_tokens=total_tokens_calc,
                 cost_usd=total_cost_usd_calc,
                 cost_ils=total_cost_ils_calc

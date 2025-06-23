@@ -310,8 +310,8 @@ def log_to_sheets(
     prompt_tokens_total=None, completion_tokens_total=None, cached_tokens=None,
     cached_tokens_gpt_a=None, cost_gpt_a=None,
     cached_tokens_gpt_b=None, cost_gpt_b=None,
-    cached_tokens_gpt_e=None, cost_gpt_e=None,
-    merge_usage=None, fields_updated_by_gpt_e=None
+    cached_tokens_gpt_c=None, cost_gpt_c=None,
+    merge_usage=None, fields_updated_by_gpt_c=None
 ):
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
@@ -424,13 +424,26 @@ def log_to_sheets(
             cached_tokens_gpt_a = 0
         if cached_tokens_gpt_b is None:
             cached_tokens_gpt_b = 0
-        if cached_tokens_gpt_e is None:
-            cached_tokens_gpt_e = 0
+        if cached_tokens_gpt_c is None:
+            cached_tokens_gpt_c = 0
 
         # 🚨 תיקון 3: חישוב עלויות מפורטות
         # שימוש בפונקציה המרכזית מ-gpt_handler במקום חישוב פנימי
         def get_gpt_costs(prompt_tokens, completion_tokens, cached_tokens=0):
             return calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens)
+
+        # פונקציה אחידה לחישוב עלויות
+        def calculate_costs_unified(usage_dict):
+            """חישוב אחיד של כל העלויות"""
+            cost_usd = usage_dict.get("cost_total", 0)
+            cost_ils = cost_usd * USD_TO_ILS
+            cost_agorot = cost_ils * 100
+            
+            return {
+                "cost_usd": round(cost_usd, 6),
+                "cost_ils": round(cost_ils, 4),
+                "cost_agorot": round(cost_agorot, 2)
+            }
 
         # חישוב עלויות אם לא סופקו
         if cost_gpt_a is None:
@@ -439,9 +452,23 @@ def log_to_sheets(
         if cost_gpt_b is None:
             costs = get_gpt_costs(summary_usage.get("prompt_tokens", 0), summary_usage.get("completion_tokens", 0), summary_usage.get("cached_tokens", 0))
             cost_gpt_b = costs["cost_total_ils"]
-        if cost_gpt_e is None:
+        if cost_gpt_c is None:
             costs = get_gpt_costs(extract_usage.get("prompt_tokens", 0), extract_usage.get("completion_tokens", 0), extract_usage.get("cached_tokens", 0))
-            cost_gpt_e = costs["cost_total_ils"]
+            cost_gpt_c = costs["cost_total_ils"]
+
+        # חישוב עלויות אחידות
+        main_costs = calculate_costs_unified(main_usage)
+        summary_costs = calculate_costs_unified(summary_usage)
+        extract_costs = calculate_costs_unified(extract_usage)
+
+        # חישוב סכומים כוללים נכון
+        total_cost_usd = (
+            main_costs["cost_usd"] + 
+            summary_costs["cost_usd"] + 
+            extract_costs["cost_usd"]
+        )
+        total_cost_ils = total_cost_usd * USD_TO_ILS
+        total_cost_agorot = total_cost_ils * 100
 
         # 🚨 תיקון 4: ניקוי ערכי עלות
         def clean_cost_value(cost_val):
@@ -483,8 +510,8 @@ def log_to_sheets(
             "prompt_tokens_total": prompt_tokens_total,
             "completion_tokens_total": completion_tokens_total,
             "cached_tokens": cached_tokens,
-            "total_cost_usd": format_money(main_cost_usd),
-            "total_cost_ils": agorot_from_usd(main_cost_usd),
+            "total_cost_usd": round(total_cost_usd, 6),
+            "total_cost_ils": round(total_cost_agorot, 2),  # באגורות!
             "usage_prompt_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_a"),
             "usage_completion_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_a"),
             "usage_total_tokens_gpt_a": safe_calc(lambda: (
@@ -493,18 +520,18 @@ def log_to_sheets(
                 safe_int(main_usage.get("prompt_tokens", 0))
             ), "usage_total_tokens_gpt_a"),
             "cached_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt_a"),
-            "cost_gpt_a": agorot_from_usd(main_usage.get("cost_total", 0)),
+            "cost_gpt_a": main_costs["cost_agorot"],
             "model_gpt_a": str(main_usage.get("model", "")),
-            "usage_prompt_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_e"),
-            "usage_completion_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_e"),
-            "usage_total_tokens_gpt_e": safe_calc(lambda: (
+            "usage_prompt_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_c"),
+            "usage_completion_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_c"),
+            "usage_total_tokens_gpt_c": safe_calc(lambda: (
                 safe_int(extract_usage.get("cached_tokens", 0)) +
                 safe_int(extract_usage.get("completion_tokens", 0)) +
                 safe_int(extract_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_gpt_e"),
-            "cached_tokens_gpt_e": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_e"),
-            "cost_gpt_e": agorot_from_usd(extract_usage.get("cost_total", 0)),
-            "model_gpt_e": str(extract_usage.get("model", "")),
+            ), "usage_total_tokens_gpt_c"),
+            "cached_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_c"),
+            "cost_gpt_c": extract_costs["cost_agorot"],
+            "model_gpt_c": str(extract_usage.get("model", "")),
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only,
@@ -520,7 +547,7 @@ def log_to_sheets(
                     safe_int(summary_usage.get("prompt_tokens", 0))
                 ), "usage_total_tokens_gpt_b"),
                 "cached_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt_b"),
-                "cost_gpt_b": agorot_from_usd(summary_usage.get("cost_total", 0)),
+                "cost_gpt_b": summary_costs["cost_agorot"],
                 "model_gpt_b": str(summary_usage.get("model", "")),
             })
 

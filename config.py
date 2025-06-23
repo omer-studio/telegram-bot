@@ -80,6 +80,8 @@ def get_client():
     מחזיר פונקציה שמדמה את הקליינט המקורי של OpenAI אבל משתמשת ב-LiteLLM.
     פלט: פונקציה שמדמה OpenAI client
     """
+    import litellm
+    
     class LiteLLMClient:
         def __init__(self):
             self.chat = self.Chat()
@@ -99,10 +101,15 @@ def get_client():
                     }
                     if metadata:
                         litellm_kwargs["metadata"] = metadata
-                    response = completion(**litellm_kwargs)
+                    response = litellm.completion(**litellm_kwargs)
                     return self._convert_response(response)
                 
                 def _convert_response(self, litellm_response):
+                    print(f"[DEBUG] === LITELLM RAW RESPONSE ===")
+                    print(f"[DEBUG] litellm_response type: {type(litellm_response)}")
+                    print(f"[DEBUG] litellm_response: {litellm_response}")
+                    print(f"[DEBUG] === END LITELLM RAW RESPONSE ===")
+                    
                     class MockResponse:
                         def __init__(self, litellm_response):
                             self.choices = [self.MockChoice(litellm_response)]
@@ -123,7 +130,48 @@ def get_client():
                                 self.prompt_tokens_details = self.MockPromptTokensDetails(usage_data)
                             class MockPromptTokensDetails:
                                 def __init__(self, usage_data):
-                                    self.cached_tokens = usage_data.get("cached_tokens", 0)
+                                    # נסה כמה אפשרויות שונות לקבל cached tokens
+                                    self.cached_tokens = 0
+                                    
+                                    try:
+                                        # המר ל-dict אם זה לא dict
+                                        if not isinstance(usage_data, dict):
+                                            if hasattr(usage_data, '__dict__'):
+                                                usage_data = usage_data.__dict__
+                                            else:
+                                                usage_data = {}
+                                        
+                                        # אפשרות 1: מ-prompt_tokens_details
+                                        if 'prompt_tokens_details' in usage_data:
+                                            prompt_details = usage_data['prompt_tokens_details']
+                                            if isinstance(prompt_details, dict):
+                                                self.cached_tokens = prompt_details.get('cached_tokens', 0)
+                                            elif hasattr(prompt_details, 'cached_tokens'):
+                                                self.cached_tokens = getattr(prompt_details, 'cached_tokens', 0)
+                                        
+                                        # אפשרות 2: ישירות מ-usage
+                                        if self.cached_tokens == 0:
+                                            self.cached_tokens = usage_data.get('cached_tokens', 0)
+                                        
+                                        # אפשרות 3: שמות אחרים שLiteLLM עשוי להשתמש בהם
+                                        if self.cached_tokens == 0:
+                                            self.cached_tokens = usage_data.get('cache_read_input_tokens', 0)
+                                        
+                                        # אפשרות 4: מ-raw response אם קיים
+                                        if self.cached_tokens == 0 and hasattr(usage_data, '_raw_response'):
+                                            raw_usage = usage_data._raw_response.get('usage', {})
+                                            if 'prompt_tokens_details' in raw_usage:
+                                                self.cached_tokens = raw_usage['prompt_tokens_details'].get('cached_tokens', 0)
+                                            elif 'cached_tokens' in raw_usage:
+                                                self.cached_tokens = raw_usage.get('cached_tokens', 0)
+                                        
+                                    except Exception as e:
+                                        print(f"[DEBUG] MockPromptTokensDetails error: {e}")
+                                        self.cached_tokens = 0
+                                    
+                                    print(f"[DEBUG] MockPromptTokensDetails: cached_tokens = {self.cached_tokens}")
+                                    print(f"[DEBUG] MockPromptTokensDetails: usage_data type = {type(usage_data)}")
+                                    print(f"[DEBUG] MockPromptTokensDetails: usage_data = {usage_data}")
                     return MockResponse(litellm_response)
     return LiteLLMClient()
 

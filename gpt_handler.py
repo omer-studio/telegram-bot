@@ -22,7 +22,7 @@ from datetime import datetime
 from config import client, GPT_LOG_PATH
 from fields_dict import FIELDS_DICT
 from prompts import BOT_REPLY_SUMMARY_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
-from gpt_e_logger import append_gpt_e_html_update
+from gpt_c_logger import append_gpt_c_html_update
 
 # קבועים
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
@@ -67,7 +67,7 @@ def write_gpt_log(call_type, usage_log, model_name, interaction_id=None):
 # 🔄 עדכון: פונקציה חדשה לחישוב עלויות עם LiteLLM
 def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS):
     """
-    מחשב עלות GPT באמצעות LiteLLM.
+    מחשב עלות GPT באמצעות LiteLLM עם פרמטרים ישירים.
     קלט: prompt_tokens, completion_tokens, cached_tokens, model_name, usd_to_ils
     פלט: dict usage אחיד עם כל הערכים.
     """
@@ -77,23 +77,19 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
         # 🔍 דיבאג חכם: הדפסת פרטי הקלט
         print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
         
-        # יצירת response mock לחישוב עלות - מבנה נכון ל-LiteLLM
-        mock_response = {
-            "model": model_name,
-            "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens
-            }
-        }
+        # חישוב עלות באמצעות LiteLLM עם פרמטרים ישירים
+        cost_usd = litellm.completion_cost(
+            model=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cached_tokens=cached_tokens
+        )
         
-        # חישוב עלות באמצעות LiteLLM
-        cost_usd = litellm.completion_cost(completion_response=mock_response)
         cost_ils = cost_usd * usd_to_ils
         cost_agorot = cost_ils * 100
         
         # 🔍 דיבאג חכם: הדפסת תוצאות החישוב
-        print(f"[DEBUG] calculate_gpt_cost - Cost: ${cost_usd:.6f} = ₪{cost_ils:.4f} = {cost_agorot:.2f} אגורות")
+        print(f"[DEBUG] calculate_gpt_cost - LiteLLM Cost: ${cost_usd:.6f} = ₪{cost_ils:.4f} = {cost_agorot:.2f} אגורות")
         
         return {
             "prompt_tokens": prompt_tokens,
@@ -135,8 +131,10 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
     שולח הודעה ל-gpt_a הראשי ומחזיר את התשובה, כולל פירוט עלות וטוקנים.
     """
     try:
+        import litellm
+        
         metadata = {"gpt_identifier": "gpt_a", "chat_id": chat_id, "message_id": message_id}
-        response = client.chat.completions.create(
+        response = litellm.completion(
             model="gpt-4o",
             messages=full_messages,
             temperature=1,
@@ -144,8 +142,34 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
             store=True
         )
 
+        # 🔥 דיבאג מפורט - תוסיף את זה בכל 3 הפונקציות
+        print(f"[DEBUG] === RAW RESPONSE DEBUG (gpt_a) ===")
+        print(f"[DEBUG] response type: {type(response)}")
+        print(f"[DEBUG] response attributes: {dir(response)}")
+        print(f"[DEBUG] usage type: {type(response.usage)}")
+        print(f"[DEBUG] usage attributes: {dir(response.usage)}")
+        print(f"[DEBUG] usage as dict: {response.usage.__dict__ if hasattr(response.usage, '__dict__') else 'no __dict__'}")
+
+        # בדיקה אם יש prompt_tokens_details
+        if hasattr(response.usage, 'prompt_tokens_details'):
+            print(f"[DEBUG] prompt_tokens_details found!")
+            print(f"[DEBUG] prompt_tokens_details type: {type(response.usage.prompt_tokens_details)}")
+            print(f"[DEBUG] prompt_tokens_details attributes: {dir(response.usage.prompt_tokens_details)}")
+            print(f"[DEBUG] prompt_tokens_details as dict: {response.usage.prompt_tokens_details.__dict__ if hasattr(response.usage.prompt_tokens_details, '__dict__') else 'no __dict__'}")
+        else:
+            print(f"[DEBUG] NO prompt_tokens_details found!")
+
+        # בדיקה אם יש raw response
+        if hasattr(response, '_raw_response'):
+            print(f"[DEBUG] _raw_response found: {response._raw_response}")
+        elif hasattr(response, 'raw'):
+            print(f"[DEBUG] raw found: {response.raw}")
+        else:
+            print(f"[DEBUG] No raw response found")
+        print(f"[DEBUG] === END RAW RESPONSE DEBUG (gpt_a) ===")
+
         prompt_tokens = response.usage.prompt_tokens
-        cached_tokens = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0)
+        cached_tokens = getattr(getattr(response.usage, 'prompt_tokens_details', None), 'cached_tokens', 0)
         completion_tokens = response.usage.completion_tokens
         model_name = response.model
 
@@ -172,8 +196,10 @@ def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
     שולח תשובה של הבוט ל-gpt_b ומקבל תמצית קצרה להיסטוריה.
     """
     try:
+        import litellm
+        
         metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "original_message_id": original_message_id}
-        response = client.chat.completions.create(
+        response = litellm.completion(
             model="gpt-4.1-nano",
             messages=[{"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT}, {"role": "user", "content": reply_text}],
             temperature=1,
@@ -181,8 +207,34 @@ def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
             store=True
         )
 
+        # 🔥 דיבאג מפורט - תוסיף את זה בכל 3 הפונקציות
+        print(f"[DEBUG] === RAW RESPONSE DEBUG (gpt_b) ===")
+        print(f"[DEBUG] response type: {type(response)}")
+        print(f"[DEBUG] response attributes: {dir(response)}")
+        print(f"[DEBUG] usage type: {type(response.usage)}")
+        print(f"[DEBUG] usage attributes: {dir(response.usage)}")
+        print(f"[DEBUG] usage as dict: {response.usage.__dict__ if hasattr(response.usage, '__dict__') else 'no __dict__'}")
+
+        # בדיקה אם יש prompt_tokens_details
+        if hasattr(response.usage, 'prompt_tokens_details'):
+            print(f"[DEBUG] prompt_tokens_details found!")
+            print(f"[DEBUG] prompt_tokens_details type: {type(response.usage.prompt_tokens_details)}")
+            print(f"[DEBUG] prompt_tokens_details attributes: {dir(response.usage.prompt_tokens_details)}")
+            print(f"[DEBUG] prompt_tokens_details as dict: {response.usage.prompt_tokens_details.__dict__ if hasattr(response.usage.prompt_tokens_details, '__dict__') else 'no __dict__'}")
+        else:
+            print(f"[DEBUG] NO prompt_tokens_details found!")
+
+        # בדיקה אם יש raw response
+        if hasattr(response, '_raw_response'):
+            print(f"[DEBUG] _raw_response found: {response._raw_response}")
+        elif hasattr(response, 'raw'):
+            print(f"[DEBUG] raw found: {response.raw}")
+        else:
+            print(f"[DEBUG] No raw response found")
+        print(f"[DEBUG] === END RAW RESPONSE DEBUG (gpt_b) ===")
+
         prompt_tokens = response.usage.prompt_tokens
-        cached_tokens = getattr(response.usage.prompt_tokens_details, 'cached_tokens', 0)
+        cached_tokens = getattr(getattr(response.usage, 'prompt_tokens_details', None), 'cached_tokens', 0)
         completion_tokens = response.usage.completion_tokens
         model_name = response.model
 
@@ -280,6 +332,8 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
     """
     print("[DEBUG][gpt_c] CALLED - הפונקציה הראשית")
     try:
+        import litellm
+        
         logging.info("🔄 מתחיל gpt_c - עדכון סיכום עם מידע חדש")
         print(f"[DEBUG][gpt_c] --- START ---")
         print(f"[DEBUG][gpt_c] user_message: {user_message} (type: {type(user_message)})")
@@ -289,7 +343,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         
         user_content = f"הודעה חדשה: {user_message}"
         
-        response = client.chat.completions.create(
+        response = litellm.completion(
             model="gpt-4.1-nano",
             messages=[
                 {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
@@ -301,6 +355,32 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
             store=True
         )
         
+        # 🔥 דיבאג מפורט - תוסיף את זה בכל 3 הפונקציות
+        print(f"[DEBUG] === RAW RESPONSE DEBUG (gpt_c) ===")
+        print(f"[DEBUG] response type: {type(response)}")
+        print(f"[DEBUG] response attributes: {dir(response)}")
+        print(f"[DEBUG] usage type: {type(response.usage)}")
+        print(f"[DEBUG] usage attributes: {dir(response.usage)}")
+        print(f"[DEBUG] usage as dict: {response.usage.__dict__ if hasattr(response.usage, '__dict__') else 'no __dict__'}")
+
+        # בדיקה אם יש prompt_tokens_details
+        if hasattr(response.usage, 'prompt_tokens_details'):
+            print(f"[DEBUG] prompt_tokens_details found!")
+            print(f"[DEBUG] prompt_tokens_details type: {type(response.usage.prompt_tokens_details)}")
+            print(f"[DEBUG] prompt_tokens_details attributes: {dir(response.usage.prompt_tokens_details)}")
+            print(f"[DEBUG] prompt_tokens_details as dict: {response.usage.prompt_tokens_details.__dict__ if hasattr(response.usage.prompt_tokens_details, '__dict__') else 'no __dict__'}")
+        else:
+            print(f"[DEBUG] NO prompt_tokens_details found!")
+
+        # בדיקה אם יש raw response
+        if hasattr(response, '_raw_response'):
+            print(f"[DEBUG] _raw_response found: {response._raw_response}")
+        elif hasattr(response, 'raw'):
+            print(f"[DEBUG] raw found: {response.raw}")
+        else:
+            print(f"[DEBUG] No raw response found")
+        print(f"[DEBUG] === END RAW RESPONSE DEBUG (gpt_c) ===")
+
         content = response.choices[0].message.content.strip()
         print(f"[DEBUG][gpt_c] raw gpt_c response: {content}")
         
@@ -338,7 +418,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         prompt_tokens = response.usage.prompt_tokens
         completion_tokens = response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
-        cached_tokens = getattr(response.usage, 'cached_tokens', 0)
+        cached_tokens = getattr(getattr(response.usage, 'prompt_tokens_details', None), 'cached_tokens', 0)
         model_name = response.model
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name)
         
@@ -368,7 +448,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         logging.error(f"❌ שגיאה ב-gpt_c: {e}")
         return None
 
-def gpt_e_async(*args, **kwargs):
+def gpt_c_async(*args, **kwargs):
     loop = asyncio.get_event_loop()
     return loop.run_in_executor(None, gpt_c, *args, **kwargs)
 

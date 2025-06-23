@@ -48,6 +48,7 @@ from bot_setup import setup_bot
 from message_handler import handle_message
 import os
 import requests
+from gpt_c_logger import clear_gpt_c_html_log
 
 class DummyContext:
     def __init__(self, bot_data):
@@ -124,26 +125,25 @@ if __name__ == "__main__":
     import sys
     from http.server import SimpleHTTPRequestHandler, HTTPServer
     import urllib.parse
-    from gpt_e_logger import clear_gpt_e_html_log
 
-    class GptELogHandler(SimpleHTTPRequestHandler):
+    class GptCLogHandler(SimpleHTTPRequestHandler):
         def do_GET(self):
-            if self.path.startswith("/data/gpt_e_results.html") or self.path == "/":
+            if self.path.startswith("/data/gpt_c_results.html") or self.path == "/":
                 # Serve the HTML file
                 self.send_response(200)
                 self.send_header("Content-type", "text/html; charset=utf-8")
                 self.end_headers()
-                with open(os.path.join("data", "gpt_e_results.html"), "rb") as f:
+                with open(os.path.join("data", "gpt_c_results.html"), "rb") as f:
                     self.wfile.write(f.read())
             else:
                 super().do_GET()
 
         def do_POST(self):
             parsed = urllib.parse.urlparse(self.path)
-            if parsed.path.startswith("/data/gpt_e_results.html") or parsed.path == "/":
+            if parsed.path.startswith("/data/gpt_c_results.html") or parsed.path == "/":
                 qs = urllib.parse.parse_qs(parsed.query)
                 if "clear" in qs and qs["clear"] == ["1"]:
-                    clear_gpt_e_html_log()
+                    clear_gpt_c_html_log()
                     self.send_response(204)
                     self.end_headers()
                     return
@@ -151,8 +151,8 @@ if __name__ == "__main__":
             self.end_headers()
 
     port = 8000
-    print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_e_results.html (or just http://localhost:{port}/)")
-    httpd = HTTPServer(("", port), GptELogHandler)
+    print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_c_results.html (or just http://localhost:{port}/)")
+    httpd = HTTPServer(("", port), GptCLogHandler)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
