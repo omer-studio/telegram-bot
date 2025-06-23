@@ -198,6 +198,26 @@ def health_check() -> dict: # בדיקת תקינות המערכת (config, shee
         health["config_loaded"] = True
         from sheets_handler import sheet_users, sheet_log
         health["sheets_connected"] = True
+        
+        # בדיקת חיבור ל־OpenAI/LiteLLM
+        try:
+            import litellm
+            # בדיקה פשוטה - ניסיון ליצור completion קטן
+            response = litellm.completion(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": "test"}],
+                max_tokens=5,
+                temperature=0
+            )
+            if response and hasattr(response, 'choices') and len(response.choices) > 0:
+                health["openai_connected"] = True
+                print("✅ חיבור ל־OpenAI/LiteLLM תקין")
+            else:
+                print("❌ תשובה לא תקינה מ־OpenAI/LiteLLM")
+        except Exception as openai_error:
+            print(f"❌ שגיאה בחיבור ל־OpenAI/LiteLLM: {openai_error}")
+            health["openai_connected"] = False
+        
         # בדיקת כתיבה לקבצים
         test_log = {"test": "health_check", "timestamp": datetime.now().isoformat()}
         with open("health_test.json", "w") as f:
