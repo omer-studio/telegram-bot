@@ -14,7 +14,7 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet
-from gpt_handler import get_main_response, summarize_bot_reply, gpt_c, normalize_usage_dict
+from gpt_handler import get_main_response, summarize_bot_reply, gpt_c, normalize_usage_dict, should_run_gpt_c
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from fields_dict import FIELDS_DICT
 import time
@@ -173,8 +173,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             messages_for_gpt.extend(history_messages)
             messages_for_gpt.append({"role": "user", "content": user_msg})
 
-            last_bot_message = next((msg.get("content", "") for msg in reversed(history_messages) if msg.get("role") == "assistant"), "")
-
             # שלב 2: קריאה ל-gpt_a למענה ראשי (זה מה שיקבע את איכות התשובה)
             print(f"[DEBUG] 🔥 Calling get_main_response...")
             gpt_response = await asyncio.to_thread(
@@ -191,7 +189,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_chat_history(chat_id, user_msg, "")
             
             # שלב 4: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
-            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, last_bot_message))
+            # העברת bot_reply כ-last_bot_message - זה יהיה ההודעה הנוכחית (לא מקוצרת עדיין)
+            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, bot_reply))
 
         except Exception as ex:
             await handle_critical_error(ex, chat_id, user_msg, update)
@@ -285,26 +284,34 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         # gpt_c: עדכון פרופיל משתמש
         gpt_c_response = None
         try:
-            print(f"[DEBUG] קורא ל-gpt_c עם user_msg: {user_msg}")
-            gpt_c_response = await asyncio.to_thread(
-                gpt_c,
-                user_message=user_msg,
-                last_bot_message=last_bot_message,
-                chat_id=chat_id,
-                message_id=message_id
-            )
-            print(f"[DEBUG] gpt_c החזיר: {gpt_c_response}")
-            if gpt_c_response and gpt_c_response.get("full_data"):
-                updated_profile = {}
-                updated_profile.update(gpt_c_response.get("full_data", {}))
-                if gpt_c_response.get("updated_summary"):
-                    updated_profile["summary"] = gpt_c_response.get("updated_summary")
+            # בדיקה אם יש טעם להפעיל gpt_c
+            if should_run_gpt_c(user_msg):
+                # בחירת ההודעה הנכונה ל-gpt_c: מקוצרת אם קוצרה, אחרת מקורית
+                bot_message_for_gpt_c = new_summary_for_history if new_summary_for_history else bot_reply
                 
-                print(f"[DEBUG] מעדכן פרופיל עם: {updated_profile}")
-                update_user_profile(chat_id, updated_profile)
-                log_payload["gpt_c_data"] = {k: v for k, v in gpt_c_response.items() if k not in ["updated_summary", "full_data"]}
+                print(f"[DEBUG] קורא ל-gpt_c עם user_msg: {user_msg}")
+                print(f"[DEBUG] bot_message_for_gpt_c: {bot_message_for_gpt_c}")
+                gpt_c_response = await asyncio.to_thread(
+                    gpt_c,
+                    user_message=user_msg,
+                    last_bot_message=bot_message_for_gpt_c,
+                    chat_id=chat_id,
+                    message_id=message_id
+                )
+                print(f"[DEBUG] gpt_c החזיר: {gpt_c_response}")
+                if gpt_c_response and gpt_c_response.get("full_data"):
+                    updated_profile = {}
+                    updated_profile.update(gpt_c_response.get("full_data", {}))
+                    if gpt_c_response.get("updated_summary"):
+                        updated_profile["summary"] = gpt_c_response.get("updated_summary")
+                    
+                    print(f"[DEBUG] מעדכן פרופיל עם: {updated_profile}")
+                    update_user_profile(chat_id, updated_profile)
+                    log_payload["gpt_c_data"] = {k: v for k, v in gpt_c_response.items() if k not in ["updated_summary", "full_data"]}
+                else:
+                    print(f"[DEBUG] gpt_c לא החזיר נתונים תקינים")
             else:
-                print(f"[DEBUG] gpt_c לא החזיר נתונים תקינים")
+                print(f"[DEBUG] לא קורא ל-gpt_c - ההודעה לא נראית מכילה מידע חדש: {user_msg}")
         except Exception as e:
             print(f"[ERROR] שגיאה ב-gpt_c: {e}")
             logging.error(f"Error in gpt_c (profile update): {e}")

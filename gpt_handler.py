@@ -112,6 +112,95 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
             "model": model_name
         }
 
+# ============================ פונקציות עזר לבדיקת הצורך ב-gpt_c ============================
+
+def should_run_gpt_c(user_message):
+    """
+    בודק אם יש טעם להפעיל gpt_c על הודעה נתונה.
+    מחזיר False רק על הודעות שאנחנו בטוחים שלא מכילות מידע חדש.
+    הכלל: gpt_c מופעל תמיד, אלא אם כן ההודעה היא משהו שלא יכול להכיל מידע חדש.
+    """
+    if not user_message or not user_message.strip():
+        return False
+    
+    message = user_message.strip()
+    
+    # ביטויים בסיסיים שלא יכולים להכיל מידע חדש
+    base_phrases = [
+        'היי', 'שלום', 'מה שלומך', 'מה נשמע', 'מה קורה', 'מה המצב',
+        'תודה', 'תודה רבה', 'תודה לך', 'תודה מאוד', 'תודה ענקית', 'תודהה',
+        'בסדר', 'אוקיי', 'אוקי', 'בסדר גמור', 'בסדר מושלם', 'אוקייי',
+        'אני מבין', 'אה', 'וואו', 'מעניין', 'נכון', 'אכן', 'אה אה',
+        'כן', 'לא', 'אולי', 'יכול להיות', 'אפשרי',
+        'אני לא יודע', 'לא יודע', 'לא בטוח', 'לא יודע מה להגיד', 'אין לי מושג',
+        'בהחלט', 'בטח', 'כמובן', 'ברור', 'ודאי', 'בוודאי',
+        'מעולה', 'נהדר', 'מדהים', 'פנטסטי', 'מושלם',
+        'אה אוקיי', 'אה בסדר', 'אה הבנתי', 'אה נכון',
+        'כן לא', 'כן אולי', 'אולי כן', 'אולי לא',
+        'אה אוקיי תודה', 'אה בסדר תודה', 'אה הבנתי תודה'
+    ]
+    
+    # אימוג'י בלבד
+    emoji_only = ['👍', '👎', '❤️', '😊', '😢', '😡', '🤔', '😅', '😂', '😭']
+    
+    # נקודות בלבד
+    dots_only = ['...', '....', '.....', '......']
+    
+    # סימני קריאה בלבד
+    exclamation_only = ['!!!', '!!!!', '!!!!!']
+    
+    # בדיקה אם ההודעה היא בדיוק ביטוי בסיסי
+    message_lower = message.lower()
+    for phrase in base_phrases:
+        if message_lower == phrase.lower():
+            return False
+    
+    # בדיקה אם ההודעה היא ביטוי בסיסי + תווים נוספים
+    for phrase in base_phrases:
+        phrase_lower = phrase.lower()
+        
+        # בדיקה אם ההודעה מתחילה בביטוי הבסיסי
+        if message_lower.startswith(phrase_lower):
+            # מה שנשאר אחרי הביטוי הבסיסי
+            remaining = message_lower[len(phrase_lower):].strip()
+            
+            # אם מה שנשאר הוא רק תווים מותרים, אז לא להפעיל gpt_c
+            if remaining in ['', '!', '?', ':)', ':(', '!:)', '?:(', '!:(', '?:)', '...', '....', '.....', '......', '!!!', '!!!!', '!!!!!']:
+                return False
+            
+            # אם מה שנשאר הוא רק אימוג'י או שילוב של תווים מותרים
+            import re
+            # הסרת רווחים מהתחלה ומהסוף
+            remaining_clean = remaining.strip()
+            # בדיקה אם מה שנשאר הוא רק תווים מותרים
+            allowed_chars = r'^[!?:\.\s\(\)]+$'
+            if re.match(allowed_chars, remaining_clean):
+                return False
+    
+    # בדיקה אם ההודעה היא רק אימוג'י
+    if message in emoji_only:
+        return False
+    
+    # בדיקה אם ההודעה היא רק נקודות
+    if message in dots_only:
+        return False
+    
+    # בדיקה אם ההודעה היא רק סימני קריאה
+    if message in exclamation_only:
+        return False
+    
+    # בדיקה אם ההודעה היא ביטוי + אימוג'י
+    for phrase in base_phrases:
+        phrase_lower = phrase.lower()
+        if message_lower.startswith(phrase_lower):
+            remaining = message_lower[len(phrase_lower):].strip()
+            # בדיקה אם מה שנשאר הוא רק אימוג'י
+            if remaining in ['👍', '👎', '❤️', '😊', '😢', '😡', '🤔', '😅', '😂', '😭']:
+                return False
+    
+    # אם הגענו לכאן, ההודעה יכולה להכיל מידע חדש
+    return True
+
 # ============================הג'יפיטי ה-A - פועל תמיד ועונה תשובה למשתמש =======================
 
 def get_main_response(full_messages, chat_id=None, message_id=None):
@@ -335,7 +424,11 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
         print(f"[DEBUG][gpt_c] PROFILE_EXTRACTION_ENHANCED_PROMPT: {PROFILE_EXTRACTION_ENHANCED_PROMPT}")
         metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
         
-        user_content = f"הודעה חדשה: {user_message}"
+        # יצירת תוכן שמשלב את הודעת המשתמש עם ההודעה האחרונה של הבוט
+        if last_bot_message:
+            user_content = f"הודעת המשתמש: {user_message}\n\nתשובת הבוט האחרונה: {last_bot_message}"
+        else:
+            user_content = f"הודעת המשתמש: {user_message}"
         
         response = litellm.completion(
             model="gpt-4.1-nano",
