@@ -14,12 +14,19 @@ from secret_commands import handle_secret_command
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet
-from gpt_handler import get_main_response, summarize_bot_reply, gpt_c, normalize_usage_dict, should_run_gpt_c
+from gpt_a_handler import get_main_response
+from gpt_b_handler import summarize_bot_reply
+from gpt_c_handler import gpt_c
+from gpt_d_handler import gpt_d
+from gpt_utils import normalize_usage_dict
+from gpt_c_handler import should_run_gpt_c
+from gpt_d_handler import smart_update_profile_with_gpt_d
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from fields_dict import FIELDS_DICT
 import time
 import json
-from gpt_handler import smart_update_profile_with_gpt_d
+from gpt_e_handler import execute_gpt_e_if_needed
+from sheets_handler import increment_gpt_c_run_count, get_user_state
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
@@ -287,9 +294,14 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         # gpt_c: עדכון פרופיל משתמש
         gpt_c_response = None
         gpt_d_usage = None
+        gpt_e_result = None
         try:
             # בדיקה אם יש טעם להפעיל gpt_c
             if should_run_gpt_c(user_msg):
+                # הגדלת מונה gpt_c
+                gpt_c_run_count = increment_gpt_c_run_count(chat_id)
+                print(f"[DEBUG] gpt_c_run_count incremented to: {gpt_c_run_count}")
+                
                 # בחירת ההודעה הנכונה ל-gpt_c: מקוצרת אם קוצרה, אחרת מקורית
                 bot_message_for_gpt_c = new_summary_for_history if new_summary_for_history else bot_reply
                 
@@ -327,6 +339,35 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 update_user_profile(chat_id, updated_profile)
                 log_payload["gpt_c_data"] = gpt_c_usage
                 log_payload["gpt_d_data"] = gpt_d_usage
+                
+                # gpt_e: בדיקה והפעלה אם צריך
+                try:
+                    user_state = get_user_state(chat_id)
+                    last_gpt_e_timestamp = user_state.get("last_gpt_e_timestamp")
+                    
+                    gpt_e_result = execute_gpt_e_if_needed(
+                        chat_id=chat_id,
+                        gpt_c_run_count=gpt_c_run_count,
+                        last_gpt_e_timestamp=last_gpt_e_timestamp
+                    )
+                    
+                    if gpt_e_result:
+                        print(f"[DEBUG] gpt_e executed successfully for chat_id={chat_id}")
+                        log_payload["gpt_e_data"] = {
+                            "success": gpt_e_result.get("success", False),
+                            "changes_count": len(gpt_e_result.get("changes", {})),
+                            "tokens_used": gpt_e_result.get("tokens_used", 0),
+                            "execution_time": gpt_e_result.get("execution_time", 0),
+                            "cost_data": gpt_e_result.get("cost_data", {}),
+                            "errors": gpt_e_result.get("errors", [])
+                        }
+                    else:
+                        print(f"[DEBUG] gpt_e conditions not met for chat_id={chat_id}")
+                        
+                except Exception as e:
+                    print(f"[ERROR] שגיאה ב-gpt_e: {e}")
+                    logging.error(f"Error in gpt_e: {e}")
+                
             else:
                 print(f"[DEBUG] לא קורא ל-gpt_c - ההודעה לא נראית מכילה מידע חדש: {user_msg}")
         except Exception as e:
@@ -353,42 +394,36 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", "gpt-4.1-nano"))
             
             # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
-            gpt_c_usage = {}
-            if gpt_c_response:
-                # gpt_c מחזיר את העלויות ישירות בתוך האובייקט הראשי
-                gpt_c_usage = {
-                    "prompt_tokens": gpt_c_response.get("prompt_tokens", 0),
-                    "completion_tokens": gpt_c_response.get("completion_tokens", 0),
-                    "total_tokens": gpt_c_response.get("total_tokens", 0),
-                    "cached_tokens": gpt_c_response.get("cached_tokens", 0),
-                    "cost_total": gpt_c_response.get("cost_total", 0.0),
-                    "cost_total_ils": gpt_c_response.get("cost_total_ils", 0.0),
-                    "cost_agorot": gpt_c_response.get("cost_agorot", 0.0),
-                    "model": gpt_c_response.get("model", "gpt-4.1-nano")
-                }
-            if not gpt_c_usage and gpt_c_response:
-                gpt_c_usage = normalize_usage_dict(gpt_c_response, gpt_c_response.get("model", "gpt-4.1-nano"))
+            gpt_c_usage = log_payload.get("gpt_c_data", {})
+            
+            # חילוץ נתונים מ-gpt_e_result (עם בדיקת None)
+            gpt_e_usage = {}
+            if gpt_e_result and gpt_e_result.get("cost_data"):
+                gpt_e_usage = gpt_e_result["cost_data"]
             
             # חישוב סכומים
             total_tokens_calc = (
                 gpt_a_usage.get("total_tokens", 0) + 
                 gpt_b_usage.get("total_tokens", 0) + 
                 gpt_c_usage.get("total_tokens", 0) +
-                gpt_d_usage.get("total_tokens", 0) if gpt_d_usage else 0
+                (gpt_d_usage.get("total_tokens", 0) if gpt_d_usage else 0) +
+                (gpt_e_usage.get("total_tokens", 0) if gpt_e_usage else 0)
             )
             
             total_cost_usd_calc = (
                 gpt_a_usage.get("cost_total", 0) + 
                 gpt_b_usage.get("cost_total", 0) + 
                 gpt_c_usage.get("cost_total", 0) +
-                gpt_d_usage.get("cost_total", 0) if gpt_d_usage else 0
+                (gpt_d_usage.get("cost_total", 0) if gpt_d_usage else 0) +
+                (gpt_e_usage.get("cost_total", 0) if gpt_e_usage else 0)
             )
             
             total_cost_ils_calc = (
                 gpt_a_usage.get("cost_total_ils", 0) + 
                 gpt_b_usage.get("cost_total_ils", 0) + 
                 gpt_c_usage.get("cost_total_ils", 0) +
-                gpt_d_usage.get("cost_total_ils", 0) if gpt_d_usage else 0
+                (gpt_d_usage.get("cost_total_ils", 0) if gpt_d_usage else 0) +
+                (gpt_e_usage.get("cost_total_ils", 0) if gpt_e_usage else 0)
             )
             
             print("[DEBUG] ---- log_to_sheets DEBUG ----")
@@ -401,6 +436,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
             print(f"[DEBUG] gpt_c_usage: {gpt_c_usage}")
             print(f"[DEBUG] gpt_d_usage: {gpt_d_usage}")
+            print(f"[DEBUG] gpt_e_usage: {gpt_e_usage}")
             print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
             print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
             print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
@@ -418,7 +454,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 total_tokens=total_tokens_calc,
                 cost_usd=total_cost_usd_calc,
                 cost_ils=total_cost_ils_calc,
-                gpt_d_usage=gpt_d_usage
+                gpt_d_usage=gpt_d_usage,
+                gpt_e_usage=gpt_e_usage
             )
             print("[DEBUG] ---- END log_to_sheets DEBUG ----")
         except Exception as e:

@@ -6,7 +6,7 @@ import os
 import json
 import time
 from dateutil.parser import parse as parse_dt  # שים לב - זה צריך להיות מותקן ב־requirements.txt
-from gpt_handler import USD_TO_ILS
+from gpt_utils import USD_TO_ILS
 import pytz  # הוספתי לוודא שיש pytz
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט

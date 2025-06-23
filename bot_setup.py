@@ -51,7 +51,8 @@ from sheets_handler import increment_code_try, get_user_summary, update_user_pro
 from notifications import send_startup_notification
 from messages import get_welcome_messages
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages, send_error_stats_report, send_usage_report
-from gpt_handler import get_main_response, summarize_bot_reply
+from gpt_a_handler import get_main_response
+from gpt_b_handler import summarize_bot_reply
 from apscheduler.schedulers.background import BackgroundScheduler
 from daily_summary import send_daily_summary
 import pytz

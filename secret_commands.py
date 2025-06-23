@@ -13,7 +13,8 @@ SECRET_CODES = {
     "#512SheetBooM": "clear_sheets",      # מוחק מידע מהגיליונות
     "#734TotalZap": "clear_all",          # מוחק הכל (היסטוריה + גיליונות)
     "#errors_report": "errors_report",      # מפעיל דוח שגיאות לאדמין
-    "#usage_report": "usage_report"        # מפעיל דוח usage שבועי לאדמין
+    "#usage_report": "usage_report",        # מפעיל דוח usage שבועי לאדמין
+    "#run_gpt_e": "run_gpt_e"               # מפעיל gpt_e ידנית על chat_id
 }
 
 def handle_secret_command(chat_id, text):
@@ -101,6 +102,56 @@ def handle_secret_command(chat_id, text):
         if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
             send_usage_report(7)
             return True, "נשלח דוח usage שבועי לאדמין."
+        else:
+            return False, "אין לך הרשאה לפקודה זו."
+
+    if text.strip() == "#run_gpt_e":
+        if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
+            # פקודה להפעלת gpt_e ידנית
+            # הפורמט: #run_gpt_e <chat_id>
+            parts = text.split()
+            if len(parts) == 2:
+                target_chat_id = parts[1]
+                try:
+                    from gpt_e_handler import run_gpt_e
+                    result = run_gpt_e(target_chat_id)
+                    
+                    if result['success']:
+                        changes_count = len(result.get('changes', {}))
+                        tokens_used = result.get('tokens_used', 0)
+                        execution_time = result.get('execution_time', 0)
+                        
+                        msg = f"✅ gpt_e הופעל בהצלחה על chat_id={target_chat_id}\n"
+                        msg += f"📊 שינויים: {changes_count}\n"
+                        msg += f"🔢 טוקנים: {tokens_used}\n"
+                        msg += f"⏱️ זמן: {execution_time:.2f} שניות"
+                        
+                        if result.get('errors'):
+                            msg += f"\n⚠️ שגיאות: {', '.join(result['errors'])}"
+                    else:
+                        errors = result.get('errors', ['Unknown error'])
+                        msg = f"❌ gpt_e נכשל על chat_id={target_chat_id}\n"
+                        msg += f"שגיאות: {', '.join(errors)}"
+                    
+                    # שליחת הודעה לאדמין
+                    send_admin_secret_command_notification(
+                        f"🔧 הופעל gpt_e ידנית על chat_id={target_chat_id}\n"
+                        f"תוצאה: {'הצלחה' if result['success'] else 'כישלון'}\n"
+                        f"שינויים: {len(result.get('changes', {}))}\n"
+                        f"טוקנים: {result.get('tokens_used', 0)}"
+                    )
+                    
+                    return True, msg
+                    
+                except Exception as e:
+                    error_msg = f"❌ שגיאה בהפעלת gpt_e: {str(e)}"
+                    send_admin_secret_command_notification(
+                        f"❌ שגיאה בהפעלת gpt_e ידנית על chat_id={target_chat_id}\n"
+                        f"שגיאה: {str(e)}"
+                    )
+                    return False, error_msg
+            else:
+                return False, "פורמט שגוי. השתמש: #run_gpt_e <chat_id>"
         else:
             return False, "אין לך הרשאה לפקודה זו."
 

@@ -25,7 +25,7 @@ sheets_handler.py
 from config import setup_google_sheets, SUMMARY_FIELD
 from datetime import datetime
 import logging
-from gpt_handler import calculate_gpt_cost, USD_TO_ILS
+from gpt_utils import calculate_gpt_cost
 from fields_dict import FIELDS_DICT
 import json
 from dataclasses import dataclass, asdict
@@ -312,7 +312,7 @@ def log_to_sheets(
     cached_tokens_gpt_b=None, cost_gpt_b=None,
     cached_tokens_gpt_c=None, cost_gpt_c=None,
     merge_usage=None, fields_updated_by_gpt_c=None,
-    gpt_d_usage=None
+    gpt_d_usage=None, gpt_e_usage=None
 ):
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
@@ -423,13 +423,15 @@ def log_to_sheets(
         summary_costs = calculate_costs_unified(summary_usage)
         extract_costs = calculate_costs_unified(extract_usage)
         gpt_d_costs = calculate_costs_unified(gpt_d_usage) if gpt_d_usage else {"cost_usd": 0, "cost_ils": 0, "cost_agorot": 0}
+        gpt_e_costs = calculate_costs_unified(gpt_e_usage) if gpt_e_usage else {"cost_usd": 0, "cost_ils": 0, "cost_agorot": 0}
 
         # חישוב סכומים כוללים נכון
         total_cost_usd = (
             main_costs["cost_usd"] + 
             summary_costs["cost_usd"] + 
             extract_costs["cost_usd"] +
-            gpt_d_costs["cost_usd"]
+            gpt_d_costs["cost_usd"] +
+            gpt_e_costs["cost_usd"]
         )
         total_cost_ils = total_cost_usd * USD_TO_ILS
         total_cost_agorot = total_cost_ils * 100
@@ -457,6 +459,9 @@ def log_to_sheets(
 
         # האם הופעל gpt_d?
         has_gpt_d = gpt_d_usage and len(gpt_d_usage) > 0 and safe_float(gpt_d_usage.get("completion_tokens", 0)) > 0
+
+        # האם הופעל gpt_e?
+        has_gpt_e = gpt_e_usage and len(gpt_e_usage) > 0 and safe_float(gpt_e_usage.get("completion_tokens", 0)) > 0
 
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
         def format_money(value):
@@ -492,8 +497,8 @@ def log_to_sheets(
             "date_only": date_only,
             "time_only": time_only,
         }
-        # הוספת שדות gpt_c רק אם הופעל
-        if has_extract:
+        # הוספת שדות gpt_c תמיד אם extract_usage הוא dict (גם אם ריק)
+        if isinstance(extract_usage, dict):
             values_to_log.update({
                 "usage_prompt_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_c"),
                 "usage_completion_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_c"),
@@ -527,6 +532,17 @@ def log_to_sheets(
                 "cached_tokens_gpt_d": safe_calc(lambda: safe_int(gpt_d_usage.get("cached_tokens", 0)), "cached_tokens_gpt_d"),
                 "cost_gpt_d": gpt_d_costs["cost_agorot"],
                 "model_gpt_d": str(gpt_d_usage.get("model", "")),
+            })
+
+        # הוספת שדות gpt_e רק אם הופעל
+        if has_gpt_e:
+            values_to_log.update({
+                "usage_prompt_tokens_gpt_e": safe_calc(lambda: safe_int(gpt_e_usage.get("prompt_tokens", 0) - gpt_e_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_e"),
+                "usage_completion_tokens_gpt_e": safe_calc(lambda: safe_int(gpt_e_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_e"),
+                "usage_total_tokens_gpt_e": safe_calc(lambda: safe_int(gpt_e_usage.get("total_tokens", 0)), "usage_total_tokens_gpt_e"),
+                "cached_tokens_gpt_e": safe_calc(lambda: safe_int(gpt_e_usage.get("cached_tokens", 0)), "cached_tokens_gpt_e"),
+                "cost_gpt_e": gpt_e_costs["cost_agorot"],
+                "model_gpt_e": str(gpt_e_usage.get("model", "")),
             })
 
         # 🚨 דיבאגים חזקים לפני שמירה
@@ -762,7 +778,7 @@ def calculate_costs_unified(usage_dict):
         model = usage_dict.get("model", "gpt-4o")
         
         # קריאה לפונקציה המרכזית לחישוב עלויות (ללא completion_response)
-        from gpt_handler import calculate_gpt_cost
+        from gpt_utils import calculate_gpt_cost
         cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model)
         cost_total = cost_data.get("cost_total", 0)
         print(f"[DEBUG] calculate_costs_unified recalculated cost: {cost_total} for {model}")
@@ -775,3 +791,289 @@ def calculate_costs_unified(usage_dict):
         "cost_ils": round(cost_ils, 4),
         "cost_agorot": round(cost_agorot, 2)
     }
+
+def get_user_state(chat_id: str) -> dict:
+    """
+    מחזיר את מצב המשתמש מגיליון user_states.
+    
+    :param chat_id: מזהה המשתמש
+    :return: מילון עם מצב המשתמש (gpt_c_run_count, last_gpt_e_timestamp וכו')
+    """
+    print(f"[DEBUG] get_user_state: chat_id={chat_id}")
+    logging.debug(f"[DEBUG] get_user_state: chat_id={chat_id}")
+    
+    try:
+        all_records = sheet_states.get_all_records()
+        header = sheet_states.row_values(1)
+        
+        for row in all_records:
+            if str(row.get("chat_id", "")).strip() == str(chat_id):
+                # יצירת מילון עם כל השדות הקיימים
+                user_state = {}
+                for key in header:
+                    value = row.get(key, "")
+                    
+                    # המרת ערכים מספריים
+                    if key == "gpt_c_run_count":
+                        try:
+                            value = int(value) if value else 0
+                        except (ValueError, TypeError):
+                            value = 0
+                    
+                    user_state[key] = value
+                
+                print(f"[DEBUG] Retrieved user state for chat_id={chat_id}: {user_state}")
+                logging.debug(f"[DEBUG] Retrieved user state for chat_id={chat_id}: {user_state}")
+                
+                return user_state
+        
+        # אם המשתמש לא נמצא, החזרת מילון ריק
+        print(f"[DEBUG] User not found in user_states for chat_id={chat_id}")
+        logging.debug(f"[DEBUG] User not found in user_states for chat_id={chat_id}")
+        
+        return {}
+        
+    except Exception as e:
+        print(f"[ERROR] get_user_state failed for chat_id={chat_id}: {e}")
+        logging.error(f"[ERROR] get_user_state failed for chat_id={chat_id}: {e}")
+        return {}
+
+def update_user_state(chat_id: str, updates: dict) -> bool:
+    """
+    מעדכן את מצב המשתמש בגיליון user_states.
+    
+    :param chat_id: מזהה המשתמש
+    :param updates: מילון עם השדות לעדכון
+    :return: True אם הצליח, False אחרת
+    """
+    print(f"[DEBUG] update_user_state: chat_id={chat_id}, updates={updates}")
+    logging.debug(f"[DEBUG] update_user_state: chat_id={chat_id}, updates={updates}")
+    
+    try:
+        all_records = sheet_states.get_all_records()
+        header = sheet_states.row_values(1)
+        
+        for idx, row in enumerate(all_records):
+            if str(row.get("chat_id", "")).strip() == str(chat_id):
+                print(f"👤 מצא משתמש בשורה {idx + 2}")
+                updated_fields = []
+                
+                for key, value in updates.items():
+                    if key in header:
+                        col_index = header.index(key) + 1
+                        print(f"[DEBUG] updating state field: {key} = '{value}' at col {col_index}")
+                        logging.info(f"[DEBUG] updating state field: {key} = '{value}' at col {col_index}")
+                        
+                        try:
+                            sheet_states.update_cell(idx + 2, col_index, str(value))
+                            updated_fields.append(f"{key}: {value}")
+                        except Exception as e:
+                            print(f"❌ שגיאה בעדכון שדה מצב {key}: {e}")
+                            logging.error(f"❌ שגיאה בעדכון שדה מצב {key}: {e}")
+                    else:
+                        print(f"⚠️ שדה מצב {key} לא קיים בגיליון, מדלג.")
+                        logging.warning(f"⚠️ שדה מצב {key} לא קיים בגיליון, מדלג.")
+                
+                if updated_fields:
+                    print(f"[DEBUG] updated state fields: {updated_fields}")
+                    logging.info(f"[DEBUG] updated state fields: {updated_fields}")
+                else:
+                    print("⚠️ לא עודכנו שדות מצב - אין ערכים תקינים")
+                    logging.info("⚠️ לא עודכנו שדות מצב - אין ערכים תקינים")
+                
+                print(f"[DEBUG] update_user_state: סיום | chat_id={chat_id}")
+                logging.debug(f"[DEBUG] update_user_state: סיום | chat_id={chat_id}")
+                return True
+        
+        # אם לא נמצא, מוסיף שורה חדשה
+        print(f"❌ לא נמצא משתמש עם chat_id: {chat_id}, מוסיף שורה חדשה")
+        logging.warning(f"❌ לא נמצא משתמש עם chat_id: {chat_id}, מוסיף שורה חדשה")
+        
+        # יצירת שורה חדשה עם chat_id וערכים ברירת מחדל
+        new_row = [""] * len(header)
+        new_row[0] = str(chat_id)  # עמודה ראשונה היא chat_id
+        
+        # הוספת העדכונים לשורה החדשה
+        for key, value in updates.items():
+            if key in header:
+                col_index = header.index(key)
+                new_row[col_index] = str(value)
+        
+        sheet_states.append_row(new_row)
+        print(f"✅ נוספה שורה חדשה עבור chat_id {chat_id}")
+        logging.info(f"✅ נוספה שורה חדשה עבור chat_id {chat_id}")
+        
+        print(f"[DEBUG] update_user_state: סיום | chat_id={chat_id}")
+        logging.debug(f"[DEBUG] update_user_state: סיום | chat_id={chat_id}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"💥 שגיאה בעדכון מצב משתמש: {e}")
+        logging.error(f"💥 שגיאה בעדכון מצב משתמש: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def increment_gpt_c_run_count(chat_id: str) -> int:
+    """
+    מגדיל את מונה gpt_c_run_count ב-1 ומחזיר את הערך החדש.
+    
+    :param chat_id: מזהה המשתמש
+    :return: הערך החדש של gpt_c_run_count
+    """
+    print(f"[DEBUG] increment_gpt_c_run_count: chat_id={chat_id}")
+    logging.debug(f"[DEBUG] increment_gpt_c_run_count: chat_id={chat_id}")
+    
+    try:
+        all_records = sheet_states.get_all_records()
+        header = sheet_states.row_values(1)
+        
+        # חיפוש המשתמש
+        for i, row in enumerate(all_records, start=2):  # מתחיל מ-2 כי שורה 1 היא header
+            if str(row.get("chat_id", "")).strip() == str(chat_id):
+                # מציאת עמודת gpt_c_run_count
+                gpt_c_run_count_col = None
+                for j, col_name in enumerate(header, start=1):
+                    if col_name == "gpt_c_run_count":
+                        gpt_c_run_count_col = j
+                        break
+                
+                if gpt_c_run_count_col is None:
+                    # יצירת עמודה חדשה אם לא קיימת
+                    gpt_c_run_count_col = len(header) + 1
+                    sheet_states.update_cell(1, gpt_c_run_count_col, "gpt_c_run_count")
+                    print(f"[DEBUG] Created new column gpt_c_run_count at position {gpt_c_run_count_col}")
+                
+                # קריאת הערך הנוכחי
+                current_value = row.get("gpt_c_run_count", 0)
+                if isinstance(current_value, str):
+                    try:
+                        current_value = int(current_value)
+                    except ValueError:
+                        current_value = 0
+                
+                # הגדלת הערך
+                new_value = current_value + 1
+                
+                # עדכון התא
+                sheet_states.update_cell(i, gpt_c_run_count_col, new_value)
+                
+                print(f"[DEBUG] Incremented gpt_c_run_count from {current_value} to {new_value} for chat_id={chat_id}")
+                logging.info(f"[DEBUG] Incremented gpt_c_run_count from {current_value} to {new_value} for chat_id={chat_id}")
+                
+                return new_value
+        
+        # אם המשתמש לא נמצא, יצירת רשומה חדשה
+        print(f"[DEBUG] User not found in user_states, creating new record for chat_id={chat_id}")
+        
+        # הוספת שורה חדשה
+        new_row = [""] * len(header)
+        new_row[0] = str(chat_id)  # chat_id בעמודה הראשונה
+        
+        # הוספת gpt_c_run_count אם לא קיים
+        if "gpt_c_run_count" not in header:
+            header.append("gpt_c_run_count")
+            new_row.append(1)
+        else:
+            gpt_c_run_count_idx = header.index("gpt_c_run_count")
+            new_row[gpt_c_run_count_idx] = 1
+        
+        sheet_states.append_row(new_row)
+        
+        print(f"[DEBUG] Created new user record with gpt_c_run_count=1 for chat_id={chat_id}")
+        logging.info(f"[DEBUG] Created new user record with gpt_c_run_count=1 for chat_id={chat_id}")
+        
+        return 1
+        
+    except Exception as e:
+        print(f"[ERROR] increment_gpt_c_run_count failed for chat_id={chat_id}: {e}")
+        logging.error(f"[ERROR] increment_gpt_c_run_count failed for chat_id={chat_id}: {e}")
+        return 0
+
+def reset_gpt_c_run_count(chat_id: str) -> bool:
+    """
+    מאפס את מונה gpt_c_run_count ל-0 ומעדכן את last_gpt_e_timestamp.
+    
+    :param chat_id: מזהה המשתמש
+    :return: True אם הצליח, False אם נכשל
+    """
+    print(f"[DEBUG] reset_gpt_c_run_count: chat_id={chat_id}")
+    logging.debug(f"[DEBUG] reset_gpt_c_run_count: chat_id={chat_id}")
+    
+    try:
+        from datetime import datetime
+        
+        all_records = sheet_states.get_all_records()
+        header = sheet_states.row_values(1)
+        
+        # חיפוש המשתמש
+        for i, row in enumerate(all_records, start=2):  # מתחיל מ-2 כי שורה 1 היא header
+            if str(row.get("chat_id", "")).strip() == str(chat_id):
+                # מציאת עמודות נדרשות
+                gpt_c_run_count_col = None
+                last_gpt_e_timestamp_col = None
+                
+                for j, col_name in enumerate(header, start=1):
+                    if col_name == "gpt_c_run_count":
+                        gpt_c_run_count_col = j
+                    elif col_name == "last_gpt_e_timestamp":
+                        last_gpt_e_timestamp_col = j
+                
+                # יצירת עמודות אם לא קיימות
+                if gpt_c_run_count_col is None:
+                    gpt_c_run_count_col = len(header) + 1
+                    sheet_states.update_cell(1, gpt_c_run_count_col, "gpt_c_run_count")
+                    print(f"[DEBUG] Created new column gpt_c_run_count at position {gpt_c_run_count_col}")
+                
+                if last_gpt_e_timestamp_col is None:
+                    last_gpt_e_timestamp_col = len(header) + 1
+                    sheet_states.update_cell(1, last_gpt_e_timestamp_col, "last_gpt_e_timestamp")
+                    print(f"[DEBUG] Created new column last_gpt_e_timestamp at position {last_gpt_e_timestamp_col}")
+                
+                # עדכון הערכים
+                current_timestamp = datetime.now().isoformat()
+                
+                sheet_states.update_cell(i, gpt_c_run_count_col, 0)
+                sheet_states.update_cell(i, last_gpt_e_timestamp_col, current_timestamp)
+                
+                print(f"[DEBUG] Reset gpt_c_run_count to 0 and updated last_gpt_e_timestamp to {current_timestamp} for chat_id={chat_id}")
+                logging.info(f"[DEBUG] Reset gpt_c_run_count to 0 and updated last_gpt_e_timestamp to {current_timestamp} for chat_id={chat_id}")
+                
+                return True
+        
+        # אם המשתמש לא נמצא, יצירת רשומה חדשה
+        print(f"[DEBUG] User not found in user_states, creating new record for chat_id={chat_id}")
+        
+        current_timestamp = datetime.now().isoformat()
+        
+        # הוספת שורה חדשה
+        new_row = [""] * len(header)
+        new_row[0] = str(chat_id)  # chat_id בעמודה הראשונה
+        
+        # הוספת עמודות אם לא קיימות
+        if "gpt_c_run_count" not in header:
+            header.append("gpt_c_run_count")
+            new_row.append(0)
+        else:
+            gpt_c_run_count_idx = header.index("gpt_c_run_count")
+            new_row[gpt_c_run_count_idx] = 0
+        
+        if "last_gpt_e_timestamp" not in header:
+            header.append("last_gpt_e_timestamp")
+            new_row.append(current_timestamp)
+        else:
+            last_gpt_e_timestamp_idx = header.index("last_gpt_e_timestamp")
+            new_row[last_gpt_e_timestamp_idx] = current_timestamp
+        
+        sheet_states.append_row(new_row)
+        
+        print(f"[DEBUG] Created new user record with gpt_c_run_count=0 and last_gpt_e_timestamp={current_timestamp} for chat_id={chat_id}")
+        logging.info(f"[DEBUG] Created new user record with gpt_c_run_count=0 and last_gpt_e_timestamp={current_timestamp} for chat_id={chat_id}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] reset_gpt_c_run_count failed for chat_id={chat_id}: {e}")
+        logging.error(f"[ERROR] reset_gpt_c_run_count failed for chat_id={chat_id}: {e}")
+        return False
