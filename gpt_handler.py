@@ -456,7 +456,7 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
             user_content = f"תשובת המשתמש לצורך חילוץ מידע:\n{user_message}"
         
         response = litellm.completion(
-            model="gpt-4.1-nano",
+            model="gpt-4o-mini",  # מודל זול ומהיר
             messages=[
                 {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
                 {"role": "user", "content": user_content}
@@ -662,7 +662,7 @@ def gpt_d(changed_fields, chat_id=None, message_id=None):
         metadata = {"gpt_identifier": "gpt_d", "chat_id": chat_id, "message_id": message_id}
         
         response = litellm.completion(
-            model="gpt-4.1-nano",  # מודל זול ומהיר
+            model="gpt-4o-mini",  # מודל זול ומהיר
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
@@ -763,7 +763,7 @@ def gpt_d(changed_fields, chat_id=None, message_id=None):
             "cost_total": 0.0,
             "cost_total_ils": 0.0,
             "cost_agorot": 0.0,
-            "model": "gpt-4.1-nano"
+            "model": "gpt-4o-mini"
         }
 
 def log_gpt_d_performance(changed_fields, final_values, cost_data):

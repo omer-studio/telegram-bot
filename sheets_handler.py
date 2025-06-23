@@ -452,6 +452,9 @@ def log_to_sheets(
         # האם הופעל סיכום (gpt_b)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
 
+        # האם הופעל gpt_c (חילוץ)?
+        has_extract = extract_usage and len(extract_usage) > 0 and safe_float(extract_usage.get("completion_tokens", 0)) > 0
+
         # האם הופעל gpt_d?
         has_gpt_d = gpt_d_usage and len(gpt_d_usage) > 0 and safe_float(gpt_d_usage.get("completion_tokens", 0)) > 0
 
@@ -485,16 +488,21 @@ def log_to_sheets(
             "cached_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt_a"),
             "cost_gpt_a": main_costs["cost_agorot"],
             "model_gpt_a": str(main_usage.get("model", "")),
-            "usage_prompt_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_c"),
-            "usage_completion_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_c"),
-            "usage_total_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("total_tokens", 0)), "usage_total_tokens_gpt_c"),
-            "cached_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_c"),
-            "cost_gpt_c": extract_costs["cost_agorot"],
-            "model_gpt_c": str(extract_usage.get("model", "")),
             "timestamp": timestamp_full,
             "date_only": date_only,
             "time_only": time_only,
         }
+        # הוספת שדות gpt_c רק אם הופעל
+        if has_extract:
+            values_to_log.update({
+                "usage_prompt_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_c"),
+                "usage_completion_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_c"),
+                "usage_total_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("total_tokens", 0)), "usage_total_tokens_gpt_c"),
+                "cached_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_c"),
+                "cost_gpt_c": extract_costs["cost_agorot"],
+                "model_gpt_c": str(extract_usage.get("model", "")),
+            })
+        
         # הוספת שדות gpt_b רק אם יש סיכום
         if has_summary:
             values_to_log.update({
