@@ -15,7 +15,7 @@ from messages import get_welcome_messages, get_retry_message_by_attempt, approva
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet
 from gpt_handler import get_main_response, summarize_bot_reply, gpt_c, normalize_usage_dict, should_run_gpt_c
-from utils import log_event_to_file, update_chat_history, get_chat_history_messages
+from utils import log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from fields_dict import FIELDS_DICT
 import time
 import json
@@ -278,10 +278,11 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             print(f"[DEBUG] הודעת הבוט קצרה ({len(bot_reply)} תווים), לא קורא ל-gpt_b")
 
         # עדכון היסטוריה סופי עם תמצית או תשובה מלאה
+        from utils import update_last_bot_message
         if new_summary_for_history:
-            update_chat_history(chat_id, "bot_summary", new_summary_for_history)
+            update_last_bot_message(chat_id, new_summary_for_history)
         else:
-            update_chat_history(chat_id, "bot", bot_reply)
+            update_last_bot_message(chat_id, bot_reply)
 
         # gpt_c: עדכון פרופיל משתמש
         gpt_c_response = None

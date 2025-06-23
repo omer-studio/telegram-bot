@@ -15,8 +15,6 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 from telegram import Bot
 from config import ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, gpt_log_path
 
-bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
-
 print("🚀 התחלת הרצה של daily_summary.py")
 
 def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
@@ -73,6 +71,8 @@ async def send_daily_summary(days_back=1):
     """
     מחשב ושולח דוח עלות ושימוש יומי, כולל סיכום להיום.
     """
+    from telegram import Bot
+    bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
     try:
         tz = pytz.timezone("Europe/Berlin")
         yesterday_date = datetime.now(tz).date() - timedelta(days=days_back)

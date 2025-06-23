@@ -77,11 +77,12 @@ def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את הי�
             history_data[chat_id] = {"am_context": "", "history": []}
 
         # הוספת האירוע החדש
-        history_data[chat_id]["history"].append({
-            "user": user_msg,
-            "bot": bot_summary,
-            "timestamp": datetime.now().isoformat()
-        })
+        if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
+            history_data[chat_id]["history"].append({
+                "user": user_msg,
+                "bot": bot_summary,
+                "timestamp": datetime.now().isoformat()
+            })
 
         # שמירה על איקס הודעות אחרונות בלבד
         history_data[chat_id]["history"] = history_data[chat_id]["history"][-30000:]
@@ -356,3 +357,22 @@ def send_usage_report(days_back: int = 1):
         send_admin_notification(msg)
     except Exception as e:
         send_admin_notification(f"[send_usage_report] שגיאה בשליחת דוח usage: {e}")
+
+
+def update_last_bot_message(chat_id, bot_summary):
+    """
+    מעדכן את השדה 'bot' של השורה האחרונה בהיסטוריה של המשתמש.
+    קלט: chat_id (str/int), bot_summary (str)
+    פלט: אין (מעדכן בקובץ)
+    """
+    try:
+        file_path = CHAT_HISTORY_PATH
+        with open(file_path, encoding="utf-8") as f:
+            history_data = json.load(f)
+        chat_id = str(chat_id)
+        if chat_id in history_data and history_data[chat_id]["history"]:
+            history_data[chat_id]["history"][-1]["bot"] = bot_summary
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(history_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"❌ שגיאה בעדכון תשובת בוט: {e}")
