@@ -18,6 +18,8 @@ from gpt_handler import get_main_response, summarize_bot_reply, gpt_c, normalize
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages
 from fields_dict import FIELDS_DICT
 import time
+import json
+from gpt_handler import smart_update_profile_with_gpt_d
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
@@ -283,6 +285,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
 
         # gpt_c: עדכון פרופיל משתמש
         gpt_c_response = None
+        gpt_d_usage = None
         try:
             # בדיקה אם יש טעם להפעיל gpt_c
             if should_run_gpt_c(user_msg):
@@ -291,25 +294,38 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 
                 print(f"[DEBUG] קורא ל-gpt_c עם user_msg: {user_msg}")
                 print(f"[DEBUG] bot_message_for_gpt_c: {bot_message_for_gpt_c}")
-                gpt_c_response = await asyncio.to_thread(
-                    gpt_c,
-                    user_message=user_msg,
-                    last_bot_message=bot_message_for_gpt_c,
-                    chat_id=chat_id,
-                    message_id=message_id
-                )
-                print(f"[DEBUG] gpt_c החזיר: {gpt_c_response}")
-                if gpt_c_response and gpt_c_response.get("full_data"):
-                    updated_profile = {}
-                    updated_profile.update(gpt_c_response.get("full_data", {}))
-                    if gpt_c_response.get("updated_summary"):
-                        updated_profile["summary"] = gpt_c_response.get("updated_summary")
-                    
-                    print(f"[DEBUG] מעדכן פרופיל עם: {updated_profile}")
-                    update_user_profile(chat_id, updated_profile)
-                    log_payload["gpt_c_data"] = {k: v for k, v in gpt_c_response.items() if k not in ["updated_summary", "full_data"]}
+                
+                # קבלת הפרופיל הקיים
+                existing_profile = get_user_summary(chat_id)
+                if existing_profile:
+                    try:
+                        existing_profile = json.loads(existing_profile)
+                    except:
+                        existing_profile = {}
                 else:
-                    print(f"[DEBUG] gpt_c לא החזיר נתונים תקינים")
+                    existing_profile = {}
+                
+                # שימוש בפונקציה החכמה עם gpt_d
+                updated_profile, combined_usage = smart_update_profile_with_gpt_d(
+                    existing_profile=existing_profile,
+                    user_message=user_msg,
+                    interaction_id=message_id
+                )
+                
+                # הפרדת נתוני gpt_c ו-gpt_d
+                gpt_c_usage = {}
+                gpt_d_usage = {}
+                
+                for key, value in combined_usage.items():
+                    if key.startswith("gpt_d_") or key in ["field_conflict_resolution"]:
+                        gpt_d_usage[key] = value
+                    else:
+                        gpt_c_usage[key] = value
+                
+                print(f"[DEBUG] מעדכן פרופיל עם: {updated_profile}")
+                update_user_profile(chat_id, updated_profile)
+                log_payload["gpt_c_data"] = gpt_c_usage
+                log_payload["gpt_d_data"] = gpt_d_usage
             else:
                 print(f"[DEBUG] לא קורא ל-gpt_c - ההודעה לא נראית מכילה מידע חדש: {user_msg}")
         except Exception as e:
@@ -356,19 +372,22 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             total_tokens_calc = (
                 gpt_a_usage.get("total_tokens", 0) + 
                 gpt_b_usage.get("total_tokens", 0) + 
-                gpt_c_usage.get("total_tokens", 0)
+                gpt_c_usage.get("total_tokens", 0) +
+                gpt_d_usage.get("total_tokens", 0) if gpt_d_usage else 0
             )
             
             total_cost_usd_calc = (
                 gpt_a_usage.get("cost_total", 0) + 
                 gpt_b_usage.get("cost_total", 0) + 
-                gpt_c_usage.get("cost_total", 0)
+                gpt_c_usage.get("cost_total", 0) +
+                gpt_d_usage.get("cost_total", 0) if gpt_d_usage else 0
             )
             
             total_cost_ils_calc = (
                 gpt_a_usage.get("cost_total_ils", 0) + 
                 gpt_b_usage.get("cost_total_ils", 0) + 
-                gpt_c_usage.get("cost_total_ils", 0)
+                gpt_c_usage.get("cost_total_ils", 0) +
+                gpt_d_usage.get("cost_total_ils", 0) if gpt_d_usage else 0
             )
             
             print("[DEBUG] ---- log_to_sheets DEBUG ----")
@@ -380,6 +399,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             print(f"[DEBUG] gpt_a_usage: {gpt_a_usage}")
             print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
             print(f"[DEBUG] gpt_c_usage: {gpt_c_usage}")
+            print(f"[DEBUG] gpt_d_usage: {gpt_d_usage}")
             print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
             print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
             print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
@@ -396,7 +416,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 extract_usage=gpt_c_usage,
                 total_tokens=total_tokens_calc,
                 cost_usd=total_cost_usd_calc,
-                cost_ils=total_cost_ils_calc
+                cost_ils=total_cost_ils_calc,
+                gpt_d_usage=gpt_d_usage
             )
             print("[DEBUG] ---- END log_to_sheets DEBUG ----")
         except Exception as e:

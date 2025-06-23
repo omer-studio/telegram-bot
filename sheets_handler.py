@@ -311,7 +311,8 @@ def log_to_sheets(
     cached_tokens_gpt_a=None, cost_gpt_a=None,
     cached_tokens_gpt_b=None, cost_gpt_b=None,
     cached_tokens_gpt_c=None, cost_gpt_c=None,
-    merge_usage=None, fields_updated_by_gpt_c=None
+    merge_usage=None, fields_updated_by_gpt_c=None,
+    gpt_d_usage=None
 ):
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
@@ -421,12 +422,14 @@ def log_to_sheets(
         main_costs = calculate_costs_unified(main_usage)
         summary_costs = calculate_costs_unified(summary_usage)
         extract_costs = calculate_costs_unified(extract_usage)
+        gpt_d_costs = calculate_costs_unified(gpt_d_usage) if gpt_d_usage else {"cost_usd": 0, "cost_ils": 0, "cost_agorot": 0}
 
         # חישוב סכומים כוללים נכון
         total_cost_usd = (
             main_costs["cost_usd"] + 
             summary_costs["cost_usd"] + 
-            extract_costs["cost_usd"]
+            extract_costs["cost_usd"] +
+            gpt_d_costs["cost_usd"]
         )
         total_cost_ils = total_cost_usd * USD_TO_ILS
         total_cost_agorot = total_cost_ils * 100
@@ -448,6 +451,9 @@ def log_to_sheets(
 
         # האם הופעל סיכום (gpt_b)?
         has_summary = summary_usage and len(summary_usage) > 0 and safe_float(summary_usage.get("completion_tokens", 0)) > 0
+
+        # האם הופעל gpt_d?
+        has_gpt_d = gpt_d_usage and len(gpt_d_usage) > 0 and safe_float(gpt_d_usage.get("completion_tokens", 0)) > 0
 
         # --- עלות כוללת בדולר (מחושב לפי טבלת עלויות) ---
         def format_money(value):
@@ -502,6 +508,17 @@ def log_to_sheets(
                 "cached_tokens_gpt_b": safe_calc(lambda: safe_int(summary_usage.get("cached_tokens", 0)), "cached_tokens_gpt_b"),
                 "cost_gpt_b": summary_costs["cost_agorot"],
                 "model_gpt_b": str(summary_usage.get("model", "")),
+            })
+        
+        # הוספת שדות gpt_d רק אם הופעל
+        if has_gpt_d:
+            values_to_log.update({
+                "usage_prompt_tokens_gpt_d": safe_calc(lambda: safe_int(gpt_d_usage.get("prompt_tokens", 0) - gpt_d_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_d"),
+                "usage_completion_tokens_gpt_d": safe_calc(lambda: safe_int(gpt_d_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_d"),
+                "usage_total_tokens_gpt_d": safe_calc(lambda: safe_int(gpt_d_usage.get("total_tokens", 0)), "usage_total_tokens_gpt_d"),
+                "cached_tokens_gpt_d": safe_calc(lambda: safe_int(gpt_d_usage.get("cached_tokens", 0)), "cached_tokens_gpt_d"),
+                "cost_gpt_d": gpt_d_costs["cost_agorot"],
+                "model_gpt_d": str(gpt_d_usage.get("model", "")),
             })
 
         # 🚨 דיבאגים חזקים לפני שמירה
