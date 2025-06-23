@@ -1,8 +1,8 @@
 """
 gpt_handler.py
 --------------
-קובץ זה מרכז את כל הפונקציות שמבצעות אינטראקציה עם GPT (שליחת הודעות, חישוב עלות, דיבאגינג).
-הרציונל: ריכוז כל הלוגיקה של GPT במקום אחד, כולל תיעוד מלא של טוקנים, עלויות, ולוגים.
+קובץ זה מרכז את כל הפונקציות שמבצעות אינטראקציה עם gpt (שליחת הודעות, חישוב עלות, דיבאגינג).
+הרציונל: ריכוז כל הלוגיקה של gpt במקום אחד, כולל תיעוד מלא של טוקנים, עלויות, ולוגים.
 
 🔄 עדכון: מעבר ל-LiteLLM עם מעקב עלויות מובנה
 --------------------------------------------------
@@ -19,7 +19,7 @@ import asyncio
 import re
 import threading
 from datetime import datetime
-from config import GPT_LOG_PATH
+from config import gpt_log_path
 from fields_dict import FIELDS_DICT
 from prompts import BOT_REPLY_SUMMARY_PROMPT, PROFILE_EXTRACTION_ENHANCED_PROMPT
 from gpt_c_logger import append_gpt_c_html_update
@@ -35,13 +35,13 @@ os.makedirs(PROJECT_ROOT, exist_ok=True)
 
 def _debug_gpt_usage(model_name, prompt_tokens, completion_tokens, cached_tokens, total_tokens, call_type):
     """
-    הדפסת debug info על usage של GPT.
+    הדפסת debug info על usage של gpt.
     """
     print(f"[DEBUG] {call_type} - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache = {total_tokens}total")
 
 def write_gpt_log(call_type, usage_log, model_name, interaction_id=None):
     """
-    כותב לוג של קריאת GPT לקובץ JSON.
+    כותב לוג של קריאת gpt לקובץ JSON.
     קלט: call_type (main_reply/summary/identity_extraction), usage_log (dict), model_name (str), interaction_id (str, optional)
     """
     try:
@@ -56,18 +56,18 @@ def write_gpt_log(call_type, usage_log, model_name, interaction_id=None):
             log_entry["interaction_id"] = str(interaction_id)
         
         # וידוא שהתיקייה קיימת
-        os.makedirs(os.path.dirname(GPT_LOG_PATH), exist_ok=True)
+        os.makedirs(os.path.dirname(gpt_log_path), exist_ok=True)
         
-        with open(GPT_LOG_PATH, "a", encoding="utf-8") as f:
+        with open(gpt_log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
             
     except Exception as e:
-        logging.error(f"שגיאה בכתיבת לוג GPT: {e}")
+        logging.error(f"שגיאה בכתיבת לוג gpt: {e}")
 
 # 🔄 עדכון: פונקציה חדשה לחישוב עלויות עם LiteLLM
 def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS, completion_response=None):
     """
-    מחשב את העלות של שימוש ב-GPT לפי מספר הטוקנים והמודל.
+    מחשב את העלות של שימוש ב-gpt לפי מספר הטוקנים והמודל.
     משתמש אך ורק ב-LiteLLM עם completion_response.
     מחזיר רק את העלות הכוללת (cost_total) כפי שמחושב ע"י LiteLLM, בלי פילוח ידני.
     """
@@ -252,7 +252,7 @@ def summarize_bot_reply_async(*args, **kwargs):
 
 def validate_extracted_data(data):
     """
-    בודק אם הנתונים שחולצו מה-GPT תקינים (dict, מפתחות מסוג str בלבד).
+    בודק אם הנתונים שחולצו מה-gpt תקינים (dict, מפתחות מסוג str בלבד).
     קלט: data (dict)
     פלט: True/False
     """
@@ -322,7 +322,7 @@ def smart_update_profile_async(existing_profile, user_message, interaction_id=No
 
 def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
     """
-    מפעיל את כל זרימת ה-GPT: gpt_a, gpt_b, ו-smart_update_profile (שקורא ל-gpt_c).
+    מפעיל את כל זרימת ה-gpt: gpt_a, gpt_b, ו-smart_update_profile (שקורא ל-gpt_c).
     """
     print("[DEBUG][gpt_c] CALLED - הפונקציה הראשית")
     try:

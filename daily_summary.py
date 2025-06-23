@@ -13,7 +13,7 @@ import pytz  # הוספתי לוודא שיש pytz
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 from telegram import Bot
-from config import ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, GPT_LOG_PATH
+from config import ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, gpt_log_path
 
 bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
 
@@ -27,7 +27,7 @@ def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
     interactions = {}
     call_types_counter = {}
 
-    with open(GPT_LOG_PATH, "r", encoding="utf-8") as f:
+    with open(gpt_log_path, "r", encoding="utf-8") as f:
         for line in f:
             try:
                 entry = json.loads(line)

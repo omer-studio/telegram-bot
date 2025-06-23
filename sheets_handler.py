@@ -231,11 +231,11 @@ def update_user_profile(chat_id, field_values):
                 if updated_fields:
                     print(f"[DEBUG] updated fields: {updated_fields}")
                     logging.info(f"[DEBUG] updated fields: {updated_fields}")
-                    # שמור את summary בדיוק כפי שהוחזר מה-GPT
+                    # שמור את summary בדיוק כפי שהוחזר מה-gpt
                     if "summary" in field_values and SUMMARY_FIELD in header:
                         summary_col = header.index(SUMMARY_FIELD) + 1
                         summary_val = field_values["summary"]
-                        print(f"📊 מעדכן סיכום בעמודה {summary_col}: '{summary_val}' (מה-GPT)")
+                        print(f"📊 מעדכן סיכום בעמודה {summary_col}: '{summary_val}' (מה-gpt)")
                         try:
                             sheet_users.update_cell(idx + 2, summary_col, summary_val)
                         except Exception as e:

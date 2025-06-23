@@ -2,7 +2,7 @@
 message_handler.py
 ------------------
 קובץ זה מטפל בכל הודעה נכנסת מהמשתמש בטלגרם.
-הרציונל: ריכוז כל הלוגיקה של טיפול בהודעות, הרשאות, רישום, מענה, לוגים, ושילוב GPT.
+הרציונל: ריכוז כל הלוגיקה של טיפול בהודעות, הרשאות, רישום, מענה, לוגים, ושילוב gpt.
 """
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -84,7 +84,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     הפונקציה הראשית שמטפלת בכל הודעה נכנסת מהמשתמש.
     קלט: update (אובייקט טלגרם), context (אובייקט קונטקסט)
     פלט: אין (מטפלת בכל הלוגיקה של הודעה)
-    # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב GPT, עדכון היסטוריה, והכל בצורה אסינכרונית.
+    # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב gpt, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
     from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
     try:
@@ -166,7 +166,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_summary = get_user_summary(chat_id) or ""
             history_messages = get_chat_history_messages(chat_id)
             
-            # בניית ההודעות ל-GPT-A
+            # בניית ההודעות ל-gpt_a
             messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
             if current_summary:
                 messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}"})
@@ -175,7 +175,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             last_bot_message = next((msg.get("content", "") for msg in reversed(history_messages) if msg.get("role") == "assistant"), "")
 
-            # שלב 2: קריאה ל-GPT-A למענה ראשי (זה מה שיקבע את איכות התשובה)
+            # שלב 2: קריאה ל-gpt_a למענה ראשי (זה מה שיקבע את איכות התשובה)
             print(f"[DEBUG] 🔥 Calling get_main_response...")
             gpt_response = await asyncio.to_thread(
                 get_main_response,
@@ -190,7 +190,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
             update_chat_history(chat_id, user_msg, "")
             
-            # שלב 4: הפעלת משימות רקע (GPT-B, gpt_c, עדכון היסטוריה סופי, לוגים)
+            # שלב 4: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
             asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, last_bot_message))
 
         except Exception as ex:
@@ -252,11 +252,11 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         await handle_critical_error(ex, chat_id, user_msg, update)
 
 async def handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, last_bot_message):
-    """מטפל בכל המשימות ברקע - GPT-B, gpt_c, עדכון היסטוריה, לוגים"""
+    """מטפל בכל המשימות ברקע - gpt_b, gpt_c, עדכון היסטוריה, לוגים"""
     try:
         bot_reply = gpt_response["bot_reply"]
         
-        # GPT-B: יצירת תמצית לתשובת הבוט (רק אם ההודעה ארוכה)
+        # gpt_b: יצירת תמצית לתשובת הבוט (רק אם ההודעה ארוכה)
         new_summary_for_history = None
         summary_response = None
         
@@ -272,7 +272,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 )
                 new_summary_for_history = summary_response.get("summary")
             except Exception as e:
-                logging.error(f"Error in GPT-B (summary): {e}")
+                logging.error(f"Error in gpt_b (summary): {e}")
         else:
             print(f"[DEBUG] הודעת הבוט קצרה ({len(bot_reply)} תווים), לא קורא ל-gpt_b")
 

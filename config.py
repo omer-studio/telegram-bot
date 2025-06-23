@@ -110,7 +110,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # נתיבי קבצים עיקריים
-GPT_LOG_PATH = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
+gpt_log_path = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
 BOT_TRACE_LOG_PATH = os.path.join(DATA_DIR, "bot_trace_log.jsonl")
 CHAT_HISTORY_PATH = os.path.join(DATA_DIR, "chat_history.json")
 BOT_ERRORS_PATH = os.path.join(DATA_DIR, "bot_errors.jsonl")
@@ -145,7 +145,7 @@ def get_config_snapshot():
         "DATA_DIR": DATA_DIR,
         "PROJECT_ROOT": PROJECT_ROOT,
         "LOG_FILE_PATH": LOG_FILE_PATH,
-        "GPT_LOG_PATH": GPT_LOG_PATH,
+        "gpt_log_path": gpt_log_path,
         "BOT_TRACE_LOG_PATH": BOT_TRACE_LOG_PATH,
         "CHAT_HISTORY_PATH": CHAT_HISTORY_PATH,
         "BOT_ERRORS_PATH": BOT_ERRORS_PATH,

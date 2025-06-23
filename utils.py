@@ -7,7 +7,7 @@ utils.py
 import json
 import os
 from datetime import datetime
-from config import LOG_FILE_PATH, LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH
+from config import LOG_FILE_PATH, LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path
 
 
 def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
@@ -97,9 +97,9 @@ def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את הי�
 
 
 
-def get_chat_history_messages(chat_id: str) -> list: # מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT (רשימת הודעות)
+def get_chat_history_messages(chat_id: str) -> list: # מחזיר את היסטוריית השיחה בפורמט המתאים ל-gpt (רשימת הודעות)
     """
-    מחזיר את היסטוריית השיחה בפורמט המתאים ל-GPT (רשימת הודעות).
+    מחזיר את היסטוריית השיחה בפורמט המתאים ל-gpt (רשימת הודעות).
     קלט: chat_id (str)
     פלט: list של dict (role, content)
     """
@@ -318,8 +318,7 @@ def send_usage_report(days_back: int = 1):
     import os, json
     from datetime import datetime, timedelta
     from notifications import send_admin_notification
-    from config import GPT_LOG_PATH
-    if not os.path.exists(GPT_LOG_PATH):
+    if not os.path.exists(gpt_log_path):
         send_admin_notification("אין לוג usage זמין.")
         return
     try:
@@ -328,7 +327,7 @@ def send_usage_report(days_back: int = 1):
         errors = 0
         now = datetime.now()
         since = now - timedelta(days=days_back)
-        with open(GPT_LOG_PATH, "r", encoding="utf-8") as f:
+        with open(gpt_log_path, "r", encoding="utf-8") as f:
             for line in f:
                 try:
                     entry = json.loads(line)
