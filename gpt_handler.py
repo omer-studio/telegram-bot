@@ -69,15 +69,13 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
     """
     מחשב את העלות של שימוש ב-GPT לפי מספר הטוקנים והמודל.
     משתמש אך ורק ב-LiteLLM עם completion_response.
+    מחזיר רק את העלות הכוללת (cost_total) כפי שמחושב ע"י LiteLLM, בלי פילוח ידני.
     """
     print(f"[DEBUG] 🔥 calculate_gpt_cost CALLED! 🔥")
     print(f"[DEBUG] Input: prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, cached_tokens={cached_tokens}, model_name={model_name}")
     print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
-    
     try:
         import litellm
-        
-        # אם יש completion_response, נשתמש בו לחישוב העלות
         if completion_response:
             print(f"[DEBUG] Using completion_response for cost calculation")
             cost_usd = litellm.completion_cost(completion_response=completion_response)
@@ -85,30 +83,20 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
         else:
             print(f"[DEBUG] No completion_response provided, cannot calculate cost with LiteLLM")
             cost_usd = 0.0
-            
         cost_ils = cost_usd * usd_to_ils
         cost_agorot = cost_ils * 100
-        
-        prompt_regular = prompt_tokens - cached_tokens
-        
         result = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
             "cached_tokens": cached_tokens,
-            "prompt_regular": prompt_regular,
-            "cost_prompt_regular": cost_usd * (prompt_regular / (prompt_regular + completion_tokens)) if (prompt_regular + completion_tokens) > 0 else 0,
-            "cost_prompt_cached": 0.0,
-            "cost_completion": cost_usd * (completion_tokens / (prompt_regular + completion_tokens)) if (prompt_regular + completion_tokens) > 0 else 0,
             "cost_total": cost_usd,
             "cost_total_ils": cost_ils,
             "cost_agorot": cost_agorot,
             "model": model_name
         }
-        
         print(f"[DEBUG] calculate_gpt_cost returning: {result}")
         return result
-        
     except Exception as e:
         print(f"[ERROR] calculate_gpt_cost failed: {e}")
         import traceback
@@ -118,10 +106,6 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
             "cached_tokens": cached_tokens,
-            "prompt_regular": prompt_tokens - cached_tokens,
-            "cost_prompt_regular": 0.0,
-            "cost_prompt_cached": 0.0,
-            "cost_completion": 0.0,
             "cost_total": 0.0,
             "cost_total_ils": 0.0,
             "cost_agorot": 0.0,

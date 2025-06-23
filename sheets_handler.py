@@ -475,21 +475,13 @@ def log_to_sheets(
             "total_cost_ils": round(total_cost_agorot, 2),  # באגורות!
             "usage_prompt_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("prompt_tokens", 0) - main_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_a"),
             "usage_completion_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_a"),
-            "usage_total_tokens_gpt_a": safe_calc(lambda: (
-                safe_int(main_usage.get("cached_tokens", 0)) +
-                safe_int(main_usage.get("completion_tokens", 0)) +
-                safe_int(main_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_gpt_a"),
+            "usage_total_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("total_tokens", 0)), "usage_total_tokens_gpt_a"),
             "cached_tokens_gpt_a": safe_calc(lambda: safe_int(main_usage.get("cached_tokens", 0)), "cached_tokens_gpt_a"),
             "cost_gpt_a": main_costs["cost_agorot"],
             "model_gpt_a": str(main_usage.get("model", "")),
             "usage_prompt_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("prompt_tokens", 0) - extract_usage.get("cached_tokens", 0)), "usage_prompt_tokens_gpt_c"),
             "usage_completion_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("completion_tokens", 0)), "usage_completion_tokens_gpt_c"),
-            "usage_total_tokens_gpt_c": safe_calc(lambda: (
-                safe_int(extract_usage.get("cached_tokens", 0)) +
-                safe_int(extract_usage.get("completion_tokens", 0)) +
-                safe_int(extract_usage.get("prompt_tokens", 0))
-            ), "usage_total_tokens_gpt_c"),
+            "usage_total_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("total_tokens", 0)), "usage_total_tokens_gpt_c"),
             "cached_tokens_gpt_c": safe_calc(lambda: safe_int(extract_usage.get("cached_tokens", 0)), "cached_tokens_gpt_c"),
             "cost_gpt_c": extract_costs["cost_agorot"],
             "model_gpt_c": str(extract_usage.get("model", "")),
