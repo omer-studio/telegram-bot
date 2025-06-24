@@ -32,6 +32,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 from litellm import completion
 from fields_dict import FIELDS_DICT
 from prompts import SYSTEM_PROMPT  # ייבוא ישיר של הפרומט הראשי
+import time
+import logging
 
 
 # טעינת קונפיגורציה
@@ -84,11 +86,27 @@ def setup_google_sheets():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
     gs_client = gspread.authorize(creds)
 
-    sheet_users = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet("גיליון1")
-    sheet_log = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet("2")
-    sheet_states = gs_client.open_by_key(GOOGLE_SHEET_ID).worksheet("user_states")
-
-    return sheet_users, sheet_log, sheet_states
+    max_retries = 3
+    delay = 5
+    last_exception = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"[DEBUG] Attempt {attempt}: Opening Google Sheet with ID: {GOOGLE_SHEET_ID}")
+            sheet = gs_client.open_by_key(GOOGLE_SHEET_ID)
+            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: גיליון1")
+            sheet_users = sheet.worksheet("גיליון1")
+            sheet_log = sheet.worksheet("log")
+            sheet_states = sheet.worksheet("states")
+            print(f"[DEBUG] Google Sheets loaded successfully!")
+            return sheet_users, sheet_log, sheet_states
+        except Exception as e:
+            print(f"[ERROR] Google Sheets access failed on attempt {attempt}: {e}")
+            last_exception = e
+            if attempt < max_retries:
+                print(f"[DEBUG] Retrying in {delay} seconds...")
+                time.sleep(delay)
+    print(f"[FATAL] All attempts to access Google Sheets failed.")
+    raise last_exception
 
 
 # ⚠️ יש להשתמש אך ורק במפתחות מתוך FIELDS_DICT! אין להכניס שמות שדה קשיחים חדשים כאן או בקוד אחר.
