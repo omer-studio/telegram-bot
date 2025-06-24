@@ -1,46 +1,61 @@
 """
 gpt_d_handler.py
 ----------------
-מנוע gpt_d: מיזוג/איכות פרופיל (profile merge/quality)
+מנוע gpt_d: מיזוג פרטי פרופיל חדשים עם קיימים
 """
 
 import logging
+from datetime import datetime
+import json
 import litellm
 from prompts import PROFILE_MERGE_PROMPT
-import json
-from gpt_c_handler import gpt_c
-from gpt_utils import normalize_usage_dict
 from config import GPT_MODELS, GPT_PARAMS
+from gpt_utils import normalize_usage_dict
 
-def gpt_d(changed_fields, chat_id=None, message_id=None):
+def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, message_id=None):
     """
-    מפעיל את gpt_d למיזוג/איכות פרופיל רגשי.
+    מיזוג נתוני פרופיל חדשים עם קיימים באמצעות gpt_d
     """
     try:
         metadata = {"gpt_identifier": "gpt_d", "chat_id": chat_id, "message_id": message_id}
-        user_content = f"שדות לעדכון:\n{changed_fields}"
         params = GPT_PARAMS["gpt_d"]
         model = GPT_MODELS["gpt_d"]
         
+        prompt = f"""פרופיל קיים: {json.dumps(existing_profile, ensure_ascii=False, indent=2)}
+
+מידע חדש שחולץ: {json.dumps(new_extracted_fields, ensure_ascii=False, indent=2)}
+
+מזג את המידע ותחזיר פרופיל מעודכן."""
+
         completion_params = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": PROFILE_MERGE_PROMPT},
-                {"role": "user", "content": user_content}
-            ],
+            "messages": [{"role": "system", "content": PROFILE_MERGE_PROMPT}, {"role": "user", "content": prompt}],
             "temperature": params["temperature"],
-            "max_tokens": params["max_tokens"],
             "metadata": metadata,
             "store": True
         }
         
+        # הוספת max_tokens רק אם הוא לא None
+        if params["max_tokens"] is not None:
+            completion_params["max_tokens"] = params["max_tokens"]
+        
         response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
-        usage = response.usage.__dict__ if hasattr(response.usage, "__dict__") else {}
-        return {"content": content, "usage": usage, "model": response.model}
+        usage = normalize_usage_dict(response.usage, response.model)
+        
+        # ניסיון לפרס JSON
+        try:
+            if content and content.strip().startswith("{"):
+                extracted_fields = json.loads(content)
+            else:
+                extracted_fields = {}
+        except json.JSONDecodeError:
+            extracted_fields = {}
+        
+        return {"merged_profile": extracted_fields, "usage": usage, "model": response.model}
     except Exception as e:
         logging.error(f"[gpt_d] Error: {e}")
-        return {"content": "[שגיאה במיזוג]", "usage": {}, "model": GPT_MODELS["gpt_d"]}
+        return {"merged_profile": {}, "usage": {}, "model": GPT_MODELS["gpt_d"]}
 
 def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None):
     """
@@ -68,7 +83,7 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     # מיזוג: שדות חדשים מחליפים קיימים
     merged_fields = existing_profile.copy()
     merged_fields.update(changed_fields)
-    gpt_d_result = gpt_d(changed_fields, message_id=interaction_id)
+    gpt_d_result = merge_profile_data(existing_profile, changed_fields, message_id=interaction_id)
     gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", GPT_MODELS["gpt_d"]))
     # נסה לפרסר את התוצאה
     updated_profile = merged_fields

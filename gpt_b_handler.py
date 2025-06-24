@@ -1,26 +1,34 @@
 """
 gpt_b_handler.py
 ----------------
-מנוע gpt_b: לוגיקת הסיכום (summary logic)
+מנוע gpt_b: יוצר סיכומים קצרים להיסטוריה
 """
 
 import logging
+from datetime import datetime
+import json
 import litellm
 from prompts import BOT_REPLY_SUMMARY_PROMPT
 from config import GPT_MODELS, GPT_PARAMS
+from gpt_utils import normalize_usage_dict
 
-def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
+def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
     """
-    שולח תשובה של הבוט ל-gpt_b ומקבל תמצית קצרה להיסטוריה.
+    יוצר סיכום קצר של הקשר השיחה עבור היסטוריה
     """
     try:
-        metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "original_message_id": original_message_id}
+        metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "message_id": message_id}
         params = GPT_PARAMS["gpt_b"]
         model = GPT_MODELS["gpt_b"]
         
+        messages = [
+            {"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT},
+            {"role": "user", "content": f"משתמש: {user_msg}\nבוט: {bot_reply}"}
+        ]
+        
         completion_params = {
             "model": model,
-            "messages": [{"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT}, {"role": "user", "content": reply_text}],
+            "messages": messages,
             "temperature": params["temperature"],
             "metadata": metadata,
             "store": True
@@ -32,8 +40,8 @@ def summarize_bot_reply(reply_text, chat_id=None, original_message_id=None):
         
         response = litellm.completion(**completion_params)
         summary = response.choices[0].message.content.strip()
-        usage = response.usage.__dict__ if hasattr(response.usage, "__dict__") else {}
+        usage = normalize_usage_dict(response.usage, response.model)
         return {"summary": summary, "usage": usage, "model": response.model}
     except Exception as e:
         logging.error(f"[gpt_b] Error: {e}")
-        return {"summary": "[שגיאה בסיכום]", "usage": {}, "model": GPT_MODELS["gpt_b"]} 
+        return {"summary": f"[סיכום: {user_msg[:50]}...]", "usage": {}, "model": GPT_MODELS["gpt_b"]} 

@@ -2,6 +2,21 @@ import logging
 
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
 
+def safe_get_usage_value(obj, attr_name, default=0):
+    """
+    מחלץ ערך מusage object באופן בטוח, כולל תמיכה בwrappers של OpenAI API החדש
+    """
+    try:
+        if hasattr(obj, attr_name):
+            value = getattr(obj, attr_name)
+            # אם זה wrapper object, ננסה להמיר אותו למספר
+            if hasattr(value, '__dict__'):
+                return default
+            return int(value) if value is not None else default
+        return default
+    except (ValueError, TypeError, AttributeError):
+        return default
+
 def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name=None, usd_to_ils=USD_TO_ILS, completion_response=None):
     if model_name is None:
         from config import GPT_MODELS
@@ -55,11 +70,40 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
 def normalize_usage_dict(usage, model_name=""):
     """
     מנרמל מילון usage של gpt לפורמט אחיד (לוגים/דוחות).
+    מטפל בwrappers חדשים של OpenAI API.
     """
     if not usage:
         return {}
-    if hasattr(usage, "__dict__"):
-        usage = usage.__dict__
-    result = dict(usage)
-    result["model"] = model_name
-    return result 
+    
+    # אם זה usage object של OpenAI, נמיר אותו בבטחה
+    if hasattr(usage, '__dict__'):
+        try:
+            result = {
+                "prompt_tokens": safe_get_usage_value(usage, 'prompt_tokens', 0),
+                "completion_tokens": safe_get_usage_value(usage, 'completion_tokens', 0),
+                "total_tokens": safe_get_usage_value(usage, 'total_tokens', 0),
+            }
+            
+            # נחפש cached_tokens במקומות השונים שהם יכולים להיות
+            cached_tokens = 0
+            if hasattr(usage, 'prompt_tokens_details'):
+                cached_tokens = safe_get_usage_value(usage.prompt_tokens_details, 'cached_tokens', 0)
+            elif hasattr(usage, 'cached_tokens'):
+                cached_tokens = safe_get_usage_value(usage, 'cached_tokens', 0)
+            
+            result["cached_tokens"] = cached_tokens
+            result["model"] = model_name
+            return result
+        except Exception as e:
+            print(f"[DEBUG] שגיאה בנירמול usage: {e}")
+            # fallback לנירמול פשוט
+            return {"model": model_name, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0}
+    
+    # אם זה כבר dict, פשוט נוסיף את המודל
+    if isinstance(usage, dict):
+        result = dict(usage)
+        result["model"] = model_name
+        return result
+    
+    # fallback
+    return {"model": model_name, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0} 

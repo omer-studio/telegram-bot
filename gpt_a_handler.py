@@ -10,6 +10,7 @@ import json
 import litellm
 from prompts import SYSTEM_PROMPT
 from config import GPT_MODELS, GPT_PARAMS
+from gpt_utils import normalize_usage_dict
 
 # פונקציה ראשית - שליחת הודעה ל-gpt_a
 
@@ -36,7 +37,7 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
         
         response = litellm.completion(**completion_params)
         bot_reply = response.choices[0].message.content.strip()
-        usage = response.usage.__dict__ if hasattr(response.usage, "__dict__") else {}
+        usage = normalize_usage_dict(response.usage, response.model)
         return {"bot_reply": bot_reply, "usage": usage, "model": response.model}
     except Exception as e:
         logging.error(f"[gpt_a] Error: {e}")

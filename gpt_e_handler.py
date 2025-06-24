@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Any
 from utils import get_chat_history_messages
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
 from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
+from gpt_utils import normalize_usage_dict, safe_get_usage_value
 
 # הגדרת לוגר
 logger = logging.getLogger(__name__)
@@ -166,29 +167,29 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
             response = litellm.completion(**completion_params)
             
             # חילוץ התוכן מהתגובה
-            response_content = response.choices[0].message.content.strip()
-            logger.info(f"[gpt_e] Received response from GPT: {response_content[:200]}...")
+            content = response.choices[0].message.content.strip()
+            logger.info(f"[gpt_e] Received response from GPT: {content[:200]}...")
             
-            # חילוץ נתוני שימוש
-            prompt_tokens = response.usage.prompt_tokens
-            completion_tokens = response.usage.completion_tokens
-            total_tokens = response.usage.total_tokens
-            cached_tokens = getattr(getattr(response.usage, 'prompt_tokens_details', None), 'cached_tokens', 0)
-            model_name = response.model
+            # נירמול usage באופן בטוח
+            usage = normalize_usage_dict(response.usage, response.model)
             
-            # חישוב עלות
-            from gpt_utils import calculate_gpt_cost
-            cost_data = calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens, model_name, completion_response=response)
+            # חילוץ cached_tokens בבטחה
+            cached_tokens = safe_get_usage_value(response.usage, 'cached_tokens', 0)
+            if cached_tokens == 0 and hasattr(response.usage, 'prompt_tokens_details'):
+                cached_tokens = safe_get_usage_value(response.usage.prompt_tokens_details, 'cached_tokens', 0)
             
-            result['tokens_used'] = total_tokens
-            result['cost_data'] = cost_data
+            # עדכון ה-usage עם cached_tokens
+            usage["cached_tokens"] = cached_tokens
+            
+            result['tokens_used'] = response.usage.total_tokens
+            result['cost_data'] = usage
             
         except Exception as e:
             result['errors'].append(f"GPT API error: {str(e)}")
             logger.error(f"[gpt_e] GPT API error for chat_id={chat_id}: {e}")
             return result
         
-        if not response_content:
+        if not content:
             result['errors'].append("Empty response from GPT")
             logger.error(f"[gpt_e] Empty response from GPT for chat_id={chat_id}")
             return result
@@ -197,14 +198,14 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         # ניסיון לחלץ JSON מהתגובה
         try:
             # חיפוש JSON בתגובה
-            if response_content.startswith('{') and response_content.endswith('}'):
-                changes = json.loads(response_content)
+            if content.startswith('{') and content.endswith('}'):
+                changes = json.loads(content)
             else:
                 # חיפוש JSON בתוך הטקסט
-                start_idx = response_content.find('{')
-                end_idx = response_content.rfind('}') + 1
+                start_idx = content.find('{')
+                end_idx = content.rfind('}') + 1
                 if start_idx != -1 and end_idx > start_idx:
-                    json_str = response_content[start_idx:end_idx]
+                    json_str = content[start_idx:end_idx]
                     changes = json.loads(json_str)
                 else:
                     changes = {}

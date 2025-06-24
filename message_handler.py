@@ -15,12 +15,10 @@ from messages import get_welcome_messages, get_retry_message_by_attempt, approva
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet
 from gpt_a_handler import get_main_response
-from gpt_b_handler import summarize_bot_reply
-from gpt_c_handler import gpt_c
-from gpt_d_handler import gpt_d
-from gpt_utils import normalize_usage_dict
-from gpt_c_handler import should_run_gpt_c
+from gpt_b_handler import get_summary
+from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d
+from gpt_utils import normalize_usage_dict
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from fields_dict import FIELDS_DICT
 import time
@@ -273,10 +271,11 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             try:
                 print(f"[DEBUG] הודעת הבוט ארוכה ({len(bot_reply)} תווים), קורא ל-gpt_b לסיכום")
                 summary_response = await asyncio.to_thread(
-                    summarize_bot_reply,
-                    reply_text=bot_reply,
+                    get_summary,
+                    user_msg=user_msg,
+                    bot_reply=bot_reply,
                     chat_id=chat_id,
-                    original_message_id=message_id
+                    message_id=message_id
                 )
                 new_summary_for_history = summary_response.get("summary")
             except Exception as e:
@@ -375,19 +374,25 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             logging.error(f"Error in gpt_c (profile update): {e}")
 
         # שמירת לוגים ונתונים נוספים
+        # נירמול ה-usage לפני השמירה ב-log
+        from gpt_utils import normalize_usage_dict
+        clean_gpt_response = {k: v for k, v in gpt_response.items() if k != "bot_reply"}
+        if "usage" in clean_gpt_response:
+            clean_gpt_response["usage"] = normalize_usage_dict(clean_gpt_response["usage"], gpt_response.get("model", ""))
+        
         log_payload.update({
             "gpt_a_response": bot_reply,
-            "gpt_a_usage": {k: v for k, v in gpt_response.items() if k != "bot_reply"},
+            "gpt_a_usage": clean_gpt_response,
             "timestamp_end": datetime.now().isoformat()
         })
         
         # רישום לגיליון Google Sheets
         try:
+            from config import GPT_MODELS
+            from gpt_utils import normalize_usage_dict
+            
             # חילוץ נתונים מ-gpt_response
-            gpt_a_usage = gpt_response.get("usage", {})  # ישירות מה-usage המחושב
-            if not gpt_a_usage:
-                from config import GPT_MODELS
-            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("usage", {}).get("model", GPT_MODELS["gpt_a"]))
+            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", GPT_MODELS["gpt_a"]))
             
             # חילוץ נתונים מ-summary_response (עם בדיקת None)
             gpt_b_usage = summary_response.get("usage", {}) if summary_response else {}
@@ -466,6 +471,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         log_event_to_file(log_payload)
         logging.info("---- סיום טיפול בהודעה (משתמש מאושר) ----")
         print("---- סיום טיפול בהודעה (משתמש מאושר) ----")
+        print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)

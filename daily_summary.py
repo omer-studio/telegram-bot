@@ -147,8 +147,10 @@ def setup_daily_reports():
             asyncio.set_event_loop(loop)
             loop.run_until_complete(send_daily_summary())
             print("✅ [DAILY] דוח באתחול נשלח בהצלחה!")
+            print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח באתחול: {e}")
+            print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
     
     # תזמון יומי קבוע ל-8:00 בבוקר
     def scheduled_daily_report():

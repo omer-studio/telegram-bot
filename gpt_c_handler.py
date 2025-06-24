@@ -1,46 +1,52 @@
 """
 gpt_c_handler.py
 ----------------
-מנוע gpt_c: חילוץ פרופיל nano (profile extraction nano)
+מנוע gpt_c: חילוץ מידע מהודעות משתמש לעדכון פרופיל
 """
 
 import logging
+from datetime import datetime
+import json
 import litellm
 from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
 from config import GPT_MODELS, GPT_PARAMS
+from gpt_utils import normalize_usage_dict
 
-def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
+def extract_user_info(user_msg, chat_id=None, message_id=None):
     """
-    מפעיל את gpt_c (nano) לחילוץ פרופיל רגשי מהודעת משתמש.
+    מחלץ מידע רלוונטי מהודעת המשתמש לעדכון הפרופיל שלו
     """
     try:
         metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
-        if last_bot_message:
-            user_content = f"שאלת הבוט לצורך הקשר בלבד:\n{last_bot_message}\n\nתשובת המשתמש לצורך חילוץ מידע:\n{user_message}"
-        else:
-            user_content = f"תשובת המשתמש לצורך חילוץ מידע:\n{user_message}"
         params = GPT_PARAMS["gpt_c"]
         model = GPT_MODELS["gpt_c"]
         
         completion_params = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
-                {"role": "user", "content": user_content}
-            ],
+            "messages": [{"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT}, {"role": "user", "content": user_msg}],
             "temperature": params["temperature"],
-            "max_tokens": params["max_tokens"],
             "metadata": metadata,
             "store": True
         }
         
+        # הוספת max_tokens רק אם הוא לא None
+        if params["max_tokens"] is not None:
+            completion_params["max_tokens"] = params["max_tokens"]
+        
         response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
-        usage = response.usage.__dict__ if hasattr(response.usage, "__dict__") else {}
-        return {"content": content, "usage": usage, "model": response.model}
+        usage = normalize_usage_dict(response.usage, response.model)
+        
+        # ניסיון לפרס JSON
+        try:
+            extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
+        except json.JSONDecodeError:
+            extracted_fields = {}
+        
+        return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
     except Exception as e:
         logging.error(f"[gpt_c] Error: {e}")
-        return {"content": "[שגיאה בחילוץ]", "usage": {}, "model": GPT_MODELS["gpt_c"]}
+        return {"extracted_fields": {}, "usage": {}, "model": GPT_MODELS["gpt_c"]}
 
 def should_run_gpt_c(user_message):
     """
