@@ -386,12 +386,13 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             # חילוץ נתונים מ-gpt_response
             gpt_a_usage = gpt_response.get("usage", {})  # ישירות מה-usage המחושב
             if not gpt_a_usage:
-                gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("usage", {}).get("model", "gpt-4o"))
+                from config import GPT_MODELS
+            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("usage", {}).get("model", GPT_MODELS["gpt_a"]))
             
             # חילוץ נתונים מ-summary_response (עם בדיקת None)
             gpt_b_usage = summary_response.get("usage", {}) if summary_response else {}
             if not gpt_b_usage and summary_response:
-                gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", "gpt-4.1-nano"))
+                gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", GPT_MODELS["gpt_b"]))
             
             # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
             gpt_c_usage = log_payload.get("gpt_c_data", {})

@@ -356,3 +356,27 @@ ROLE:
 - future_vision: איך היה רוצה לראות את עצמו בעתיד
     """
 )
+
+# --- 6. פרומט gpt_d - מיזוג פרופיל (gpt_d) ---
+# משמש ל-gpt_d שמבצע מיזוג חכם של שדות פרופיל חדשים עם פרופיל קיים
+PROFILE_MERGE_PROMPT = (
+    """
+אתה מקבל שדות חדשים שחולצו מהודעת משתמש
+המטרה שלך היא לבצע מיזוג חכם ואיכותי של המידע
+
+הכללים:
+1. החזר JSON עם השדות המעודכנים בלבד
+2. אם יש סתירה בין מידע חדש לקיים - העדף את החדש
+3. שמור על עקביות ודיוק
+4. אל תמציא מידע שלא נאמר במפורש
+5. אם משהו לא ברור - השאר את השדה הקיים
+
+שדות מותרים:
+age, relationship_type, parental_status, occupation_or_role, 
+self_religious_affiliation, self_religiosity_level, family_religiosity,
+closet_status, who_knows, who_doesnt_know, attracted_to, attends_therapy,
+primary_conflict, trauma_history, goal_in_course, fears_concerns, future_vision
+
+החזר רק JSON תקין, ללא הסברים נוספים.
+    """
+)

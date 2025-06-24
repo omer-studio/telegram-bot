@@ -2,7 +2,10 @@ import logging
 
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
 
-def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name='gpt-4o', usd_to_ils=USD_TO_ILS, completion_response=None):
+def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name=None, usd_to_ils=USD_TO_ILS, completion_response=None):
+    if model_name is None:
+        from config import GPT_MODELS
+        model_name = GPT_MODELS["gpt_a"]
     """
     מחשב את העלות של שימוש ב-gpt לפי מספר הטוקנים והמודל.
     משתמש אך ורק ב-LiteLLM עם completion_response.

@@ -145,19 +145,25 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         
         try:
             import litellm
+            from config import GPT_MODELS, GPT_PARAMS
             
             metadata = {"gpt_identifier": "gpt_e", "chat_id": chat_id}
-            response = litellm.completion(
-                model="gpt-4o",
-                messages=[
+            params = GPT_PARAMS["gpt_e"]
+            model = GPT_MODELS["gpt_e"]
+            
+            completion_params = {
+                "model": model,
+                "messages": [
                     {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.8,
-                max_tokens=2000,
-                metadata=metadata,
-                store=True
-            )
+                "temperature": params["temperature"],
+                "max_tokens": params["max_tokens"],
+                "metadata": metadata,
+                "store": True
+            }
+            
+            response = litellm.completion(**completion_params)
             
             # חילוץ התוכן מהתגובה
             response_content = response.choices[0].message.content.strip()

@@ -6,7 +6,7 @@ from datetime import datetime
 from sheets_handler import delete_row_by_chat_id
 from utils import log_event_to_file, send_error_stats_report, send_usage_report  # ודא שהפונקציות קיימות! (יש כמעט בוודאות)
 from notifications import send_admin_secret_command_notification  # <--- נדרש בקובץ notifications.py
-from config import CHAT_HISTORY_PATH, ADMIN_NOTIFICATION_CHAT_ID
+from config import CHAT_HISTORY_PATH, ADMIN_NOTIFICATION_CHAT_ID, config
 
 SECRET_CODES = {
     "#487chaCha2025": "clear_history",    # מוחק היסטוריית שיחה
@@ -67,7 +67,7 @@ def handle_secret_command(chat_id, text):
         send_admin_secret_command_notification(
             f"❗ הופעל קוד סודי למחיקת נתונים בגיליונות בצ'אט {chat_id}.\n"
             f"נמחק אך ורק מידע של משתמש זה (לא של אחרים).\n"
-            f"גיליון1: {'הצליח' if deleted_sheet else 'לא הצליח'}, user_states: {'הצליח' if deleted_state else 'לא הצליח'}"
+            f"{config['SHEET_USER_TAB']}: {'הצליח' if deleted_sheet else 'לא הצליח'}, {config['SHEET_STATES_TAB']}: {'הצליח' if deleted_state else 'לא הצליח'}"
         )
         return True, msg
 
@@ -88,7 +88,7 @@ def handle_secret_command(chat_id, text):
         send_admin_secret_command_notification(
             f"❗ הופעל קוד סודי למחיקת **הכל** בצ'אט {chat_id}.\n"
             f"נמחק הכל של משתמש זה בלבד (לא של אחרים).\n"
-            f"היסטוריה: {'✔️' if cleared else '❌'} | גיליון1: {'✔️' if deleted_sheet else '❌'} | user_states: {'✔️' if deleted_state else '❌'}"
+            f"היסטוריה: {'✔️' if cleared else '❌'} | {config['SHEET_USER_TAB']}: {'✔️' if deleted_sheet else '❌'} | {config['SHEET_STATES_TAB']}: {'✔️' if deleted_state else '❌'}"
         )
         return True, msg
 
@@ -195,10 +195,10 @@ def clear_chat_history(chat_id):
 
 def clear_from_sheets(chat_id):
     print(f"[CLEAR_SHEETS] מנסה למחוק מהגיליונות | chat_id={chat_id} | timestamp={datetime.now().isoformat()}")
-    deleted_sheet = delete_row_by_chat_id(sheet_name="גיליון1", chat_id=chat_id)
-    print(f"[CLEAR_SHEETS] נמחק בגיליון1: {deleted_sheet} | chat_id={chat_id}")
-    deleted_state = delete_row_by_chat_id(sheet_name="user_states", chat_id=chat_id)
-    print(f"[CLEAR_SHEETS] נמחק ב-user_states: {deleted_state} | chat_id={chat_id}")
+    deleted_sheet = delete_row_by_chat_id(sheet_name=config["SHEET_USER_TAB"], chat_id=chat_id)
+    print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_USER_TAB']}: {deleted_sheet} | chat_id={chat_id}")
+    deleted_state = delete_row_by_chat_id(sheet_name=config["SHEET_STATES_TAB"], chat_id=chat_id)
+    print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_STATES_TAB']}: {deleted_state} | chat_id={chat_id}")
     return deleted_sheet, deleted_state
 
 # דוגמה להוספת קוד סודי חדש:

@@ -7,6 +7,7 @@ gpt_c_handler.py
 import logging
 import litellm
 from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
+from config import GPT_MODELS, GPT_PARAMS
 
 def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
     """
@@ -18,23 +19,28 @@ def gpt_c(user_message, last_bot_message="", chat_id=None, message_id=None):
             user_content = f"שאלת הבוט לצורך הקשר בלבד:\n{last_bot_message}\n\nתשובת המשתמש לצורך חילוץ מידע:\n{user_message}"
         else:
             user_content = f"תשובת המשתמש לצורך חילוץ מידע:\n{user_message}"
-        response = litellm.completion(
-            model="gpt-4o-mini",
-            messages=[
+        params = GPT_PARAMS["gpt_c"]
+        model = GPT_MODELS["gpt_c"]
+        
+        completion_params = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
                 {"role": "user", "content": user_content}
             ],
-            temperature=0.3,
-            max_tokens=500,
-            metadata=metadata,
-            store=True
-        )
+            "temperature": params["temperature"],
+            "max_tokens": params["max_tokens"],
+            "metadata": metadata,
+            "store": True
+        }
+        
+        response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
         usage = response.usage.__dict__ if hasattr(response.usage, "__dict__") else {}
         return {"content": content, "usage": usage, "model": response.model}
     except Exception as e:
         logging.error(f"[gpt_c] Error: {e}")
-        return {"content": "[שגיאה בחילוץ]", "usage": {}, "model": "gpt-4o-mini"}
+        return {"content": "[שגיאה בחילוץ]", "usage": {}, "model": GPT_MODELS["gpt_c"]}
 
 def should_run_gpt_c(user_message):
     """

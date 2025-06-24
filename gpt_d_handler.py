@@ -10,6 +10,7 @@ from prompts import PROFILE_MERGE_PROMPT
 import json
 from gpt_c_handler import gpt_c
 from gpt_utils import normalize_usage_dict
+from config import GPT_MODELS, GPT_PARAMS
 
 def gpt_d(changed_fields, chat_id=None, message_id=None):
     """
@@ -18,23 +19,28 @@ def gpt_d(changed_fields, chat_id=None, message_id=None):
     try:
         metadata = {"gpt_identifier": "gpt_d", "chat_id": chat_id, "message_id": message_id}
         user_content = f"שדות לעדכון:\n{changed_fields}"
-        response = litellm.completion(
-            model="gpt-4o-mini",
-            messages=[
+        params = GPT_PARAMS["gpt_d"]
+        model = GPT_MODELS["gpt_d"]
+        
+        completion_params = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": PROFILE_MERGE_PROMPT},
                 {"role": "user", "content": user_content}
             ],
-            temperature=0.1,
-            max_tokens=300,
-            metadata=metadata,
-            store=True
-        )
+            "temperature": params["temperature"],
+            "max_tokens": params["max_tokens"],
+            "metadata": metadata,
+            "store": True
+        }
+        
+        response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
         usage = response.usage.__dict__ if hasattr(response.usage, "__dict__") else {}
         return {"content": content, "usage": usage, "model": response.model}
     except Exception as e:
         logging.error(f"[gpt_d] Error: {e}")
-        return {"content": "[שגיאה במיזוג]", "usage": {}, "model": "gpt-4o-mini"}
+        return {"content": "[שגיאה במיזוג]", "usage": {}, "model": GPT_MODELS["gpt_d"]}
 
 def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None):
     """
@@ -51,7 +57,7 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
             extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
         except Exception as e:
             extracted_fields = {}
-        gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", "gpt-4o-mini"))
+        gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
     # 2. אם אין שדות חדשים, מחזירים את הפרופיל הקיים
     if not extracted_fields:
         return existing_profile, gpt_c_usage
@@ -63,7 +69,7 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     merged_fields = existing_profile.copy()
     merged_fields.update(changed_fields)
     gpt_d_result = gpt_d(changed_fields, message_id=interaction_id)
-    gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", "gpt-4o-mini"))
+    gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", GPT_MODELS["gpt_d"]))
     # נסה לפרסר את התוצאה
     updated_profile = merged_fields
     content = gpt_d_result.get("content", "")

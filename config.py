@@ -93,10 +93,12 @@ def setup_google_sheets():
         try:
             print(f"[DEBUG] Attempt {attempt}: Opening Google Sheet with ID: {GOOGLE_SHEET_ID}")
             sheet = gs_client.open_by_key(GOOGLE_SHEET_ID)
-            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: גיליון1")
-            sheet_users = sheet.worksheet("גיליון1")
-            sheet_log = sheet.worksheet("log")
-            sheet_states = sheet.worksheet("states")
+            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_USER_TAB']}")
+            sheet_users = sheet.worksheet(config["SHEET_USER_TAB"])
+            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_LOG_TAB']}")
+            sheet_log = sheet.worksheet(config["SHEET_LOG_TAB"])
+            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_STATES_TAB']}")
+            sheet_states = sheet.worksheet(config["SHEET_STATES_TAB"])
             print(f"[DEBUG] Google Sheets loaded successfully!")
             return sheet_users, sheet_log, sheet_states
         except Exception as e:
@@ -169,3 +171,39 @@ def get_config_snapshot():
         "BOT_ERRORS_PATH": BOT_ERRORS_PATH,
         "CRITICAL_ERRORS_PATH": CRITICAL_ERRORS_PATH
     }
+
+# ================================
+# 🎯 הגדרת מודלים ופרמטרים מרכזית
+# ================================
+# כל שינוי כאן משפיע על כל מנועי ה-GPT - Single Source of Truth!
+
+GPT_MODELS = {
+    "gpt_a": "gpt-4o",           # המנוע הראשי - תשובות איכותיות
+    "gpt_b": "gpt-4.1-nano",     # סיכום תשובות - מהיר וזול
+    "gpt_c": "gpt-4o-mini",      # חילוץ פרופיל - מהיר יחסית
+    "gpt_d": "gpt-4o-mini",      # מיזוג פרופיל - מהיר יחסית  
+    "gpt_e": "gpt-4o",           # עדכון פרופיל מתקדם - איכותי
+}
+
+GPT_PARAMS = {
+    "gpt_a": {
+        "temperature": 1,
+        "max_tokens": None,  # ללא הגבלה
+    },
+    "gpt_b": {
+        "temperature": 1,
+        "max_tokens": None,  # ללא הגבלה
+    },
+    "gpt_c": {
+        "temperature": 0.3,
+        "max_tokens": 500,
+    },
+    "gpt_d": {
+        "temperature": 0.1,
+        "max_tokens": 300,
+    },
+    "gpt_e": {
+        "temperature": 0.8,
+        "max_tokens": 2000,
+    },
+}

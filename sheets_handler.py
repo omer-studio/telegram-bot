@@ -602,6 +602,12 @@ def log_to_sheets(
         # שמירה בגיליון
         sheet_log.insert_row(row_data, 3)
 
+        # שמירה נוספת ל-gpt_usage_log.jsonl עבור daily_summary
+        try:
+            log_gpt_usage_to_file(message_id, chat_id, main_usage, summary_usage, extract_usage, gpt_d_usage, gpt_e_usage, total_cost_ils)
+        except Exception as e:
+            print(f"[WARNING] שגיאה בשמירת לוג usage: {e}")
+
         # --- אחרי בניית values_to_log, לוג דיבאג על תקינות כל שדה ---
         try:
             debug_fields = []
@@ -705,9 +711,10 @@ def delete_row_by_chat_id(sheet_name, chat_id):
 
     sheet_users, sheet_log, sheet_states = setup_google_sheets()
 
-    if sheet_name == "user_states":
+    from config import config
+    if sheet_name == config["SHEET_STATES_TAB"]:
         worksheet = sheet_states
-    elif sheet_name == "log":
+    elif sheet_name == config["SHEET_LOG_TAB"]:
         worksheet = sheet_log
     else:
         worksheet = sheet_users
@@ -716,15 +723,15 @@ def delete_row_by_chat_id(sheet_name, chat_id):
     header = worksheet.row_values(1)  # רשימת כותרות
     for idx, row in enumerate(all_records, start=2):  # מתחילים מ-2 כי שורה 1 זה כותרות
         if str(row.get("chat_id")) == str(chat_id):
-            if sheet_name == "user_states":
+            if sheet_name == config["SHEET_STATES_TAB"]:
                 # מוחק את כל השורה
                 worksheet.delete_row(idx)
-                print(f"✅ נמחקה שורה לגמרי עבור chat_id {chat_id} בגיליון user_states (שורה {idx})")
+                print(f"✅ נמחקה שורה לגמרי עבור chat_id {chat_id} בגיליון {config['SHEET_STATES_TAB']} (שורה {idx})")
             else:
                 # מרוקן את כל העמודות חוץ מהעמודה הראשונה (קוד)
                 for col in range(2, len(header) + 1):  # עמודה 2 עד סוף (1 זה הקוד)
                     worksheet.update_cell(idx, col, "")
-                print(f"✅ נוקתה השורה עבור chat_id {chat_id} בגיליון1 (נשמר רק הקוד בשורה {idx})")
+                print(f"✅ נוקתה השורה עבור chat_id {chat_id} בגיליון {config['SHEET_USER_TAB']} (נשמר רק הקוד בשורה {idx})")
             return True
     print(f"❌ לא נמצאה שורה עם chat_id {chat_id} למחיקה בגיליון {sheet_name}")
     return False
@@ -775,7 +782,8 @@ def calculate_costs_unified(usage_dict):
         prompt_tokens = usage_dict.get("prompt_tokens", 0)
         completion_tokens = usage_dict.get("completion_tokens", 0)
         cached_tokens = usage_dict.get("cached_tokens", 0)
-        model = usage_dict.get("model", "gpt-4o")
+        from config import GPT_MODELS
+        model = usage_dict.get("model", GPT_MODELS["gpt_a"])
         
         # קריאה לפונקציה המרכזית לחישוב עלויות (ללא completion_response)
         from gpt_utils import calculate_gpt_cost
@@ -1072,8 +1080,51 @@ def reset_gpt_c_run_count(chat_id: str) -> bool:
         logging.info(f"[DEBUG] Created new user record with gpt_c_run_count=0 and last_gpt_e_timestamp={current_timestamp} for chat_id={chat_id}")
         
         return True
-        
+
     except Exception as e:
         print(f"[ERROR] reset_gpt_c_run_count failed for chat_id={chat_id}: {e}")
         logging.error(f"[ERROR] reset_gpt_c_run_count failed for chat_id={chat_id}: {e}")
         return False
+
+def log_gpt_usage_to_file(message_id, chat_id, main_usage, summary_usage, extract_usage, gpt_d_usage, gpt_e_usage, total_cost_ils):
+    """
+    כותב רישום אינטראקציה אחד ל-gpt_usage_log.jsonl עבור daily_summary.
+    כל אינטראקציה = קריאה אחת ל-gpt_a, אז יש בדיוק רישום אחד לאינטראקציה.
+    """
+    from datetime import datetime
+    import json
+    import os
+    from config import gpt_log_path
+    
+    try:
+        # יצירת רישום אחד לאינטראקציה (מבוסס על gpt_a שתמיד קיים)
+        interaction_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "interaction_id": message_id,
+            "chat_id": str(chat_id),
+            "type": "gpt_a",  # זה המזהה העיקרי לאינטראקציה
+            "cost_total_ils": total_cost_ils,
+            "has_gpt_b": bool(summary_usage and summary_usage.get("total_tokens", 0) > 0),
+            "has_gpt_c": bool(extract_usage and extract_usage.get("total_tokens", 0) > 0),
+            "has_gpt_d": bool(gpt_d_usage and gpt_d_usage.get("total_tokens", 0) > 0),
+            "has_gpt_e": bool(gpt_e_usage and gpt_e_usage.get("total_tokens", 0) > 0),
+        }
+        
+        # הוספת פרטי usage אם קיימים
+        if main_usage:
+            interaction_entry["gpt_a_tokens"] = main_usage.get("total_tokens", 0)
+            interaction_entry["gpt_a_cost"] = main_usage.get("cost_total_ils", 0)
+        
+        # יצירת תיקייה אם לא קיימת
+        os.makedirs(os.path.dirname(gpt_log_path), exist_ok=True)
+        
+        # כתיבה לקובץ
+        with open(gpt_log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(interaction_entry, ensure_ascii=False) + "\n")
+        
+        print(f"[DEBUG] רישום אינטראקציה נשמר ל-{gpt_log_path}: {message_id}")
+        
+    except Exception as e:
+        print(f"[ERROR] log_gpt_usage_to_file failed: {e}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
