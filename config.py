@@ -46,8 +46,8 @@ def load_config():
     if env_path and os.path.exists(env_path):
         path = env_path
     else:
-        project_root = os.path.dirname(os.path.abspath(__file__))
-        local_path = os.path.join(project_root, "etc", "secrets", "config.json")
+        # שימוש במשתנה הגלובלי PROJECT_ROOT במקום חישוב מחדש
+        local_path = os.path.join(PROJECT_ROOT, "etc", "secrets", "config.json")
         abs_path = "/etc/secrets/config.json"
         if os.path.exists(local_path):
             path = local_path
@@ -58,6 +58,9 @@ def load_config():
     print("DEBUG: using config path:", path)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+# הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # הגדרות גלובליות
 config = load_config()
@@ -121,20 +124,23 @@ PROFILE_FIELDS = [
 SUMMARY_FIELD = "summary" if "summary" in FIELDS_DICT else list(FIELDS_DICT.keys())[-1]
 
 # הגדרות לוגים
-LOG_FILE_PATH = "bot_trace_log.jsonl"
+BOT_TRACE_LOG_FILENAME = "bot_trace_log.jsonl"
+GPT_USAGE_LOG_FILENAME = "gpt_usage_log.jsonl"
+CHAT_HISTORY_FILENAME = "chat_history.json"
+BOT_ERRORS_FILENAME = "bot_errors.jsonl"
+CRITICAL_ERRORS_FILENAME = "critical_errors.jsonl"
 LOG_LIMIT = 100
 
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # נתיבי קבצים עיקריים
-gpt_log_path = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
-BOT_TRACE_LOG_PATH = os.path.join(DATA_DIR, "bot_trace_log.jsonl")
-CHAT_HISTORY_PATH = os.path.join(DATA_DIR, "chat_history.json")
-BOT_ERRORS_PATH = os.path.join(DATA_DIR, "bot_errors.jsonl")
-CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, "critical_errors.jsonl")
+gpt_log_path = os.path.join(DATA_DIR, GPT_USAGE_LOG_FILENAME)
+BOT_TRACE_LOG_PATH = os.path.join(DATA_DIR, BOT_TRACE_LOG_FILENAME)
+CHAT_HISTORY_PATH = os.path.join(DATA_DIR, CHAT_HISTORY_FILENAME)
+BOT_ERRORS_PATH = os.path.join(DATA_DIR, BOT_ERRORS_FILENAME)
+CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, CRITICAL_ERRORS_FILENAME)
 
 def check_config_sanity():
     """
@@ -164,7 +170,7 @@ def get_config_snapshot():
         "GOOGLE_SHEET_ID": "***",
         "DATA_DIR": DATA_DIR,
         "PROJECT_ROOT": PROJECT_ROOT,
-        "LOG_FILE_PATH": LOG_FILE_PATH,
+        "LOG_FILE_PATH": BOT_TRACE_LOG_FILENAME,
         "gpt_log_path": gpt_log_path,
         "BOT_TRACE_LOG_PATH": BOT_TRACE_LOG_PATH,
         "CHAT_HISTORY_PATH": CHAT_HISTORY_PATH,
@@ -191,7 +197,7 @@ GPT_PARAMS = {
         "max_tokens": None,  # ללא הגבלה
     },
     "gpt_b": {
-        "temperature": 1,
+        "temperature": 0.5,
         "max_tokens": None,  # ללא הגבלה
     },
     "gpt_c": {
@@ -207,3 +213,11 @@ GPT_PARAMS = {
         "max_tokens": 2000,
     },
 }
+
+# קבועים מספריים - Single Source of Truth
+MAX_LOG_LINES_TO_KEEP = 500  # למגבלת לוגים ישנים
+MAX_OLD_LOG_LINES = 1000     # לניקוי לוגים ישנים  
+MAX_CHAT_HISTORY_MESSAGES = 30000  # מגבלת היסטוריית שיחה
+MAX_TRACEBACK_LENGTH = 500   # אורך מקסימלי של traceback בהודעות שגיאה
+PRODUCTION_PORT = 8000       # פורט לסביבת ייצור
+DEVELOPMENT_PORT = 10000     # פורט לסביבת פיתוח

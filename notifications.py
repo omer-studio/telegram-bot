@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 import requests
-from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, BOT_TRACE_LOG_PATH, BOT_ERRORS_PATH
+from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, BOT_TRACE_LOG_PATH, BOT_ERRORS_PATH, MAX_LOG_LINES_TO_KEEP
 from utils import log_error_stat
 
 def write_deploy_commit_to_log(commit):
@@ -237,13 +237,13 @@ def log_error_to_file(error_data, send_telegram=True):
                 pass
         with open(error_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(error_data, ensure_ascii=False) + "\n")
-        # מגביל ל־500 שורות
+        # מגביל ל־MAX_LOG_LINES_TO_KEEP שורות
         if os.path.exists(error_file):
             with open(error_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
-            if len(lines) > 500:
-                with open(error_file, "w", encoding="utf-8") as f:
-                    f.writelines(lines[-500:])
+            if len(lines) > MAX_LOG_LINES_TO_KEEP:
+                # שמירה על MAX_LOG_LINES_TO_KEEP שורות אחרונות בלבד
+                f.writelines(lines[-MAX_LOG_LINES_TO_KEEP:])
         print(f"📝 שגיאה נרשמה בקובץ: {error_file}")
         # --- שולח גם טלגרם עם פירוט ---
         if send_telegram:

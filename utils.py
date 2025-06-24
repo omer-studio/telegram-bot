@@ -1,13 +1,13 @@
 """
 utils.py
 --------
-קובץ זה מרכז פונקציות עזר כלליות: לוגים, היסטוריה, דוחות, בדיקות תקינות, ועוד.
+כלים שימושיים לכל חלקי הבוט: רישום אירועים, ניהול היסטוריה, סטטיסטיקות, בדיקות תקינות.
 הרציונל: כלים שימושיים לכל חלקי הבוט, מופרדים מהלוגיקה הראשית.
 """
 import json
 import os
 from datetime import datetime
-from config import LOG_FILE_PATH, LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path
+from config import LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path, BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME, DATA_DIR, MAX_LOG_LINES_TO_KEEP, MAX_OLD_LOG_LINES, MAX_CHAT_HISTORY_MESSAGES, MAX_TRACEBACK_LENGTH
 
 
 def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
@@ -36,7 +36,7 @@ def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקו�
         lines.append(json.dumps(log_data, ensure_ascii=False))
 
         # שמירה על מגבלת הלוגים (למשל 200)
-        lines = lines[-500:]
+        lines = lines[-MAX_LOG_LINES_TO_KEEP:]
 
         # שמירה חזרה לקובץ
         with open(file_path, "w", encoding="utf-8") as f:
@@ -85,7 +85,7 @@ def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את הי�
             })
 
         # שמירה על איקס הודעות אחרונות בלבד
-        history_data[chat_id]["history"] = history_data[chat_id]["history"][-30000:]
+        history_data[chat_id]["history"] = history_data[chat_id]["history"][-MAX_CHAT_HISTORY_MESSAGES:]
 
         # שמירה חזרה לקובץ
         with open(file_path, "w", encoding="utf-8") as f:
@@ -158,23 +158,23 @@ def get_user_stats(chat_id: str) -> dict: # מחזיר סטטיסטיקות על
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
 
 
-def clean_old_logs() -> None: # מנקה לוגים ישנים (משאיר עד 1000 שורות אחרונות)
+def clean_old_logs() -> None: # מנקה לוגים ישנים (משאיר עד MAX_OLD_LOG_LINES שורות אחרונות)
     """
-    מנקה לוגים ישנים (משאיר עד 1000 שורות אחרונות).
+    מנקה לוגים ישנים (משאיר עד MAX_OLD_LOG_LINES שורות אחרונות).
     פלט: אין (מנקה קבצים)
     """
     try:
-        files_to_clean = ["bot_trace_log.jsonl", "bot_errors.jsonl"]
+        files_to_clean = [BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME]
         
         for file_name in files_to_clean:
             if os.path.exists(file_name):
-                # שמירה על 1000 שורות אחרונות בלבד
+                # שמירה על MAX_OLD_LOG_LINES שורות אחרונות בלבד
                 with open(file_name, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                 
-                if len(lines) > 1000:
+                if len(lines) > MAX_OLD_LOG_LINES:
                     with open(file_name, "w", encoding="utf-8") as f:
-                        f.writelines(lines[-1000:])
+                        f.writelines(lines[-MAX_OLD_LOG_LINES:])
                     print(f"🧽 נוקה קובץ: {file_name}")
         
     except Exception as e:
@@ -253,8 +253,8 @@ def format_error_message(error: Exception, context: str = "") -> str: # מעצב
     
     # מידע טכני מפורט
     tb = traceback.format_exc()
-    if len(tb) > 500:
-        tb = tb[:500] + "... (קוצר)"
+    if len(tb) > MAX_TRACEBACK_LENGTH:
+        tb = tb[:MAX_TRACEBACK_LENGTH] + "... (קוצר)"
     
     error_msg += f"🔧 פרטים טכניים:\n{tb}"
     
@@ -265,10 +265,9 @@ def log_error_stat(error_type: str) -> None:
     """
     מעדכן קובץ errors_stats.json עם ספירה לכל error_type
     """
-    import os, json
-    stats_path = os.path.join("data", "errors_stats.json")
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    stats_path = os.path.join(DATA_DIR, "errors_stats.json")
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
     try:
         print(f"[DEBUG][log_error_stat] error_type = {error_type} (type: {type(error_type)})")
         if os.path.exists(stats_path):
@@ -293,9 +292,8 @@ def send_error_stats_report():
     """
     שולח דוח שגיאות מצטבר לאדמין (ספירה לפי סוג שגיאה)
     """
-    import os, json
     from notifications import send_admin_notification
-    stats_path = os.path.join("data", "errors_stats.json")
+    stats_path = os.path.join(DATA_DIR, "errors_stats.json")
     if not os.path.exists(stats_path):
         send_admin_notification("אין נתוני שגיאות זמינים.")
         return
@@ -316,8 +314,7 @@ def send_usage_report(days_back: int = 1):
     """
     שולח דוח usage יומי/שבועי לאדמין (מספר משתמשים, הודעות, ממוצע תקלות למשתמש)
     """
-    import os, json
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from notifications import send_admin_notification
     if not os.path.exists(gpt_log_path):
         send_admin_notification("אין לוג usage זמין.")

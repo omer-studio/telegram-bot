@@ -9,6 +9,7 @@ import os
 import json
 from datetime import datetime
 from typing import Optional
+from config import DATA_DIR
 
 
 def append_gpt_c_html_update(
@@ -34,7 +35,7 @@ def append_gpt_c_html_update(
         chat_id: מזהה הצ'אט
         message_id: מזהה ההודעה
     """
-    html_file = os.path.join("data", "gpt_c_results.html")
+    html_file = os.path.join(DATA_DIR, "gpt_c_results.html")
     # התיקייה data תמיד קיימת לפי דרישת המשתמש
     
     # יצירת תוכן HTML חדש
@@ -252,7 +253,7 @@ def clear_gpt_c_html_log():
     """
     מנקה את כל העדכונים מהלוג HTML, משאיר רק את הכותרת.
     """
-    html_file = os.path.join("data", "gpt_c_results.html")
+    html_file = os.path.join(DATA_DIR, "gpt_c_results.html")
     if not os.path.exists(html_file):
         return
     
@@ -335,3 +336,5 @@ def clear_gpt_c_html_log():
     # כתיבה לקובץ
     with open(html_file, 'w', encoding='utf-8') as f:
         f.write(new_content) 
+
+ 

@@ -9,9 +9,6 @@ from dateutil.parser import parse as parse_dt  # שים לב - זה צריך ל�
 from gpt_utils import USD_TO_ILS
 import pytz  # הוספתי לוודא שיש pytz
 
-# הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-
 from telegram import Bot
 from config import ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, gpt_log_path
 
@@ -71,7 +68,6 @@ async def send_daily_summary(days_back=1):
     """
     מחשב ושולח דוח עלות ושימוש יומי, כולל סיכום להיום.
     """
-    from telegram import Bot
     bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
     try:
         tz = pytz.timezone("Europe/Berlin")

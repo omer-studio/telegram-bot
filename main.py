@@ -49,6 +49,7 @@ from message_handler import handle_message
 import os
 import requests
 from gpt_c_logger import clear_gpt_c_html_log
+from config import DATA_DIR, PRODUCTION_PORT
 
 class DummyContext:
     def __init__(self, bot_data):
@@ -133,7 +134,7 @@ if __name__ == "__main__":
                 self.send_response(200)
                 self.send_header("Content-type", "text/html; charset=utf-8")
                 self.end_headers()
-                with open(os.path.join("data", "gpt_c_results.html"), "rb") as f:
+                with open(os.path.join(DATA_DIR, "gpt_c_results.html"), "rb") as f:
                     self.wfile.write(f.read())
             else:
                 super().do_GET()
@@ -150,7 +151,8 @@ if __name__ == "__main__":
             self.send_response(404)
             self.end_headers()
 
-    port = 8000
+    print(f"🤖 בוט רץ בפורט {PRODUCTION_PORT}!")
+    port = PRODUCTION_PORT
     print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_c_results.html (or just http://localhost:{port}/)")
     httpd = HTTPServer(("", port), GptCLogHandler)
     try:
