@@ -2,6 +2,7 @@
 gpt_b_handler.py
 ----------------
 מנוע gpt_b: יוצר סיכומים קצרים להיסטוריה
+משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 """
 
 import logging
@@ -15,6 +16,7 @@ from gpt_utils import normalize_usage_dict
 def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
     """
     יוצר סיכום קצר של הקשר השיחה עבור היסטוריה
+    משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
     """
     try:
         metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "message_id": message_id}
@@ -42,6 +44,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         summary = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
         return {"summary": summary, "usage": usage, "model": response.model}
+        
     except Exception as e:
         logging.error(f"[gpt_b] Error: {e}")
-        return {"summary": f"[סיכום: {user_msg[:50]}...]", "usage": {}, "model": GPT_MODELS["gpt_b"]} 
+        return {"summary": f"[סיכום: {user_msg[:50]}...]", "usage": {}, "model": model} 

@@ -69,7 +69,7 @@ config = load_config()
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
-print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", OPENAI_ADMIN_KEY[:13] + "...")
+print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", OPENAI_ADMIN_KEY[:5] + "...")
 GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 
 # הגדרות התראות שגיאות (לבוט הניהולי החדש)
@@ -78,6 +78,50 @@ ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
 
 # הגדרת LiteLLM
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
+# ==========================================================
+# 🚀 הגדרת Google AI Studio (Gemini) - מומלץ!
+# ==========================================================
+# פשוט יותר מ-Vertex AI - רק API key אחד ללא service accounts מסובכים
+GEMINI_API_KEY = config.get("GEMINI_API_KEY", "")
+if GEMINI_API_KEY:
+    os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
+    print(f"✅ [CONFIG] Google AI Studio (Gemini) API Key configured")
+    print(f"   Key prefix: {GEMINI_API_KEY[:5]}...")  # 🔒 הפחתה ל-5 תווים לבטיחות
+else:
+    print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
+
+# ==========================================================
+# 🔑 הגדרת אימות גלובלית עבור Google Vertex AI (לא בשימוש כרגע)
+# ==========================================================
+# השארנו את הקוד הזה כגיבוי למקרה של מעבר עתידי ל-Vertex AI
+# כרגע אנחנו משתמשים ב-Google AI Studio שפשוט יותר ועם GEMINI_API_KEY למעלה
+
+# try:
+#     # יצירת קובץ זמני עם credentials
+#     import tempfile
+#     import json as json_module
+#     
+#     service_account_dict = config["SERVICE_ACCOUNT_DICT"]
+#     
+#     # יצירת קובץ זמני עם ה-service account credentials
+#     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+#         json_module.dump(service_account_dict, temp_file, indent=2)
+#         temp_credentials_path = temp_file.name
+#     
+#     # הגדרת משתני הסביבה כפי ש-LiteLLM מצפה
+#     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_credentials_path
+#     os.environ["VERTEXAI_PROJECT"] = service_account_dict["project_id"]
+#     os.environ["VERTEXAI_LOCATION"] = "us-central1"  # ברירת מחדל
+#     
+#     print(f"✅ [CONFIG] אימות Google Vertex AI הוגדר בהצלחה")
+#     print(f"   Project: {service_account_dict['project_id']}")
+#     print(f"   Credentials file: {temp_credentials_path}")
+#     
+# except KeyError as e:
+#     print(f"⚠️ [CONFIG] אזהרה: לא נמצא מפתח '{e}' בקונפיגורציה עבור Vertex AI.")
+# except Exception as e:
+#     print(f"❌ [CONFIG] שגיאה בהגדרת אימות עבור Google Vertex AI: {e}")
 
 # הגדרת Google Sheets
 def setup_google_sheets():
@@ -183,12 +227,80 @@ def get_config_snapshot():
 # ================================
 # כל שינוי כאן משפיע על כל מנועי ה-GPT - Single Source of Truth!
 
+# ================================
+# 🔧 הגדרות Concurrent Handling
+# ================================
+# הגדרות לניהול עומסי משתמשים מרובים
+MAX_CONCURRENT_USERS = 50  # מספר משתמשים מקסימלי במקביל (הוגדל ל-50 - הרבה מקום)
+MAX_SHEETS_OPERATIONS_PER_MINUTE = 60  # מגבלת Google Sheets (60% מ-100)
+SHEETS_QUEUE_SIZE = 100  # גודל תור לפעולות Sheets
+SHEETS_BATCH_SIZE = 5  # כמות פעולות לעיבוד במקביל
+
+# סוגי עדכונים לפי עדיפות
+UPDATE_PRIORITY = {
+    "critical": 1,    # היסטוריה + פרופיל - מיידי
+    "normal": 2,      # לוגים רגילים - יכול לחכות
+    "low": 3          # נתונים סטטיסטיים - לא דחוף
+}
+
+# ✨ זיהוי אוטומטי של סוג המודל וההגדרות המתאימות
+def get_model_info(model_name):
+    """
+    🤖 מחזיר מידע על המודל והגדרות מתאימות
+    """
+    model_configs = {
+        # 🌟 מודלי Gemini מומלצים
+        "gemini/gemini-2.0-flash-exp": {
+            "type": "free_tier",
+            "cost": "חינמי",
+            "speed": "מהיר מאוד",
+            "quality": "מעולה"
+        },
+        "gemini/gemini-1.5-pro": {
+            "type": "free_tier", 
+            "cost": "חינמי",
+            "speed": "בינוני",
+            "quality": "מעולה"
+        },
+        "gemini/gemini-1.5-flash": {
+            "type": "free_tier",
+            "cost": "חינמי", 
+            "speed": "מהיר",
+            "quality": "טוב"
+        },
+        "gemini/gemini-2.5-pro": {
+            "type": "paid_tier",
+            "cost": "~$7/מיליון טוקן",
+            "speed": "איטי",
+            "quality": "הטוב ביותר"
+        }
+    }
+    
+    return model_configs.get(model_name, {
+        "type": "unknown",
+        "cost": "לא ידוע",
+        "speed": "לא ידוע", 
+        "quality": "לא ידוע"
+    })
+
+# 🤖 הגדרת מודלים - GPTA בתשלום, השאר חינמיים איכותיים
 GPT_MODELS = {
-    "gpt_a": "gpt-4o",           # המנוע הראשי - תשובות איכותיות
-    "gpt_b": "gpt-4.1-nano",     # סיכום תשובות - מהיר וזול
-    "gpt_c": "gpt-4o-mini",      # חילוץ פרופיל - מהיר יחסית
-    "gpt_d": "gpt-4o-mini",      # מיזוג פרופיל - מהיר יחסית  
-    "gpt_e": "gpt-4o",           # עדכון פרופיל מתקדם - איכותי
+    "gpt_a": "gemini/gemini-2.5-pro",         # 🤖 המנוע הראשי - הטוב ביותר (בתשלום)
+    "gpt_b": "gemini/gemini-2.0-flash-exp",   # 🤖 סיכום תשובות - מהיר וחינמי
+    "gpt_c": "gemini/gemini-1.5-pro",         # 🤖 חילוץ פרופיל - איכותי וחינמי
+    "gpt_d": "gemini/gemini-1.5-pro",         # 🤖 מיזוג פרופיל - איכותי וחינמי
+    "gpt_e": "gemini/gemini-2.0-flash-exp",   # 🤖 עדכון פרופיל מתקדם - מהיר וחינמי
+}
+
+# 🔄 מודלי fallback - גיבוי חכם (חינמי → בתשלום רק במקרה הצורך)
+GPT_FALLBACK_MODELS = {
+    "gpt_a": "gemini/gemini-1.5-flash",       # 🔄 fallback ראשון - Flash יציב (חינמי)
+    # שאר ה-GPT מודלים משתמשים במודלים חינמיים אז אין צורך ב-fallback
+}
+
+# 💰 מודל מתקדם (בתשלום) - רק במקרה הצורך הקיצוני
+GPT_PREMIUM_FALLBACK = {
+    "gpt_a": "gemini/gemini-2.5-pro",         # 💎 פרימיום - רק אם החינמיים לא עובדים
 }
 
 GPT_PARAMS = {

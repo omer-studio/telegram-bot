@@ -2,6 +2,7 @@
 gpt_d_handler.py
 ----------------
 מנוע gpt_d: מיזוג פרטי פרופיל חדשים עם קיימים
+משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 """
 
 import logging
@@ -15,6 +16,7 @@ from gpt_utils import normalize_usage_dict
 def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, message_id=None):
     """
     מיזוג נתוני פרופיל חדשים עם קיימים באמצעות gpt_d
+    משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
     """
     try:
         metadata = {"gpt_identifier": "gpt_d", "chat_id": chat_id, "message_id": message_id}
@@ -53,9 +55,10 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
             extracted_fields = {}
         
         return {"merged_profile": extracted_fields, "usage": usage, "model": response.model}
+        
     except Exception as e:
         logging.error(f"[gpt_d] Error: {e}")
-        return {"merged_profile": {}, "usage": {}, "model": GPT_MODELS["gpt_d"]}
+        return {"merged_profile": {}, "usage": {}, "model": model}
 
 def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None):
     """
@@ -63,15 +66,12 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     מחזיר tuple: (updated_profile, combined_usage)
     """
     # 1. חילוץ שדות חדשים מהודעת המשתמש (gpt_c)
-    gpt_c_result = gpt_c(user_message)
+    from gpt_c_handler import extract_fields_from_message
+    gpt_c_result = extract_fields_from_message(user_message)
     extracted_fields = {}
     gpt_c_usage = {}
     if isinstance(gpt_c_result, dict):
-        content = gpt_c_result.get("content", "")
-        try:
-            extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
-        except Exception as e:
-            extracted_fields = {}
+        extracted_fields = gpt_c_result.get("extracted_fields", {})
         gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
     # 2. אם אין שדות חדשים, מחזירים את הפרופיל הקיים
     if not extracted_fields:
@@ -86,13 +86,7 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     gpt_d_result = merge_profile_data(existing_profile, changed_fields, message_id=interaction_id)
     gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", GPT_MODELS["gpt_d"]))
     # נסה לפרסר את התוצאה
-    updated_profile = merged_fields
-    content = gpt_d_result.get("content", "")
-    try:
-        if content and content.strip().startswith("{"):
-            updated_profile = json.loads(content)
-    except Exception as e:
-        pass
+    updated_profile = gpt_d_result.get("merged_profile", merged_fields)
     # 4. איחוד usage
     combined_usage = {}
     combined_usage.update(gpt_c_usage)

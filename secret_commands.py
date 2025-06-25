@@ -17,17 +17,22 @@ SECRET_CODES = {
     "#run_gpt_e": "run_gpt_e"               # מפעיל gpt_e ידנית על chat_id
 }
 
-def handle_secret_command(chat_id, text):
-    print(f"[SECRET_CMD] קיבלתי הודעה לבדוק קוד סודי | chat_id={chat_id} | text={text!r} | timestamp={datetime.now().isoformat()}")
+def handle_secret_command(chat_id, user_msg):
+    """
+    טיפול בפקודות סודיות למטרות בדיקה ותחזוקה.
+    קלט: chat_id, user_msg
+    פלט: (bool, str) - האם טופל והתשובה
+    """
+    print(f"[SECRET_CMD] קיבלתי הודעה לבדוק קוד סודי | chat_id={chat_id} | text={user_msg!r} | timestamp={datetime.now().isoformat()}")
 
-    action = SECRET_CODES.get(text.strip())
+    action = SECRET_CODES.get(user_msg.strip())
     if not action:
-        print(f"[SECRET_CMD] לא נמצא קוד סודי תואם | chat_id={chat_id} | text={text!r}")
+        print(f"[SECRET_CMD] לא נמצא קוד סודי תואם | chat_id={chat_id} | text={user_msg!r}")
         log_event_to_file({
             "event": "secret_command",
             "timestamp": datetime.now().isoformat(),
             "chat_id": chat_id,
-            "input_text": text,
+            "input_text": user_msg,
             "result": "no_action"
         })
         return False, None
@@ -92,24 +97,24 @@ def handle_secret_command(chat_id, text):
         )
         return True, msg
 
-    if text.strip() == "#errors_report":
+    if user_msg.strip() == "#errors_report":
         if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
             send_error_stats_report()
             return True, "נשלח דוח שגיאות לאדמין."
         else:
             return False, "אין לך הרשאה לפקודה זו."
-    if text.strip() == "#usage_report":
+    if user_msg.strip() == "#usage_report":
         if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
             send_usage_report(7)
             return True, "נשלח דוח usage שבועי לאדמין."
         else:
             return False, "אין לך הרשאה לפקודה זו."
 
-    if text.strip() == "#run_gpt_e":
+    if user_msg.strip() == "#run_gpt_e":
         if str(chat_id) == str(ADMIN_NOTIFICATION_CHAT_ID):
             # פקודה להפעלת gpt_e ידנית
             # הפורמט: #run_gpt_e <chat_id>
-            parts = text.split()
+            parts = user_msg.split()
             if len(parts) == 2:
                 target_chat_id = parts[1]
                 try:
@@ -155,12 +160,65 @@ def handle_secret_command(chat_id, text):
         else:
             return False, "אין לך הרשאה לפקודה זו."
 
+    # 📊 דוח ביצועי concurrent handling
+    if user_msg.lower() in ["/performance", "/ביצועים", "/stats"]:
+        try:
+            from concurrent_monitor import get_performance_report, get_performance_stats
+            
+            # קבלת דוח מפורט
+            report = get_performance_report()
+            
+            # הוספת נתונים טכניים
+            stats = get_performance_stats()
+            technical_info = f"""
+📊 **נתונים טכניים נוספים:**
+   • עומס מערכת: {stats['current_active_users']}/{stats['max_concurrent_users']} ({(stats['current_active_users']/stats['max_concurrent_users']*100):.1f}%)
+   • יעילות תגובה: {'🟢 מעולה' if stats['avg_response_time_current'] < 3 else '🟡 בינוני' if stats['avg_response_time_current'] < 5 else '🔴 איטי'}
+   • יציבות מערכת: {'🟢 יציב' if stats['error_rate'] < 0.05 else '🟡 בינוני' if stats['error_rate'] < 0.1 else '🔴 לא יציב'}
+"""
+            
+            return True, report + technical_info
+            
+        except Exception as e:
+            return True, f"❌ שגיאה בקבלת דוח ביצועים: {e}"
+
+    # 🚀 בדיקה מהירה של מצב המערכת
+    if user_msg.lower() in ["/status", "/מצב"]:
+        try:
+            from concurrent_monitor import get_performance_stats
+            stats = get_performance_stats()
+            
+            status_emoji = "🟢" if stats['current_active_users'] < stats['max_concurrent_users'] * 0.7 else "🟡" if stats['current_active_users'] < stats['max_concurrent_users'] * 0.9 else "🔴"
+            
+            quick_status = f"""
+{status_emoji} **מצב המערכת - עדכון מהיר**
+
+👥 **משתמשים פעילים:** {stats['current_active_users']}/{stats['max_concurrent_users']}
+⏱️ **זמן תגובה:** {stats['avg_response_time_current']:.2f}s
+🔴 **שיעור שגיאות:** {stats['error_rate']:.1%}
+💻 **סה"כ בקשות היום:** {stats['total_requests']}
+
+🔄 **סשנים פעילים:**"""
+            
+            if stats['active_sessions']:
+                for chat_id, stage in list(stats['active_sessions'].items())[:5]:  # מקסימום 5
+                    quick_status += f"\n   • {chat_id}: {stage}"
+                if len(stats['active_sessions']) > 5:
+                    quick_status += f"\n   • ועוד {len(stats['active_sessions']) - 5} סשנים..."
+            else:
+                quick_status += "\n   • אין סשנים פעילים כרגע"
+            
+            return True, quick_status
+            
+        except Exception as e:
+            return True, f"❌ שגיאה בבדיקת מצב: {e}"
+
     print(f"[SECRET_CMD] קוד סודי לא תואם אף פעולה | chat_id={chat_id} | action={action} | timestamp={datetime.now().isoformat()}")
     log_event_to_file({
         "event": "secret_command",
         "timestamp": datetime.now().isoformat(),
         "chat_id": chat_id,
-        "input_text": text,
+        "input_text": user_msg,
         "action": action,
         "result": "unknown_action"
     })

@@ -15,24 +15,28 @@ from gpt_utils import normalize_usage_dict
 def extract_user_info(user_msg, chat_id=None, message_id=None):
     """
     מחלץ מידע רלוונטי מהודעת המשתמש לעדכון הפרופיל שלו
+    כולל מערכת fallback למקרה של rate limit ב-Gemini.
     """
+    from config import GPT_FALLBACK_MODELS
+    
+    metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
+    params = GPT_PARAMS["gpt_c"]
+    model = GPT_MODELS["gpt_c"]
+    
+    completion_params = {
+        "model": model,
+        "messages": [{"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT}, {"role": "user", "content": user_msg}],
+        "temperature": params["temperature"],
+        "metadata": metadata,
+        "store": True
+    }
+    
+    # הוספת max_tokens רק אם הוא לא None
+    if params["max_tokens"] is not None:
+        completion_params["max_tokens"] = params["max_tokens"]
+    
+    # ניסיון עם המודל הראשי
     try:
-        metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
-        params = GPT_PARAMS["gpt_c"]
-        model = GPT_MODELS["gpt_c"]
-        
-        completion_params = {
-            "model": model,
-            "messages": [{"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT}, {"role": "user", "content": user_msg}],
-            "temperature": params["temperature"],
-            "metadata": metadata,
-            "store": True
-        }
-        
-        # הוספת max_tokens רק אם הוא לא None
-        if params["max_tokens"] is not None:
-            completion_params["max_tokens"] = params["max_tokens"]
-        
         response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
@@ -44,9 +48,39 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
             extracted_fields = {}
         
         return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
+        
     except Exception as e:
-        logging.error(f"[gpt_c] Error: {e}")
-        return {"extracted_fields": {}, "usage": {}, "model": GPT_MODELS["gpt_c"]}
+        error_str = str(e)
+        is_rate_limit = "429" in error_str or "quota" in error_str.lower() or "rate limit" in error_str.lower()
+        
+        if is_rate_limit and "gpt_c" in GPT_FALLBACK_MODELS:
+            # ניסיון עם מודל fallback
+            fallback_model = GPT_FALLBACK_MODELS["gpt_c"]
+            logging.warning(f"[gpt_c] Rate limit for {model}, trying fallback: {fallback_model}")
+            
+            try:
+                completion_params["model"] = fallback_model
+                completion_params["metadata"]["fallback_used"] = True
+                
+                response = litellm.completion(**completion_params)
+                content = response.choices[0].message.content.strip()
+                usage = normalize_usage_dict(response.usage, response.model)
+                
+                # ניסיון לפרס JSON
+                try:
+                    extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
+                except json.JSONDecodeError:
+                    extracted_fields = {}
+                
+                logging.info(f"[gpt_c] Fallback successful: {fallback_model}")
+                return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
+                
+            except Exception as fallback_error:
+                logging.error(f"[gpt_c] Fallback also failed: {fallback_error}")
+                return {"extracted_fields": {}, "usage": {}, "model": fallback_model}
+        else:
+            logging.error(f"[gpt_c] Error (not rate limit): {e}")
+            return {"extracted_fields": {}, "usage": {}, "model": model}
 
 def should_run_gpt_c(user_message):
     """

@@ -151,6 +151,28 @@ def error_human_funny_message():
         "תכתוב לי שוב בעוד דקה ונראה אם סיימתי בשירותים."
     )
 
+def get_unsupported_message_response(message_type):
+    """
+    מחזיר הודעה מותאמת לסוג ההודעה שהתקבלה.
+    קלט: message_type (str) - סוג ההודעה
+    פלט: str - הודעה מותאמת
+    """
+    responses = {
+        "voice": "🎤 שמעתי שיש לך הודעה קולית! אני מנסה לתמלל אותה עכשיו... אם לא אצליח, אתה יכול לכתוב לי את זה בטקסט 😊",
+        "sticker": "😄 לצערי אני לא יכול לקרוא סטיקרים אבל אני בטוח שזה חמוד! בוא נמשיך בטקסט?",
+        "photo": "📷 וואו, תמונה! אני רואה שיש משהו לשתף אבל לצערי אני עדיין לא יודע לראות תמונות. תוכל לכתוב לי מה זה?",
+        "video": "🎬 סרטון מעניין! אני מצטער אבל אני עדיין לא יודע לצפות בסרטונים. תוכל לספר לי מה זה?",
+        "document": "📄 קובץ! אני לא יכול לקרוא קבצים כרגע. תוכל לכתוב לי מה זה?",
+        "audio": "🎵 מוזיקה! אני לא יכול להאזין למוזיקה כרגע. תוכל לכתוב לי מה זה?",
+        "animation": "🎭 אנימציה! אני לא יכול לצפות באנימציות כרגע. תוכל לכתוב לי מה זה?",
+        "video_note": "📹 הודעת וידאו קצרה! אני לא יכול לצפות בהודעות וידאו כרגע. תוכל לכתוב לי מה זה?",
+        "location": "📍 מיקום! אני לא יכול לראות מיקומים כרגע. תוכל לכתוב לי איפה זה?",
+        "contact": "👤 איש קשר! אני לא יכול לקרוא פרטי קשר כרגע. תוכל לכתוב לי מי זה?",
+        "unknown": "🤔 לא ברור לי מה זה... תוכל לכתוב לי בטקסט?"
+    }
+    
+    return responses.get(message_type, responses["unknown"])
+
 def new_user_admin_message(chat_id):
     """
     הודעה לאדמין על משתמש חדש בצ'אט.

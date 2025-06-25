@@ -20,9 +20,17 @@ sheets_handler.py
 3. אם לא מצאנו אותו גם שם — זו הפעם הראשונה של המשתמש בצ'אט! נרשום אותו ב-user_states עם code_try=0.
 
 כל פונקציה כאן כוללת תיעוד ולוגיקה ברורה למה עושים כל שלב, ויש לוגים (וגם print) לכל פעולה קריטית.
+
+🔧 Concurrent Handling:
+======================
+הקובץ כולל מערכת Queue מתקדמת לניהול פעולות Google Sheets במקביל:
+- Priority Queue (קריטי > רגיל > נמוך)
+- Rate limiting (60 operations/minute)
+- Batch processing
+- Fallback mechanism למקרה של עומס
 """
 
-from config import setup_google_sheets, SUMMARY_FIELD
+from config import setup_google_sheets, SUMMARY_FIELD, MAX_SHEETS_OPERATIONS_PER_MINUTE, SHEETS_QUEUE_SIZE, SHEETS_BATCH_SIZE, UPDATE_PRIORITY
 from datetime import datetime
 import logging
 from gpt_utils import calculate_gpt_cost, USD_TO_ILS
@@ -30,6 +38,150 @@ from fields_dict import FIELDS_DICT
 import json
 from dataclasses import dataclass, asdict
 from typing import Optional
+import asyncio
+import time
+from collections import defaultdict
+
+# ================================
+# 🚀 מערכת Queue מתקדמת לGoogle Sheets
+# ================================
+
+class SheetsOperation:
+    """מייצג פעולה בודדת בGoogle Sheets"""
+    def __init__(self, operation_type: str, priority: int, data: dict, retry_count: int = 0):
+        self.operation_type = operation_type
+        self.priority = priority
+        self.data = data
+        self.retry_count = retry_count
+        self.created_at = time.time()
+        
+    def __lt__(self, other):
+        return self.priority < other.priority
+
+class SheetsQueueManager:
+    """מנהל תור פעולות Google Sheets עם rate limiting וpriority"""
+    
+    def __init__(self):
+        self.queue = asyncio.PriorityQueue(maxsize=SHEETS_QUEUE_SIZE)
+        self.rate_limiter = []  # timestamps של פעולות אחרונות
+        self.processing = False
+        
+    async def add_operation(self, operation_type: str, priority_name: str, data: dict):
+        """הוספת פעולה לתור"""
+        priority = UPDATE_PRIORITY.get(priority_name, 2)
+        operation = SheetsOperation(operation_type, priority, data)
+        
+        try:
+            await self.queue.put(operation)
+            debug_log(f"Added {operation_type} operation with priority {priority_name}", "SheetsQueue")
+            
+            # התחלת עיבוד אם לא רץ כבר
+            if not self.processing:
+                asyncio.create_task(self._process_queue())
+                
+        except asyncio.QueueFull:
+            debug_log(f"Queue full! Dropping {operation_type} operation", "SheetsQueue")
+            
+    async def _process_queue(self):
+        """עיבוד התור במקביל עם rate limiting"""
+        if self.processing:
+            return
+            
+        self.processing = True
+        debug_log("Started processing Sheets queue", "SheetsQueue")
+        
+        try:
+            while not self.queue.empty():
+                # בדיקת rate limiting
+                if not self._can_execute():
+                    await asyncio.sleep(1)
+                    continue
+                
+                # עיבוד batch של פעולות
+                batch = []
+                for _ in range(min(SHEETS_BATCH_SIZE, self.queue.qsize())):
+                    try:
+                        operation = await asyncio.wait_for(self.queue.get(), timeout=0.1)
+                        batch.append(operation)
+                    except asyncio.TimeoutError:
+                        break
+                
+                if batch:
+                    await self._execute_batch(batch)
+                    
+        finally:
+            self.processing = False
+            debug_log("Finished processing Sheets queue", "SheetsQueue")
+    
+    def _can_execute(self) -> bool:
+        """בדיקה אם אפשר לבצע פעולות (rate limiting)"""
+        now = time.time()
+        # ניקוי timestamps ישנים (מעל דקה)
+        self.rate_limiter = [ts for ts in self.rate_limiter if now - ts < 60]
+        
+        return len(self.rate_limiter) < MAX_SHEETS_OPERATIONS_PER_MINUTE
+    
+    async def _execute_batch(self, batch: list):
+        """ביצוע batch של פעולות"""
+        for operation in batch:
+            try:
+                await self._execute_operation(operation)
+                self.rate_limiter.append(time.time())
+                
+            except Exception as e:
+                debug_log(f"Failed to execute {operation.operation_type}: {e}", "SheetsQueue")
+                
+                # retry לפעולות קריטיות
+                if operation.priority == 1 and operation.retry_count < 3:
+                    operation.retry_count += 1
+                    await self.queue.put(operation)
+    
+    async def _execute_operation(self, operation: SheetsOperation):
+        """ביצוע פעולה בודדת"""
+        operation_type = operation.operation_type
+        data = operation.data
+        
+        # ביצוע הפעולה בthread נפרד כדי לא לחסום
+        if operation_type == "log_to_sheets":
+            await asyncio.to_thread(self._sync_log_to_sheets, data)
+        elif operation_type == "update_profile":
+            await asyncio.to_thread(self._sync_update_profile, data)
+        elif operation_type == "increment_code_try":
+            await asyncio.to_thread(self._sync_increment_code_try, data)
+        # ... פעולות נוספות
+    
+    def _sync_log_to_sheets(self, data: dict):
+        """ביצוע סינכרוני של log_to_sheets"""
+        return log_to_sheets_sync(**data)
+    
+    def _sync_update_profile(self, data: dict):
+        """ביצוע סינכרוני של update_profile"""
+        return update_user_profile_sync(data["chat_id"], data["field_values"])
+    
+    def _sync_increment_code_try(self, data: dict):
+        """ביצוע סינכרוני של increment_code_try"""
+        return increment_code_try_sync(data["sheet_states"], data["chat_id"])
+
+# יצירת instance גלובלי
+sheets_queue_manager = SheetsQueueManager()
+
+# ================================
+# 🔧 פונקציות Async Wrapper
+# ================================
+
+async def log_to_sheets_async(priority: str = "normal", **kwargs):
+    """גרסה אסינכרונית של log_to_sheets"""
+    await sheets_queue_manager.add_operation("log_to_sheets", priority, kwargs)
+
+async def update_user_profile_async(chat_id, field_values, priority: str = "critical"):
+    """גרסה אסינכרונית של update_user_profile"""
+    data = {"chat_id": chat_id, "field_values": field_values}
+    await sheets_queue_manager.add_operation("update_profile", priority, data)
+
+async def increment_code_try_async(sheet_states, chat_id, priority: str = "normal"):
+    """גרסה אסינכרונית של increment_code_try"""
+    data = {"sheet_states": sheet_states, "chat_id": chat_id}
+    await sheets_queue_manager.add_operation("increment_code_try", priority, data)
 
 def debug_log(message: str, function_name: str = "", chat_id: str = ""):
     """
@@ -108,7 +260,8 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
         return False
 
 
-def increment_code_try(sheet_states, chat_id):
+def increment_code_try_sync(sheet_states, chat_id):
+    """פונקציה סינכרונית מקורית - לשימוש פנימי בלבד"""
     """
     מגדיל את מונה הניסיונות של המשתמש להזין קוד בגיליון user_states.
     קלט: sheet_states, chat_id
@@ -204,7 +357,8 @@ def get_user_summary(chat_id):
         logging.error(f"❌ שגיאה בקריאת סיכום משתמש: {e}")
         return ""
 
-def update_user_profile(chat_id, field_values):
+def update_user_profile_sync(chat_id, field_values):
+    """פונקציה סינכרונית מקורית - לשימוש פנימי בלבד"""
     """
     מעדכן את הפרופיל של המשתמש בגיליון לפי field_values.
     קלט: chat_id, field_values (dict)
@@ -312,7 +466,7 @@ def clean_for_storage(data):
             clean[k] = v
     return clean
 
-def log_to_sheets(
+def log_to_sheets_sync(
     message_id, chat_id, user_msg, reply_text, reply_summary,
     main_usage, summary_usage, extract_usage, total_tokens,
     cost_usd, cost_ils,
@@ -323,6 +477,7 @@ def log_to_sheets(
     merge_usage=None, fields_updated_by_gpt_c=None,
     gpt_d_usage=None, gpt_e_usage=None
 ):
+    """פונקציה סינכרונית מקורית - לשימוש פנימי בלבד"""
     """
     שומר את כל נתוני השיחה בגיליון הלוגים.
     מחשב את כל הפרמטרים החסרים אוטומטית אם לא סופקו.
@@ -1075,11 +1230,72 @@ def reset_gpt_c_run_count(chat_id: str) -> bool:
         logging.info(f"[DEBUG] Created new user record with gpt_c_run_count=0 and last_gpt_e_timestamp={current_timestamp} for chat_id={chat_id}")
         
         return True
-
+        
     except Exception as e:
         print(f"[ERROR] reset_gpt_c_run_count failed for chat_id={chat_id}: {e}")
         logging.error(f"[ERROR] reset_gpt_c_run_count failed for chat_id={chat_id}: {e}")
         return False
+
+# ================================
+# 🌍 פונקציות ציבוריות חדשות (Async)
+# ================================
+
+def log_to_sheets(priority: str = "normal", **kwargs):
+    """
+    פונקציה ציבורית לרישום לוגים - תומכת במצב async וsync
+    
+    Args:
+        priority: "critical", "normal", או "low"
+        **kwargs: כל הפרמטרים של log_to_sheets_sync
+    """
+    try:
+        # ניסיון לבצע async אם אפשר
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # אם יש event loop רץ, נוסיף לתור
+            asyncio.create_task(log_to_sheets_async(priority, **kwargs))
+        else:
+            # אם אין event loop, נבצע סינכרוני
+            log_to_sheets_sync(**kwargs)
+    except RuntimeError:
+        # fallback לביצוע סינכרוני
+        log_to_sheets_sync(**kwargs)
+
+def update_user_profile(chat_id, field_values, priority: str = "critical"):
+    """
+    פונקציה ציבורית לעדכון פרופיל - תומכת במצב async וsync
+    
+    Args:
+        chat_id: מזהה המשתמש
+        field_values: dict עם שדות לעדכון
+        priority: "critical", "normal", או "low"
+    """
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(update_user_profile_async(chat_id, field_values, priority))
+        else:
+            update_user_profile_sync(chat_id, field_values)
+    except RuntimeError:
+        update_user_profile_sync(chat_id, field_values)
+
+def increment_code_try(sheet_states, chat_id, priority: str = "normal"):
+    """
+    פונקציה ציבורית להגדלת מונה ניסיונות - תומכת במצב async וsync
+    """
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(increment_code_try_async(sheet_states, chat_id, priority))
+            # במקרה של increment, נחזיר ערך זמני ונעדכן אסינכרונית
+            return 1
+        else:
+            return increment_code_try_sync(sheet_states, chat_id)
+    except RuntimeError:
+        return increment_code_try_sync(sheet_states, chat_id)
 
 def log_gpt_usage_to_file(message_id, chat_id, main_usage, summary_usage, extract_usage, gpt_d_usage, gpt_e_usage, total_cost_ils):
     """

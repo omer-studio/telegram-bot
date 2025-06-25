@@ -6,18 +6,23 @@
 
 
 
-python-telegram-bot==22.1
+python-telegram-bot==21.0.1
+python-dotenv>=1.0.0
+asyncio>=3.4.3
 openai>=1.30.0
+anthropic>=0.25.1
 litellm>=1.30.0
 google-generativeai>=0.8.0
 fastapi>=0.110.0
-uvicorn==0.22.0
+uvicorn>=0.22.0
 gspread==5.12.0
 oauth2client==4.1.3
-python-dotenv==1.0.1
+requests>=2.31.0
 Flask
-python-dateutil
+psutil>=5.9.0
 APScheduler
-pytz
-pydantic>=2.6.0
+pytz>=2024.1
 pytest
+faster-whisper>=1.1.0
+openai-whisper
+ffmpeg-python>=0.2.0

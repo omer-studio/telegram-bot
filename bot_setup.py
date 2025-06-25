@@ -90,7 +90,18 @@ if os.name == 'nt':
     subprocess.run([os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', 'uvicorn', 'requests'])
 
 # יצירת אפליקציית טלגרם
-app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+try:
+    # הפעלת concurrent_updates - מאפשר טיפול במשתמשים מרובים במקביל
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(True).read_timeout(30).job_queue(None).build()
+except Exception as e:
+    print(f"⚠️ בעיה עם ApplicationBuilder (ניסיון 1): {e}")
+    try:
+        # ניסיון נוסף ללא כל תכונות מתקדמות
+        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).read_timeout(30).job_queue(None).build()
+    except Exception as e2:
+        print(f"⚠️ בעיה עם ApplicationBuilder (ניסיון 2): {e2}")
+        # ניסיון אחרון עם הגדרות מינימליות
+        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
 # חיבור ל-Google Sheets
 def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data

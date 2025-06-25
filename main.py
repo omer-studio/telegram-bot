@@ -54,6 +54,7 @@ from config import DATA_DIR, PRODUCTION_PORT
 class DummyContext:
     def __init__(self, bot_data):
         self.bot_data = bot_data
+        self.bot = app.bot  # הוספת גישה לבוט
 
 app_fastapi = FastAPI()
 app = setup_bot()

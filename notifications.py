@@ -324,3 +324,197 @@ def handle_non_critical_error(error, chat_id, user_msg, error_type):
         "user_msg": user_msg,
         "critical": False
     })
+
+def send_concurrent_alert(alert_type: str, details: dict):
+    """
+    שליחת התראות ספציפיות למערכת Concurrent Handling
+    """
+    try:
+        if alert_type == "max_users_reached":
+            message = (
+                f"🔴 **התראת עומס מקסימלי**\n"
+                f"👥 הגענו למספר המקסימלי של משתמשים: {details.get('active_users', 0)}/{details.get('max_users', 10)}\n"
+                f"⏱️ זמן: {datetime.now().strftime('%H:%M:%S')}\n"
+                f"📊 זמן תגובה ממוצע: {details.get('avg_response_time', 0):.2f}s\n"
+                f"🚫 משתמשים נדחו: {details.get('rejected_users', 0)}\n"
+                f"📈 יש לשקול הגדלת MAX_CONCURRENT_USERS"
+            )
+        elif alert_type == "high_response_time":
+            message = (
+                f"⚠️ **התראת זמן תגובה גבוה**\n"
+                f"⏱️ זמן תגובה ממוצע: {details.get('avg_response_time', 0):.2f}s\n"
+                f"🎯 יעד: מתחת ל-4 שניות\n"
+                f"👥 משתמשים פעילים: {details.get('active_users', 0)}\n"
+                f"📊 שיעור שגיאות: {details.get('error_rate', 0):.1%}"
+            )
+        elif alert_type == "sheets_queue_overflow":
+            message = (
+                f"🗂️ **התראת עומס Google Sheets**\n"
+                f"📥 גודל תור: {details.get('queue_size', 0)}\n"
+                f"⚡ פעולות לדקה: {details.get('operations_per_minute', 0)}\n"
+                f"🚨 יש לבדוק אם Google Sheets מגיב כראוי"
+            )
+        elif alert_type == "concurrent_error":
+            message = (
+                f"❌ **שגיאה במערכת Concurrent**\n"
+                f"🔧 רכיב: {details.get('component', 'לא ידוע')}\n"
+                f"📝 שגיאה: {details.get('error', 'לא ידוע')}\n"
+                f"👤 משתמש: {details.get('chat_id', 'לא ידוע')}\n"
+                f"⏰ זמן: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            )
+        elif alert_type == "queue_failure":
+            message = (
+                f"🔥 **כשל בתור Google Sheets**\n"
+                f"📊 פעולות שנדחו: {details.get('dropped_operations', 0)}\n"
+                f"🔄 סוג פעולה: {details.get('operation_type', 'לא ידוע')}\n"
+                f"⚠️ נתונים עלולים להיאבד!"
+            )
+        else:
+            message = f"🔔 התראת Concurrent: {alert_type}\n{details}"
+        
+        send_error_notification(message)
+        print(f"[CONCURRENT_ALERT] {alert_type}: {message}")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to send concurrent alert: {e}")
+
+def send_recovery_notification(recovery_type: str, details: dict):
+    """
+    הודעת התאוששות מבעיות concurrent
+    """
+    try:
+        if recovery_type == "system_recovered":
+            message = (
+                f"✅ **מערכת התאוששה**\n"
+                f"👥 משתמשים פעילים: {details.get('active_users', 0)}\n"
+                f"⏱️ זמן תגובה: {details.get('avg_response_time', 0):.2f}s\n"
+                f"📊 המערכת פועלת כרגיל"
+            )
+        elif recovery_type == "queue_cleared":
+            message = (
+                f"🧹 **תור Google Sheets נוקה**\n"
+                f"📥 גודל תור חדש: {details.get('queue_size', 0)}\n"
+                f"✅ המערכת פועלת כרגיל"
+            )
+        else:
+            message = f"🔄 התאוששות: {recovery_type}\n{details}"
+        
+        send_error_notification(message)
+        print(f"[RECOVERY] {recovery_type}: {message}")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to send recovery notification: {e}")
+
+# ========================================
+# 🚨 מערכת התראות אדמין (מקור: admin_alerts.py)
+# ========================================
+
+def send_admin_alert(message, alert_level="info"):
+    """
+    🚨 שולח התראה לאדמין בטלגרם
+    
+    Args:
+        message: הודעת ההתראה
+        alert_level: "info", "warning", "critical"
+    """
+    try:
+        from config import ADMIN_CHAT_ID, BOT_TOKEN
+        import telegram
+        import asyncio
+        
+        # אייקונים לפי רמת חומרה
+        icons = {
+            "info": "📊",
+            "warning": "⚠️", 
+            "critical": "🚨"
+        }
+        
+        icon = icons.get(alert_level, "📊")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        alert_text = f"{icon} **התראת מערכת** ({timestamp})\n\n{message}"
+        
+        # שליחה אסינכרונית (לא חוסמת)
+        asyncio.create_task(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
+        
+        # גם ללוג
+        import logging
+        logging.warning(f"[🚨 אדמין] {message}")
+        
+    except Exception as e:
+        # אם נכשל לשלוח - לפחות ללוג
+        import logging
+        logging.error(f"[🚨] נכשל לשלוח התראה לאדמין: {e}")
+        logging.warning(f"[🚨 לוג] {message}")
+
+async def _send_telegram_message_admin(bot_token, chat_id, text):
+    """שולח הודעה בטלגרם (אסינכרונית)"""
+    try:
+        import telegram
+        bot = telegram.Bot(token=bot_token)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        import logging
+        logging.error(f"[טלגרם] שגיאה בשליחה: {e}")
+
+def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, daily_limit, monthly_limit):
+    """
+    💰 התראה על בעיית תקציב
+    """
+    daily_percent = (daily_usage / daily_limit) * 100
+    monthly_percent = (monthly_usage / monthly_limit) * 100
+    
+    alert_level = "info"
+    
+    if daily_usage >= daily_limit or monthly_usage >= monthly_limit:
+        alert_level = "critical"
+        message = f"""🚨 **חריגה ממגבלת תקציב!**
+
+💰 **העלות הנוכחית:**
+• עלות השימוש: ${cost_usd:.3f}
+• מודל: {model_name} ({tier})
+
+📊 **סטטוס תקציב:**
+• יומי: ${daily_usage:.2f} / ${daily_limit:.2f} ({daily_percent:.1f}%)
+• חודשי: ${monthly_usage:.2f} / ${monthly_limit:.2f} ({monthly_percent:.1f}%)
+
+⚠️ **המערכת ממשיכה לעבוד** - המשתמשים לא הושפעו!"""
+        
+    elif daily_percent >= 80 or monthly_percent >= 80:
+        alert_level = "warning"
+        message = f"""⚠️ **מתקרב למגבלת תקציב**
+
+💰 **השימוש האחרון:**
+• עלות: ${cost_usd:.3f}
+• מודל: {model_name} ({tier})
+
+📊 **סטטוס תקציב:**
+• יומי: ${daily_usage:.2f} / ${daily_limit:.2f} ({daily_percent:.1f}%)
+• חודשי: ${monthly_usage:.2f} / ${monthly_limit:.2f} ({monthly_percent:.1f}%)
+
+✅ המערכת עובדת תקין"""
+        
+    elif tier == "paid" and daily_percent >= 50:
+        alert_level = "info"
+        message = f"""📊 **דוח שימוש בתשלום**
+
+💰 **השימוש האחרון:**
+• עלות: ${cost_usd:.3f}
+• מודל: {model_name} (בתשלום)
+
+📊 **סטטוס תקציב:**
+• יומי: ${daily_usage:.2f} / ${daily_limit:.2f} ({daily_percent:.1f}%)
+• חודשי: ${monthly_usage:.2f} / ${monthly_limit:.2f} ({monthly_percent:.1f}%)"""
+    else:
+        # שימוש רגיל - לא צריך התראה
+        return
+    
+    send_admin_alert(message, alert_level)
+
+def alert_system_status(message, level="info"):
+    """התראה כללית על סטטוס המערכת"""
+    send_admin_alert(f"🤖 **סטטוס מערכת:**\n\n{message}", level)

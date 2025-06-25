@@ -11,9 +11,9 @@ from datetime import datetime
 import logging
 import asyncio
 from secret_commands import handle_secret_command
-from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message
+from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response
 from notifications import handle_critical_error
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet
+from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
@@ -24,7 +24,7 @@ from fields_dict import FIELDS_DICT
 import time
 import json
 from gpt_e_handler import execute_gpt_e_if_needed
-from sheets_handler import increment_gpt_c_run_count, get_user_state
+from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
@@ -86,6 +86,35 @@ async def send_approval_message(update, chat_id):
         reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
     )
 
+def detect_message_type(message):
+    """
+    מזהה את סוג ההודעה שהתקבלה.
+    קלט: message (telegram Message object)
+    פלט: str - סוג ההודעה
+    """
+    if message.voice:
+        return "voice"
+    elif message.photo:
+        return "photo"
+    elif message.video:
+        return "video"
+    elif message.document:
+        return "document"
+    elif message.sticker:
+        return "sticker"
+    elif message.audio:
+        return "audio"
+    elif message.animation:
+        return "animation"
+    elif message.video_note:
+        return "video_note"
+    elif message.location:
+        return "location"
+    elif message.contact:
+        return "contact"
+    else:
+        return "unknown"
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     הפונקציה הראשית שמטפלת בכל הודעה נכנסת מהמשתמש.
@@ -94,6 +123,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב gpt, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
     from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
+    
     try:
         log_payload = {
             "chat_id": None,
@@ -106,12 +136,105 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if update.message.text:
                 user_msg = update.message.text
             else:
-                logging.error(f"❌ שגיאה - אין טקסט בהודעה | chat_id={chat_id}")
-                await update.message.reply_text("❌ לא קיבלתי טקסט בהודעה.")
+                # זיהוי סוג ההודעה ושליחת הודעה מותאמת
+                message_type = detect_message_type(update.message)
+                
+                # טיפול מיוחד בהודעות קוליות
+                if message_type == "voice":
+                    logging.info(f"🎤 התקבלה הודעה קולית | chat_id={chat_id}")
+                    print(f"[VOICE_MSG] chat_id={chat_id} | message_id={message_id}")
+                    
+                    # ייבוא voice_handler (משתמש ב-instance גלובלי)
+                    from voice_handler import voice_handler
+                    
+                    # ניסיון לתמלל
+                    try:
+                        transcribed_text = await voice_handler.transcribe_voice_message(update, context)
+                        
+                        if transcribed_text:
+                            # אם התמלול הצליח, ממשיכים עם הטקסט המתומלל
+                            user_msg = transcribed_text
+                            logging.info(f"✅ תמלול הצליח: {transcribed_text}")
+                            print(f"[TRANSCRIPTION_SUCCESS] {transcribed_text}")
+                            
+                            # רישום להיסטוריה ולוגים
+                            log_event_to_file({
+                                "chat_id": chat_id,
+                                "message_id": message_id,
+                                "message_type": "voice",
+                                "transcribed_text": transcribed_text,
+                                "timestamp": datetime.now().isoformat(),
+                                "event_type": "voice_transcription_success"
+                            })
+                            
+                            # ממשיכים עם הטיפול הרגיל בטקסט המתומלל
+                            # (לא return כאן - ממשיכים לקוד הבא)
+                        else:
+                            # אם התמלול נכשל
+                            logging.warning(f"⚠️ תמלול נכשל | chat_id={chat_id}")
+                            print(f"[TRANSCRIPTION_FAILED] chat_id={chat_id}")
+                            
+                            # רישום להיסטוריה ולוגים
+                            log_event_to_file({
+                                "chat_id": chat_id,
+                                "message_id": message_id,
+                                "message_type": "voice",
+                                "timestamp": datetime.now().isoformat(),
+                                "event_type": "voice_transcription_failed"
+                            })
+                            
+                            # voice_handler כבר שלח הודעת שגיאה למשתמש, אז לא נשלח עוד אחת
+                            await end_monitoring_user(str(chat_id), True)
+                            return
+                            
+                    except Exception as e:
+                        logging.error(f"❌ שגיאה בתמלול הודעה קולית: {e}")
+                        print(f"[TRANSCRIPTION_ERROR] {e}")
+                        
+                        # רישום להיסטוריה ולוגים
+                        log_event_to_file({
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "message_type": "voice",
+                            "error": str(e),
+                            "timestamp": datetime.now().isoformat(),
+                            "event_type": "voice_transcription_error"
+                        })
+                        
+                        # voice_handler כבר שלח הודעת שגיאה למשתמש, אז לא נשלח עוד אחת
+                        await end_monitoring_user(str(chat_id), True)
+                        return
+                
+                else:
+                    # הודעות לא-טקסט אחרות (לא voice)
+                    appropriate_response = get_unsupported_message_response(message_type)
+                    
+                    logging.info(f"📩 התקבלה הודעה מסוג {message_type} | chat_id={chat_id}")
+                    print(f"[NON_TEXT_MSG] chat_id={chat_id} | message_id={message_id} | type={message_type}")
+                    
+                    # רישום להיסטוריה ולוגים
+                    log_event_to_file({
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "message_type": message_type,
+                        "bot_response": appropriate_response,
+                        "timestamp": datetime.now().isoformat(),
+                        "event_type": "unsupported_message"
+                    })
+                    
+                    await update.message.reply_text(appropriate_response)
+                    await end_monitoring_user(str(chat_id), True)
+                    return
+
+            # 🚀 התחלת ניטור concurrent
+            if not await start_monitoring_user(str(chat_id), str(message_id)):
+                await update.message.reply_text("⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
                 return
+
             did, reply = handle_secret_command(chat_id, user_msg)
             if did:
                 await update.message.reply_text(reply)
+                await end_monitoring_user(str(chat_id), True)
                 return
             log_payload["chat_id"] = chat_id
             log_payload["message_id"] = message_id
@@ -122,10 +245,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.error(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
             print(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
             await handle_critical_error(ex, None, None, update)
+            await end_monitoring_user(str(chat_id) if 'chat_id' in locals() else "unknown", False)
             return
 
         # שלב 1: בדיקה מהירה אם זה משתמש חדש (רק ב-user_states)
         try:
+            await update_user_processing_stage(str(chat_id), "onboarding_check")
             logging.info("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
             print("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
             
@@ -135,6 +260,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if is_first_time:
                 # אם זה משתמש חדש, עושים את כל הבדיקות המלאות ברקע
                 asyncio.create_task(handle_new_user_background(update, context, chat_id, user_msg))
+                await end_monitoring_user(str(chat_id), True)
                 return
             else:
                 logging.info("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
@@ -143,10 +269,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.error(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
             print(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
+            await end_monitoring_user(str(chat_id), False)
             return
 
         # שלב 2: בדיקה מהירה של הרשאות (רק ב-user_states)
         try:
+            await update_user_processing_stage(str(chat_id), "permission_check")
             logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
             print("🔍 בודק הרשאות משתמש מול הגיליון...")
             
@@ -156,15 +284,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not exists_in_states:
                 # אם לא קיים ב-user_states, עושים בדיקה מלאה ברקע
                 asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
+                await end_monitoring_user(str(chat_id), True)
                 return
                 
         except Exception as ex:
             logging.error(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
             print(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
+            await end_monitoring_user(str(chat_id), False)
             return
 
         # שלב 3: משתמש מאושר - שליחת תשובה מיד!
+        await update_user_processing_stage(str(chat_id), "gpt_a")
         logging.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
@@ -192,15 +323,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = gpt_response["bot_reply"]
 
             # שלב 3: שליחת התשובה למשתמש ועדכון היסטוריה ראשוני
+            await update_user_processing_stage(str(chat_id), "sending_response")
             await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
             update_chat_history(chat_id, user_msg, "")
             
             # שלב 4: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
+            await update_user_processing_stage(str(chat_id), "background_tasks")
             # העברת bot_reply כ-last_bot_message - זה יהיה ההודעה הנוכחית (לא מקוצרת עדיין)
             asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, bot_reply))
+            
+            # סיום ניטור משתמש
+            await end_monitoring_user(str(chat_id), True)
 
         except Exception as ex:
             await handle_critical_error(ex, chat_id, user_msg, update)
+            await end_monitoring_user(str(chat_id), False)
 
     except Exception as ex:
         await handle_critical_error(ex, locals().get('chat_id'), locals().get('user_msg'), update)
@@ -284,7 +421,6 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             print(f"[DEBUG] הודעת הבוט קצרה ({len(bot_reply)} תווים), לא קורא ל-gpt_b")
 
         # עדכון היסטוריה סופי עם תמצית או תשובה מלאה
-        from utils import update_last_bot_message
         if new_summary_for_history:
             update_last_bot_message(chat_id, new_summary_for_history)
         else:
@@ -375,7 +511,6 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
 
         # שמירת לוגים ונתונים נוספים
         # נירמול ה-usage לפני השמירה ב-log
-        from gpt_utils import normalize_usage_dict
         clean_gpt_response = {k: v for k, v in gpt_response.items() if k != "bot_reply"}
         if "usage" in clean_gpt_response:
             clean_gpt_response["usage"] = normalize_usage_dict(clean_gpt_response["usage"], gpt_response.get("model", ""))
@@ -389,7 +524,6 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         # רישום לגיליון Google Sheets
         try:
             from config import GPT_MODELS
-            from gpt_utils import normalize_usage_dict
             
             # חילוץ נתונים מ-gpt_response
             gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", GPT_MODELS["gpt_a"]))

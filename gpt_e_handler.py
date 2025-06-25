@@ -2,9 +2,10 @@
 gpt_e_handler.py
 ----------------
 מנוע gpt_e: חידוד, תיקון והשלמת פרופיל רגשי על בסיס היסטוריה ופרופיל קיים.
+משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 
 - מופעל כל 50 ריצות gpt_c, או מעל 20 ריצות gpt_c אם עברו 24 שעות מאז הריצה האחרונה.
-- שולח ל-GPT-4 את ההיסטוריה והפרופיל, מקבל שדות חדשים/מתוקנים בלבד.
+- שולח ל-GPT את ההיסטוריה והפרופיל, מקבל שדות חדשים/מתוקנים בלבד.
 - מעדכן Google Sheets, user_state, ולוגים.
 """
 
@@ -141,8 +142,8 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         # שלב 3: הכנת פרומפט
         user_prompt = prepare_gpt_e_prompt(chat_history, current_profile)
         
-        # שלב 4: שליחה ל-GPT-4
-        logger.info(f"[gpt_e] Sending request to GPT-4 for chat_id={chat_id}")
+        # שלב 4: שליחה ל-GPT
+        logger.info(f"[gpt_e] Sending request to GPT for chat_id={chat_id}")
         
         try:
             import litellm
