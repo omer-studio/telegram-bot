@@ -275,12 +275,12 @@ def get_model_info(model_name):
             "speed": "איטי",
             "quality": "הטוב ביותר"
         },
-        "gemini-2.5-flash": {
-            "type": "free_tier",
-            "cost": "חינמי",
+        "gemini/gemini-2.5-flash": {
+            "type": "paid_tier",
+            "cost": "$0.30/$2.50",
             "speed": "מהיר מאוד",
             "quality": "מעולה",
-            "note": "2.5 Flash - איזון מושלם בין מהירות לאיכות עם Thinking"
+            "note": "2.5 Flash - הטוב ביותר! איזון מושלם בין מהירות לאיכות"
         }
     }
     
@@ -291,18 +291,18 @@ def get_model_info(model_name):
         "quality": "לא ידוע"
     })
 
-# 🤖 הגדרת מודלים - עדכון למודל Gemini 2.5 Flash מהיר ואיכותי
+# 🤖 הגדרת מודלים - עם 2.5 Flash בשם הנכון!
 GPT_MODELS = {
-    "gpt_a": "gemini-2.5-flash",              # 🤖 המנוע הראשי - 2.5 Flash מהיר ואיכותי 🚀
-    "gpt_b": "gemini/gemini-2.0-flash-exp",   # 🤖 סיכום תשובות - מהיר וחינמי
-    "gpt_c": "gemini/gemini-1.5-pro",         # 🤖 חילוץ פרופיל - איכותי וחינמי
-    "gpt_d": "gemini/gemini-1.5-pro",         # 🤖 מיזוג פרופיל - איכותי וחינמי
-    "gpt_e": "gemini/gemini-2.0-flash-exp",   # 🤖 עדכון פרופיל מתקדם - מהיר וחינמי
+    "gpt_a": "gemini/gemini-2.5-flash",             # 🤖 המנוע הראשי - 2.5 Flash החדש! 🚀
+    "gpt_b": "gemini/gemini-2.0-flash-exp",         # 🤖 סיכום תשובות - מהיר וחינמי
+    "gpt_c": "gemini/gemini-1.5-pro",               # 🤖 חילוץ פרופיל - איכותי וחינמי
+    "gpt_d": "gemini/gemini-1.5-pro",               # 🤖 מיזוג פרופיל - איכותי וחינמי
+    "gpt_e": "gemini/gemini-2.0-flash-exp",         # 🤖 עדכון פרופיל מתקדם - מהיר וחינמי
 }
 
-# 🔄 מודלי fallback - גיבוי חכם (2.5 Flash בכל המקרים)
+# 🔄 מודלי fallback - גיבוי חכם
 GPT_FALLBACK_MODELS = {
-    "gpt_a": "gemini-2.5-flash",              # 🔄 fallback ראשון - 2.5 Flash מהיר ואיכותי
+    "gpt_a": "gemini/gemini-1.5-pro",               # 🔄 fallback ראשון - Pro יציב וחינמי
     # שאר ה-GPT מודלים משתמשים במודלים חינמיים אז אין צורך ב-fallback
 }
 
