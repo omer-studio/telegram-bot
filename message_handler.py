@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 import logging
 import asyncio
-from secret_commands import handle_secret_command
+from utils import handle_secret_command, log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state
@@ -19,7 +19,6 @@ from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d
 from gpt_utils import normalize_usage_dict
-from utils import log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from fields_dict import FIELDS_DICT
 import time
 import json

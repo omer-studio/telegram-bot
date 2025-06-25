@@ -254,7 +254,8 @@ def get_model_info(model_name):
             "type": "free_tier",
             "cost": "חינמי",
             "speed": "מהיר מאוד",
-            "quality": "מעולה"
+            "quality": "מעולה",
+            "note": "מומלץ כמנוע ראשי - איזון מושלם בין מהירות לאיכות"
         },
         "gemini/gemini-1.5-pro": {
             "type": "free_tier", 
@@ -273,6 +274,13 @@ def get_model_info(model_name):
             "cost": "~$7/מיליון טוקן",
             "speed": "איטי",
             "quality": "הטוב ביותר"
+        },
+        "gemini-2.5-flash": {
+            "type": "free_tier",
+            "cost": "חינמי",
+            "speed": "מהיר מאוד",
+            "quality": "מעולה",
+            "note": "2.5 Flash - איזון מושלם בין מהירות לאיכות עם Thinking"
         }
     }
     
@@ -283,24 +291,24 @@ def get_model_info(model_name):
         "quality": "לא ידוע"
     })
 
-# 🤖 הגדרת מודלים - GPTA בתשלום, השאר חינמיים איכותיים
+# 🤖 הגדרת מודלים - עדכון למודל Gemini 2.5 Flash מהיר ואיכותי
 GPT_MODELS = {
-    "gpt_a": "gemini/gemini-2.5-pro",         # 🤖 המנוע הראשי - הטוב ביותר (בתשלום)
+    "gpt_a": "gemini-2.5-flash",              # 🤖 המנוע הראשי - 2.5 Flash מהיר ואיכותי 🚀
     "gpt_b": "gemini/gemini-2.0-flash-exp",   # 🤖 סיכום תשובות - מהיר וחינמי
     "gpt_c": "gemini/gemini-1.5-pro",         # 🤖 חילוץ פרופיל - איכותי וחינמי
     "gpt_d": "gemini/gemini-1.5-pro",         # 🤖 מיזוג פרופיל - איכותי וחינמי
     "gpt_e": "gemini/gemini-2.0-flash-exp",   # 🤖 עדכון פרופיל מתקדם - מהיר וחינמי
 }
 
-# 🔄 מודלי fallback - גיבוי חכם (חינמי → בתשלום רק במקרה הצורך)
+# 🔄 מודלי fallback - גיבוי חכם (2.5 Flash בכל המקרים)
 GPT_FALLBACK_MODELS = {
-    "gpt_a": "gemini/gemini-1.5-flash",       # 🔄 fallback ראשון - Flash יציב (חינמי)
+    "gpt_a": "gemini-2.5-flash",              # 🔄 fallback ראשון - 2.5 Flash מהיר ואיכותי
     # שאר ה-GPT מודלים משתמשים במודלים חינמיים אז אין צורך ב-fallback
 }
 
 # 💰 מודל מתקדם (בתשלום) - רק במקרה הצורך הקיצוני
 GPT_PREMIUM_FALLBACK = {
-    "gpt_a": "gemini/gemini-2.5-pro",         # 💎 פרימיום - רק אם החינמיים לא עובדים
+    "gpt_a": "gemini/gemini-1.5-pro",         # 💎 פרימיום - Pro יציב אם Flash לא עובד
 }
 
 GPT_PARAMS = {

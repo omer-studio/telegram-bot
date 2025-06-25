@@ -1,27 +1,22 @@
 """
 utils.py
 --------
-כלים שימושיים לכל חלקי הבוט: רישום אירועים, ניהול היסטוריה, סטטיסטיקות, בדיקות תקינות.
+כלים שימושיים לכל חלקי הבוט: רישום אירועים, ניהול היסטוריה, סטטיסטיקות, בדיקות תקינות, פקודות סודיות.
 הרציונל: כלים שימושיים לכל חלקי הבוט, מופרדים מהלוגיקה הראשית.
 """
 import json
 import os
 from datetime import datetime
-from config import LOG_LIMIT, BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path, BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME, DATA_DIR, MAX_LOG_LINES_TO_KEEP, MAX_OLD_LOG_LINES, MAX_CHAT_HISTORY_MESSAGES, MAX_TRACEBACK_LENGTH
+from config import BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path, BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME, DATA_DIR, MAX_LOG_LINES_TO_KEEP, MAX_OLD_LOG_LINES, MAX_CHAT_HISTORY_MESSAGES, MAX_TRACEBACK_LENGTH, config
 
 
-def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
+def log_event_to_file(log_data: dict) -> None:
     """
     רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
     קלט: log_data (dict)
     פלט: אין (שומר לקובץ)
     """
     try:
-        print("[DEBUG][log_event_to_file] --- START ---")
-        for k, v in log_data.items():
-            print(f"[DEBUG][log_event_to_file] {k} = {v} (type: {type(v)})")
-            if isinstance(v, (dict, list)):
-                print(f"[DEBUG][log_event_to_file][ALERT] {k} הוא {type(v)}! ערך: {v}")
         file_path = BOT_TRACE_LOG_PATH
         log_data["timestamp_end"] = datetime.now().isoformat()
 
@@ -35,7 +30,7 @@ def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקו�
         # הוספת לוג חדש
         lines.append(json.dumps(log_data, ensure_ascii=False))
 
-        # שמירה על מגבלת הלוגים (למשל 200)
+        # שמירה על מגבלת הלוגים
         lines = lines[-MAX_LOG_LINES_TO_KEEP:]
 
         # שמירה חזרה לקובץ
@@ -47,9 +42,6 @@ def log_event_to_file(log_data: dict) -> None: # רושם אירועים לקו�
     except Exception as e:
         import traceback
         print(f"❌ שגיאה בשמירת לוג: {e}")
-        print("[DEBUG][log_event_to_file][EXCEPTION] log_data:")
-        for k, v in log_data.items():
-            print(f"[DEBUG][log_event_to_file][EXCEPTION] {k} = {v} (type: {type(v)})")
         print(traceback.format_exc())
 
 
@@ -186,7 +178,7 @@ def health_check() -> dict: # בדיקת תקינות המערכת (config, shee
     בדיקת תקינות המערכת (config, sheets, openai, כתיבה לקבצים).
     פלט: dict עם סטטוס לכל רכיב.
     """
-    from config import check_config_sanity, get_config_snapshot
+    from config import check_config_sanity
     from notifications import send_error_notification
     health = {
         "config_loaded": False,
@@ -373,3 +365,133 @@ def update_last_bot_message(chat_id, bot_summary):
                 json.dump(history_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"❌ שגיאה בעדכון תשובת בוט: {e}")
+
+
+# ========================================
+# פקודות סודיות - Secret Commands
+# ========================================
+
+SECRET_CODES = {
+    "#487chaCha2025": "clear_history",    # מוחק היסטוריית שיחה
+    "#512SheetBooM": "clear_sheets",      # מוחק מידע מהגיליונות
+    "#734TotalZap": "clear_all",          # מוחק הכל (היסטוריה + גיליונות)
+}
+
+def handle_secret_command(chat_id, user_msg):
+    """
+    טיפול בפקודות סודיות למטרות בדיקה ותחזוקה.
+    קלט: chat_id, user_msg
+    פלט: (bool, str) - האם טופל והתשובה
+    """
+    print(f"[SECRET_CMD] קיבלתי הודעה לבדוק קוד סודי | chat_id={chat_id} | text={user_msg!r} | timestamp={datetime.now().isoformat()}")
+
+    action = SECRET_CODES.get(user_msg.strip())
+    if not action:
+        return False, None
+
+    print(f"[SECRET_CMD] קוד סודי מזוהה: {action} | chat_id={chat_id}")
+
+    if action == "clear_history":
+        cleared = clear_chat_history(chat_id)
+        msg = "🧹 כל ההיסטוריה שלך נמחקה!" if cleared else "🤷‍♂️ לא נמצאה היסטוריה למחיקה."
+        print(f"[SECRET_CMD] {chat_id} ביקש clear_history — {'נמחק' if cleared else 'לא נמצא'}")
+        log_event_to_file({
+            "event": "secret_command",
+            "timestamp": datetime.now().isoformat(),
+            "chat_id": chat_id,
+            "action": "clear_history",
+            "result": cleared
+        })
+        _send_admin_secret_notification(
+            f"❗ הופעל קוד סודי למחיקת היסטוריה בצ'אט {chat_id}.\n"
+            f"נמחקה אך ורק ההיסטוריה של משתמש זה."
+        )
+        return True, msg
+
+    if action == "clear_sheets":
+        deleted_sheet, deleted_state = clear_from_sheets(chat_id)
+        msg = "🗑️ כל הנתונים שלך נמחקו מהגיליונות!" if (deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא מידע למחיקה בגיליונות."
+        print(f"[SECRET_CMD] {chat_id} ביקש clear_sheets — sheet: {deleted_sheet}, state: {deleted_state}")
+        log_event_to_file({
+            "event": "secret_command",
+            "timestamp": datetime.now().isoformat(),
+            "chat_id": chat_id,
+            "action": "clear_sheets",
+            "deleted_sheet": deleted_sheet,
+            "deleted_state": deleted_state
+        })
+        _send_admin_secret_notification(
+            f"❗ הופעל קוד סודי למחיקת נתונים בגיליונות בצ'אט {chat_id}.\n"
+            f"נמחק אך ורק מידע של משתמש זה.\n"
+            f"{config['SHEET_USER_TAB']}: {'הצליח' if deleted_sheet else 'לא הצליח'}, {config['SHEET_STATES_TAB']}: {'הצליח' if deleted_state else 'לא הצליח'}"
+        )
+        return True, msg
+
+    if action == "clear_all":
+        cleared = clear_chat_history(chat_id)
+        deleted_sheet, deleted_state = clear_from_sheets(chat_id)
+        msg = "💣 הכל נמחק! (היסטוריה + גיליונות)" if (cleared or deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא שום מידע למחיקה."
+        print(f"[SECRET_CMD] {chat_id} ביקש clear_all — history: {cleared}, sheet: {deleted_sheet}, state: {deleted_state}")
+        log_event_to_file({
+            "event": "secret_command",
+            "timestamp": datetime.now().isoformat(),
+            "chat_id": chat_id,
+            "action": "clear_all",
+            "cleared_history": cleared,
+            "deleted_sheet": deleted_sheet,
+            "deleted_state": deleted_state
+        })
+        _send_admin_secret_notification(
+            f"❗ הופעל קוד סודי למחיקת **הכל** בצ'אט {chat_id}.\n"
+            f"נמחק הכל של משתמש זה בלבד.\n"
+            f"היסטוריה: {'✔️' if cleared else '❌'} | {config['SHEET_USER_TAB']}: {'✔️' if deleted_sheet else '❌'} | {config['SHEET_STATES_TAB']}: {'✔️' if deleted_state else '❌'}"
+        )
+        return True, msg
+
+    return False, None
+
+def clear_chat_history(chat_id):
+    """מוחק היסטוריית צ'אט ספציפי"""
+    path = CHAT_HISTORY_PATH
+    print(f"[CLEAR_HISTORY] מנסה למחוק היסטוריה | chat_id={chat_id} | path={path}")
+    if not os.path.exists(path):
+        print(f"[CLEAR_HISTORY] קובץ היסטוריה לא קיים | path={path}")
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if str(chat_id) in data:
+            data.pop(str(chat_id))
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"[CLEAR_HISTORY] נמחקה היסטוריה בהצלחה | chat_id={chat_id}")
+            return True
+        print(f"[CLEAR_HISTORY] לא נמצאה היסטוריה למחיקה | chat_id={chat_id}")
+        return False
+    except Exception as e:
+        print(f"[ERROR-clear_chat_history] {e} | chat_id={chat_id}")
+        log_event_to_file({
+            "event": "clear_history_error",
+            "timestamp": datetime.now().isoformat(),
+            "chat_id": chat_id,
+            "error": str(e)
+        })
+        return False
+
+def clear_from_sheets(chat_id):
+    """מוחק נתוני משתמש מהגיליונות"""
+    from sheets_handler import delete_row_by_chat_id
+    print(f"[CLEAR_SHEETS] מנסה למחוק מהגיליונות | chat_id={chat_id}")
+    deleted_sheet = delete_row_by_chat_id(sheet_name=config["SHEET_USER_TAB"], chat_id=chat_id)
+    print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_USER_TAB']}: {deleted_sheet} | chat_id={chat_id}")
+    deleted_state = delete_row_by_chat_id(sheet_name=config["SHEET_STATES_TAB"], chat_id=chat_id)
+    print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_STATES_TAB']}: {deleted_state} | chat_id={chat_id}")
+    return deleted_sheet, deleted_state
+
+def _send_admin_secret_notification(message: str):
+    """שולח הודעה לאדמין על שימוש בקוד סודי"""
+    try:
+        from notifications import send_admin_secret_command_notification
+        send_admin_secret_command_notification(message)
+    except Exception as e:
+        print(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")

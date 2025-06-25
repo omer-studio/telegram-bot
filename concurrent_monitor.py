@@ -32,7 +32,7 @@ concurrent_monitor.py
 💡 בלי הקובץ הזה: 50+ משתמשים → Google Sheets קורס → הבוט קורס
    עם הקובץ הזה: מקסימום 10 משתמשים → מערכת יציבה ואמינה
 
-🔗 משמש ב: message_handler.py, secret_commands.py
+🔗 משמש ב: message_handler.py, utils.py
 """
 
 import asyncio
