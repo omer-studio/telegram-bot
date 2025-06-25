@@ -25,6 +25,7 @@ voice_handler.py
 import logging
 import os
 import tempfile
+import subprocess  # נוסף: נדרש לבדיקת FFmpeg
 from typing import Optional
 import whisper
 import asyncio

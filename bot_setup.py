@@ -143,8 +143,8 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
 
 setup_admin_reports()
 
-# הוספת handler להודעות טקסט
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+# הוספת handler להודעות טקסט וקוליות
+app.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, handle_message))
 
 # פונקציה שמבצעת את כל ההתקנה
 def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app
