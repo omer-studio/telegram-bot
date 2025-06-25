@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 import logging
 import asyncio
+import re
 from utils import handle_secret_command, log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response
 from notifications import handle_critical_error
@@ -25,6 +26,20 @@ import json
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 
+def format_text_for_telegram(text):
+    """
+    ממיר פורמטים מווואטסאפ לפורמט HTML של טלגרם:
+    - *טקסט* -> <b>טקסט</b> (bold)
+    - _טקסט_ -> <i>טקסט</i> (italic)
+    """
+    # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
+    text = re.sub(r'\*([^\s*][^*]*[^\s*]|\S)\*', r'<b>\1</b>', text)
+    
+    # המרת קו תחתון ל-italic (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
+    text = re.sub(r'_([^\s_][^_]*[^\s_]|\S)_', r'<i>\1</i>', text)
+    
+    return text
+
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
     """
@@ -33,7 +48,10 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     פלט: אין (שולחת הודעה)
     # מהלך מעניין: עדכון היסטוריה ולוגים רק אם ההודעה נשלחה בהצלחה.
     """
-    print(f"[SEND_MESSAGE] chat_id={chat_id} | text={text.replace(chr(10), ' ')[:120]}", flush=True)
+    # מיפוי פורמטים לפני שליחה
+    formatted_text = format_text_for_telegram(text)
+    
+    print(f"[SEND_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
     try:
         bot_id = None
         if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
@@ -45,7 +63,7 @@ async def send_message(update, chat_id, text, is_bot_message=True):
         print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
     import sys; sys.stdout.flush()
     try:
-        sent_message = await update.message.reply_text(text, parse_mode="HTML")
+        sent_message = await update.message.reply_text(formatted_text, parse_mode="HTML")
         print(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
         logging.info(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
     except Exception as e:
@@ -53,25 +71,25 @@ async def send_message(update, chat_id, text, is_bot_message=True):
         logging.error(f"[ERROR] שליחת הודעה נכשלה: {e}")
         log_event_to_file({
             "chat_id": chat_id,
-            "bot_message": text,
+            "bot_message": formatted_text,
             "timestamp": datetime.now().isoformat(),
             "error": str(e)
         })
         try:
             from notifications import send_error_notification
-            send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=text)
+            send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
         except Exception as notify_err:
             print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
             logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
         return
     if is_bot_message:
-        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", text)
+        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", formatted_text)
     log_event_to_file({
         "chat_id": chat_id,
-        "bot_message": text,
+        "bot_message": formatted_text,
         "timestamp": datetime.now().isoformat()
     })
-    print(f"[BOT_MSG] {text.replace(chr(10), ' ')[:120]}")
+    print(f"[BOT_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
 
 # פונקציה לשליחת הודעת אישור (הועתקה מ-main.py)
 async def send_approval_message(update, chat_id):
@@ -80,8 +98,9 @@ async def send_approval_message(update, chat_id):
     קלט: update, chat_id
     פלט: אין (שולחת הודעה)
     """
+    approval_msg = approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה."
     await update.message.reply_text(
-        approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה.",
+        format_text_for_telegram(approval_msg),
         reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
     )
 
@@ -145,9 +164,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"[VOICE_MSG_DISABLED] chat_id={chat_id} | message_id={message_id}")
                     
                     # הודעה למשתמש שהתכונה לא זמינה כרגע
+                    voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
                     await update.message.reply_text(
-                        "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\n"
-                        "אנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
+                        format_text_for_telegram(voice_message)
                     )
                     
                     # רישום להיסטוריה ולוגים
@@ -179,18 +198,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "event_type": "unsupported_message"
                     })
                     
-                    await update.message.reply_text(appropriate_response)
+                    await update.message.reply_text(format_text_for_telegram(appropriate_response))
                     await end_monitoring_user(str(chat_id), True)
                     return
 
             # 🚀 התחלת ניטור concurrent
             if not await start_monitoring_user(str(chat_id), str(message_id)):
-                await update.message.reply_text("⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
+                await update.message.reply_text(format_text_for_telegram("⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות."))
                 return
 
             did, reply = handle_secret_command(chat_id, user_msg)
             if did:
-                await update.message.reply_text(reply)
+                await update.message.reply_text(format_text_for_telegram(reply))
                 await end_monitoring_user(str(chat_id), True)
                 return
             log_payload["chat_id"] = chat_id
@@ -334,25 +353,25 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 current_try = 1
 
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
-                await update.message.reply_text(code_approved_message())
+                await update.message.reply_text(format_text_for_telegram(code_approved_message()))
                 await send_approval_message(update, chat_id)
             else:
                 if current_try == 1:
-                    await update.message.reply_text(get_retry_message_by_attempt(current_try))
+                    await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
                 elif current_try == 2:
-                    await update.message.reply_text(get_retry_message_by_attempt(current_try))
+                    await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
                 elif current_try == 3:
-                    await update.message.reply_text(get_retry_message_by_attempt(current_try))
+                    await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
                 elif current_try >= 4:
-                    await update.message.reply_text(not_approved_message())
+                    await update.message.reply_text(format_text_for_telegram(not_approved_message()))
         elif not approved:
             if user_msg.strip() == APPROVE_BUTTON_TEXT:
                 approve_user(context.bot_data["sheet"], chat_id)
-                await update.message.reply_text(nice_keyboard_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
-                await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
-                await update.message.reply_text(full_access_message(), parse_mode="HTML")
+                await update.message.reply_text(format_text_for_telegram(nice_keyboard_message()), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
+                await update.message.reply_text(format_text_for_telegram(remove_keyboard_message()), reply_markup=ReplyKeyboardRemove())
+                await update.message.reply_text(format_text_for_telegram(full_access_message()), parse_mode="HTML")
             elif user_msg.strip() == DECLINE_BUTTON_TEXT:
-                await update.message.reply_text("כדי להמשיך, יש לאשר את התנאים.")
+                await update.message.reply_text(format_text_for_telegram("כדי להמשיך, יש לאשר את התנאים."))
                 await send_approval_message(update, chat_id)
             else:
                 await send_approval_message(update, chat_id)
@@ -576,9 +595,12 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         await handle_critical_error(ex, chat_id, user_msg, update)
 
 async def send_message_with_retry(update, chat_id, text, is_bot_message=True, max_retries=3):
+    # מיפוי פורמטים לפני שליחה
+    formatted_text = format_text_for_telegram(text)
+    
     for attempt in range(max_retries):
         try:
-            await update.message.reply_text(text, parse_mode="HTML")
+            await update.message.reply_text(formatted_text, parse_mode="HTML")
             return True
         except Exception as e:
             if attempt < max_retries - 1:
