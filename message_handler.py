@@ -311,20 +311,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             messages_for_gpt.extend(history_messages)
             messages_for_gpt.append({"role": "user", "content": user_msg})
 
-            # שלב 2: קריאה ל-gpt_a למענה ראשי (זה מה שיקבע את איכות התשובה)
-            print(f"[DEBUG] 🔥 Calling get_main_response...")
-            gpt_response = await asyncio.to_thread(
-                get_main_response,
+            # שלב 2: קריאה ל-gpt_a למענה ראשי עם מנגנון הודעות זמניות
+            print(f"[DEBUG] 🔥 Calling get_main_response_with_timeout...")
+            from gpt_a_handler import get_main_response_with_timeout
+            gpt_response = await get_main_response_with_timeout(
                 full_messages=messages_for_gpt,
                 chat_id=chat_id,
-                message_id=message_id
+                message_id=message_id,
+                update=update
             )
-            print(f"[DEBUG] get_main_response returned: {gpt_response}")
+            print(f"[DEBUG] get_main_response_with_timeout returned: {gpt_response}")
             bot_reply = gpt_response["bot_reply"]
+            
+            # הדפסת מידע על בחירת המודל
+            if gpt_response.get("used_premium"):
+                print(f"🎯 [MODEL_INFO] השתמש במודל מתקדם: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')}")
+            else:
+                print(f"🚀 [MODEL_INFO] השתמש במודל מהיר: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')}")
 
-            # שלב 3: שליחת התשובה למשתמש ועדכון היסטוריה ראשוני
+            # שלב 3: שליחת התשובה למשתמש (אלא אם כבר נשלחה דרך עריכת הודעה זמנית)
             await update_user_processing_stage(str(chat_id), "sending_response")
-            await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
+            if not gpt_response.get("message_already_sent", False):
+                await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
             update_chat_history(chat_id, user_msg, "")
             
             # שלב 4: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)

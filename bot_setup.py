@@ -203,38 +203,42 @@ def install_single_dependency(pip_command, description):
 
 @time_operation("התקנת תלויות - סה״כ")
 def install_dependencies():
-    """מתקין את כל התלויות הנדרשות (Windows בלבד)"""
-    # 🔧 תיקון: בסביבת production לא מתקין תלויות
-    if os.getenv("RENDER"):  # אם רץ ברנדר
-        print("ℹ️  רץ בסביבת production - מדלג על התקנת תלויות")
+    """
+    מתקין תלויות Python (רק בסביבת פיתוח מקומי)
+    בסביבת production (רנדר) או בsandbox mode - מדלג על התקנה
+    """
+    print("📦 בודק התקנת תלויות...")
+    
+    # 🔧 תיקון חשוב: מניעת התקנות בsandbox ובproduction
+    if os.getenv("RENDER"):
+        print("ℹ️  רץ בסביבת production (רנדר) - מדלג על התקנת תלויות")
+        print("    (התלויות כבר אמורות להיות מותקנות מה-requirements.txt)")
         return
-        
-    if os.name == 'nt':
-        print('🔧 מתחיל התקנת תלויות...')
-        
-        # עדכון pip
-        install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '--upgrade', 'pip'],
-            "עדכון pip"
-        )
-
-        # התקנת requirements.txt
-        install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'pip.exe'), 'install', '-r', 'requirements.txt'],
-            "requirements.txt"
-        )
-
-        # התקנת uvicorn (לסביבה לוקאלית)
-        install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'pip.exe'), 'install', 'uvicorn'],
-            "uvicorn"
-        )
-
-        # התקנת requests (אם לא קיים)
-        install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'pip.exe'), 'install', 'requests'],
-            "requests"
-        )
+    
+    # בדיקה נוספת: אם זה sandbox mode
+    if any(arg in sys.argv[0].lower() for arg in ["sandbox", "uvicorn"]):
+        print("ℹ️  רץ במצב sandbox - מדלג על התקנת תלויות")
+        return
+    
+    # רק בסביבת פיתוח מקומי (Windows בדרך כלל)
+    print("🔧 סביבת פיתוח מקומי - בודק תלויות...")
+    
+    pip_commands = [
+        ([sys.executable, "-m", "pip", "install", "--upgrade", "pip"], "עדכון pip"),
+        ([sys.executable, "-m", "pip", "install", "python-telegram-bot[webhooks]"], "python-telegram-bot"),
+        ([sys.executable, "-m", "pip", "install", "gspread", "oauth2client"], "Google Sheets"),
+        ([sys.executable, "-m", "pip", "install", "fastapi", "uvicorn[standard]"], "FastAPI & Uvicorn"),
+        ([sys.executable, "-m", "pip", "install", "litellm"], "LiteLLM"),
+        ([sys.executable, "-m", "pip", "install", "openai"], "OpenAI"),
+        ([sys.executable, "-m", "pip", "install", "anthropic"], "Anthropic"),
+        ([sys.executable, "-m", "pip", "install", "google-generativeai"], "Google Generative AI"),
+        ([sys.executable, "-m", "pip", "install", "apscheduler", "pytz"], "תזמון"),
+        ([sys.executable, "-m", "pip", "install", "requests"], "Requests"),
+        ([sys.executable, "-m", "pip", "install", "openai-whisper"], "Whisper")
+    ]
+    
+    for pip_command, description in pip_commands:
+        install_single_dependency(pip_command, description)
 
 def time_telegram_step(step_name, func):
     """מודד זמן לשלב ביצירת אפליקציית טלגרם"""

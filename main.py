@@ -50,6 +50,7 @@ import os
 import requests
 from gpt_c_logger import clear_gpt_c_html_log
 from config import DATA_DIR, PRODUCTION_PORT
+import sys
 
 # 🔧 תיקון: מניעת setup מרובה
 _bot_setup_completed = False
@@ -58,6 +59,23 @@ _app_instance = None
 def get_bot_app():
     """מחזיר את הapp של הבוט, מגדיר אותו רק פעם אחת"""
     global _bot_setup_completed, _app_instance
+    
+    # 🔧 תיקון: בדיקה משופרת למניעת setup כפול
+    if _bot_setup_completed and _app_instance is not None:
+        print("ℹ️  הבוט כבר הוגדר, מחזיר instance קיים")
+        return _app_instance
+    
+    # בדיקה נוספת: אם זה בsandbox mode או עם uvicorn
+    if any(arg in sys.argv[0].lower() for arg in ["sandbox", "uvicorn"]) or os.getenv("UVICORN_MODE"):
+        print("⚠️  זוהה sandbox/uvicorn mode - אל תפעיל main.py ישירות!")
+        print("    השתמש ב: python sandbox.py")
+        raise SystemExit("❌ שגיאה: main.py לא צריך לרוץ במצב sandbox")
+    
+    # בדיקה נוספת: אם זה deploy חדש ברנדר
+    if os.getenv("RENDER") and os.getenv("IS_PULL_REQUEST"):
+        print("ℹ️  זוהה deploy חדש ברנדר - ממתין להשלמת deployment...")
+        import time
+        time.sleep(5)  # ממתין קצת שהdeployment יסתיים
     
     if not _bot_setup_completed:
         print("🚀 מבצע setup ראשוני של הבוט...")

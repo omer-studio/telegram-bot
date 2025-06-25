@@ -101,6 +101,18 @@ class VoiceHandler:
         import subprocess
         import sys
         
+        # 🔧 תיקון: בסביבת production לא מתקין כלום!
+        if os.getenv("RENDER"):  # אם רץ ברנדר
+            logging.info("ℹ️  רץ בסביבת production - מדלג על התקנת FFmpeg")
+            # רק בדיקה אם זמין במערכת
+            try:
+                subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
+                logging.info("[DEBUG] FFmpeg זמין במערכת (production)")
+                return True
+            except:
+                logging.warning("[WARNING] FFmpeg לא זמין בproduction - תמלול קולי לא יעבוד")
+                return False
+        
         # בדיקה ישירה אם FFmpeg זמין
         try:
             subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True, timeout=5)
@@ -141,6 +153,9 @@ class VoiceHandler:
         logging.warning("[WARNING] FFmpeg לא נמצא במערכת")
         logging.warning("[WARNING] FFmpeg לא נמצא ב-PATH")
         
+        # 🔧 תיקון: רק בסביבת פיתוח מקומי מנסה להתקין
+        logging.info("ℹ️  סביבת פיתוח מקומי - מנסה התקנות FFmpeg")
+        
         # התקנה עבור Windows
         try:
             if os.name == 'nt':  # Windows
@@ -169,7 +184,7 @@ class VoiceHandler:
         except Exception as e:
             logging.error(f"[ERROR] שגיאה כללית בהתקנת FFmpeg ב-Windows: {e}")
         
-        # ניסיון התקנה ב-Linux/Unix (סביבות פרודקשן)
+        # ניסיון התקנה ב-Linux/Unix (רק בסביבת פיתוח)
         try:
             if os.name == 'posix':  # Linux/Unix
                 logging.info("[DEBUG] מנסה להתקין FFmpeg ב-Linux...")
@@ -182,17 +197,23 @@ class VoiceHandler:
         except FileNotFoundError:
             logging.warning("[WARNING] apt-get לא זמין")
         
-        # ניסיון התקנה דרך ffmpeg-python
+        # 🔧 תיקון: ניסיון התקנה דרך ffmpeg-python רק אם ffmpeg-python עדיין לא קיים
         try:
-            logging.info("[DEBUG] מנסה להתקין ffmpeg-python...")
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'ffmpeg-python'], timeout=60)
-            
-            # ניסיון נוסף להורדת FFmpeg binary
+            # בדיקה ראשונה אם ffmpeg-python כבר קיים
             import ffmpeg
-            logging.info("[DEBUG] ffmpeg-python הותקן בהצלחה")
-            
-        except Exception as e:
-            logging.error(f"[ERROR] נכשל בהתקנת ffmpeg-python: {e}")
+            logging.info("[DEBUG] ffmpeg-python כבר קיים - מדלג על התקנה")
+            return True
+        except ImportError:
+            logging.info("[DEBUG] ffmpeg-python לא קיים - מנסה להתקין...")
+            try:
+                subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'ffmpeg-python'], timeout=60)
+                
+                # ניסיון נוסף להורדת FFmpeg binary
+                import ffmpeg
+                logging.info("[DEBUG] ffmpeg-python הותקן בהצלחה")
+                
+            except Exception as e:
+                logging.error(f"[ERROR] נכשל בהתקנת ffmpeg-python: {e}")
         
         # בדיקה סופית
         if shutil.which("ffmpeg"):
