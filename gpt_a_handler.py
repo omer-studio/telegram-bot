@@ -16,7 +16,7 @@ from prompts import SYSTEM_PROMPT
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
 from gpt_utils import normalize_usage_dict
 from gpt_utils import billing_guard
-from notifications import alert_billing_issue
+from notifications import alert_billing_issue, send_error_notification
 
 # ייבוא הפילטר החכם
 # ===============================
@@ -298,8 +298,17 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         
     except Exception as e:
         logging.error(f"[gpt_a] שגיאה במודל {model}: {e}")
+        
+        # שליחת הודעת שגיאה טכנית לאדמין
+        send_error_notification(
+            error_message=f"שגיאה במנוע הראשי (gpt_a) - מודל: {model}, שגיאה: {str(e)}",
+            chat_id=chat_id,
+            user_msg=full_messages[-1]["content"] if full_messages else "לא זמין",
+            error_type="gpt_a_engine_error"
+        )
+        
         return {
-            "bot_reply": "[שגיאה במנוע הראשי - נסה שוב]", 
+            "bot_reply": "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧", 
             "usage": {}, 
             "model": model,
             "used_premium": use_premium,
@@ -378,8 +387,16 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         if temp_message_task and not temp_message_task.done():
             temp_message_task.cancel()
         
+        # שליחת הודעת שגיאה טכנית לאדמין
+        send_error_notification(
+            error_message=f"שגיאה כללית ב-get_main_response_with_timeout: {str(e)}",
+            chat_id=chat_id,
+            user_msg=full_messages[-1]["content"] if full_messages else "לא זמין", 
+            error_type="gpt_a_timeout_error"
+        )
+        
         return {
-            "bot_reply": "[שגיאה במנוע הראשי - נסה שוב]", 
+            "bot_reply": "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧", 
             "usage": {}, 
             "model": "error",
             "used_premium": use_premium,
