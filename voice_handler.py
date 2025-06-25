@@ -28,7 +28,7 @@ class DisabledVoiceHandler:
     async def transcribe_voice_message(self, update, context):
         """פונקציה דמה שמחזירה None"""
         logger.warning("transcribe_voice_message נקרא אבל מבוטל")
-        return None
-
+                return None
+                
 # יצירת instance גלובלי דמה
 voice_handler = DisabledVoiceHandler() 

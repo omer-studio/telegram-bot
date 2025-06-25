@@ -65,8 +65,11 @@ def get_bot_app():
         print("ℹ️  הבוט כבר הוגדר, מחזיר instance קיים")
         return _app_instance
     
-    # בדיקה נוספת: אם זה בsandbox mode או עם uvicorn
-    if any(arg in sys.argv[0].lower() for arg in ["sandbox", "uvicorn"]) or os.getenv("UVICORN_MODE"):
+    # בדיקה נוספת: אם זה בsandbox mode או עם uvicorn (אבל לא בסביבת production)
+    is_sandbox_mode = any(arg in sys.argv[0].lower() for arg in ["sandbox"]) or os.getenv("UVICORN_MODE")
+    is_local_uvicorn = any(arg in sys.argv[0].lower() for arg in ["uvicorn"]) and not os.getenv("RENDER")
+    
+    if is_sandbox_mode or is_local_uvicorn:
         print("⚠️  זוהה sandbox/uvicorn mode - אל תפעיל main.py ישירות!")
         print("    השתמש ב: python sandbox.py")
         raise SystemExit("❌ שגיאה: main.py לא צריך לרוץ במצב sandbox")
