@@ -58,13 +58,84 @@ from daily_summary import send_daily_summary
 import pytz
 from message_handler import handle_message
 
-# בדיקת קיום קבצים קריטיים
-critical_files = [
-    "data/gpt_usage_log.jsonl",
-    "data/chat_history.json",
-    "data/bot_errors.jsonl"
-]
-for file_path in critical_files:
+# רשימה לשמירת זמני ביצוע
+execution_times = {}
+
+def time_operation(operation_name):
+    """מקישט פונקציה למדידת זמן ביצוע"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            print(f"⏱️  מתחיל {operation_name}...")
+            result = func(*args, **kwargs)
+            elapsed_time = time.time() - start_time
+            execution_times[operation_name] = elapsed_time
+            print(f"✅ {operation_name} הושלם תוך {elapsed_time:.2f} שניות")
+            return result
+        return wrapper
+    return decorator
+
+def print_execution_summary():
+    """מדפיס טבלה מסכמת של זמני הביצוע"""
+    print("\n" + "="*70)
+    print("📊 סיכום מפורט של זמני ביצוע ההתקנה")
+    print("="*70)
+    print(f"{'פעולה':<45} {'זמן (שניות)':<12} {'זמן (דקות)':<8}")
+    print("-" * 70)
+    
+    # מיון לפי סדר ביצוע - קטגוריות עיקריות ואחר כך פרטים
+    main_operations = []
+    sub_operations = []
+    
+    for operation, duration in execution_times.items():
+        if "סה״כ" in operation:
+            main_operations.append((operation, duration))
+        else:
+            sub_operations.append((operation, duration))
+    
+    total_time = 0
+    
+    # הדפסת קטגוריות עיקריות
+    print("🏗️ שלבים עיקריים:")
+    for operation, duration in main_operations:
+        total_time += duration
+        minutes = duration / 60
+        print(f"  {operation:<43} {duration:>8.2f}      {minutes:>6.2f}")
+    
+    print()
+    print("🔍 פירוט שלבי משנה:")
+    
+    # הדפסת פרטים לפי קטגוריות
+    categories = {
+        "קבצים": [op for op in sub_operations if "קובץ" in op[0]],
+        "תלויות": [op for op in sub_operations if any(x in op[0] for x in ["עדכון", "requirements", "uvicorn", "requests"])],
+        "טלגרם": [op for op in sub_operations if any(x in op[0] for x in ["אפליקציה", "concurrent", "בסיסית", "מינימלית"])],
+        "Google Sheets": [op for op in sub_operations if any(x in op[0] for x in ["ספריות", "הרשאות", "API", "גיליון", "משתמשים", "מצבים"])],
+        "תזמון": [op for op in sub_operations if any(x in op[0] for x in ["אזור זמן", "מתזמן", "דוח", "סיכום", "הפעלת"])],
+        "אחר": [op for op in sub_operations if not any(cat in op[0] for cat in ["קובץ", "עדכון", "requirements", "uvicorn", "requests", "אפליקציה", "concurrent", "בסיסית", "מינימלית", "ספריות", "הרשאות", "API", "גיליון", "משתמשים", "מצבים", "אזור זמן", "מתזמן", "דוח", "סיכום", "הפעלת"])]
+    }
+    
+    for category, operations in categories.items():
+        if operations:
+            print(f"\n  📁 {category}:")
+            for operation, duration in operations:
+                minutes = duration / 60
+                if duration < 0.01:  # פחות מ-0.01 שניה
+                    print(f"    {operation:<39} {duration:>8.3f}      {minutes:>6.3f}")
+                else:
+                    print(f"    {operation:<39} {duration:>8.2f}      {minutes:>6.2f}")
+    
+    print("\n" + "-" * 70)
+    total_minutes = total_time / 60
+    print(f"{'🎯 סה״כ זמן התקנה כולל':<45} {total_time:>8.2f}      {total_minutes:>6.2f}")
+    print("="*70)
+
+def setup_single_critical_file(file_path):
+    """יוצר קובץ קריטי יחיד עם מדידת זמן"""
+    start_time = time.time()
+    file_name = os.path.basename(file_path)
+    print(f"⏱️  בודק/יוצר קובץ {file_name}...")
+    
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     if not os.path.exists(file_path):
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -72,38 +143,143 @@ for file_path in critical_files:
                 f.write('{}')
             else:
                 f.write('')
-
-# --- קטעי התקנה והרצה לוקאלית (Windows בלבד) ---
-if os.name == 'nt':
-    # 1. בדיקת venv והפעלה
-    venv_path = os.path.join(os.getcwd(), 'venv')
-    if not os.path.exists(venv_path):
-        print('🔧 יוצר venv חדש...')
-        subprocess.run([sys.executable, '-m', 'venv', 'venv'])
+        status = "נוצר"
     else:
-        print('✅ venv קיים')
+        status = "קיים"
+    
+    elapsed_time = time.time() - start_time
+    execution_times[f"קובץ {file_name}"] = elapsed_time
+    print(f"✅ קובץ {file_name} ({status}) - {elapsed_time:.3f} שניות")
 
-    # 2. התקנת כל התלויות
-    print('🔧 מתקין תלויות מ-requirements.txt...')
-    subprocess.run([os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '--upgrade', 'pip'])
-    subprocess.run([os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '-r', 'requirements.txt'])
-    subprocess.run([os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', 'uvicorn', 'requests'])
+@time_operation("בדיקת קיום קבצים קריטיים - סה״כ")
+def setup_critical_files():
+    """יוצר קבצים קריטיים הנדרשים לפעולת הבוט"""
+    critical_files = [
+        "data/gpt_usage_log.jsonl",
+        "data/chat_history.json", 
+        "data/bot_errors.jsonl"
+    ]
+    
+    print(f"🔍 בודק {len(critical_files)} קבצים קריטיים...")
+    for file_path in critical_files:
+        setup_single_critical_file(file_path)
 
-# יצירת אפליקציית טלגרם
-try:
-    # הפעלת concurrent_updates - מאפשר טיפול במשתמשים מרובים במקביל
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(True).read_timeout(30).job_queue(None).build()
-except Exception as e:
-    print(f"⚠️ בעיה עם ApplicationBuilder (ניסיון 1): {e}")
+@time_operation("בדיקת והכנת סביבה וירטואלית")
+def setup_virtual_environment():
+    """בודק ויוצר venv במידת הצורך (Windows בלבד)"""
+    if os.name == 'nt':
+        venv_path = os.path.join(os.getcwd(), 'venv')
+        if not os.path.exists(venv_path):
+            print('🔧 יוצר venv חדש...')
+            subprocess.run([sys.executable, '-m', 'venv', 'venv'])
+        else:
+            print('✅ venv קיים')
+
+def install_single_dependency(pip_command, description):
+    """מתקין dependency יחיד עם מדידת זמן"""
+    start_time = time.time()
+    print(f"⏱️  מתקין {description}...")
+    result = subprocess.run(pip_command, capture_output=True, text=True)
+    elapsed_time = time.time() - start_time
+    execution_times[description] = elapsed_time
+    if result.returncode == 0:
+        print(f"✅ {description} הותקן תוך {elapsed_time:.2f} שניות")
+    else:
+        print(f"⚠️ {description} - יש בעיה (אך ממשיך): {elapsed_time:.2f} שניות")
+    return result
+
+@time_operation("התקנת תלויות - סה״כ")
+def install_dependencies():
+    """מתקין את כל התלויות הנדרשות (Windows בלבד)"""
+    if os.name == 'nt':
+        print('🔧 מתחיל התקנת תלויות...')
+        
+        # עדכון pip
+        install_single_dependency(
+            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '--upgrade', 'pip'],
+            "עדכון pip"
+        )
+        
+        # התקנת requirements.txt
+        install_single_dependency(
+            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '-r', 'requirements.txt'],
+            "requirements.txt"
+        )
+        
+        # התקנת תלויות נוספות
+        install_single_dependency(
+            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', 'uvicorn'],
+            "uvicorn"
+        )
+        
+        install_single_dependency(
+            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', 'requests'],
+            "requests"
+        )
+
+def time_telegram_step(step_name, func):
+    """מודד זמן לשלב ביצירת אפליקציית טלגרם"""
+    start_time = time.time()
+    print(f"⏱️  {step_name}...")
     try:
-        # ניסיון נוסף ללא כל תכונות מתקדמות
-        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).read_timeout(30).job_queue(None).build()
-    except Exception as e2:
-        print(f"⚠️ בעיה עם ApplicationBuilder (ניסיון 2): {e2}")
-        # ניסיון אחרון עם הגדרות מינימליות
-        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+        result = func()
+        elapsed_time = time.time() - start_time
+        execution_times[step_name] = elapsed_time
+        print(f"✅ {step_name} הושלם תוך {elapsed_time:.2f} שניות")
+        return result
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        execution_times[step_name] = elapsed_time
+        print(f"⚠️ {step_name} נכשל תוך {elapsed_time:.2f} שניות: {e}")
+        raise
+
+@time_operation("יצירת אפליקציית טלגרם - סה״כ")
+def create_telegram_app():
+    """יוצר אפליקציית טלגרם עם הגדרות מתקדמות"""
+    global app
+    
+    # ניסיון 1: הגדרות מלאות
+    try:
+        def build_full_featured_app():
+            return ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(True).read_timeout(30).job_queue(None).build()
+        
+        app = time_telegram_step("יצירת אפליקציה עם concurrent_updates", build_full_featured_app)
+        return
+    except Exception as e:
+        print(f"⚠️ בעיה עם ApplicationBuilder (ניסיון 1): {e}")
+        
+        # ניסיון 2: הגדרות בסיסיות
+        try:
+            def build_basic_app():
+                return ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).read_timeout(30).job_queue(None).build()
+            
+            app = time_telegram_step("יצירת אפליקציה בסיסית", build_basic_app)
+            return
+        except Exception as e2:
+            print(f"⚠️ בעיה עם ApplicationBuilder (ניסיון 2): {e2}")
+        
+        # ניסיון 3: מינימליסטי
+        try:
+            def build_minimal_app():
+                return ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+            
+            app = time_telegram_step("יצירת אפליקציה מינימלית", build_minimal_app)
+        except Exception as e3:
+            print(f"❌ כשל בכל ניסיונות יצירת אפליקציית טלגרם: {e3}")
+            raise
+
+def time_google_sheets_step(step_name, func):
+    """מודד זמן לשלב בחיבור Google Sheets"""
+    start_time = time.time()
+    print(f"⏱️  {step_name}...")
+    result = func()
+    elapsed_time = time.time() - start_time
+    execution_times[step_name] = elapsed_time
+    print(f"✅ {step_name} הושלם תוך {elapsed_time:.2f} שניות")
+    return result
 
 # חיבור ל-Google Sheets
+@time_operation("חיבור ל-Google Sheets - סה״כ")
 def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data
     """
     מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data.
@@ -111,14 +287,50 @@ def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליו�
     """
     try:
         logging.info("🔗 מתחבר ל-Google Sheets...")
-        import gspread
-        from oauth2client.service_account import ServiceAccountCredentials
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
-        sheet = gspread.authorize(creds).open_by_key(config["GOOGLE_SHEET_ID"]).worksheet(config["SHEET_USER_TAB"])  # בטוח כי SHEET_USER_TAB מוגדר ב-config.json
-        sheet_states = gspread.authorize(creds).open_by_key(config["GOOGLE_SHEET_ID"]).worksheet(config["SHEET_STATES_TAB"])
+        
+        # שלב 1: טעינת ספריות
+        def load_libraries():
+            import gspread
+            from oauth2client.service_account import ServiceAccountCredentials
+            return gspread, ServiceAccountCredentials
+        
+        gspread, ServiceAccountCredentials = time_google_sheets_step("טעינת ספריות Google Sheets", load_libraries)
+        
+        # שלב 2: הגדרת הרשאות
+        def setup_credentials():
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            return ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
+        
+        creds = time_google_sheets_step("הגדרת הרשאות Google", setup_credentials)
+        
+        # שלב 3: התחברות ל-API
+        def authorize_client():
+            return gspread.authorize(creds)
+        
+        client = time_google_sheets_step("התחברות ל-Google Sheets API", authorize_client)
+        
+        # שלב 4: פתיחת הגיליון הראשי
+        def open_main_sheet():
+            return client.open_by_key(config["GOOGLE_SHEET_ID"])
+        
+        spreadsheet = time_google_sheets_step("פתיחת הגיליון הראשי", open_main_sheet)
+        
+        # שלב 5: טעינת גיליון משתמשים
+        def load_users_sheet():
+            return spreadsheet.worksheet(config["SHEET_USER_TAB"])
+        
+        sheet = time_google_sheets_step("טעינת גיליון משתמשים", load_users_sheet)
+        
+        # שלב 6: טעינת גיליון מצבים
+        def load_states_sheet():
+            return spreadsheet.worksheet(config["SHEET_STATES_TAB"])
+        
+        sheet_states = time_google_sheets_step("טעינת גיליון מצבים", load_states_sheet)
+        
+        # שמירה באפליקציה
         app.bot_data["sheet"] = sheet
         app.bot_data["sheet_states"] = sheet_states
+        
         logging.info("✅ חיבור ל-Google Sheets בוצע בהצלחה")
         print("✅ חיבור ל-Google Sheets בוצע בהצלחה")
     except Exception as ex:
@@ -127,24 +339,82 @@ def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליו�
         raise
 
 # === תזמון דוחות אוטומטיים לאדמין ===
+def time_scheduler_step(step_name, func):
+    """מודד זמן לשלב בהגדרת תזמון"""
+    start_time = time.time()
+    print(f"⏱️  {step_name}...")
+    result = func()
+    elapsed_time = time.time() - start_time
+    execution_times[step_name] = elapsed_time
+    print(f"✅ {step_name} הושלם תוך {elapsed_time:.2f} שניות")
+    return result
+
+@time_operation("הגדרת תזמון דוחות אוטומטיים - סה״כ")
 def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר
     """
     מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר.
     פלט: אין (מתזמן דוחות)
     """
-    tz = pytz.timezone("Asia/Jerusalem")
-    scheduler = BackgroundScheduler(timezone=tz)
-    scheduler.add_job(send_error_stats_report, 'cron', hour=8, minute=0)
-    scheduler.add_job(lambda: send_usage_report(1), 'cron', hour=8, minute=0)
-    scheduler.add_job(lambda: send_daily_summary(days_back=1), 'cron', hour=8, minute=0)  #לא למחוק!! דוח כספים יומי על אתמול לא למחוק לעולם לא משנה מה
+    # הגדרת אזור זמן
+    def setup_timezone():
+        return pytz.timezone("Asia/Jerusalem")
+    
+    tz = time_scheduler_step("הגדרת אזור זמן ישראל", setup_timezone)
+    
+    # יצירת מתזמן
+    def create_scheduler():
+        return BackgroundScheduler(timezone=tz)
+    
+    scheduler = time_scheduler_step("יצירת מתזמן רקע", create_scheduler)
+    
+    # הוספת תזמון דוח שגיאות
+    def add_error_report_job():
+        scheduler.add_job(send_error_stats_report, 'cron', hour=8, minute=0)
+        return "תזמון דוח שגיאות נוסף"
+    
+    time_scheduler_step("הוספת תזמון דוח שגיאות", add_error_report_job)
+    
+    # הוספת תזמון דוח שימוש
+    def add_usage_report_job():
+        scheduler.add_job(lambda: send_usage_report(1), 'cron', hour=8, minute=0)
+        return "תזמון דוח שימוש נוסף"
+    
+    time_scheduler_step("הוספת תזמון דוח שימוש", add_usage_report_job)
 
-    scheduler.start()
+    # הוספת תזמון סיכום יומי
+    def add_daily_summary_job():
+        scheduler.add_job(lambda: send_daily_summary(days_back=1), 'cron', hour=8, minute=0)  #לא למחוק!! דוח כספים יומי על אתמול לא למחוק לעולם לא משנה מה
+        return "תזמון סיכום יומי נוסף"
+    
+    time_scheduler_step("הוספת תזמון סיכום יומי", add_daily_summary_job)
+
+    # הפעלת המתזמן
+    def start_scheduler():
+        scheduler.start()
+        return "מתזמן הופעל"
+    
+    time_scheduler_step("הפעלת המתזמן", start_scheduler)
+    
     print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
 
-setup_admin_reports()
+@time_operation("הוספת handlers להודעות")
+def setup_message_handlers():
+    """מוסיף handlers לטיפול בהודעות טקסט וקוליות"""
+    start_time = time.time()
+    print(f"⏱️  מוסיף handler להודעות טקסט וקוליות...")
+    
+    app.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, handle_message))
+    
+    elapsed_time = time.time() - start_time
+    execution_times["הוספת message handler"] = elapsed_time
+    print(f"✅ Message handler נוסף תוך {elapsed_time:.3f} שניות")
 
-# הוספת handler להודעות טקסט וקוליות
-app.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, handle_message))
+@time_operation("שליחת התראת הפעלה")
+def send_startup_notification_timed():
+    """שולח התראה על הפעלת הבוט"""
+    send_startup_notification()
+
+# תזמון דוחות יתבצע כחלק מהתקנת הבוט
 
 # פונקציה שמבצעת את כל ההתקנה
 def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app
@@ -152,6 +422,20 @@ def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבו�
     מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app.
     פלט: app (אפליקציית טלגרם)
     """
+    print("🚀 מתחיל התקנה של הבוט...")
+    
+    # ביצוע כל שלבי ההתקנה עם מדידת זמן
+    setup_critical_files()
+    setup_virtual_environment()
+    install_dependencies()
+    create_telegram_app()
     connect_google_sheets()
-    send_startup_notification()
+    setup_admin_reports()
+    setup_message_handlers()
+    send_startup_notification_timed()
+    
+    # הדפסת סיכום זמני הביצוע
+    print_execution_summary()
+    
+    print("🎉 ההתקנה הושלמה בהצלחה!")
     return app 

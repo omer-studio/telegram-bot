@@ -173,8 +173,9 @@ def setup_daily_reports():
     # הפעל דוח מיידי
     threading.Thread(target=startup_report, daemon=True).start()
 
-# הפעל אוטומטית כשטוענים את הקובץ
-setup_daily_reports()
+# הפעל אוטומטית כשטוענים את הקובץ (רק אם זה לא import)
+if __name__ == "__main__":
+    setup_daily_reports()
 
 if __name__ == "__main__":
     import asyncio
