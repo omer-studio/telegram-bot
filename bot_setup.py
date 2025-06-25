@@ -233,8 +233,9 @@ def install_dependencies():
         ([sys.executable, "-m", "pip", "install", "anthropic"], "Anthropic"),
         ([sys.executable, "-m", "pip", "install", "google-generativeai"], "Google Generative AI"),
         ([sys.executable, "-m", "pip", "install", "apscheduler", "pytz"], "תזמון"),
-        ([sys.executable, "-m", "pip", "install", "requests"], "Requests"),
-        ([sys.executable, "-m", "pip", "install", "openai-whisper"], "Whisper")
+        ([sys.executable, "-m", "pip", "install", "requests"], "Requests")
+        # 🔧 תיקון זמני: הסרת whisper עד פתרון בעיית הזיכרון
+        # ([sys.executable, "-m", "pip", "install", "openai-whisper"], "Whisper")
     ]
     
     for pip_command, description in pip_commands:
@@ -422,11 +423,11 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
 
 @time_operation("הוספת handlers להודעות")
 def setup_message_handlers():
-    """מוסיף handlers לטיפול בהודעות טקסט וקוליות"""
+    """מוסיף handlers לטיפול בהודעות טקסט (הודעות קוליות זמנית מבוטלות)"""
     start_time = time.time()
-    print(f"⏱️  מוסיף handler להודעות טקסט וקוליות...")
+    print(f"⏱️  מוסיף handler להודעות טקסט...")
     
-    app.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     elapsed_time = time.time() - start_time
     execution_times["הוספת message handler"] = elapsed_time

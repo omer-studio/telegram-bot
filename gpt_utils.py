@@ -296,6 +296,19 @@ class BillingProtection:
             self.usage_data["monthly"][monthly_key] = 0.0
         self.usage_data["monthly"][monthly_key] += cost_usd
         
+        # 🔧 תיקון זליגת זיכרון: הגבלת מספר רשומות ישנות
+        # שמירה על מקסימום 60 ימים של נתונים יומיים
+        if len(self.usage_data["daily"]) > 60:
+            old_keys = sorted(self.usage_data["daily"].keys())[:-30]  # שמור רק 30 ימים אחרונים
+            for old_key in old_keys:
+                del self.usage_data["daily"][old_key]
+        
+        # שמירה על מקסימום 12 חודשים של נתונים חודשיים  
+        if len(self.usage_data["monthly"]) > 12:
+            old_keys = sorted(self.usage_data["monthly"].keys())[:-6]  # שמור רק 6 חודשים אחרונים
+            for old_key in old_keys:
+                del self.usage_data["monthly"][old_key]
+        
         # בדיקת מגבלות
         daily_usage = self.usage_data["daily"][daily_key]
         monthly_usage = self.usage_data["monthly"][monthly_key]

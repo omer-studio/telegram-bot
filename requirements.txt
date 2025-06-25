@@ -23,7 +23,8 @@ psutil>=5.9.0
 APScheduler
 pytz>=2024.1
 pytest
-faster-whisper>=1.1.0
-openai-whisper
-ffmpeg-python>=0.2.0
+# 🔧 תיקון זמני: מבוטל עד פתרון בעיית ffmpeg בסביבת הענן
+# faster-whisper>=1.1.0  
+# openai-whisper
+# ffmpeg-python>=0.2.0
 python-dateutil>=2.8.0

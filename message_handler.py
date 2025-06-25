@@ -139,71 +139,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # זיהוי סוג ההודעה ושליחת הודעה מותאמת
                 message_type = detect_message_type(update.message)
                 
-                # טיפול מיוחד בהודעות קוליות
+                # 🔧 תיקון זמני: הסרת תמיכה בהודעות קוליות
+                # (עד שנפתור את בעיית ffmpeg בסביבת הענן)
                 if message_type == "voice":
-                    logging.info(f"🎤 התקבלה הודעה קולית | chat_id={chat_id}")
-                    print(f"[VOICE_MSG] chat_id={chat_id} | message_id={message_id}")
+                    logging.info(f"🎤 התקבלה הודעה קולית (לא נתמכת כרגע) | chat_id={chat_id}")
+                    print(f"[VOICE_MSG_DISABLED] chat_id={chat_id} | message_id={message_id}")
                     
-                    # ייבוא voice_handler (משתמש ב-instance גלובלי)
-                    from voice_handler import voice_handler
+                    # הודעה למשתמש שהתכונה לא זמינה כרגע
+                    await update.message.reply_text(
+                        "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\n"
+                        "אנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
+                    )
                     
-                    # ניסיון לתמלל
-                    try:
-                        transcribed_text = await voice_handler.transcribe_voice_message(update, context)
-                        
-                        if transcribed_text:
-                            # אם התמלול הצליח, ממשיכים עם הטקסט המתומלל
-                            user_msg = transcribed_text
-                            logging.info(f"✅ תמלול הצליח: {transcribed_text}")
-                            print(f"[TRANSCRIPTION_SUCCESS] {transcribed_text}")
-                            
-                            # רישום להיסטוריה ולוגים
-                            log_event_to_file({
-                                "chat_id": chat_id,
-                                "message_id": message_id,
-                                "message_type": "voice",
-                                "transcribed_text": transcribed_text,
-                                "timestamp": datetime.now().isoformat(),
-                                "event_type": "voice_transcription_success"
-                            })
-                            
-                            # ממשיכים עם הטיפול הרגיל בטקסט המתומלל
-                            # (לא return כאן - ממשיכים לקוד הבא)
-                        else:
-                            # אם התמלול נכשל
-                            logging.warning(f"⚠️ תמלול נכשל | chat_id={chat_id}")
-                            print(f"[TRANSCRIPTION_FAILED] chat_id={chat_id}")
-                            
-                            # רישום להיסטוריה ולוגים
-                            log_event_to_file({
-                                "chat_id": chat_id,
-                                "message_id": message_id,
-                                "message_type": "voice",
-                                "timestamp": datetime.now().isoformat(),
-                                "event_type": "voice_transcription_failed"
-                            })
-                            
-                            # voice_handler כבר שלח הודעת שגיאה למשתמש, אז לא נשלח עוד אחת
-                            await end_monitoring_user(str(chat_id), True)
-                            return
-                            
-                    except Exception as e:
-                        logging.error(f"❌ שגיאה בתמלול הודעה קולית: {e}")
-                        print(f"[TRANSCRIPTION_ERROR] {e}")
-                        
-                        # רישום להיסטוריה ולוגים
-                        log_event_to_file({
-                            "chat_id": chat_id,
-                            "message_id": message_id,
-                            "message_type": "voice",
-                            "error": str(e),
-                            "timestamp": datetime.now().isoformat(),
-                            "event_type": "voice_transcription_error"
-                        })
-                        
-                        # voice_handler כבר שלח הודעת שגיאה למשתמש, אז לא נשלח עוד אחת
-                        await end_monitoring_user(str(chat_id), True)
-                        return
+                    # רישום להיסטוריה ולוגים
+                    log_event_to_file({
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "message_type": "voice",
+                        "timestamp": datetime.now().isoformat(),
+                        "event_type": "voice_temporarily_disabled"
+                    })
+                    
+                    await end_monitoring_user(str(chat_id), True)
+                    return
                 
                 else:
                     # הודעות לא-טקסט אחרות (לא voice)
