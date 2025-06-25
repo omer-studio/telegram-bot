@@ -43,6 +43,7 @@ from typing import Dict, List, Optional, Deque
 from dataclasses import dataclass, asdict
 from collections import defaultdict, deque
 import logging
+import os
 
 @dataclass
 class UserSession:
@@ -108,13 +109,22 @@ class ConcurrentMonitor:
         """מתחיל את background tasks אם הם לא התחילו עדיין"""
         if not self._background_tasks_started:
             try:
-                asyncio.create_task(self._collect_metrics_loop())
-                asyncio.create_task(self._cleanup_stale_sessions())
-                asyncio.create_task(self._monitor_system_health())
-                self._background_tasks_started = True
-                logging.info("[ConcurrentMonitor] Background tasks started")
-            except RuntimeError:
+                # 🔧 תיקון: רק אם יש event loop פעיל ולא בסביבת production
+                if not os.getenv("RENDER"):  # רק בפיתוח מקומי
+                    loop = asyncio.get_running_loop()
+                    if loop and not loop.is_closed():
+                        asyncio.create_task(self._collect_metrics_loop())
+                        asyncio.create_task(self._cleanup_stale_sessions())
+                        asyncio.create_task(self._monitor_system_health())
+                        self._background_tasks_started = True
+                        logging.info("[ConcurrentMonitor] Background tasks started")
+                else:
+                    # בסביבת production - מדלגים על background tasks
+                    self._background_tasks_started = True
+                    logging.info("[ConcurrentMonitor] Skipping background tasks in production")
+            except (RuntimeError, AttributeError):
                 # אם אין event loop פעיל, ננסה שוב בפעם הבאה
+                logging.debug("[ConcurrentMonitor] No active event loop, skipping background tasks")
                 pass
         
     async def start_user_session(self, chat_id: str, message_id: str) -> bool:

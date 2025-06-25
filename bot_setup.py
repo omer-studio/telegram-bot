@@ -167,6 +167,11 @@ def setup_critical_files():
 @time_operation("בדיקת והכנת סביבה וירטואלית")
 def setup_virtual_environment():
     """בודק ויוצר venv במידת הצורך (Windows בלבד)"""
+    # 🔧 תיקון: בסביבת production לא צריך venv
+    if os.getenv("RENDER"):  # אם רץ ברנדר
+        print("ℹ️  רץ בסביבת production - מדלג על יצירת venv")
+        return
+        
     if os.name == 'nt':
         venv_path = os.path.join(os.getcwd(), 'venv')
         if not os.path.exists(venv_path):
@@ -179,6 +184,14 @@ def install_single_dependency(pip_command, description):
     """מתקין dependency יחיד עם מדידת זמן"""
     start_time = time.time()
     print(f"⏱️  מתקין {description}...")
+    
+    # 🔧 תיקון: בסביבת production לא מתקין
+    if os.getenv("RENDER"):  # אם רץ ברנדר
+        elapsed_time = time.time() - start_time
+        execution_times[description] = elapsed_time
+        print(f"ℹ️  {description} - מדלג (production) תוך {elapsed_time:.3f} שניות")
+        return type('Result', (), {'returncode': 0})()  # mock result
+    
     result = subprocess.run(pip_command, capture_output=True, text=True)
     elapsed_time = time.time() - start_time
     execution_times[description] = elapsed_time
@@ -191,6 +204,11 @@ def install_single_dependency(pip_command, description):
 @time_operation("התקנת תלויות - סה״כ")
 def install_dependencies():
     """מתקין את כל התלויות הנדרשות (Windows בלבד)"""
+    # 🔧 תיקון: בסביבת production לא מתקין תלויות
+    if os.getenv("RENDER"):  # אם רץ ברנדר
+        print("ℹ️  רץ בסביבת production - מדלג על התקנת תלויות")
+        return
+        
     if os.name == 'nt':
         print('🔧 מתחיל התקנת תלויות...')
         
@@ -199,21 +217,22 @@ def install_dependencies():
             [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '--upgrade', 'pip'],
             "עדכון pip"
         )
-        
+
         # התקנת requirements.txt
         install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', '-r', 'requirements.txt'],
+            [os.path.join('venv', 'Scripts', 'pip.exe'), 'install', '-r', 'requirements.txt'],
             "requirements.txt"
         )
-        
-        # התקנת תלויות נוספות
+
+        # התקנת uvicorn (לסביבה לוקאלית)
         install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', 'uvicorn'],
+            [os.path.join('venv', 'Scripts', 'pip.exe'), 'install', 'uvicorn'],
             "uvicorn"
         )
-        
+
+        # התקנת requests (אם לא קיים)
         install_single_dependency(
-            [os.path.join('venv', 'Scripts', 'python.exe'), '-m', 'pip', 'install', 'requests'],
+            [os.path.join('venv', 'Scripts', 'pip.exe'), 'install', 'requests'],
             "requests"
         )
 
@@ -412,9 +431,19 @@ def setup_message_handlers():
 @time_operation("שליחת התראת הפעלה")
 def send_startup_notification_timed():
     """שולח התראה על הפעלת הבוט"""
+    # 🔧 תיקון: רק אם לא בsandbox mode ולא בsetup כפול
+    if not os.getenv("RENDER") and not _setup_completed:
+        print("ℹ️  רץ בסביבת פיתוח - מדלג על התראת startup")
+        return
+    elif _setup_completed:
+        print("ℹ️  התראת startup כבר נשלחה - מדלג")
+        return
     send_startup_notification()
 
 # תזמון דוחות יתבצע כחלק מהתקנת הבוט
+
+# 🔧 תיקון: מניעת setup כפול
+_setup_completed = False
 
 # פונקציה שמבצעת את כל ההתקנה
 def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app
@@ -422,6 +451,12 @@ def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבו�
     מבצע את כל ההתקנה הראשונית של הבוט: חיבור Sheets, שליחת התראה, החזרת app.
     פלט: app (אפליקציית טלגרם)
     """
+    global _setup_completed, app
+    
+    if _setup_completed and app:
+        print("ℹ️  הבוט כבר הוגדר, מחזיר instance קיים")
+        return app
+    
     print("🚀 מתחיל התקנה של הבוט...")
     
     # ביצוע כל שלבי ההתקנה עם מדידת זמן
@@ -438,4 +473,6 @@ def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבו�
     print_execution_summary()
     
     print("🎉 ההתקנה הושלמה בהצלחה!")
+    
+    _setup_completed = True
     return app 

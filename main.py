@@ -51,13 +51,30 @@ import requests
 from gpt_c_logger import clear_gpt_c_html_log
 from config import DATA_DIR, PRODUCTION_PORT
 
+# 🔧 תיקון: מניעת setup מרובה
+_bot_setup_completed = False
+_app_instance = None
+
+def get_bot_app():
+    """מחזיר את הapp של הבוט, מגדיר אותו רק פעם אחת"""
+    global _bot_setup_completed, _app_instance
+    
+    if not _bot_setup_completed:
+        print("🚀 מבצע setup ראשוני של הבוט...")
+        _app_instance = setup_bot()
+        _bot_setup_completed = True
+        print("✅ Setup הבוט הושלם!")
+    else:
+        print("ℹ️  הבוט כבר הוגדר, מדלג על setup")
+    
+    return _app_instance
+
 class DummyContext:
     def __init__(self, bot_data):
         self.bot_data = bot_data
-        self.bot = app.bot  # הוספת גישה לבוט
+        self.bot = get_bot_app().bot  # הוספת גישה לבוט
 
 app_fastapi = FastAPI()
-app = setup_bot()
 
 # הוספת app_fastapi כדי שיהיה זמין ל-uvicorn
 __all__ = ['app_fastapi']
@@ -70,6 +87,7 @@ async def webhook(request: Request):
     """
     try:
         data = await request.json()
+        app = get_bot_app()
         update = Update.de_json(data, app.bot)
         context = DummyContext(app.bot_data)
         if update.message:
@@ -95,6 +113,10 @@ async def on_startup():
     """
     from utils import health_check
     from notifications import send_error_notification
+    
+    # וודא שהבוט מוגדר
+    get_bot_app()
+    
     try:
         health = health_check()
         if not all(health.values()):
@@ -119,6 +141,7 @@ async def main():
     """
     מריץ את הבוט (אתחול והרצה).
     """
+    app = get_bot_app()
     await app.initialize()
     await app.start()
     print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")
