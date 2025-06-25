@@ -283,9 +283,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # הדפסת מידע על בחירת המודל
             if gpt_response.get("used_premium"):
-                print(f"🎯 [MODEL_INFO] השתמש במודל מתקדם: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')}")
+                print(f"🎯 [MODEL_INFO] השתמש במודל מתקדם: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
             else:
-                print(f"🚀 [MODEL_INFO] השתמש במודל מהיר: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')}")
+                print(f"🚀 [MODEL_INFO] השתמש במודל מהיר: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
 
             # שלב 3: שליחת התשובה למשתמש (אלא אם כבר נשלחה דרך עריכת הודעה זמנית)
             await update_user_processing_stage(str(chat_id), "sending_response")
