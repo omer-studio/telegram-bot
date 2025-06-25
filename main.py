@@ -67,7 +67,9 @@ def get_bot_app():
     
     # בדיקה נוספת: אם זה בsandbox mode או עם uvicorn (אבל לא בסביבת production)
     is_sandbox_mode = any(arg in sys.argv[0].lower() for arg in ["sandbox"]) or os.getenv("UVICORN_MODE")
-    is_local_uvicorn = any(arg in sys.argv[0].lower() for arg in ["uvicorn"]) and not os.getenv("RENDER")
+    # בדיקה משופרת לזיהוי סביבת production - בודק גם PORT וגם RENDER
+    is_production = os.getenv("RENDER") or os.getenv("PORT") or os.getenv("RAILWAY_STATIC_URL")
+    is_local_uvicorn = any(arg in sys.argv[0].lower() for arg in ["uvicorn"]) and not is_production
     
     if is_sandbox_mode or is_local_uvicorn:
         print("⚠️  זוהה sandbox/uvicorn mode - אל תפעיל main.py ישירות!")
