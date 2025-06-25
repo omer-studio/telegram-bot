@@ -207,6 +207,10 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
     """
     מוחק הודעה זמנית ושולח הודעה חדשה
     """
+    # ייבוא יחיד בתחילת הפונקציה
+    from message_handler import format_text_for_telegram
+    formatted_text = format_text_for_telegram(new_text)
+    
     try:
         # מחיקת ההודעה הזמנית
         await update.message.bot.delete_message(
@@ -214,10 +218,6 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
             message_id=temp_message_id
         )
         logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית נמחקה | chat_id={chat_id} | message_id={temp_message_id}")
-        
-        # המרת פורמט WhatsApp לHTML לפני שליחה
-        from message_handler import format_text_for_telegram
-        formatted_text = format_text_for_telegram(new_text)
         
         # שליחת הודעה חדשה
         await update.message.reply_text(formatted_text, parse_mode="HTML")
@@ -228,9 +228,6 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
         logging.error(f"❌ [DELETE_MSG] שגיאה במחיקת הודעה זמנית: {e}")
         # אם המחיקה נכשלה, נשלח הודעה חדשה בלי למחוק
         try:
-            # המרת פורמט WhatsApp לHTML לפני שליחה
-            from message_handler import format_text_for_telegram
-            formatted_text = format_text_for_telegram(new_text)
             await update.message.reply_text(formatted_text, parse_mode="HTML")
             logging.info(f"📤 [FALLBACK_MSG] נשלחה הודעה חדשה (ללא מחיקה) | chat_id={chat_id}")
             return True
