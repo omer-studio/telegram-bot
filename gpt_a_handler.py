@@ -202,25 +202,29 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=5):
         logging.error(f"❌ [TEMP_MSG] שגיאה בשליחת הודעה זמנית: {e}")
         return None
 
-async def edit_temporary_message(update, chat_id, temp_message_id, new_text):
+async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id, new_text):
     """
-    מחליף הודעה זמנית בתשובה האמיתית
+    מוחק הודעה זמנית ושולח הודעה חדשה
     """
     try:
-        await update.message.bot.edit_message_text(
+        # מחיקת ההודעה הזמנית
+        await update.message.bot.delete_message(
             chat_id=chat_id,
-            message_id=temp_message_id,
-            text=new_text,
-            parse_mode="HTML"
+            message_id=temp_message_id
         )
-        logging.info(f"✅ [EDIT_MSG] הודעה זמנית הוחלפה | chat_id={chat_id} | message_id={temp_message_id}")
+        logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית נמחקה | chat_id={chat_id} | message_id={temp_message_id}")
+        
+        # שליחת הודעה חדשה
+        await update.message.reply_text(new_text, parse_mode="HTML")
+        logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
         return True
+        
     except Exception as e:
-        logging.error(f"❌ [EDIT_MSG] שגיאה בעריכת הודעה זמנית: {e}")
-        # אם העריכה נכשלה, נשלח הודעה חדשה
+        logging.error(f"❌ [DELETE_MSG] שגיאה במחיקת הודעה זמנית: {e}")
+        # אם המחיקה נכשלה, נשלח הודעה חדשה בלי למחוק
         try:
             await update.message.reply_text(new_text, parse_mode="HTML")
-            logging.info(f"📤 [FALLBACK_MSG] נשלחה הודעה חדשה במקום עריכה | chat_id={chat_id}")
+            logging.info(f"📤 [FALLBACK_MSG] נשלחה הודעה חדשה (ללא מחיקה) | chat_id={chat_id}")
             return True
         except Exception as e2:
             logging.error(f"❌ [FALLBACK_MSG] שגיאה גם בהודעה חדשה: {e2}")
@@ -364,18 +368,18 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 temp_message_task.cancel()
                 logging.info(f"✅ [TIMING] GPT מהיר ({gpt_duration:.1f}s) - הודעה זמנית בוטלה")
             else:
-                # הודעה זמנית כבר נשלחה - מחליפים אותה
+                # הודעה זמנית כבר נשלחה - מוחקים ושולחים חדשה
                 temp_message_id = await temp_message_task
                 if temp_message_id and update and chat_id:
-                    success = await edit_temporary_message(
+                    success = await delete_temporary_message_and_send_new(
                         update, 
                         chat_id, 
                         temp_message_id, 
                         gpt_result["bot_reply"]
                     )
                     if success:
-                        logging.info(f"🔄 [TIMING] GPT איטי ({gpt_duration:.1f}s) - הודעה זמנית הוחלפה")
-                        # מסמנים שההודעה כבר נשלחה דרך העריכה
+                        logging.info(f"🔄 [TIMING] GPT איטי ({gpt_duration:.1f}s) - הודעה זמנית נמחקה ונשלחה חדשה")
+                        # מסמנים שההודעה כבר נשלחה דרך המחיקה והשליחה
                         gpt_result["message_already_sent"] = True
         
         return gpt_result
