@@ -13,7 +13,7 @@ import asyncio
 import threading
 import time
 from prompts import SYSTEM_PROMPT
-from config import GPT_MODELS, GPT_PARAMS
+from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
 from gpt_utils import normalize_usage_dict
 from gpt_utils import billing_guard
 from notifications import alert_billing_issue
