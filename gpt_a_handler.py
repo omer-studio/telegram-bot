@@ -17,7 +17,7 @@ from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
 from gpt_utils import normalize_usage_dict
 from gpt_utils import billing_guard
 from notifications import alert_billing_issue, send_error_notification
-from performance_monitor import performance_monitor
+# מערכת ביצועים מבוטלת זמנית
 
 # ייבוא הפילטר החכם
 # ===============================
@@ -239,16 +239,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     metadata = {"gpt_identifier": "gpt_a", "chat_id": chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_a"]
     
-    # 🔬 התחלת מדידת ביצועים
+    # 🔬 מדידת ביצועים מבוטלת זמנית
     measurement_id = None
-    user_message = full_messages[-1]["content"] if full_messages else ""
-    
-    if chat_id and message_id:
-        measurement_id = performance_monitor.start_measurement(
-            chat_id=str(chat_id),
-            message_id=str(message_id), 
-            user_message=user_message
-        )
     
     # בחירת מודל לפי הפילטר
     if use_premium:
@@ -278,25 +270,12 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         # 🔬 תזמון הטוקן הראשון - צריך להשתמש ב-streaming לזה
         response = litellm.completion(**completion_params)
         
-        # 🔬 רישום הטוקן הראשון (ממוקם בעייתית כרגע - צריך streaming לדיוק)
-        if measurement_id:
-            performance_monitor.record_first_token(measurement_id)
+        # 🔬 רישום הטוקן הראשון מבוטל זמנית
         
         bot_reply = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
         
-        # 🔬 סיום מדידת ביצועים
-        if measurement_id and hasattr(response, 'usage'):
-            prompt_tokens = getattr(response.usage, 'prompt_tokens', 0)
-            completion_tokens = getattr(response.usage, 'completion_tokens', 0)
-            
-            performance_monitor.record_response_complete(
-                measurement_id=measurement_id,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                model_used=response.model,
-                model_tier=model_tier
-            )
+        # 🔬 מדידת ביצועים מבוטלת זמנית
         
         # 📊 מעקב אחר חיוב
         if hasattr(response, 'usage'):
@@ -337,9 +316,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     except Exception as e:
         logging.error(f"[gpt_a] שגיאה במודל {model}: {e}")
         
-        # 🔬 רישום שגיאה במדידת ביצועים
-        if measurement_id:
-            performance_monitor.record_error(measurement_id, str(e))
+        # 🔬 רישום שגיאה מבוטל זמנית
         
         # שליחת הודעת שגיאה טכנית לאדמין
         send_error_notification(
