@@ -218,102 +218,129 @@
 
 ---
 
-## 📊 ~~מערכת אבחון צוואר בקבוק~~ (מבוטל זמנית)
+## 📊 מערכת בקרת לוגים
 
-### 🚫 המערכת לא פעילה כרגע
+הבוט כולל מערכת מתקדמת לבקרת רמת הלוגים המאפשרת לך לשלוט בדיוק איזה מידע מוצג.
 
-מערכת הביצועים הסרה זמנית לפשטות הקוד:
+### 🎛️ הגדרות זמינות ב-`config.py`
 
-- ~~**TTFT (Time To First Token)**~~ - לא נמדד כרגע
-- ~~**TPS (Tokens Per Second)**~~ - לא נמדד כרגע  
-- **הבוט עובד תקין** בלי מערכת הביצועים
-
-**למפתחים:** ניתן להחזיר את המערכת בעתיד אם נדרש.
-
-### 📝 הערה למפתחים
-
-המערכת הוסרה כדי לשמור על פשטות הקוד. אם תרצה להחזיר אותה בעתיד:
-1. השב את הקובץ `performance_monitor.py` 
-2. החזר את הקוד בgpt_a_handler.py
-3. הוסף את פקודות האדמין הרלוונטיות
-
----
-
-## 🚀 מבני נתונים והקבצים
-
-הבוט שומר נתונים בקבצים מקומיים וב-Google Sheets:
-
-### Google Sheets:
-- **user_profiles** - פרופילי משתמשים, היסטוריה קצרה
-- **log** - לוגים מלאים של כל הודעה
-- **user_states** - מצבי משתמשים ומשתנים זמניים
-
-### קבצים מקומיים:
-- `data/conversations/` - היסטורית שיחות מלאה
-- לוגי שגיאות ודוחות מגוונים
-
----
-
-## 🔧 פקודות אדמין
-
-הבוט כולל מערכת פקודות סודיות לאדמין:
-
-- `#status` - מצב המערכת והסטטיסטיקות
-- `#users` - רשימת משתמשים פעילים
-- `#errors` - דוח שגיאות אחרונות
-- `#broadcast` - שליחת הודעה לכל המשתמשים
-- ~~`#perf_status`~~ - מערכת ביצועים מבוטלת
-- ~~`#perf_analyze`~~ - מערכת ביצועים מבוטלת
-- ~~`#perf_clear`~~ - מערכת ביצועים מבוטלת
-
----
-
-## 🛠️ פיתוח ותחזוקה
-
-### הרצת בדיקות:
-```bash
-# אין כרגע בדיקות אוטומטיות פעילות
+```python
+# ⚙️ הגדרות ברירת מחדל - מותאמות לפרודקשן!
+DEFAULT_LOG_LEVEL = "INFO"
+ENABLE_DEBUG_PRINTS = False           # דיבאג כללי (False = רזה יותר)
+ENABLE_GPT_COST_DEBUG = True          # עלויות GPT (מומלץ TRUE!)
+ENABLE_SHEETS_DEBUG = False           # דיבאג גיליונות Google
+ENABLE_PERFORMANCE_DEBUG = True       # זמני תגובה (מומלץ TRUE!)
+ENABLE_MESSAGE_DEBUG = True           # הודעות בסיסיות
+ENABLE_DATA_EXTRACTION_DEBUG = True   # חילוץ נתונים מ-GPT C,D,E (מומלץ TRUE!)
 ```
 
-### עדכון התלויות:
-```bash
-uv sync
+### 🔍 מה מוצג תמיד (ללא תלות בהגדרות):
+
+**מידע חיוני לתפעול הבוט:**
+- `🔍 [GPT-C] חולצו 3 שדות: ['age', 'occupation', 'goal']` - מה נחלץ מהודעות המשתמש
+- `🔄 [GPT-D] מוזגו 5 שדות` - איך מתבצע מיזוג נתונים
+- `💾 [SAVE] שדה 'age' ← 'בן 25' (עמודה 4)` - איך נתונים נשמרים בגיליון
+- `✅ [SAVED] נשמרו 3 שדות: age, occupation, goal` - סיכום השמירה
+- `⏱️ [GPT_TIMING] GPT הסתיים תוך 2.34 שניות` - זמני תגובה
+
+### 💰 מידע עלויות (כאשר `ENABLE_GPT_COST_DEBUG = True`):
+- `💰 [GPT-C] עלות: 0.001200$ | טוקנים: 1250`
+- `💰 [GPT-A] עלות: 0.003400$ | טוקנים: 2100`
+
+### 📋 פירוט נתונים (כאשר `ENABLE_DATA_EXTRACTION_DEBUG = True`):
+```json
+📋 [GPT-C] נתונים שחולצו: {
+  "age": "בן 25",
+  "occupation": "מהנדס תוכנה",
+  "goal": "לשפר ביטחון עצמי"
+}
 ```
 
-### ניטור לוגים:
-הבוט יוצר לוגים מפורטים בתיקיית `data/` ושולח דוחות אוטומטיים לאדמין.
+### 🚀 תרחישי שימוש מומלצים
 
-### גיבוי נתונים:
-רשומות שמורות בגיליונות Google ובקבצים מקומיים לאבטחה מרבית.
+**🎯 פרודקשן (רזה אבל עם מידע חיוני):**
+```python
+ENABLE_DEBUG_PRINTS = False
+ENABLE_GPT_COST_DEBUG = True          # חשוב לראות עלויות!
+ENABLE_PERFORMANCE_DEBUG = True       # חשוב לראות זמנים!
+ENABLE_DATA_EXTRACTION_DEBUG = True   # חשוב לראות מה נשמר!
+ENABLE_SHEETS_DEBUG = False
+ENABLE_MESSAGE_DEBUG = True
+```
+
+**🔬 פיתוח מלא:**
+```python
+ENABLE_DEBUG_PRINTS = True
+ENABLE_GPT_COST_DEBUG = True
+ENABLE_PERFORMANCE_DEBUG = True
+ENABLE_DATA_EXTRACTION_DEBUG = True
+ENABLE_SHEETS_DEBUG = True
+ENABLE_MESSAGE_DEBUG = True
+```
+
+**⚠️ דיבאג ממוקד (רק GPT):**
+```python
+ENABLE_DEBUG_PRINTS = False
+ENABLE_GPT_COST_DEBUG = True
+ENABLE_PERFORMANCE_DEBUG = False
+ENABLE_DATA_EXTRACTION_DEBUG = True
+ENABLE_SHEETS_DEBUG = False
+ENABLE_MESSAGE_DEBUG = False
+```
+
+### 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
 
 ---
 
-## 📞 תמיכה ופתרון בעיות
+## מבנה הפרויקט
+- `main.py` - נקודת כניסה ראשית
+- `config.py` - הגדרות והגדרת לוגים
+- `message_handler.py` - טיפול בהודעות
+- `gpt_*.py` - מודולי GPT שונים
+- `sheets_handler.py` - אינטגרציה עם Google Sheets
+- `utils.py` - פונקציות עזר
 
-### בעיות נפוצות:
-1. **"הבוט לא עונה"** → בדוק טוקן טלגרם וחיבור לאינטרנט
-2. **"שגיאות Google Sheets"** → בדוק הרשאות Service Account
-3. **"תגובות איטיות"** → בדוק חיבור לאינטרנט ועומס השרת
-4. **"שגיאות מערכת"** → בדוק שגיאות בלוגים
-
-### מידע נוסף:
-- הרץ בדיקות אוטומטיות לוודא תקינות המערכת
-- שימוש בפקודות אדמין לניטור שוטף
-- עדכונים שוטפים לפי התקדמות הפרויקט
-
----
-
-## 📋 מצבי המערכת
-
-המערכת בנויה להיות עמידה ויציבה:
-
-- **Circuit Breaker** - הגנה מפני כישלונות
-- **Rate Limiting** - מניעת עומס יתר על ה-APIs
-- **Error Recovery** - התאוששות אוטומטית מבעיות
-- **Monitoring** - ניטור בזמן אמת של הביצועים
-
-המערכת מוכנה לטיפול ב-10+ משתמשים במקביל בביצועים אופטימליים.
-
-**פותח על ידי:** AI Assistant  
-**תאריך:** 2025  
-**גרסה:** 2.0 - מאוחדת ומחודשת 
+## רישיון
+MIT License 

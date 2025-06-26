@@ -40,7 +40,9 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         if params["max_tokens"] is not None:
             completion_params["max_tokens"] = params["max_tokens"]
         
-        response = litellm.completion(**completion_params)
+        from gpt_utils import measure_llm_latency
+        with measure_llm_latency(model):
+            response = litellm.completion(**completion_params)
         summary = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
         return {"summary": summary, "usage": usage, "model": response.model}

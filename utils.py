@@ -1,49 +1,40 @@
 """
 utils.py
 --------
-כלים שימושיים לכל חלקי הבוט: רישום אירועים, ניהול היסטוריה, סטטיסטיקות, בדיקות תקינות, פקודות סודיות.
-הרציונל: כלים שימושיים לכל חלקי הבוט, מופרדים מהלוגיקה הראשית.
+פונקציות עזר כלליות לבוט: שמירת לוגים, ניהול היסטוריה, סטטיסטיקות, בדיקת תקינות ועוד.
 """
 import json
 import os
+import traceback
 from datetime import datetime
+import requests
+import time
+import logging
 from config import BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path, BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME, DATA_DIR, MAX_LOG_LINES_TO_KEEP, MAX_OLD_LOG_LINES, MAX_CHAT_HISTORY_MESSAGES, MAX_TRACEBACK_LENGTH, config
+from config import should_log_debug_prints, should_log_message_debug, should_log_sheets_debug
+import litellm
 
+# ==========================================================
+# ניהול לוגים ושמירת מידע
+# ==========================================================
 
-def log_event_to_file(log_data: dict) -> None:
-    """
-    רושם אירועים לקובץ הלוגים הראשי (bot_trace_log.jsonl)
-    קלט: log_data (dict)
-    פלט: אין (שומר לקובץ)
-    """
+def log_event_to_file(event_data, filename=None):
+    """שומר אירוע ללוג בפורמט JSON lines"""
     try:
-        file_path = BOT_TRACE_LOG_PATH
-        log_data["timestamp_end"] = datetime.now().isoformat()
-
-        # קריאת לוגים קיימים
-        if os.path.exists(file_path):
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-        else:
-            lines = []
-
-        # הוספת לוג חדש
-        lines.append(json.dumps(log_data, ensure_ascii=False))
-
-        # שמירה על מגבלת הלוגים
-        lines = lines[-MAX_LOG_LINES_TO_KEEP:]
-
-        # שמירה חזרה לקובץ
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-
-        print(f"📝 לוג נשמר: {file_path}")
-
+        if filename is None:
+            filename = BOT_TRACE_LOG_PATH
+        
+        event_data["timestamp"] = datetime.now().isoformat()
+        
+        with open(filename, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event_data, ensure_ascii=False) + "\n")
+        
+        if should_log_debug_prints():
+            logging.debug(f"לוג נשמר: {filename}")
     except Exception as e:
-        import traceback
-        print(f"❌ שגיאה בשמירת לוג: {e}")
-        print(traceback.format_exc())
-
+        logging.error(f"שגיאה בשמירת לוג: {e}")
+        if should_log_debug_prints():
+            print(traceback.format_exc())
 
 
 def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את היסטוריית השיחה של המשתמש בקובץ JSON ייעודי
@@ -83,17 +74,17 @@ def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את הי�
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(history_data, f, ensure_ascii=False, indent=2)
 
-        print(f"📚 היסטוריה עודכנה למשתמש {chat_id}")
+        if should_log_message_debug():
+            logging.info(f"היסטוריה עודכנה למשתמש {chat_id}")
 
     except Exception as e:
-        print(f"❌ שגיאה בעדכון היסטוריה: {e}")
+        logging.error(f"שגיאה בעדכון היסטוריה: {e}")
 
 
-
-def get_chat_history_messages(chat_id: str) -> list: # מחזיר את היסטוריית השיחה בפורמט המתאים ל-gpt (רשימת הודעות)
+def get_chat_history_messages(chat_id: str, limit: int = None) -> list: # מחזיר את היסטוריית השיחה בפורמט המתאים ל-gpt (רשימת הודעות)
     """
     מחזיר את היסטוריית השיחה בפורמט המתאים ל-gpt (רשימת הודעות).
-    קלט: chat_id (str)
+    קלט: chat_id (str), limit (int, optional) - מספר הודעות מקסימלי
     פלט: list של dict (role, content)
     """
     try:
@@ -109,17 +100,22 @@ def get_chat_history_messages(chat_id: str) -> list: # מחזיר את היסט�
     
     messages = []
     history = history_data[chat_id]["history"]
-    if len(history) < 15:
-        last_entries = history  #  שולח את כל ההיסטוריה אם יש -  פחות מ-איקס הודעות
+    
+    # קביעת מספר ההודעות לפי הפרמטר limit או ברירת מחדל של 15
+    max_entries = limit if limit is not None else 15
+    
+    if len(history) < max_entries:
+        last_entries = history  #  שולח את כל ההיסטוריה אם יש פחות מ-max_entries הודעות
     else:
-        last_entries = history[-5:]  # רק 5 אחרונות
+        last_entries = history[-max_entries:]  # רק max_entries אחרונות
 
     for entry in last_entries:
         messages.append({"role": "user", "content": entry["user"]})
         messages.append({"role": "assistant", "content": entry["bot"]})
 
     
-    print(f"📖 נטענו {len(messages)//2} הודעות מההיסטוריה של {chat_id}")
+    if should_log_message_debug():
+        logging.info(f"נטענו {len(messages)//2} הודעות מההיסטוריה של {chat_id}")
     return messages
 
 
@@ -146,7 +142,7 @@ def get_user_stats(chat_id: str) -> dict: # מחזיר סטטיסטיקות על
         }
         
     except Exception as e:
-        print(f"❌ שגיאה בקבלת סטטיסטיקות: {e}")
+        logging.error(f"שגיאה בקבלת סטטיסטיקות: {e}")
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
 
 
@@ -159,18 +155,22 @@ def clean_old_logs() -> None: # מנקה לוגים ישנים (משאיר עד 
         files_to_clean = [BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME]
         
         for file_name in files_to_clean:
-            if os.path.exists(file_name):
-                # שמירה על MAX_OLD_LOG_LINES שורות אחרונות בלבד
-                with open(file_name, "r", encoding="utf-8") as f:
+            file_path = os.path.join(DATA_DIR, file_name)
+            if os.path.exists(file_path):
+                # קריאת הקובץ
+                with open(file_path, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
                 
+                # שמירת השורות האחרונות בלבד
                 if len(lines) > MAX_OLD_LOG_LINES:
-                    with open(file_name, "w", encoding="utf-8") as f:
+                    with open(file_path, 'w', encoding='utf-8') as f:
                         f.writelines(lines[-MAX_OLD_LOG_LINES:])
-                    print(f"🧽 נוקה קובץ: {file_name}")
+                    
+                if should_log_debug_prints():
+                    logging.info(f"נוקה קובץ: {file_name}")
         
     except Exception as e:
-        print(f"❌ שגיאה בניקוי לוגים: {e}")
+        logging.error(f"שגיאה בניקוי לוגים: {e}")
 
 
 def health_check() -> dict: # בדיקת תקינות המערכת (config, sheets, openai, כתיבה לקבצים)
@@ -194,21 +194,25 @@ def health_check() -> dict: # בדיקת תקינות המערכת (config, shee
         
         # בדיקת חיבור ל־OpenAI/LiteLLM
         try:
-            import litellm
+            from gpt_utils import measure_llm_latency
             # בדיקה פשוטה - ניסיון ליצור completion קטן
-            response = litellm.completion(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": "test"}],
-                max_tokens=5,
-                temperature=0
-            )
+            with measure_llm_latency("gpt-3.5-turbo"):
+                response = litellm.completion(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=5,
+                    temperature=0
+                )
             if response and hasattr(response, 'choices') and len(response.choices) > 0:
                 health["openai_connected"] = True
-                print("✅ חיבור ל־OpenAI/LiteLLM תקין")
+                if should_log_debug_prints():
+                    print("✅ חיבור ל־OpenAI/LiteLLM תקין")
             else:
-                print("❌ תשובה לא תקינה מ־OpenAI/LiteLLM")
+                if should_log_debug_prints():
+                    print("❌ תשובה לא תקינה מ־OpenAI/LiteLLM")
         except Exception as openai_error:
-            print(f"❌ שגיאה בחיבור ל־OpenAI/LiteLLM: {openai_error}")
+            if should_log_debug_prints():
+                print(f"❌ שגיאה בחיבור ל־OpenAI/LiteLLM: {openai_error}")
             health["openai_connected"] = False
         
         # בדיקת כתיבה לקבצים
@@ -218,7 +222,7 @@ def health_check() -> dict: # בדיקת תקינות המערכת (config, shee
         os.remove("health_test.json")
         health["log_files_writable"] = True
     except Exception as e:
-        print(f"⚕️ בעיה בבדיקת תקינות: {e}")
+        logging.error(f"⚕️ בעיה בבדיקת תקינות: {e}")
         try:
             send_error_notification(f"[HEALTH_CHECK] בעיה בבדיקת תקינות: {e}")
         except Exception:
@@ -232,52 +236,58 @@ def format_error_message(error: Exception, context: str = "") -> str: # מעצב
     קלט: error (Exception), context (str)
     פלט: str
     """
-    import traceback
-    
-    error_msg = f"🚨 שגיאה"
-    if context:
-        error_msg += f" ב{context}"
-    
-    error_msg += f":\n"
-    error_msg += f"📍 סוג: {type(error).__name__}\n"
-    error_msg += f"💬 הודעה: {str(error)}\n"
-    error_msg += f"⏰ זמן: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
-    
-    # מידע טכני מפורט
-    tb = traceback.format_exc()
-    if len(tb) > MAX_TRACEBACK_LENGTH:
-        tb = tb[:MAX_TRACEBACK_LENGTH] + "... (קוצר)"
-    
-    error_msg += f"🔧 פרטים טכניים:\n{tb}"
-    
-    return error_msg
+    try:
+        error_msg = f"🚨 שגיאה"
+        if context:
+            error_msg += f" ב{context}"
+        
+        error_msg += f":\n"
+        error_msg += f"📍 סוג: {type(error).__name__}\n"
+        error_msg += f"💬 הודעה: {str(error)}\n"
+        error_msg += f"⏰ זמן: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+        
+        # הוספת traceback רק בdebug mode
+        if should_log_debug_prints():
+            tb = traceback.format_exc()
+            if len(tb) > MAX_TRACEBACK_LENGTH:
+                tb = tb[:MAX_TRACEBACK_LENGTH] + "... (truncated)"
+            error_msg += f"🔧 פרטים טכניים:\n{tb}"
+        
+        return error_msg
+    except:
+        return f"🚨 שגיאה בעיצוב הודעת שגיאה: {str(error)}"
 
 
 def log_error_stat(error_type: str) -> None:
-    """
-    מעדכן קובץ errors_stats.json עם ספירה לכל error_type
-    """
-    stats_path = os.path.join(DATA_DIR, "errors_stats.json")
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+    """מעדכן קובץ errors_stats.json עם ספירה לכל error_type"""
     try:
-        print(f"[DEBUG][log_error_stat] error_type = {error_type} (type: {type(error_type)})")
-        if os.path.exists(stats_path):
-            with open(stats_path, "r", encoding="utf-8") as f:
+        stats_path = os.path.join(DATA_DIR, "errors_stats.json")
+        
+        if should_log_debug_prints():
+            print(f"[DEBUG][log_error_stat] error_type = {error_type} (type: {type(error_type)})")
+        
+        # טעינה או יצירת stats
+        try:
+            with open(stats_path, 'r', encoding='utf-8') as f:
                 stats = json.load(f)
-        else:
+        except (FileNotFoundError, json.JSONDecodeError):
             stats = {}
-        for k, v in stats.items():
-            print(f"[DEBUG][log_error_stat] stats[{k}] = {v} (type: {type(v)})")
-            if isinstance(k, (dict, list)) or isinstance(v, (dict, list)):
-                print(f"[DEBUG][log_error_stat][ALERT] {k} או הערך שלו הוא dict/list!")
+        
+        if should_log_debug_prints():
+            for k, v in stats.items():
+                print(f"[DEBUG][log_error_stat] stats[{k}] = {v} (type: {type(v)})")
+                if isinstance(v, (dict, list)):
+                    print(f"[DEBUG][log_error_stat][ALERT] {k} או הערך שלו הוא dict/list!")
+        
         stats[error_type] = stats.get(error_type, 0) + 1
-        with open(stats_path, "w", encoding="utf-8") as f:
+        
+        with open(stats_path, 'w', encoding='utf-8') as f:
             json.dump(stats, f, ensure_ascii=False, indent=2)
+            
     except Exception as e:
-        import traceback
-        print(f"[log_error_stat] שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
-        print(traceback.format_exc())
+        logging.error(f"שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
+        if should_log_debug_prints():
+            print(traceback.format_exc())
 
 
 def send_error_stats_report():
@@ -364,7 +374,7 @@ def update_last_bot_message(chat_id, bot_summary):
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(history_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"❌ שגיאה בעדכון תשובת בוט: {e}")
+        logging.error(f"❌ שגיאה בעדכון תשובת בוט: {e}")
 
 
 # ========================================
@@ -383,18 +393,21 @@ def handle_secret_command(chat_id, user_msg):
     קלט: chat_id, user_msg
     פלט: (bool, str) - האם טופל והתשובה
     """
-    print(f"[SECRET_CMD] קיבלתי הודעה לבדוק קוד סודי | chat_id={chat_id} | text={user_msg!r} | timestamp={datetime.now().isoformat()}")
+    if should_log_debug_prints():
+        print(f"[SECRET_CMD] קיבלתי הודעה לבדוק קוד סודי | chat_id={chat_id} | text={user_msg!r} | timestamp={datetime.now().isoformat()}")
 
     action = SECRET_CODES.get(user_msg.strip())
     if not action:
         return False, None
 
-    print(f"[SECRET_CMD] קוד סודי מזוהה: {action} | chat_id={chat_id}")
+    if should_log_debug_prints():
+        print(f"[SECRET_CMD] קוד סודי מזוהה: {action} | chat_id={chat_id}")
 
     if action == "clear_history":
         cleared = clear_chat_history(chat_id)
         msg = "🧹 כל ההיסטוריה שלך נמחקה!" if cleared else "🤷‍♂️ לא נמצאה היסטוריה למחיקה."
-        print(f"[SECRET_CMD] {chat_id} ביקש clear_history — {'נמחק' if cleared else 'לא נמצא'}")
+        if should_log_debug_prints():
+            print(f"[SECRET_CMD] {chat_id} ביקש clear_history — {'נמחק' if cleared else 'לא נמצא'}")
         log_event_to_file({
             "event": "secret_command",
             "timestamp": datetime.now().isoformat(),
@@ -411,7 +424,8 @@ def handle_secret_command(chat_id, user_msg):
     if action == "clear_sheets":
         deleted_sheet, deleted_state = clear_from_sheets(chat_id)
         msg = "🗑️ כל הנתונים שלך נמחקו מהגיליונות!" if (deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא מידע למחיקה בגיליונות."
-        print(f"[SECRET_CMD] {chat_id} ביקש clear_sheets — sheet: {deleted_sheet}, state: {deleted_state}")
+        if should_log_debug_prints():
+            print(f"[SECRET_CMD] {chat_id} ביקש clear_sheets — sheet: {deleted_sheet}, state: {deleted_state}")
         log_event_to_file({
             "event": "secret_command",
             "timestamp": datetime.now().isoformat(),
@@ -431,7 +445,8 @@ def handle_secret_command(chat_id, user_msg):
         cleared = clear_chat_history(chat_id)
         deleted_sheet, deleted_state = clear_from_sheets(chat_id)
         msg = "💣 הכל נמחק! (היסטוריה + גיליונות)" if (cleared or deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא שום מידע למחיקה."
-        print(f"[SECRET_CMD] {chat_id} ביקש clear_all — history: {cleared}, sheet: {deleted_sheet}, state: {deleted_state}")
+        if should_log_debug_prints():
+            print(f"[SECRET_CMD] {chat_id} ביקש clear_all — history: {cleared}, sheet: {deleted_sheet}, state: {deleted_state}")
         log_event_to_file({
             "event": "secret_command",
             "timestamp": datetime.now().isoformat(),
@@ -453,9 +468,11 @@ def handle_secret_command(chat_id, user_msg):
 def clear_chat_history(chat_id):
     """מוחק היסטוריית צ'אט ספציפי"""
     path = CHAT_HISTORY_PATH
-    print(f"[CLEAR_HISTORY] מנסה למחוק היסטוריה | chat_id={chat_id} | path={path}")
+    if should_log_debug_prints():
+        print(f"[CLEAR_HISTORY] מנסה למחוק היסטוריה | chat_id={chat_id} | path={path}")
     if not os.path.exists(path):
-        print(f"[CLEAR_HISTORY] קובץ היסטוריה לא קיים | path={path}")
+        if should_log_debug_prints():
+            print(f"[CLEAR_HISTORY] קובץ היסטוריה לא קיים | path={path}")
         return False
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -464,15 +481,16 @@ def clear_chat_history(chat_id):
             data.pop(str(chat_id))
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"[CLEAR_HISTORY] נמחקה היסטוריה בהצלחה | chat_id={chat_id}")
+            if should_log_debug_prints():
+                print(f"[CLEAR_HISTORY] נמחקה היסטוריה בהצלחה | chat_id={chat_id}")
             return True
-        print(f"[CLEAR_HISTORY] לא נמצאה היסטוריה למחיקה | chat_id={chat_id}")
+        if should_log_debug_prints():
+            print(f"[CLEAR_HISTORY] לא נמצאה היסטוריה למחיקה | chat_id={chat_id}")
         return False
     except Exception as e:
-        print(f"[ERROR-clear_chat_history] {e} | chat_id={chat_id}")
+        logging.error(f"[ERROR-clear_chat_history] {e} | chat_id={chat_id}")
         log_event_to_file({
             "event": "clear_history_error",
-            "timestamp": datetime.now().isoformat(),
             "chat_id": chat_id,
             "error": str(e)
         })
@@ -481,11 +499,14 @@ def clear_chat_history(chat_id):
 def clear_from_sheets(chat_id):
     """מוחק נתוני משתמש מהגיליונות"""
     from sheets_handler import delete_row_by_chat_id
-    print(f"[CLEAR_SHEETS] מנסה למחוק מהגיליונות | chat_id={chat_id}")
+    if should_log_debug_prints():
+        print(f"[CLEAR_SHEETS] מנסה למחוק מהגיליונות | chat_id={chat_id}")
     deleted_sheet = delete_row_by_chat_id(sheet_name=config["SHEET_USER_TAB"], chat_id=chat_id)
-    print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_USER_TAB']}: {deleted_sheet} | chat_id={chat_id}")
+    if should_log_debug_prints():
+        print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_USER_TAB']}: {deleted_sheet} | chat_id={chat_id}")
     deleted_state = delete_row_by_chat_id(sheet_name=config["SHEET_STATES_TAB"], chat_id=chat_id)
-    print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_STATES_TAB']}: {deleted_state} | chat_id={chat_id}")
+    if should_log_debug_prints():
+        print(f"[CLEAR_SHEETS] נמחק ב-{config['SHEET_STATES_TAB']}: {deleted_state} | chat_id={chat_id}")
     return deleted_sheet, deleted_state
 
 def _send_admin_secret_notification(message: str):
@@ -494,4 +515,38 @@ def _send_admin_secret_notification(message: str):
         from notifications import send_admin_secret_command_notification
         send_admin_secret_command_notification(message)
     except Exception as e:
-        print(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")
+        logging.error(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")
+
+# 🎛️ פונקציה פשוטה להצגת מצב הלוגים
+def show_log_status():
+    """מציג את מצב הלוגים הנוכחי - פונקציה פשוטה ללא תלות בimports מסובכים"""
+    try:
+        from config import (ENABLE_DEBUG_PRINTS, ENABLE_GPT_COST_DEBUG, ENABLE_SHEETS_DEBUG,
+                           ENABLE_PERFORMANCE_DEBUG, ENABLE_MESSAGE_DEBUG, ENABLE_DATA_EXTRACTION_DEBUG, DEFAULT_LOG_LEVEL)
+        
+        print("\n🎛️  מצב הלוגים הנוכחי:")
+        print("=" * 40)
+        print(f"📊 רמת לוג כללית:     {DEFAULT_LOG_LEVEL}")
+        print(f"🐛 דיבאג כללי:        {'✅' if ENABLE_DEBUG_PRINTS else '❌'}")
+        print(f"💰 עלויות GPT:        {'✅' if ENABLE_GPT_COST_DEBUG else '❌'}")
+        print(f"📋 חילוץ נתונים:      {'✅' if ENABLE_DATA_EXTRACTION_DEBUG else '❌'}")
+        print(f"⏱️  ביצועים:           {'✅' if ENABLE_PERFORMANCE_DEBUG else '❌'}")
+        print(f"💬 הודעות:            {'✅' if ENABLE_MESSAGE_DEBUG else '❌'}")
+        print(f"📊 גיליונות:          {'✅' if ENABLE_SHEETS_DEBUG else '❌'}")
+        print("=" * 40)
+        print("\n💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה")
+        print("   דוגמה: $env:ENABLE_GPT_COST_DEBUG=\"false\"; python main.py")
+        
+    except ImportError as e:
+        print(f"❌ שגיאת import: {e}")
+        print("💡 אפשר גם לערוך ידנית את config.py")
+    except Exception as e:
+        print(f"❌ שגיאה: {e}")
+
+# אם מפעילים את utils.py ישירות
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "log-status":
+        show_log_status()
+    else:
+        print("שימוש: python utils.py log-status")

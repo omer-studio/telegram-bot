@@ -16,7 +16,35 @@ import logging
 import asyncio
 from typing import Dict, AsyncGenerator, Optional
 from dataclasses import dataclass
-from performance_monitor import PerformanceMonitor, PerformanceMetrics, performance_monitor
+# NOTE: performance_monitor.py is temporarily disabled per README.md
+# Creating stub classes and objects to maintain compatibility
+class PerformanceMonitor:
+    def __init__(self, target_samples=100):
+        self.target_samples = target_samples
+        self.active_measurements = {}
+    
+    def start_measurement(self, chat_id, message_id, user_message):
+        return f"{chat_id}_{message_id}"
+    
+    def record_first_token(self, measurement_id):
+        pass
+    
+    def record_response_complete(self, measurement_id, *args, **kwargs):
+        pass
+    
+    def record_error(self, measurement_id, error_msg):
+        pass
+    
+    def load_all_measurements(self):
+        return []
+    
+    def analyze_performance(self):
+        return {"error": "Performance monitoring temporarily disabled"}
+
+class PerformanceMetrics:
+    pass
+
+performance_monitor = PerformanceMonitor()
 import litellm
 
 class StreamingPerformanceMonitor(PerformanceMonitor):
@@ -34,7 +62,9 @@ class StreamingPerformanceMonitor(PerformanceMonitor):
         מחזיר את התגובה המלאה + מדידות מדויקות
         """
         if measurement_id not in self.active_measurements:
-            logging.warning(f"🔬 Measurement ID not found: {measurement_id}")
+            from config import should_log_performance_debug
+            if should_log_performance_debug():
+                logging.warning(f"🔬 Measurement ID not found: {measurement_id}")
             return None
         
         try:
@@ -44,7 +74,9 @@ class StreamingPerformanceMonitor(PerformanceMonitor):
             
             # התחלת הבקשה
             request_start = time.time()
-            response_stream = litellm.completion(**stream_params)
+            from gpt_utils import measure_llm_latency
+            with measure_llm_latency(model):
+                response_stream = litellm.completion(**stream_params)
             
             # משתנים למעקב
             first_token_received = False
@@ -65,7 +97,9 @@ class StreamingPerformanceMonitor(PerformanceMonitor):
                     if not first_token_received:
                         first_token_received = True
                         self.record_first_token(measurement_id)
-                        logging.info(f"🔬 First token received after {current_time - request_start:.3f}s")
+                        from config import should_log_performance_debug
+                        if should_log_performance_debug():
+                            logging.info(f"🔬 First token received after {current_time - request_start:.3f}s")
                     
                     # חישוב TPS זמני
                     if tokens_received > 0:
@@ -218,7 +252,9 @@ async def measure_gpt_response_with_streaming(full_messages, model, completion_p
     
     # fallback למדידה רגילה
     try:
-        response = litellm.completion(**completion_params)
+        from gpt_utils import measure_llm_latency
+        with measure_llm_latency(model):
+            response = litellm.completion(**completion_params)
         performance_monitor.record_first_token(measurement_id)
         
         content = response.choices[0].message.content.strip()

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ================================================================================
 🚨 חשוב מאוד - שתי סביבות נפרדות! 🚨
@@ -42,15 +43,21 @@
 """
 
 import asyncio
+import logging
+import json
+import time
+import sys
+import urllib.parse
+from telegram import Update, BotCommand
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.error import TelegramError
 from fastapi import FastAPI, Request
-from telegram import Update
 from bot_setup import setup_bot
 from message_handler import handle_message
 import os
 import requests
 from gpt_c_logger import clear_gpt_c_html_log
 from config import DATA_DIR, PRODUCTION_PORT
-import sys
 
 # 🔧 תיקון: מניעת setup מרובה
 _bot_setup_completed = False
@@ -79,7 +86,6 @@ def get_bot_app():
     # בדיקה נוספת: אם זה deploy חדש ברנדר
     if os.getenv("RENDER") and os.getenv("IS_PULL_REQUEST"):
         print("ℹ️  זוהה deploy חדש ברנדר - ממתין להשלמת deployment...")
-        import time
         time.sleep(5)  # ממתין קצת שהdeployment יסתיים
     
     if not _bot_setup_completed:

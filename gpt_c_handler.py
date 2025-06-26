@@ -8,17 +8,16 @@ import logging
 from datetime import datetime
 import json
 import litellm
+import re
 from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
-from config import GPT_MODELS, GPT_PARAMS
-from gpt_utils import normalize_usage_dict
+from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_extraction_debug, should_log_gpt_cost_debug
+from gpt_utils import normalize_usage_dict, measure_llm_latency
 
 def extract_user_info(user_msg, chat_id=None, message_id=None):
     """
     מחלץ מידע רלוונטי מהודעת המשתמש לעדכון הפרופיל שלו
     כולל מערכת fallback למקרה של rate limit ב-Gemini.
     """
-    from config import GPT_FALLBACK_MODELS
-    
     metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_c"]
     model = GPT_MODELS["gpt_c"]
@@ -37,7 +36,8 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     
     # ניסיון עם המודל הראשי
     try:
-        response = litellm.completion(**completion_params)
+        with measure_llm_latency(model):
+            response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
         
@@ -46,6 +46,13 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
             extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
         except json.JSONDecodeError:
             extracted_fields = {}
+        
+        # הדפסת מידע חשוב על חילוץ נתונים (תמיד יופיע!)
+        print(f"🔍 [GPT-C] חולצו {len(extracted_fields)} שדות: {list(extracted_fields.keys())}")
+        if should_log_gpt_cost_debug():
+            print(f"💰 [GPT-C] עלות: {usage.get('cost_total', 0):.6f}$ | טוקנים: {usage.get('total_tokens', 0)}")
+        if should_log_data_extraction_debug():
+            print(f"📋 [GPT-C] נתונים שחולצו: {json.dumps(extracted_fields, ensure_ascii=False, indent=2)}")
         
         return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
         
@@ -62,7 +69,8 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 completion_params["model"] = fallback_model
                 completion_params["metadata"]["fallback_used"] = True
                 
-                response = litellm.completion(**completion_params)
+                with measure_llm_latency(fallback_model):
+                    response = litellm.completion(**completion_params)
                 content = response.choices[0].message.content.strip()
                 usage = normalize_usage_dict(response.usage, response.model)
                 
@@ -73,13 +81,23 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                     extracted_fields = {}
                 
                 logging.info(f"[gpt_c] Fallback successful: {fallback_model}")
+                
+                # הדפסת מידע חשוב על חילוץ נתונים (תמיד יופיע!)
+                print(f"🔍 [GPT-C FALLBACK] חולצו {len(extracted_fields)} שדות: {list(extracted_fields.keys())}")
+                if should_log_gpt_cost_debug():
+                    print(f"💰 [GPT-C FALLBACK] עלות: {usage.get('cost_total', 0):.6f}$ | טוקנים: {usage.get('total_tokens', 0)}")
+                if should_log_data_extraction_debug():
+                    print(f"📋 [GPT-C FALLBACK] נתונים שחולצו: {json.dumps(extracted_fields, ensure_ascii=False, indent=2)}")
+                
                 return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
                 
             except Exception as fallback_error:
                 logging.error(f"[gpt_c] Fallback also failed: {fallback_error}")
+                print(f"❌ [GPT-C] שגיאה גם ב-fallback: {fallback_error}")
                 return {"extracted_fields": {}, "usage": {}, "model": fallback_model}
         else:
             logging.error(f"[gpt_c] Error (not rate limit): {e}")
+            print(f"❌ [GPT-C] שגיאה: {e}")
             return {"extracted_fields": {}, "usage": {}, "model": model}
 
 def should_run_gpt_c(user_message):
@@ -152,7 +170,6 @@ def should_run_gpt_c(user_message):
             if remaining in ['', '!', '?', ':)', ':(', '!:)', '?:(', '!:(', '?:)', '...', '....', '.....', '......', '!!!', '!!!!', '!!!!!']:
                 return False
             # אם מה שנשאר הוא רק אימוג'י או שילוב של תווים מותרים
-            import re
             # הסרת רווחים מהתחלה ומהסוף
             remaining_clean = remaining.strip()
             # בדיקה אם מה שנשאר הוא רק תווים מותרים

@@ -1,9 +1,28 @@
 import logging
 import litellm
 import time
-from config import GEMINI_API_KEY
+import os
+import json
+import traceback
+from contextlib import contextmanager
+from datetime import datetime
+from config import GEMINI_API_KEY, DATA_DIR, config, should_log_gpt_cost_debug, should_log_debug_prints, GPT_MODELS
 
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
+
+@contextmanager
+def measure_llm_latency(model_name):
+    """Context manager למדידת זמן תגובה של מודל LLM"""
+    start_time = time.time()
+    try:
+        yield
+    finally:
+        latency = time.time() - start_time
+        # רזה: רק DEBUG ללוג כללי + רישום לקובץ אם latency גבוה
+        logging.debug(f"[{model_name}] latency: {latency:.2f}s")
+        if latency > 10:  # רק אם איטי מאוד
+            # TODO: Implement performance metric logging if needed
+            pass
 
 # 🧠 מערכת fallback חכמה - חינמי → בתשלום
 class SmartGeminiManager:
@@ -35,7 +54,8 @@ class SmartGeminiManager:
         if current_day != self.last_reset_day:
             self.daily_free_used = False
             self.last_reset_day = current_day
-            print(f"🔄 יום חדש! מאפס מגבלות חינמיות ({current_day})")
+            if should_log_debug_prints():
+                print(f"🔄 יום חדש! מאפס מגבלות חינמיות ({current_day})")
     
     def smart_completion(self, messages, **kwargs):
         """
@@ -46,52 +66,83 @@ class SmartGeminiManager:
         # 🆓 תחילה - נסה מודלים חינמיים
         if not self.daily_free_used:
             for free_model in self.free_models:
+                if config.get("FREE_MODEL_DAILY_LIMIT", 100) <= config.get(f"{free_model}_usage", 0):
+                    continue
+                    
                 try:
-                    print(f"🆓 מנסה מודל חינמי: {free_model}")
-                    response = litellm.completion(
-                        model=free_model,
-                        messages=messages,
-                        api_key=self.api_key,
-                        **kwargs
-                    )
-                    print(f"✅ הצלחה עם מודל חינמי: {free_model}")
+                    if should_log_debug_prints():
+                        print(f"🆓 מנסה מודל חינמי: {free_model}")
+                    
+                    completion_params_copy = kwargs.copy()
+                    completion_params_copy["model"] = free_model
+                    
+                    with measure_llm_latency(free_model):
+                        response = litellm.completion(
+                            messages=messages,
+                            api_key=self.api_key,
+                            **completion_params_copy
+                        )
+                    
+                    # עדכון מונה השימוש
+                    config[f"{free_model}_usage"] = config.get(f"{free_model}_usage", 0) + 1
+                    with open(os.path.join(DATA_DIR, "free_model_limits.json"), 'w') as f:
+                        json.dump(config, f)
+                    
+                    if should_log_debug_prints():
+                        print(f"✅ הצלחה עם מודל חינמי: {free_model}")
                     return response, "free", free_model
                     
                 except Exception as e:
                     error_msg = str(e).lower()
                     
                     if "quota" in error_msg or "rate limit" in error_msg:
-                        print(f"🚫 מגבלה חינמית הגיעה ב-{free_model}")
+                        if should_log_debug_prints():
+                            print(f"🚫 מגבלה חינמית הגיעה ב-{free_model}")
+                        config[f"{free_model}_usage"] = config.get("FREE_MODEL_DAILY_LIMIT", 100)
+                        with open(os.path.join(DATA_DIR, "free_model_limits.json"), 'w') as f:
+                            json.dump(config, f)
                         continue  # נסה מודל חינמי הבא
                     
                     elif "expired" in error_msg:
-                        print(f"❌ בעיה עם API Key ב-{free_model}")
+                        if should_log_debug_prints():
+                            print(f"❌ בעיה עם API Key ב-{free_model}")
                         continue
                     
                     else:
-                        print(f"⚠️ שגיאה אחרת ב-{free_model}: {e}")
+                        if should_log_debug_prints():
+                            print(f"⚠️ שגיאה אחרת ב-{free_model}: {e}")
                         continue
             
             # אם הגענו לכאן - כל המודלים החינמיים נגמרו
-            print("🔄 כל המודלים החינמיים מוגבלים - עובר לבתשלום")
+            if should_log_debug_prints():
+                print("🔄 כל המודלים החינמיים מוגבלים - עובר לבתשלום")
             self.daily_free_used = True
         
         # 💰 עכשיו - נסה מודלים בתשלום (ללא חסימות!)
-        print("💰 עובר למודלים בתשלום - שירות רציף!")
+        if should_log_debug_prints():
+            print("💰 עובר למודלים בתשלום - שירות רציף!")
         for paid_model in self.paid_models:
             try:
-                print(f"💰 מנסה מודל בתשלום: {paid_model}")
-                response = litellm.completion(
-                    model=paid_model,
-                    messages=messages,
-                    api_key=self.api_key,
-                    **kwargs
-                )
-                print(f"✅ הצלחה עם מודל בתשלום: {paid_model}")
+                if should_log_debug_prints():
+                    print(f"💰 מנסה מודל בתשלום: {paid_model}")
+                
+                completion_params_copy = kwargs.copy()
+                completion_params_copy["model"] = paid_model
+                
+                with measure_llm_latency(paid_model):
+                    response = litellm.completion(
+                        messages=messages,
+                        api_key=self.api_key,
+                        **completion_params_copy
+                    )
+                
+                if should_log_debug_prints():
+                    print(f"✅ הצלחה עם מודל בתשלום: {paid_model}")
                 return response, "paid", paid_model
                 
             except Exception as e:
-                print(f"❌ שגיאה במודל בתשלום {paid_model}: {e}")
+                if should_log_debug_prints():
+                    print(f"❌ שגיאה במודל בתשלום {paid_model}: {e}")
                 continue
         
         # אם הגענו לכאן - כל המודלים נכשלו
@@ -133,17 +184,20 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
     משתמש אך ורק ב-LiteLLM עם completion_response.
     מחזיר רק את העלות הכוללת (cost_total) כפי שמחושב ע"י LiteLLM, בלי פילוח ידני.
     """
-    print(f"[DEBUG] 🔥 calculate_gpt_cost CALLED! 🔥")
-    print(f"[DEBUG] Input: prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, cached_tokens={cached_tokens}, model_name={model_name}")
-    print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
+    if should_log_gpt_cost_debug():
+        print(f"[DEBUG] 🔥 calculate_gpt_cost CALLED! 🔥")
+        print(f"[DEBUG] Input: prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, cached_tokens={cached_tokens}, model_name={model_name}")
+        print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
     try:
-        import litellm
         if completion_response:
-            print(f"[DEBUG] Using completion_response for cost calculation")
+            if should_log_gpt_cost_debug():
+                print(f"[DEBUG] Using completion_response for cost calculation")
             cost_usd = litellm.completion_cost(completion_response=completion_response)
-            print(f"[DEBUG] LiteLLM completion_cost returned: {cost_usd}")
+            if should_log_gpt_cost_debug():
+                print(f"[DEBUG] LiteLLM completion_cost returned: {cost_usd}")
         else:
-            print(f"[DEBUG] No completion_response provided, cannot calculate cost with LiteLLM")
+            if should_log_gpt_cost_debug():
+                print(f"[DEBUG] No completion_response provided, cannot calculate cost with LiteLLM")
             cost_usd = 0.0
         cost_ils = cost_usd * usd_to_ils
         cost_agorot = cost_ils * 100
@@ -157,12 +211,14 @@ def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_
             "cost_agorot": cost_agorot,
             "model": model_name
         }
-        print(f"[DEBUG] calculate_gpt_cost returning: {result}")
+        if should_log_gpt_cost_debug():
+            print(f"[DEBUG] calculate_gpt_cost returning: {result}")
         return result
     except Exception as e:
-        print(f"[ERROR] calculate_gpt_cost failed: {e}")
-        import traceback
-        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        if should_log_gpt_cost_debug():
+            print(f"[ERROR] calculate_gpt_cost failed: {e}")
+        if should_log_debug_prints():
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
         return {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -202,7 +258,8 @@ def normalize_usage_dict(usage, model_name=""):
             result["model"] = model_name
             return result
         except Exception as e:
-            print(f"[DEBUG] שגיאה בנירמול usage: {e}")
+            if should_log_debug_prints():
+                print(f"[DEBUG] שגיאה בנירמול usage: {e}")
             # fallback לנירמול פשוט
             return {"model": model_name, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0}
     
@@ -262,7 +319,8 @@ class BillingProtection:
             with open(self.usage_file, 'w', encoding='utf-8') as f:
                 json.dump(self.usage_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
+            if should_log_debug_prints():
+                print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
     
     def _get_current_keys(self):
         """מחזיר מפתחות תאריך נוכחיים"""
@@ -385,6 +443,162 @@ class BillingProtection:
         """הדפס סטטוס נוכחי"""
         status = self.get_current_status()
         
+        if should_log_debug_prints():
+            print("💰 סטטוס תקציב:")
+            print(f"📅 יומי: ${status['daily_usage']:.2f} / ${status['daily_limit']:.2f} ({status['daily_percent']:.1f}%)")
+            print(f"📆 חודשי: ${status['monthly_usage']:.2f} / ${status['monthly_limit']:.2f} ({status['monthly_percent']:.1f}%)")
+            
+            if status['daily_percent'] > 80:
+                print("⚠️ אזהרה: שימוש יומי גבוה!")
+            if status['monthly_percent'] > 80:
+                print("⚠️ אזהרה: שימוש חודשי גבוה!")
+
+# יצירת instance גלובלי
+billing_guard = BillingProtection(
+    daily_limit_usd=5.0,    # $5 ליום
+    monthly_limit_usd=50.0  # $50 לחודש
+)
+
+def try_free_models_first(full_messages, **completion_params):
+    """מנסה קודם מודלים חינמיים, אחר כך עובר לבתשלום"""
+    free_models = config.get("FREE_MODELS", [])
+    paid_models = config.get("PAID_MODELS", [])
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    limits_file = os.path.join(DATA_DIR, "free_model_limits.json")
+    
+    # טעינת מגבלות יומיות
+    try:
+        with open(limits_file, 'r') as f:
+            daily_limits = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        daily_limits = {}
+    
+    # איפוס מגבלות אם יום חדש
+    if daily_limits.get("date") != today_str:
+        daily_limits = {"date": today_str}
+        with open(limits_file, 'w') as f:
+            json.dump(daily_limits, f)
+        if should_log_debug_prints():
+            print(f"🔄 יום חדש! מאפס מגבלות חינמיות ({today_str})")
+    
+    # ניסיון עם מודלים חינמיים
+    for free_model in free_models:
+        if daily_limits.get(free_model, 0) >= config.get("FREE_MODEL_DAILY_LIMIT", 100):
+            continue
+            
+        try:
+            if should_log_debug_prints():
+                print(f"🆓 מנסה מודל חינמי: {free_model}")
+            
+            completion_params_copy = completion_params.copy()
+            completion_params_copy["model"] = free_model
+            
+            with measure_llm_latency(free_model):
+                response = litellm.completion(messages=full_messages, **completion_params_copy)
+            
+            # עדכון מונה השימוש
+            daily_limits[free_model] = daily_limits.get(free_model, 0) + 1
+            with open(limits_file, 'w') as f:
+                json.dump(daily_limits, f)
+            
+            if should_log_debug_prints():
+                print(f"✅ הצלחה עם מודל חינמי: {free_model}")
+            
+            return response
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "quota" in error_msg or "rate limit" in error_msg:
+                daily_limits[free_model] = config.get("FREE_MODEL_DAILY_LIMIT", 100)
+                with open(limits_file, 'w') as f:
+                    json.dump(daily_limits, f)
+                if should_log_debug_prints():
+                    print(f"🚫 מגבלה חינמית הגיעה ב-{free_model}")
+            elif "expired" in error_msg:
+                if should_log_debug_prints():
+                    print(f"❌ בעיה עם API Key ב-{free_model}")
+            else:
+                if should_log_debug_prints():
+                    print(f"⚠️ שגיאה אחרת ב-{free_model}: {e}")
+    
+    # אם כל המודלים החינמיים נכשלו, עובר לבתשלום
+    if should_log_debug_prints():
+        print("🔄 כל המודלים החינמיים מוגבלים - עובר לבתשלום")
+    
+    # שימוש במודלים בתשלום
+    logging.info("💰 עובר למודלים בתשלום - שירות רציף!")
+    for paid_model in paid_models:
+        try:
+            if should_log_debug_prints():
+                print(f"💰 מנסה מודל בתשלום: {paid_model}")
+            
+            completion_params_copy = completion_params.copy()
+            completion_params_copy["model"] = paid_model
+            
+            with measure_llm_latency(paid_model):
+                response = litellm.completion(messages=full_messages, **completion_params_copy)
+            
+            if should_log_debug_prints():
+                print(f"✅ הצלחה עם מודל בתשלום: {paid_model}")
+            return response
+            
+        except Exception as e:
+            if should_log_debug_prints():
+                print(f"❌ שגיאה במודל בתשלום {paid_model}: {e}")
+    
+    # אם כל המודלים נכשלו
+    raise Exception("כל המודלים (חינמיים ובתשלום) נכשלו")
+
+def normalize_usage_data(usage_data):
+    """מנרמל נתוני usage למבנה אחיד"""
+    try:
+        if hasattr(usage_data, 'prompt_tokens'):
+            return {
+                "prompt_tokens": getattr(usage_data, 'prompt_tokens', 0),
+                "completion_tokens": getattr(usage_data, 'completion_tokens', 0),
+                "total_tokens": getattr(usage_data, 'total_tokens', 0),
+                "prompt_tokens_details": getattr(usage_data, 'prompt_tokens_details', {}),
+                "completion_tokens_details": getattr(usage_data, 'completion_tokens_details', {})
+            }
+        elif isinstance(usage_data, dict):
+            return usage_data
+        else:
+            return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"[DEBUG] שגיאה בנירמול usage: {e}")
+        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+def save_usage_data(usage_data, model_name, cost_agorot=None, chat_id=None, user_message=None, bot_response=None):
+    """שומר נתוני שימוש לקובץ לוג מרכזי"""
+    try:
+        usage_log_path = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "model": model_name,
+            "usage": normalize_usage_data(usage_data),
+            "cost_agorot": cost_agorot,
+            "chat_id": str(chat_id) if chat_id else None,
+            "user_message_length": len(user_message) if user_message else 0,
+            "bot_response_length": len(bot_response) if bot_response else 0
+        }
+        
+        with open(usage_log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+            
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
+
+def print_budget_status():
+    """מדפיס סטטוס תקציב נוכחי - רק אם מופעל דיבאג"""
+    if not should_log_gpt_cost_debug():
+        return
+        
+    try:
+        status = billing_guard.get_current_status()
         print("💰 סטטוס תקציב:")
         print(f"📅 יומי: ${status['daily_usage']:.2f} / ${status['daily_limit']:.2f} ({status['daily_percent']:.1f}%)")
         print(f"📆 חודשי: ${status['monthly_usage']:.2f} / ${status['monthly_limit']:.2f} ({status['monthly_percent']:.1f}%)")
@@ -393,6 +607,304 @@ class BillingProtection:
             print("⚠️ אזהרה: שימוש יומי גבוה!")
         if status['monthly_percent'] > 80:
             print("⚠️ אזהרה: שימוש חודשי גבוה!")
+    except Exception as e:
+        logging.error(f"שגיאה בהדפסת סטטוס תקציב: {e}")
+
+# יצירת instance גלובלי
+smart_manager = SmartGeminiManager()
+
+def safe_get_usage_value(obj, attr_name, default=0):
+    """
+    מחלץ ערך מusage object באופן בטוח, כולל תמיכה בwrappers של OpenAI API החדש
+    """
+    try:
+        if hasattr(obj, attr_name):
+            value = getattr(obj, attr_name)
+            # אם זה wrapper object, ננסה להמיר אותו למספר
+            if hasattr(value, '__dict__'):
+                return default
+            return int(value) if value is not None else default
+        return default
+    except (ValueError, TypeError, AttributeError):
+        return default
+
+def calculate_gpt_cost(prompt_tokens, completion_tokens, cached_tokens=0, model_name=None, usd_to_ils=USD_TO_ILS, completion_response=None):
+    if model_name is None:
+        from config import GPT_MODELS
+        model_name = GPT_MODELS["gpt_a"]
+    """
+    מחשב את העלות של שימוש ב-gpt לפי מספר הטוקנים והמודל.
+    משתמש אך ורק ב-LiteLLM עם completion_response.
+    מחזיר רק את העלות הכוללת (cost_total) כפי שמחושב ע"י LiteLLM, בלי פילוח ידני.
+    """
+    if should_log_gpt_cost_debug():
+        print(f"[DEBUG] 🔥 calculate_gpt_cost CALLED! 🔥")
+        print(f"[DEBUG] Input: prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, cached_tokens={cached_tokens}, model_name={model_name}")
+        print(f"[DEBUG] calculate_gpt_cost - Model: {model_name}, Tokens: {prompt_tokens}p + {completion_tokens}c + {cached_tokens}cache")
+    try:
+        if completion_response:
+            if should_log_gpt_cost_debug():
+                print(f"[DEBUG] Using completion_response for cost calculation")
+            cost_usd = litellm.completion_cost(completion_response=completion_response)
+            if should_log_gpt_cost_debug():
+                print(f"[DEBUG] LiteLLM completion_cost returned: {cost_usd}")
+        else:
+            if should_log_gpt_cost_debug():
+                print(f"[DEBUG] No completion_response provided, cannot calculate cost with LiteLLM")
+            cost_usd = 0.0
+        cost_ils = cost_usd * usd_to_ils
+        cost_agorot = cost_ils * 100
+        result = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "cached_tokens": cached_tokens,
+            "cost_total": cost_usd,
+            "cost_total_ils": cost_ils,
+            "cost_agorot": cost_agorot,
+            "model": model_name
+        }
+        if should_log_gpt_cost_debug():
+            print(f"[DEBUG] calculate_gpt_cost returning: {result}")
+        return result
+    except Exception as e:
+        if should_log_gpt_cost_debug():
+            print(f"[ERROR] calculate_gpt_cost failed: {e}")
+        if should_log_debug_prints():
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+            "cached_tokens": cached_tokens,
+            "cost_total": 0.0,
+            "cost_total_ils": 0.0,
+            "cost_agorot": 0.0,
+            "model": model_name
+        }
+
+def normalize_usage_dict(usage, model_name=""):
+    """
+    מנרמל מילון usage של gpt לפורמט אחיד (לוגים/דוחות).
+    מטפל בwrappers חדשים של OpenAI API.
+    """
+    if not usage:
+        return {}
+    
+    # אם זה usage object של OpenAI, נמיר אותו בבטחה
+    if hasattr(usage, '__dict__'):
+        try:
+            result = {
+                "prompt_tokens": safe_get_usage_value(usage, 'prompt_tokens', 0),
+                "completion_tokens": safe_get_usage_value(usage, 'completion_tokens', 0),
+                "total_tokens": safe_get_usage_value(usage, 'total_tokens', 0),
+            }
+            
+            # נחפש cached_tokens במקומות השונים שהם יכולים להיות
+            cached_tokens = 0
+            if hasattr(usage, 'prompt_tokens_details'):
+                cached_tokens = safe_get_usage_value(usage.prompt_tokens_details, 'cached_tokens', 0)
+            elif hasattr(usage, 'cached_tokens'):
+                cached_tokens = safe_get_usage_value(usage, 'cached_tokens', 0)
+            
+            result["cached_tokens"] = cached_tokens
+            result["model"] = model_name
+            return result
+        except Exception as e:
+            if should_log_debug_prints():
+                print(f"[DEBUG] שגיאה בנירמול usage: {e}")
+            # fallback לנירמול פשוט
+            return {"model": model_name, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0}
+    
+    # אם זה כבר dict, פשוט נוסיף את המודל
+    if isinstance(usage, dict):
+        result = dict(usage)
+        result["model"] = model_name
+        return result
+    
+    # fallback
+    return {"model": model_name, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0}
+
+# ========================================
+# 🛡️ מערכת הגנה על חיוב (מקור: billing_protection.py)
+# ========================================
+
+class BillingProtection:
+    """
+    🛡️ מערכת הגנה מפני חיובים מופרזים
+    """
+    
+    def __init__(self, daily_limit_usd=5.0, monthly_limit_usd=50.0):
+        self.daily_limit_usd = daily_limit_usd      # מגבלה יומית: $5
+        self.monthly_limit_usd = monthly_limit_usd  # מגבלה חודשית: $50
+        
+        self.usage_file = "data/billing_usage.json"
+        self._ensure_data_dir()
+        self.usage_data = self._load_usage()
+    
+    def _ensure_data_dir(self):
+        """וודא שתיקיית data קיימת"""
+        import os
+        os.makedirs("data", exist_ok=True)
+    
+    def _load_usage(self):
+        """טען נתוני שימוש מקובץ"""
+        import os
+        import json
+        if os.path.exists(self.usage_file):
+            try:
+                with open(self.usage_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                pass
+        
+        # ברירת מחדל
+        return {
+            "daily": {},    # {"2025-01-20": 1.25}
+            "monthly": {},  # {"2025-01": 15.30}
+            "alerts_sent": {}
+        }
+    
+    def _save_usage(self):
+        """שמור נתוני שימוש לקובץ"""
+        import json
+        try:
+            with open(self.usage_file, 'w', encoding='utf-8') as f:
+                json.dump(self.usage_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            if should_log_debug_prints():
+                print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
+    
+    def _get_current_keys(self):
+        """מחזיר מפתחות תאריך נוכחיים"""
+        from datetime import datetime
+        now = datetime.now()
+        daily_key = now.strftime("%Y-%m-%d")
+        monthly_key = now.strftime("%Y-%m")
+        return daily_key, monthly_key
+    
+    def add_cost(self, cost_usd, model_name, tier_type="unknown"):
+        """
+        🔄 מוסיף עלות לספירה ובודק מגבלות
+        
+        Args:
+            cost_usd: עלות בדולרים
+            model_name: שם המודל
+            tier_type: "free" או "paid"
+        
+        Returns:
+            dict: מידע על סטטוס המגבלות
+        """
+        daily_key, monthly_key = self._get_current_keys()
+        
+        # עדכון שימוש יומי
+        if daily_key not in self.usage_data["daily"]:
+            self.usage_data["daily"][daily_key] = 0.0
+        self.usage_data["daily"][daily_key] += cost_usd
+        
+        # עדכון שימוש חודשי
+        if monthly_key not in self.usage_data["monthly"]:
+            self.usage_data["monthly"][monthly_key] = 0.0
+        self.usage_data["monthly"][monthly_key] += cost_usd
+        
+        # 🔧 תיקון זליגת זיכרון: הגבלת מספר רשומות ישנות
+        # שמירה על מקסימום 60 ימים של נתונים יומיים
+        if len(self.usage_data["daily"]) > 60:
+            old_keys = sorted(self.usage_data["daily"].keys())[:-30]  # שמור רק 30 ימים אחרונים
+            for old_key in old_keys:
+                del self.usage_data["daily"][old_key]
+        
+        # שמירה על מקסימום 12 חודשים של נתונים חודשיים  
+        if len(self.usage_data["monthly"]) > 12:
+            old_keys = sorted(self.usage_data["monthly"].keys())[:-6]  # שמור רק 6 חודשים אחרונים
+            for old_key in old_keys:
+                del self.usage_data["monthly"][old_key]
+        
+        # בדיקת מגבלות
+        daily_usage = self.usage_data["daily"][daily_key]
+        monthly_usage = self.usage_data["monthly"][monthly_key]
+        
+        status = {
+            "daily_usage": daily_usage,
+            "daily_limit": self.daily_limit_usd,
+            "daily_percent": (daily_usage / self.daily_limit_usd) * 100,
+            "monthly_usage": monthly_usage,
+            "monthly_limit": self.monthly_limit_usd,
+            "monthly_percent": (monthly_usage / self.monthly_limit_usd) * 100,
+            "cost_added": cost_usd,
+            "model": model_name,
+            "tier": tier_type,
+            "warnings": []
+        }
+        
+        # הוספת אזהרות
+        if daily_usage >= self.daily_limit_usd:
+            status["warnings"].append("🚨 עברת את המגבלה היומית!")
+        elif daily_usage >= self.daily_limit_usd * 0.8:
+            status["warnings"].append("⚠️ השימוש היומי מעל 80%")
+        
+        if monthly_usage >= self.monthly_limit_usd:
+            status["warnings"].append("🚨 עברת את המגבלה החודשית!")
+        elif monthly_usage >= self.monthly_limit_usd * 0.8:
+            status["warnings"].append("⚠️ השימוש החודשי מעל 80%")
+        
+        # שמירה
+        self._save_usage()
+        
+        return status
+    
+    def get_current_status(self):
+        """מחזיר סטטוס נוכחי ללא הוספת עלות"""
+        daily_key, monthly_key = self._get_current_keys()
+        
+        daily_usage = self.usage_data["daily"].get(daily_key, 0.0)
+        monthly_usage = self.usage_data["monthly"].get(monthly_key, 0.0)
+        
+        return {
+            "daily_usage": daily_usage,
+            "daily_limit": self.daily_limit_usd,
+            "daily_remaining": max(0, self.daily_limit_usd - daily_usage),
+            "monthly_usage": monthly_usage,
+            "monthly_limit": self.monthly_limit_usd,
+            "monthly_remaining": max(0, self.monthly_limit_usd - monthly_usage),
+            "daily_percent": (daily_usage / self.daily_limit_usd) * 100,
+            "monthly_percent": (monthly_usage / self.monthly_limit_usd) * 100
+        }
+    
+    def get_alert_level(self):
+        """
+        📊 מחזיר רמת התראה (לא חוסם, רק מתריע!)
+        """
+        status = self.get_current_status()
+        
+        # רמות התראה
+        if (status["daily_usage"] >= self.daily_limit_usd or 
+            status["monthly_usage"] >= self.monthly_limit_usd):
+            return "critical", "🚨 עברת את המגבלה!"
+        
+        elif (status["daily_usage"] >= self.daily_limit_usd * 0.8 or 
+              status["monthly_usage"] >= self.monthly_limit_usd * 0.8):
+            return "warning", "⚠️ מתקרב למגבלה (80%+)"
+        
+        elif (status["daily_usage"] >= self.daily_limit_usd * 0.5 or 
+              status["monthly_usage"] >= self.monthly_limit_usd * 0.5):
+            return "info", "📊 שימוש בינוני (50%+)"
+        
+        return "ok", "✅ שימוש תקין"
+    
+    def print_status(self):
+        """הדפס סטטוס נוכחי"""
+        status = self.get_current_status()
+        
+        if should_log_debug_prints():
+            print("💰 סטטוס תקציב:")
+            print(f"📅 יומי: ${status['daily_usage']:.2f} / ${status['daily_limit']:.2f} ({status['daily_percent']:.1f}%)")
+            print(f"📆 חודשי: ${status['monthly_usage']:.2f} / ${status['monthly_limit']:.2f} ({status['monthly_percent']:.1f}%)")
+            
+            if status['daily_percent'] > 80:
+                print("⚠️ אזהרה: שימוש יומי גבוה!")
+            if status['monthly_percent'] > 80:
+                print("⚠️ אזהרה: שימוש חודשי גבוה!")
 
 # יצירת instance גלובלי
 billing_guard = BillingProtection(

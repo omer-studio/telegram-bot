@@ -30,17 +30,32 @@ sheets_handler.py
 - Fallback mechanism למקרה של עומס
 """
 
-from config import setup_google_sheets, SUMMARY_FIELD, MAX_SHEETS_OPERATIONS_PER_MINUTE, SHEETS_QUEUE_SIZE, SHEETS_BATCH_SIZE, UPDATE_PRIORITY
-from datetime import datetime
 import logging
-from gpt_utils import calculate_gpt_cost, USD_TO_ILS
-from fields_dict import FIELDS_DICT
 import json
-from dataclasses import dataclass, asdict
-from typing import Optional
 import asyncio
 import time
+import traceback
+import os
+from datetime import datetime
+from dataclasses import dataclass, asdict
+from typing import Optional
 from collections import defaultdict
+from config import (
+    setup_google_sheets, 
+    SUMMARY_FIELD, 
+    MAX_SHEETS_OPERATIONS_PER_MINUTE, 
+    SHEETS_QUEUE_SIZE, 
+    SHEETS_BATCH_SIZE, 
+    UPDATE_PRIORITY,
+    should_log_sheets_debug,
+    config,
+    GPT_MODELS,
+    gpt_log_path
+)
+from gpt_utils import calculate_gpt_cost, USD_TO_ILS
+from fields_dict import FIELDS_DICT
+from notifications import send_error_notification
+from messages import new_user_admin_message
 
 # ================================
 # 🚀 מערכת Queue מתקדמת לGoogle Sheets
@@ -186,11 +201,17 @@ async def increment_code_try_async(sheet_states, chat_id, priority: str = "norma
 def debug_log(message: str, function_name: str = "", chat_id: str = ""):
     """
     פונקציה מרכזית לdebug שמונעת כפילות בlogs
+    מדפיס רק אם מופעל דיבאג גיליונות
     """
-    if chat_id:
+    if not should_log_sheets_debug():
+        return
+        
+    if chat_id and function_name:
         full_message = f"[DEBUG] {function_name}: {message} | chat_id={chat_id}"
-    else:
+    elif function_name:
         full_message = f"[DEBUG] {function_name}: {message}"
+    else:
+        full_message = f"[DEBUG] {message}"
     
     print(full_message)
     logging.debug(full_message)
@@ -247,8 +268,6 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id):
         sheet_states.append_row([str(chat_id), 0])
         debug_log(f"[ensure_user_state_row] ✅ נרשם chat_id {chat_id} ל-user_states (פנייה ראשונה, code_try=0)", "ensure_user_state_row")
         # שליחת הודעה לאדמין
-        from notifications import send_error_notification
-        from messages import new_user_admin_message
         send_error_notification(new_user_admin_message(chat_id))
         debug_log("ensure_user_state_row: סיום | chat_id={chat_id}", "ensure_user_state_row")
         logging.debug(f"ensure_user_state_row: סיום | chat_id={chat_id}")
@@ -382,6 +401,8 @@ def update_user_profile_sync(chat_id, field_values):
                         col_index = header.index(key) + 1
                         debug_log(f"[DEBUG] updating field: {key} = '{value}' at col {col_index}", "update_user_profile")
                         logging.info(f"[DEBUG] updating field: {key} = '{value}' at col {col_index}")
+                        # הדפסת מידע חיוני על שמירת נתונים (תמיד יופיע!)
+                        print(f"💾 [SAVE] שדה '{key}' ← '{value}' (עמודה {col_index})")
                         try:
                             sheet_users.update_cell(idx + 2, col_index, str(value))
                             updated_fields.append(f"{key}: {value}")
@@ -394,6 +415,8 @@ def update_user_profile_sync(chat_id, field_values):
                 if updated_fields:
                     debug_log(f"[DEBUG] updated fields: {updated_fields}", "update_user_profile")
                     logging.info(f"[DEBUG] updated fields: {updated_fields}")
+                    # הדפסת סיכום השמירה (תמיד יופיע!)
+                    print(f"✅ [SAVED] נשמרו {len(updated_fields)} שדות: {', '.join([f.split(':')[0] for f in updated_fields])}")
                     # שמור את summary בדיוק כפי שהוחזר מה-gpt
                     if "summary" in field_values and SUMMARY_FIELD in header:
                         summary_col = header.index(SUMMARY_FIELD) + 1
@@ -742,7 +765,6 @@ def log_to_sheets_sync(
                 missing_headers.append(key)
         if missing_headers:
             print(f"⚠️ כותרות חסרות בגיליון: {missing_headers}")
-            from notifications import send_error_notification
             send_error_notification(f"⚠️ כותרות חסרות בגיליון: {missing_headers}")
 
         # הכנסת ערכים לפי header (מתעלם מעמודות מיותרות)
@@ -776,8 +798,6 @@ def log_to_sheets_sync(
         return True
 
     except Exception as e:
-        import traceback
-        from notifications import send_error_notification
         tb = traceback.format_exc()
         print(f"[DEBUG][EXCEPTION] {tb}")
         error_msg = (

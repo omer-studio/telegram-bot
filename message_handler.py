@@ -1,17 +1,31 @@
 """
 message_handler.py
 ------------------
-קובץ זה מטפל בכל הודעה נכנסת מהמשתמש בטלגרם.
-הרציונל: ריכוז כל הלוגיקה של טיפול בהודעות, הרשאות, רישום, מענה, לוגים, ושילוב gpt.
+קובץ זה מרכז את כל הטיפול בהודעות ועיצוב, פורמטינג, ושליחה של הודעות.
+הרציונל: ריכוז כל ניהול ההודעות, פורמטינג, שגיאות, וחוויית משתמש במקום אחד.
 """
 
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import ContextTypes
-from datetime import datetime
 import logging
 import asyncio
 import re
+import json
+import time
+import telegram
+from telegram.constants import ParseMode
+from telegram.error import BadRequest, TelegramError
+from config import (
+    BOT_TOKEN, 
+    ADMIN_NOTIFICATION_CHAT_ID, 
+    ADMIN_BOT_TELEGRAM_TOKEN,
+    MAX_MESSAGE_LENGTH,
+    ADMIN_CHAT_ID
+)
+from utils import log_error_stat
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ContextTypes
+from datetime import datetime
 from utils import handle_secret_command, log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
+from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state
@@ -21,8 +35,6 @@ from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d
 from gpt_utils import normalize_usage_dict
 from fields_dict import FIELDS_DICT
-import time
-import json
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 
@@ -31,7 +43,11 @@ def format_text_for_telegram(text):
     ממיר פורמטים מווואטסאפ לפורמט HTML של טלגרם:
     - *טקסט* -> <b>טקסט</b> (bold)
     - _טקסט_ -> <i>טקסט</i> (italic)
+    - מנקה תגי HTML לא נתמכים כמו <br>
     """
+    # ניקוי תגי HTML לא נתמכים
+    text = text.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
+    
     # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
     text = re.sub(r'\*([^\s*][^*]*[^\s*]|\S)\*', r'<b>\1</b>', text)
     
@@ -51,23 +67,33 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     # מיפוי פורמטים לפני שליחה
     formatted_text = format_text_for_telegram(text)
     
-    print(f"[SEND_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
+    if should_log_message_debug():
+        print(f"[SEND_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
+    
     try:
         bot_id = None
         if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
             bot_id = getattr(update.message.bot, 'id', None)
         elif hasattr(update, 'bot'):
             bot_id = getattr(update.bot, 'id', None)
-        print(f"[DEBUG] SENDING MESSAGE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
+        
+        if should_log_debug_prints():
+            print(f"[DEBUG] SENDING MESSAGE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
     except Exception as e:
-        print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
+        if should_log_debug_prints():
+            print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
     import sys; sys.stdout.flush()
     try:
         sent_message = await update.message.reply_text(formatted_text, parse_mode="HTML")
-        print(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+        
+        if should_log_message_debug():
+            print(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+        
         logging.info(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
     except Exception as e:
-        print(f"[ERROR] שליחת הודעה נכשלה: {e}", flush=True)
+        if should_log_message_debug():
+            print(f"[ERROR] שליחת הודעה נכשלה: {e}", flush=True)
+        
         logging.error(f"[ERROR] שליחת הודעה נכשלה: {e}")
         log_event_to_file({
             "chat_id": chat_id,
@@ -79,7 +105,8 @@ async def send_message(update, chat_id, text, is_bot_message=True):
             from notifications import send_error_notification
             send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
         except Exception as notify_err:
-            print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
+            if should_log_message_debug():
+                print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
             logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
         return
     if is_bot_message:
@@ -89,7 +116,8 @@ async def send_message(update, chat_id, text, is_bot_message=True):
         "bot_message": formatted_text,
         "timestamp": datetime.now().isoformat()
     })
-    print(f"[BOT_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
+    if should_log_message_debug():
+        print(f"[BOT_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
 
 # פונקציה לשליחת הודעת אישור (הועתקה מ-main.py)
 async def send_approval_message(update, chat_id):
@@ -595,18 +623,41 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         await handle_critical_error(ex, chat_id, user_msg, update)
 
 async def send_message_with_retry(update, chat_id, text, is_bot_message=True, max_retries=3):
-    # מיפוי פורמטים לפני שליחה
     formatted_text = format_text_for_telegram(text)
     
     for attempt in range(max_retries):
         try:
-            await update.message.reply_text(formatted_text, parse_mode="HTML")
+            await asyncio.wait_for(
+                update.message.reply_text(formatted_text, parse_mode="HTML"),
+                timeout=10.0
+            )
             return True
+        except asyncio.TimeoutError:
+            logging.warning(f"Timeout on attempt {attempt + 1}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+                continue
         except Exception as e:
+            error_msg = str(e).lower()
+            
+            # אם השגיאה קשורה לפורמט HTML, ננסה בלי parse_mode
+            if "parse entities" in error_msg or "unsupported start tag" in error_msg or "br" in error_msg:
+                try:
+                    plain_text = re.sub(r'<[^>]+>', '', formatted_text)
+                    await asyncio.wait_for(
+                        update.message.reply_text(plain_text),
+                        timeout=10.0
+                    )
+                    logging.warning(f"⚠️ [HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
+                    return True
+                except Exception as plain_error:
+                    logging.error(f"❌ [PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
+            
             if attempt < max_retries - 1:
                 await asyncio.sleep(1)
-                continue
+                logging.warning(f"⚠️ [RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
             else:
-                import logging
-                logging.error(f"Failed to send message after {max_retries} attempts: {e}")
+                logging.error(f"❌ [FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
                 return False
+    
+    return False

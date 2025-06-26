@@ -10,7 +10,9 @@ gpt_e_handler.py
 """
 
 import logging
+import asyncio
 import json
+import litellm
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
@@ -19,6 +21,7 @@ from utils import get_chat_history_messages
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
 from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
 from gpt_utils import normalize_usage_dict, safe_get_usage_value
+from config import GPT_MODELS, GPT_PARAMS
 
 # הגדרת לוגר
 logger = logging.getLogger(__name__)
@@ -146,9 +149,6 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         logger.info(f"[gpt_e] Sending request to GPT for chat_id={chat_id}")
         
         try:
-            import litellm
-            from config import GPT_MODELS, GPT_PARAMS
-            
             metadata = {"gpt_identifier": "gpt_e", "chat_id": chat_id}
             params = GPT_PARAMS["gpt_e"]
             model = GPT_MODELS["gpt_e"]
@@ -165,7 +165,9 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                 "store": True
             }
             
-            response = litellm.completion(**completion_params)
+            from gpt_utils import measure_llm_latency
+            with measure_llm_latency(model):
+                response = litellm.completion(**completion_params)
             
             # חילוץ התוכן מהתגובה
             content = response.choices[0].message.content.strip()
@@ -220,9 +222,14 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                 
                 if changes:
                     logger.info(f"[gpt_e] Updating profile with changes: {changes}")
+                    # הדפסת מידע חשוב על עדכון נתונים (תמיד יופיע!)
+                    print(f"🔄 [GPT-E] מעדכן {len(changes)} שדות: {list(changes.keys())}")
+                    if 'cost_data' in result and result['cost_data']:
+                        print(f"💰 [GPT-E] עלות: {result['cost_data'].get('cost_total', 0):.6f}$ | טוקנים: {result['cost_data'].get('total_tokens', 0)}")
                     update_user_profile(chat_id, changes)
                     result['changes'] = changes
                     logger.info(f"[gpt_e] Profile updated successfully for chat_id={chat_id}")
+                    print(f"✅ [GPT-E] עדכון הפרופיל הושלם בהצלחה")
                 else:
                     logger.info(f"[gpt_e] No meaningful changes found for chat_id={chat_id}")
             else:

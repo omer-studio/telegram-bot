@@ -12,11 +12,12 @@ import litellm
 import asyncio
 import threading
 import time
+import re
 from prompts import SYSTEM_PROMPT
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
-from gpt_utils import normalize_usage_dict
-from gpt_utils import billing_guard
+from gpt_utils import normalize_usage_dict, billing_guard, measure_llm_latency
 from notifications import alert_billing_issue, send_error_notification
+from message_handler import format_text_for_telegram
 # מערכת ביצועים מבוטלת זמנית
 
 # ייבוא הפילטר החכם
@@ -157,8 +158,6 @@ def should_use_premium_model(user_message, chat_history_length=0):
     Returns:
         tuple: (should_use_premium: bool, reason: str, match_type: str)
     """
-    import re
-    
     # בדיקת אורך הודעה
     word_count = len(user_message.split())
     if word_count > LONG_MESSAGE_THRESHOLD:
@@ -207,18 +206,31 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
     """
     מוחק הודעה זמנית ושולח הודעה חדשה
     """
-    # ייבוא יחיד בתחילת הפונקציה
-    from message_handler import format_text_for_telegram
     formatted_text = format_text_for_telegram(new_text)
     
     try:
-        # מחיקת ההודעה הזמנית
-        await update.message.bot.delete_message(
-            chat_id=chat_id,
-            message_id=temp_message_id
-        )
-        logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית נמחקה | chat_id={chat_id} | message_id={temp_message_id}")
+        # מחיקת ההודעה הזמנית - תיקון הגישה ל-bot
+        bot = None
         
+        # ניסיון 1: מ-update עצמו
+        if hasattr(update, 'get_bot'):
+            bot = update.get_bot()
+        # ניסיון 2: מ-message 
+        elif hasattr(update, 'message') and hasattr(update.message, 'get_bot'):
+            bot = update.message.get_bot()
+        # ניסיון 3: מ-callback_query אם זה callback
+        elif hasattr(update, 'callback_query') and hasattr(update.callback_query, 'get_bot'):
+            bot = update.callback_query.get_bot()
+        # ניסיון 4: גישה ישירה ל-bot (ייתכן שקיים במקרים מסוימים)
+        elif hasattr(update, 'message') and hasattr(update.message, 'bot'):
+            bot = update.message.bot
+        
+        if bot:
+            await bot.delete_message(chat_id=chat_id, message_id=temp_message_id)
+            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית נמחקה | chat_id={chat_id} | message_id={temp_message_id}")
+        else:
+            logging.warning(f"⚠️ [DELETE_MSG] לא ניתן לגשת ל-bot object, מדלג על מחיקה")
+            
         # שליחת הודעה חדשה
         await update.message.reply_text(formatted_text, parse_mode="HTML")
         logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
@@ -269,14 +281,20 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         completion_params["max_tokens"] = params["max_tokens"]
     
     try:
-        import litellm
-        
         # 🔬 תזמון הטוקן הראשון - צריך להשתמש ב-streaming לזה
-        response = litellm.completion(**completion_params)
+        with measure_llm_latency(model):
+            response = litellm.completion(**completion_params)
         
         # 🔬 רישום הטוקן הראשון מבוטל זמנית
         
         bot_reply = response.choices[0].message.content.strip()
+        
+        # ניקוי תגי HTML לא נתמכים שהמודל עלול להחזיר
+        # <br> תגים לא נתמכים ב-Telegram - צריך להמיר ל-\n
+        bot_reply = bot_reply.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
+        # גם ניקוי תגי br עם attributes שונים
+        bot_reply = re.sub(r'<br\s*/?>', '\n', bot_reply)
+        
         usage = normalize_usage_dict(response.usage, response.model)
         
         # 🔬 מדידת ביצועים מבוטלת זמנית
@@ -400,6 +418,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                         logging.info(f"🔄 [TIMING] GPT איטי ({gpt_duration:.1f}s) - הודעה זמנית נמחקה ונשלחה חדשה")
                         # מסמנים שההודעה כבר נשלחה דרך המחיקה והשליחה
                         gpt_result["message_already_sent"] = True
+                    else:
+                        # אם המחיקה+שליחה נכשלו, נשלח הודעה נוספת כחירום
+                        logging.warning(f"⚠️ [EMERGENCY] מחיקה+שליחה נכשלו, שולח הודעה נוספת")
+                        try:
+                            await update.message.reply_text(
+                                f"מצטער על העיכוב. התשובה שלי:\n\n{gpt_result['bot_reply'][:1000]}..."
+                                if len(gpt_result['bot_reply']) > 1000 else gpt_result['bot_reply']
+                            )
+                            gpt_result["message_already_sent"] = True
+                        except Exception as emergency_error:
+                            logging.error(f"❌ [EMERGENCY] גם הודעת חירום נכשלה: {emergency_error}")
         
         return gpt_result
         

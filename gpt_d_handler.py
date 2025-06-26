@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 import litellm
 from prompts import PROFILE_MERGE_PROMPT
-from config import GPT_MODELS, GPT_PARAMS
+from config import GPT_MODELS, GPT_PARAMS, should_log_data_extraction_debug, should_log_gpt_cost_debug
 from gpt_utils import normalize_usage_dict
 
 def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, message_id=None):
@@ -41,7 +41,9 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         if params["max_tokens"] is not None:
             completion_params["max_tokens"] = params["max_tokens"]
         
-        response = litellm.completion(**completion_params)
+        from gpt_utils import measure_llm_latency
+        with measure_llm_latency(model):
+            response = litellm.completion(**completion_params)
         content = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
         
@@ -54,10 +56,18 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         except json.JSONDecodeError:
             extracted_fields = {}
         
+        # הדפסת מידע חשוב על מיזוג נתונים (תמיד יופיע!)
+        print(f"🔄 [GPT-D] מוזגו {len(extracted_fields)} שדות")
+        if should_log_gpt_cost_debug():
+            print(f"💰 [GPT-D] עלות: {usage.get('cost_total', 0):.6f}$ | טוקנים: {usage.get('total_tokens', 0)}")
+        if should_log_data_extraction_debug():
+            print(f"📋 [GPT-D] פרופיל מוזג: {json.dumps(extracted_fields, ensure_ascii=False, indent=2)}")
+        
         return {"merged_profile": extracted_fields, "usage": usage, "model": response.model}
         
     except Exception as e:
         logging.error(f"[gpt_d] Error: {e}")
+        print(f"❌ [GPT-D] שגיאה: {e}")
         return {"merged_profile": {}, "usage": {}, "model": model}
 
 def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None):
@@ -66,8 +76,8 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     מחזיר tuple: (updated_profile, combined_usage)
     """
     # 1. חילוץ שדות חדשים מהודעת המשתמש (gpt_c)
-    from gpt_c_handler import extract_fields_from_message
-    gpt_c_result = extract_fields_from_message(user_message)
+    from gpt_c_handler import extract_user_info
+    gpt_c_result = extract_user_info(user_message)
     extracted_fields = {}
     gpt_c_usage = {}
     if isinstance(gpt_c_result, dict):

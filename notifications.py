@@ -6,9 +6,22 @@ notifications.py
 """
 import json
 import os
+import re
+import traceback
+import logging
+import asyncio
+import telegram
 from datetime import datetime
 import requests
-from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN, BOT_TRACE_LOG_PATH, BOT_ERRORS_PATH, MAX_LOG_LINES_TO_KEEP
+from config import (
+    ADMIN_NOTIFICATION_CHAT_ID, 
+    ADMIN_BOT_TELEGRAM_TOKEN, 
+    BOT_TRACE_LOG_PATH, 
+    BOT_ERRORS_PATH, 
+    MAX_LOG_LINES_TO_KEEP,
+    ADMIN_CHAT_ID,
+    BOT_TOKEN
+)
 from utils import log_error_stat
 
 def write_deploy_commit_to_log(commit):
@@ -134,13 +147,9 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
     קלט: error_message (str), chat_id (str), user_msg (str), error_type (str)
     פלט: אין (שולח הודעה)
     """
-    import traceback
-    from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
-    import requests
     log_error_stat(error_type)
     # מסנן טוקנים/סודות
     def sanitize(msg):
-        import re
         msg = re.sub(r'(token|key|api|secret)[^\s\n\r:]*[:=][^\s\n\r]+', '[SECURE]', msg, flags=re.IGNORECASE)
         return msg
     if not isinstance(error_message, str):
@@ -220,9 +229,6 @@ def log_error_to_file(error_data, send_telegram=True):
     קלט: error_data (dict), send_telegram (bool)
     פלט: אין (שומר לוג)
     """
-    import requests
-    from config import ADMIN_NOTIFICATION_CHAT_ID, ADMIN_BOT_TELEGRAM_TOKEN
-
     try:
         print("[DEBUG][log_error_to_file] --- START ---")
         for k, v in error_data.items():
@@ -262,7 +268,6 @@ def log_error_to_file(error_data, send_telegram=True):
             }
             requests.post(url, data=data)
     except Exception as e:
-        import traceback
         print(f"💥 שגיאה ברישום שגיאה לקובץ: {e}")
         print("[DEBUG][log_error_to_file][EXCEPTION] error_data:")
         for k, v in error_data.items():
@@ -286,7 +291,6 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     print("[DEBUG][handle_critical_error][locals]:")
     for k, v in locals().items():
         print(f"[DEBUG][handle_critical_error][locals] {k} = {v} (type: {type(v)})")
-    from utils import log_error_stat
     log_error_stat("critical_error")
     send_error_notification(
         error_message=error,
@@ -309,7 +313,6 @@ def handle_non_critical_error(error, chat_id, user_msg, error_type):
     מטפל בשגיאות לא קריטיות - שגיאות שלא מונעות מהבוט לעבוד
     """
     print(f"⚠️ שגיאה לא קריטית: {error}")
-    from utils import log_error_stat
     log_error_stat(error_type)
     send_error_notification(
         error_message=error,
@@ -418,10 +421,6 @@ def send_admin_alert(message, alert_level="info"):
         alert_level: "info", "warning", "critical"
     """
     try:
-        from config import ADMIN_CHAT_ID, BOT_TOKEN
-        import telegram
-        import asyncio
-        
         # אייקונים לפי רמת חומרה
         icons = {
             "info": "📊",
@@ -438,19 +437,16 @@ def send_admin_alert(message, alert_level="info"):
         asyncio.create_task(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
         
         # גם ללוג
-        import logging
         logging.warning(f"[🚨 אדמין] {message}")
         
     except Exception as e:
         # אם נכשל לשלוח - לפחות ללוג
-        import logging
         logging.error(f"[🚨] נכשל לשלוח התראה לאדמין: {e}")
         logging.warning(f"[🚨 לוג] {message}")
 
 async def _send_telegram_message_admin(bot_token, chat_id, text):
     """שולח הודעה בטלגרם (אסינכרונית)"""
     try:
-        import telegram
         bot = telegram.Bot(token=bot_token)
         await bot.send_message(
             chat_id=chat_id,
@@ -458,7 +454,6 @@ async def _send_telegram_message_admin(bot_token, chat_id, text):
             parse_mode='Markdown'
         )
     except Exception as e:
-        import logging
         logging.error(f"[טלגרם] שגיאה בשליחה: {e}")
 
 def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, daily_limit, monthly_limit):

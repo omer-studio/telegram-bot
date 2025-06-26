@@ -65,7 +65,72 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # הגדרות גלובליות
 config = load_config()
 
-# טוקנים וזיהויים
+# ==========================================================
+# 🎛️ הגדרות בקרת לוגים - לשליטה ברמת הפירוט
+# ==========================================================
+# רמות לוגים זמינות: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# ⚙️ הגדרות ברירת מחדל (ניתן לשנות כאן)
+DEFAULT_LOG_LEVEL = "INFO"  # רמת לוגים כללית
+ENABLE_DEBUG_PRINTS = False  # DEBUG prints כלליים (False = רזה יותר)
+ENABLE_GPT_COST_DEBUG = True  # דיבאג עלויות GPT מפורט - חשוב לתפעול!
+ENABLE_SHEETS_DEBUG = False  # דיבאג גיליונות Google
+ENABLE_PERFORMANCE_DEBUG = True  # דיבאג ביצועים מפורט - חשוב לזמני תגובה!
+ENABLE_MESSAGE_DEBUG = True  # הודעות בסיסיות (מומלץ True)
+ENABLE_DATA_EXTRACTION_DEBUG = True  # מידע על חילוץ נתונים מ-GPT C,D,E
+
+# 🔧 אפשרות לעקוף עם משתני סביבה (אופציונלי)
+# דוגמאות שימוש:
+# Windows: $env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+# Linux/Mac: ENABLE_GPT_COST_DEBUG=false python main.py
+# או הגדר במשתני הסביבה של המערכת
+import os
+DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL)
+ENABLE_DEBUG_PRINTS = os.getenv("ENABLE_DEBUG_PRINTS", str(ENABLE_DEBUG_PRINTS)).lower() == "true"
+ENABLE_GPT_COST_DEBUG = os.getenv("ENABLE_GPT_COST_DEBUG", str(ENABLE_GPT_COST_DEBUG)).lower() == "true"
+ENABLE_SHEETS_DEBUG = os.getenv("ENABLE_SHEETS_DEBUG", str(ENABLE_SHEETS_DEBUG)).lower() == "true"
+ENABLE_PERFORMANCE_DEBUG = os.getenv("ENABLE_PERFORMANCE_DEBUG", str(ENABLE_PERFORMANCE_DEBUG)).lower() == "true"
+ENABLE_MESSAGE_DEBUG = os.getenv("ENABLE_MESSAGE_DEBUG", str(ENABLE_MESSAGE_DEBUG)).lower() == "true"
+ENABLE_DATA_EXTRACTION_DEBUG = os.getenv("ENABLE_DATA_EXTRACTION_DEBUG", str(ENABLE_DATA_EXTRACTION_DEBUG)).lower() == "true"
+
+# הגדרת רמת לוגים גלובלית
+logging.basicConfig(
+    level=getattr(logging, DEFAULT_LOG_LEVEL.upper(), logging.INFO),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # פלט למסוף
+        logging.FileHandler(os.path.join(PROJECT_ROOT, 'data', 'bot.log'), encoding='utf-8')  # פלט לקובץ
+    ]
+)
+
+# פונקציות עזר לבקרת לוגים
+def should_log_debug_prints():
+    """בודק האם להדפיס DEBUG prints בהתאם להגדרות"""
+    return ENABLE_DEBUG_PRINTS
+
+def should_log_gpt_cost_debug():
+    """בודק האם להדפיס דיבאג עלויות GPT"""
+    return ENABLE_GPT_COST_DEBUG
+
+def should_log_sheets_debug():
+    """בודק האם להדפיס דיבאג גיליונות"""
+    return ENABLE_SHEETS_DEBUG
+
+def should_log_performance_debug():
+    """בודק האם להדפיס דיבאג ביצועים"""
+    return ENABLE_PERFORMANCE_DEBUG
+
+def should_log_message_debug():
+    """בודק האם להדפיס הודעות בסיסיות"""
+    return ENABLE_MESSAGE_DEBUG
+
+def should_log_data_extraction_debug():
+    """בודק האם להדפיס מידע על חילוץ נתונים מ-GPT C,D,E"""
+    return ENABLE_DATA_EXTRACTION_DEBUG
+
+# ==========================================================
+# 🚀 טוקנים וזיהויים
+# ==========================================================
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
