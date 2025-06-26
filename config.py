@@ -62,6 +62,10 @@ def load_config():
 # הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
+# ⚠️ תיקון קריטי: יצירת תיקיית data לפני הגדרת הלוגים!
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # הגדרות גלובליות
 config = load_config()
 
@@ -240,9 +244,7 @@ BOT_ERRORS_FILENAME = "bot_errors.jsonl"
 CRITICAL_ERRORS_FILENAME = "critical_errors.jsonl"
 LOG_LIMIT = 100
 
-# הגדרת נתיב לוג אחיד מתוך תיקיית הפרויקט
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+
 
 # נתיבי קבצים עיקריים
 gpt_log_path = os.path.join(DATA_DIR, GPT_USAGE_LOG_FILENAME)
