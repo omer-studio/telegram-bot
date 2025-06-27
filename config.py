@@ -145,6 +145,11 @@ GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 ADMIN_BOT_TELEGRAM_TOKEN = config.get("ADMIN_BOT_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
 ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
 
+# משתנים נוספים שנדרשים ל-notifications.py ו-message_handler.py
+ADMIN_CHAT_ID = ADMIN_NOTIFICATION_CHAT_ID  # alias לעקביות
+BOT_TOKEN = TELEGRAM_BOT_TOKEN  # alias לעקביות
+MAX_MESSAGE_LENGTH = 4096  # מגבלת אורך הודעה בטלגרם
+
 # הגדרת LiteLLM
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 

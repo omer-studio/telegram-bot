@@ -17,7 +17,7 @@ from prompts import SYSTEM_PROMPT
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
 from gpt_utils import normalize_usage_dict, billing_guard, measure_llm_latency
 from notifications import alert_billing_issue, send_error_notification
-from message_handler import format_text_for_telegram
+# ייבוא format_text_for_telegram הועבר לתוך הפונקציות כדי למנוע circular import
 # מערכת ביצועים מבוטלת זמנית
 
 # ייבוא הפילטר החכם
@@ -206,6 +206,7 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
     """
     מוחק הודעה זמנית ושולח הודעה חדשה
     """
+    from message_handler import format_text_for_telegram  # ייבוא מקומי למניעת circular import
     formatted_text = format_text_for_telegram(new_text)
     
     try:

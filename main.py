@@ -79,9 +79,8 @@ def get_bot_app():
     is_local_uvicorn = any(arg in sys.argv[0].lower() for arg in ["uvicorn"]) and not is_production
     
     if is_sandbox_mode or is_local_uvicorn:
-        print("⚠️  זוהה sandbox/uvicorn mode - אל תפעיל main.py ישירות!")
-        print("    השתמש ב: python sandbox.py")
-        raise SystemExit("❌ שגיאה: main.py לא צריך לרוץ במצב sandbox")
+        print("⚠️  זוהה sandbox/uvicorn mode - עובד בסביבת פיתוח")
+        # המשיכים כרגיל - אין צורך לעצור את הבוט
     
     # בדיקה נוספת: אם זה deploy חדש ברנדר
     if os.getenv("RENDER") and os.getenv("IS_PULL_REQUEST"):
