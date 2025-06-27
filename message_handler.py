@@ -304,6 +304,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
         try:
+
             # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
             current_summary = get_user_summary(chat_id) or ""
             history_messages = get_chat_history_messages(chat_id)

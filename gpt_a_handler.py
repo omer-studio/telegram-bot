@@ -251,8 +251,20 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
 def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_premium=True, filter_reason="", match_type="unknown"):
     """
     גרסה סינכרונית של get_main_response - לשימוש ב-thread
-    כולל מדידת ביצועים לאבחון צוואר בקבוק
+    כולל מדידת ביצועים לאבחון צוואר בקבוק + הקשר אנושי מועשר
     """
+    # 🤖 הוספת מידע רקע על המשתמש כ-system message נפרד
+    if chat_id:
+        try:
+            from utils import create_human_context_for_gpt
+            human_context = create_human_context_for_gpt(chat_id)
+            if human_context:
+                # הוספת מידע הרקע כ-system message נפרד אחרי הפרומט הראשי
+                # זה יגיע לGPT כמידע נפרד ולא יהיה חלק קבוע מהפרומט
+                full_messages.insert(-1, {"role": "system", "content": human_context.strip()})
+        except Exception as e:
+            logging.error(f"שגיאה בהוספת מידע רקע: {e}")
+    
     metadata = {"gpt_identifier": "gpt_a", "chat_id": chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_a"]
     

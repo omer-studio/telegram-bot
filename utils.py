@@ -59,12 +59,17 @@ def update_chat_history(chat_id, user_msg, bot_summary): # מעדכן את הי�
         if chat_id not in history_data:
             history_data[chat_id] = {"am_context": "", "history": []}
 
-        # הוספת האירוע החדש
+        # הוספת האירוע החדש עם טיימסטאמפ מינימלי
         if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
+            now = datetime.now()
+            # יצירת טיימסטאמפ מינימלי לתצוגה: "27/12 14:01"
+            simple_timestamp = f"{now.day:02d}/{now.month:02d} {now.hour:02d}:{now.minute:02d}"
+            
             history_data[chat_id]["history"].append({
                 "user": user_msg,
                 "bot": bot_summary,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": now.isoformat(),  # פורמט מלא לחישובים פנימיים
+                "time": simple_timestamp       # פורמט קצר לתצוגה ל-GPT: [27/12 14:01]
             })
 
         # שמירה על איקס הודעות אחרונות בלבד
@@ -101,7 +106,7 @@ def get_chat_history_messages(chat_id: str, limit: int = None) -> list: # מחז
     messages = []
     history = history_data[chat_id]["history"]
     
-    # קביעת מספר ההודעות לפי הפרמטר limit או ברירת מחדל של 15
+    # קביעת מספר ההודעות לפי הפרמטר limit או ברירת מחדל של 15 זוגות (30 הודעות)
     max_entries = limit if limit is not None else 15
     
     if len(history) < max_entries:
@@ -110,8 +115,13 @@ def get_chat_history_messages(chat_id: str, limit: int = None) -> list: # מחז
         last_entries = history[-max_entries:]  # רק max_entries אחרונות
 
     for entry in last_entries:
-        messages.append({"role": "user", "content": entry["user"]})
-        messages.append({"role": "assistant", "content": entry["bot"]})
+        # הוספת הטיימסטאמפ המינימלי להודעת המשתמש בלבד (חוסך טוקנים)
+        user_content = entry["user"]
+        if "time" in entry:  # אם יש טיימסטאמפ מינימלי - מציג כ [27/12 14:01]
+            user_content = f"[{entry['time']}] {entry['user']}"
+        
+        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "assistant", "content": entry["bot"]})  # תשובת הבוט ללא זמן
 
     
     if should_log_message_debug():
@@ -119,11 +129,18 @@ def get_chat_history_messages(chat_id: str, limit: int = None) -> list: # מחז
     return messages
 
 
-def get_user_stats(chat_id: str) -> dict: # מחזיר סטטיסטיקות על המשתמש (מספר הודעות, תאריכים)
+def get_user_stats(chat_id: str) -> dict: # מחזיר סטטיסטיקות מועשרות על המשתמש לתחושה אנושית יותר
     """
-    מחזיר סטטיסטיקות על המשתמש (מספר הודעות, תאריכים).
+    📊 מחזיר סטטיסטיקות מועשרות על המשתמש להקשר אנושי.
+    
+    🎯 מטרה: לאסוף נתונים עבור create_human_context_for_gpt()
+    - מספר הודעות ותקופת הקשר
+    - זמן מההודעה האחרונה  
+    - הקשר זמן נוכחי (שעה, יום בשבוע)
+    - ניתוח מילות מפתח רגשיות
+    
     קלט: chat_id (str)
-    פלט: dict
+    פלט: dict עם מידע מפורט לשימוש מערכת ההקשר
     """
     try:
         with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
@@ -134,16 +151,175 @@ def get_user_stats(chat_id: str) -> dict: # מחזיר סטטיסטיקות על
             return {"total_messages": 0, "first_contact": None, "last_contact": None}
         
         history = history_data[chat_id]["history"]
+        now = datetime.now()
         
-        return {
+        # נתונים בסיסיים קיימים
+        basic_stats = {
             "total_messages": len(history),
             "first_contact": history[0]["timestamp"] if history else None,
             "last_contact": history[-1]["timestamp"] if history else None
         }
         
+        if not history:
+            return basic_stats
+            
+        # 🎯 העשרה חדשה - הקשר זמן ויחסים
+        first_contact_dt = datetime.fromisoformat(history[0]["timestamp"])
+        last_contact_dt = datetime.fromisoformat(history[-1]["timestamp"])
+        
+        # חישוב תקופת הקשר
+        relationship_duration = now - first_contact_dt
+        days_together = relationship_duration.days
+        
+        # זמן מההודעה האחרונה  
+        time_since_last = now - last_contact_dt
+        hours_since_last = time_since_last.total_seconds() / 3600
+        
+        # הקשר זמן יום/שבוע/חודש - לישראל
+        israel_tz = datetime.now().astimezone()
+        current_hour = israel_tz.hour
+        weekday = israel_tz.weekday()  # 0=Monday, 6=Sunday
+        day_of_month = israel_tz.day
+        month = israel_tz.month
+        
+        # זיהוי זמן יום
+        time_of_day = ""
+        if 5 <= current_hour <= 11:
+            time_of_day = "morning"
+        elif 12 <= current_hour <= 17:
+            time_of_day = "afternoon"  
+        elif 18 <= current_hour <= 22:
+            time_of_day = "evening"
+        else:
+            time_of_day = "night"
+            
+        # הקשר שבועי
+        weekend_approaching = weekday >= 3  # חמישי-שבת
+        is_weekend = weekday >= 5  # שבת-ראשון (5=שבת, 6=ראשון)
+        
+        # ניתוח תדירות הודעות
+        messages_per_day = len(history) / max(days_together, 1)
+        
+        # 📊 מעקב אחר נושאים חוזרים (מילות מפתח פשוטות)
+        user_messages = [entry["user"] for entry in history if entry.get("user")]
+        all_user_text = " ".join(user_messages).lower()
+        
+        # מילות מפתח רגשיות בסיסיות
+        emotional_keywords = {
+            "stress": ["לחץ", "חרדה", "מתח", "עצוב", "קשה", "בוכה"],
+            "hope": ["תקווה", "עתיד", "חלום", "רוצה", "מקווה", "אולי"],
+            "family": ["משפחה", "אמא", "אבא", "אח", "אחות", "הורים"],
+            "work": ["עבודה", "עובד", "בוס", "משרד", "קריירה", "לימודים"],
+            "relationship": ["חבר", "חברה", "בן זוג", "נפגש", "דייט", "אהבה"]
+        }
+        
+        topic_mentions = {}
+        for topic, keywords in emotional_keywords.items():
+            mentions = sum(all_user_text.count(keyword) for keyword in keywords)
+            if mentions > 0:
+                topic_mentions[topic] = mentions
+        
+        # 🔮 העשרה מתקדמת - הקשר תוכן
+        enhanced_stats = basic_stats.copy()
+        enhanced_stats.update({
+            # יחסי זמן 
+            "days_knowing_each_other": days_together,
+            "hours_since_last_message": round(hours_since_last, 1),
+            "messages_per_day_avg": round(messages_per_day, 1),
+            
+            # הקשר זמן נוכחי
+            "current_time_of_day": time_of_day,
+            "current_hour": current_hour,
+            "is_weekend": is_weekend,
+            "weekend_approaching": weekend_approaching,
+            "day_of_month": day_of_month,
+            "month": month,
+            "weekday_name": ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"][weekday],
+            
+            # תובנות תוכן
+            "main_topics_mentioned": topic_mentions,
+            "total_user_words": len(all_user_text.split()),
+            
+            # הקשר ריגשי-זמני מועשר לGPT
+            "relationship_context": f"אתם מדברים כבר {days_together} ימים, סה\"כ {len(history)} הודעות",
+            "time_context": f"עברו {round(hours_since_last, 1)} שעות מההודעה האחרונה",
+            "day_context": f"היום יום {['שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת', 'ראשון'][weekday]} בשעה {current_hour:02d}"
+        })
+        
+        return enhanced_stats
+        
     except Exception as e:
         logging.error(f"שגיאה בקבלת סטטיסטיקות: {e}")
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
+
+
+def create_human_context_for_gpt(chat_id: str) -> str:
+    """
+    🤖 יוצר מידע רקע חכם לGPT - ברכות יום וזמן בעברית.
+    
+    📋 לוגיקה:
+    - ברכת זמן: רק אחרי פער של 3+ שעות (בוקר/צהריים/ערב/לילה טוב)
+    - ברכת יום: רק פעם ביום אחרי פער של 6+ שעות (שאלות מותאמות לכל יום)
+    - משתמשים חדשים: ללא הקשר (בונים קשר קודם)
+    
+    קלט: chat_id (str)
+    פלט: str - הודעה בעברית או ריקה (אם לא רלוונטי)
+    """
+    try:
+        stats = get_user_stats(chat_id)
+        
+        # 🚫 משתמשים חדשים - ללא הקשר זמן
+        if stats["total_messages"] == 0:
+            return ""
+        
+        hours_since = stats.get("hours_since_last_message", 0)
+        current_hour = stats.get("current_hour", 12)
+        weekday = stats.get("weekday_name", "")
+        
+        context_parts = []
+        
+        # 🌅 1. ברכת זמן (רק אחרי פער של 3+ שעות)
+        # מטרה: ליצור תחושה של זמן אמת ונוכחות
+        if hours_since >= 3:
+            if 6 <= current_hour <= 11:
+                context_parts.append("בוקר טוב!")
+            elif 12 <= current_hour <= 15:
+                context_parts.append("צהריים טובים!")
+            elif 17 <= current_hour <= 21:
+                context_parts.append("ערב טוב!")
+            elif 21 <= current_hour <= 23 or 0 <= current_hour <= 3:
+                context_parts.append("לילה טוב!")
+        
+        # 📅 2. ברכת יום (רק פעם ביום - אחרי פער של 6+ שעות)
+        # מטרה: לתת ל-GPT רעיונות לשיחה מתאימים לכל יום בשבוע
+        if hours_since >= 6:
+            day_greetings = {
+                "ראשון": "אגב היום יום ראשון, השעה {hour:02d}:{minute:02d} - איך מתחיל השבוע?",
+                "שני": "אגב היום יום שני, השעה {hour:02d}:{minute:02d} - איך עובר עליך השבוע?", 
+                "שלישי": "אגב היום יום שלישי, השעה {hour:02d}:{minute:02d} - איך מרגיש השבוע עד כה?",
+                "רביעי": "אגב היום יום רביעי, השעה {hour:02d}:{minute:02d} - אמצע השבוע, איך זה עובר עליך?",
+                "חמישי": "אגב היום יום חמישי, השעה {hour:02d}:{minute:02d} - איך עבר עליך השבוע? יש תוכניות לסופש?",
+                "שישי": "אגב היום יום שישי, השעה {hour:02d}:{minute:02d} - איך אתה מסכם את השבוע? איפה אתה עושה ארוחת ערב הערב?",
+                "שבת": "אגב היום שבת, השעה {hour:02d}:{minute:02d} - איך עובר עליך הסופש?"
+            }
+            
+            if weekday in day_greetings:
+                now = datetime.now()
+                day_message = day_greetings[weekday].format(hour=now.hour, minute=now.minute)
+                context_parts.append(day_message)
+        
+        # 🎯 החזרת הודעה מחוברת או ריקה
+        # GPT יקבל את זה כ-system message ויחליט איך להשתמש בזה
+        if context_parts:
+            return " ".join(context_parts)
+        else:
+            return ""
+            
+    except Exception as e:
+        logging.error(f"שגיאה ביצירת הקשר אנושי: {e}")
+        return ""
+
+
 
 
 def clean_old_logs() -> None: # מנקה לוגים ישנים (משאיר עד MAX_OLD_LOG_LINES שורות אחרונות)
@@ -543,10 +719,91 @@ def show_log_status():
     except Exception as e:
         print(f"❌ שגיאה: {e}")
 
+def show_gpt_input_examples():
+    """
+    🎯 דוגמאות למה ש-GPT מקבל כקלט - להבנה ובדיקה
+    """
+    print("\n" + "="*60)
+    print("🤖 דוגמאות למה ש-GPT מקבל כהודעות קלט")
+    print("="*60)
+    
+    print("\n📋 מבנה ההודעות:")
+    print("1️⃣ System Prompt (קבוע)")
+    print("2️⃣ מידע על המשתמש (אם קיים)")
+    print("3️⃣ הקשר אנושי (זמן/יום - אם רלוונטי)")
+    print("4️⃣ 15 זוגות הודעות אחרונות (30 הודעות)")
+    print("5️⃣ ההודעה החדשה")
+    
+    print("\n🔍 דוגמה 1: משתמש חוזר אחרי כמה שעות ביום שישי")
+    example1 = [
+        {"role": "system", "content": "אתה בוט עברי חכם ומבין..."},
+        {"role": "system", "content": "מידע חשוב על היוזר: אוהב פיצה, עובד בהייטק, גר בתל אביב"},
+        {"role": "system", "content": "צהריים טובים! אגב היום יום שישי, השעה 14:30 - איך אתה מסכם את השבוע? איפה אתה עושה ארוחת ערב הערב?"},
+        {"role": "user", "content": "[26/12 08:15] בוקר טוב"},
+        {"role": "assistant", "content": "בוקר טוב! איך השינה?"},
+        {"role": "user", "content": "[26/12 12:30] עבדתי קשה היום"},
+        {"role": "assistant", "content": "נשמע מתיש, על מה עבדת?"},
+        {"role": "user", "content": "[27/12 14:30] שלום מה קורה?"}
+    ]
+    
+    print("\nהודעות ל-GPT:")
+    for i, msg in enumerate(example1, 1):
+        role = "🤖 מערכת" if msg["role"] == "system" else "👤 משתמש" if msg["role"] == "user" else "🤖 בוט"
+        content = msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]
+        print(f"{i}. {role}: {content}")
+    
+    print("\n🔍 דוגמה 2: שיחה רציפה (ללא הקשר זמן)")
+    example2 = [
+        {"role": "system", "content": "אתה בוט עברי חכם ומבין..."},
+        {"role": "system", "content": "מידע חשוב על היוזר: סטודנט למתמטיקה, גר בירושלים"},
+        {"role": "user", "content": "[27/12 14:25] היי איך אתה?"},
+        {"role": "assistant", "content": "שלום! אני בסדר, מה שלומך?"},
+        {"role": "user", "content": "[27/12 14:27] אני טוב תודה"},
+        {"role": "assistant", "content": "נהדר! איך עבר עליך היום?"},
+        {"role": "user", "content": "[27/12 14:30] מה אתה חושב על הבחירות?"}
+    ]
+    
+    print("\nהודעות ל-GPT (ללא הקשר זמן כי שיחה רציפה):")
+    for i, msg in enumerate(example2, 1):
+        role = "🤖 מערכת" if msg["role"] == "system" else "👤 משתמש" if msg["role"] == "user" else "🤖 בוט"
+        content = msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]
+        print(f"{i}. {role}: {content}")
+    
+    print("\n🔍 דוגמה 3: משתמש חדש (בלי הקשר כלל)")
+    example3 = [
+        {"role": "system", "content": "אתה בוט עברי חכם ומבין..."},
+        {"role": "user", "content": "היי מה קורה?"}
+    ]
+    
+    print("\nהודעות ל-GPT (משתמש חדש - רק system + הודעה):")
+    for i, msg in enumerate(example3, 1):
+        role = "🤖 מערכת" if msg["role"] == "system" else "👤 משתמש"
+        print(f"{i}. {role}: {msg['content']}")
+    
+    print("\n🔍 דוגמה 4: משתמש עם היסטוריה ארוכה (15 זוגות אחרונים)")
+    print("במקרה של 50 הודעות בהיסטוריה - יישלחו רק:")
+    print("• ההודעות הבסיסיות (system, user info, context)")
+    print("• 15 זוגות הודעות אחרונות = 30 הודעות")
+    print("• ההודעה הנוכחית")
+    print("• סה\"כ: ~34 הודעות במקום 53")
+    
+    print("\n💡 הסבר טכני:")
+    print("📍 get_chat_history_messages() מחזירה מקסימום 15 entries")
+    print("📍 כל entry = זוג (user + assistant)")
+    print("📍 זה אומר 15×2 = 30 הודעות מההיסטוריה")
+    print("📍 + system messages + הודעה נוכחית")
+    print("📍 create_human_context_for_gpt() מוסיף הקשר זמן רק כשרלוונטי")
+    
+    print("="*60)
+
 # אם מפעילים את utils.py ישירות
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "log-status":
         show_log_status()
+    elif len(sys.argv) > 1 and sys.argv[1] == "gpt-examples":
+        show_gpt_input_examples()
     else:
-        print("שימוש: python utils.py log-status")
+        print("שימוש:")
+        print("  python utils.py log-status     - מציג מצב לוגים")
+        print("  python utils.py gpt-examples   - מציג דוגמאות קלט ל-GPT")
