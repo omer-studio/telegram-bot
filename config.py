@@ -166,6 +166,13 @@ else:
     print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
 
 # ==========================================================
+# 🎯 הגדרות מודלים (לא סודיות - נשמרות כאן ולא ב-config.json)
+# ==========================================================
+FREE_MODELS = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
+PAID_MODELS = ["gpt-4o-mini", "gpt-4o", "gemini/gemini-2.5-flash"]
+FREE_MODEL_DAILY_LIMIT = 100
+
+# ==========================================================
 # 🔑 הגדרת אימות גלובלית עבור Google Vertex AI (לא בשימוש כרגע)
 # ==========================================================
 # השארנו את הקוד הזה כגיבוי למקרה של מעבר עתידי ל-Vertex AI
