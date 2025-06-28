@@ -171,6 +171,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
     
+    # 🕐 מדידת זמן התחלה - מהרגע שהמשתמש לחץ אנטר
+    user_request_start_time = time.time()
+    
     try:
         log_payload = {
             "chat_id": None,
@@ -375,6 +378,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not gpt_response.get("message_already_sent", False):
                 await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
             update_chat_history(chat_id, user_msg, "")
+            
+            # 🕐 מדידת זמן סיום - מהרגע שהמשתמש לחץ אנטר עד התשובה
+            user_request_end_time = time.time()
+            total_user_experience_time = user_request_end_time - user_request_start_time
+            
+            # 📊 הדפסת מדידות מפורטות
+            print(f"🎯 [USER_EXPERIENCE] Total time from webhook to response: {total_user_experience_time:.3f}s")
+            if 'gpt_pure_latency' in gpt_response:
+                gpt_pure_time = gpt_response.get('gpt_pure_latency', 0)
+                overhead_time = total_user_experience_time - gpt_pure_time
+                print(f"🎯 [USER_EXPERIENCE] GPT pure time: {gpt_pure_time:.3f}s | System overhead: {overhead_time:.3f}s")
+                print(f"🎯 [USER_EXPERIENCE] Overhead percentage: {(overhead_time/total_user_experience_time)*100:.1f}%")
             
             # שלב 4: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
             await update_user_processing_stage(str(chat_id), "background_tasks")

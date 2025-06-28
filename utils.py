@@ -10,6 +10,8 @@ from config import BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path, BOT_TRAC
 from config import should_log_debug_prints, should_log_message_debug, should_log_sheets_debug
 import litellm
 import pytz
+import asyncio
+from typing import Dict, Any, List, Tuple
 
 def get_israel_time():
     """מחזיר את הזמן הנוכחי בישראל"""
@@ -191,15 +193,15 @@ def get_time_greeting_instruction() -> str:
         hour = now.hour
         
         if 5 <= hour < 11:
-            greeting_guide = "תפתח בברכה 'בוקר טוב!' וביטוי של אנרגיה חיובית לתחילת היום"
+            greeting_guide = "תפתח בברכה 'בוקר טוב🤍' וביטוי של אנרגיה חיובית לתחילת היום"
         elif 11 <= hour < 16:
-            greeting_guide = "תפתח בברכה 'צהריים טובים!' והתייחס לקצב היום או מה שקורה בשעות האלה"
+            greeting_guide = "תפתח בברכה 'צהריים טובים🤍' והתייחס לקצב היום או מה שקורה בשעות האלה"
         elif 16 <= hour < 20:
-            greeting_guide = "תפתח בברכה 'ערב טוב!' והתייחס לסיום היום או לתוכניות הערב"
+            greeting_guide = "תפתח בברכה 'ערב טוב🤍' והתייחס לסיום היום או לתוכניות הערב"
         elif 20 <= hour < 24:
-            greeting_guide = "תפתח בברכה 'ערב טוב!' או 'לילה טוב!' והיה יותר רגוע ונעים"
+            greeting_guide = "תפתח בברכה 'ערב טוב🤍' או 'לילה טוב🤍' והיה יותר רגוע ונעים"
         else:  # 0-5
-            greeting_guide = "תפתח בברכה 'לילה טוב!' והיה מבין שזה זמן מאוחר, שאל אם הכל בסדר"
+            greeting_guide = "תפתח בברכה 'לילה טוב🤍' והיה מבין שזה זמן מאוחר, שאל אם הכל בסדר"
             
         return f"{greeting_guide}. כן באמצע השיחה התייחס לזמן בצורה טבעית ורלוונטית."
         
@@ -764,7 +766,730 @@ def show_gpt_input_examples():  # דוגמאות למה ש-GPT מקבל כקלט
 def show_personal_connection_examples():  # דוגמאות להצעות החיבור האישי
     print("🧠 הצעות חיבור: אחרי 4+ שעות | משפחה (3+), לחץ (2+), עבודה (3+) | זמנים מיוחדים")
 
+# 🚀 מערכת ניהול פרופילים מהירה - עדכון כפול אוטומטי
+def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
+    """קריאה מהירה מקובץ user_profiles.json נפרד"""
+    try:
+        from config import USER_PROFILES_PATH
+        with open(USER_PROFILES_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        return data.get(str(chat_id), {})
+    except:
+        return {}
 
+def update_user_profile_fast(chat_id: str, updates: Dict[str, Any]):
+    """עדכון מהיר - מקור אחד של אמת"""
+    try:
+        # 1. קריאת הפרופיל הנוכחי לזיהוי שינויים
+        old_profile = get_user_profile_fast(chat_id)
+        
+        # 2. יצירת הפרופיל החדש
+        new_profile = old_profile.copy()
+        new_profile.update(updates)
+        
+        # 3. זיהוי שינויים
+        changes = _detect_profile_changes(old_profile, new_profile)
+        
+        # 4. עדכון מיידי בקובץ פרופילים נפרד (המקור היחיד של האמת)
+        _update_user_profiles_file(chat_id, updates)
+        
+        # 5. רישום שינויים להיסטוריית הצ'אט
+        if changes:
+            _log_profile_changes_to_chat_history(chat_id, changes)
+        
+        # 6. Google Sheets מתעדכן מהקובץ המקומי (ברקע)
+        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        
+    except Exception as e:
+        logging.error(f"שגיאה בעדכון פרופיל מהיר: {e}")
+        # עדכון בסיסי ללא זיהוי שינויים במקרה של שגיאה
+        _update_user_profiles_file(chat_id, updates)
+        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+
+def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
+    """עדכון קובץ user_profiles.json נפרד"""
+    try:
+        from config import USER_PROFILES_PATH
+        
+        # קריאה
+        try:
+            with open(USER_PROFILES_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except:
+            data = {}
+        
+        # עדכון
+        chat_id_str = str(chat_id)
+        if chat_id_str not in data:
+            data[chat_id_str] = {}
+        
+        data[chat_id_str].update(updates)
+        data[chat_id_str]["last_update"] = get_israel_time().isoformat()
+        
+        # שמירה
+        with open(USER_PROFILES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        logging.error(f"שגיאה בעדכון קובץ פרופילים: {e}")
+
+def _update_chat_history_profile(chat_id: str, updates: Dict[str, Any]):
+    """הוספת profile לקובץ chat_history.json הקיים - נשאר לתאימות לאחור"""
+    try:
+        # קריאה
+        with open(CHAT_HISTORY_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except:
+        data = {}
+    
+    # עדכון
+    if str(chat_id) not in data:
+        data[str(chat_id)] = {"am_context": "", "history": [], "profile": {}}
+    
+    if "profile" not in data[str(chat_id)]:
+        data[str(chat_id)]["profile"] = {}
+    
+    data[str(chat_id)]["profile"].update(updates)
+    data[str(chat_id)]["last_updated"] = get_israel_time().isoformat()
+    
+    # שמירה
+    with open(CHAT_HISTORY_PATH, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+async def _sync_local_to_sheets_background(chat_id: str):
+    """מסנכרן את הקובץ המקומי ל-Google Sheets"""
+    try:
+        # קריאה מהקובץ המקומי (המקור היחיד של האמת)
+        local_profile = get_user_profile_fast(chat_id)
+        
+        # עדכון Google Sheets מהנתונים המקומיים
+        from sheets_core import setup_google_sheets, find_chat_id_in_sheet
+        
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
+        
+        # עדכון פרופיל בגיליון משתמשים
+        row_index = find_chat_id_in_sheet(sheet_users, chat_id, col=1)
+        if not row_index:
+            row_index = len(sheet_users.get_all_values()) + 1
+            sheet_users.update_cell(row_index, 1, chat_id)
+        
+        # מיפוי עמודות לפרופיל
+        profile_column_mapping = {
+            "age": 2, "pronoun_preference": 3, "occupation_or_role": 4, "attracted_to": 5,
+            "relationship_type": 6, "self_religious_affiliation": 7, "self_religiosity_level": 8,
+            "family_religiosity": 9, "closet_status": 10, "who_knows": 11, "who_doesnt_know": 12,
+            "attends_therapy": 13, "primary_conflict": 14, "trauma_history": 15, "goal_in_course": 16,
+            "language_of_strength": 17, "date_first_seen": 18, "coping_strategies": 19, "fears_concerns": 20,
+            "future_vision": 21, "other_insights": 22, "summary": 23, "last_update": 24
+        }
+        
+        # עדכון כל השדות מהקובץ המקומי
+        for field, value in local_profile.items():
+            if field in profile_column_mapping:
+                col_index = profile_column_mapping[field]
+                sheet_users.update_cell(row_index, col_index, str(value))
+        
+        # עדכון בגיליון מצבים
+        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+        if not row_index:
+            row_index = len(sheet_states.get_all_values()) + 1
+            sheet_states.update_cell(row_index, 1, chat_id)
+        
+        # עדכון סיכום ומצב
+        if "summary" in local_profile:
+            sheet_states.update_cell(row_index, 3, local_profile["summary"])
+        
+        if "last_update" in local_profile:
+            sheet_states.update_cell(row_index, 4, local_profile["last_update"])
+        
+        # עדכון profile_data כ-JSON
+        profile_json = json.dumps(local_profile, ensure_ascii=False)
+        sheet_states.update_cell(row_index, 5, profile_json)
+        
+        logging.info(f"✅ Google Sheets סונכרן מהקובץ המקומי עבור משתמש {chat_id}")
+        
+    except Exception as e:
+        logging.error(f"שגיאה בסנכרון ל-Google Sheets: {e}")
+        # הבוט ממשיך לעבוד גם אם Google Sheets נכשל
+
+def get_user_summary_fast(chat_id: str) -> str:
+    """קריאה מהירה של סיכום משתמש מקובץ chat_history.json"""
+    try:
+        profile = get_user_profile_fast(chat_id)
+        return profile.get("summary", "")
+    except:
+        return ""
+
+def update_user_summary_fast(chat_id: str, summary: str):
+    """עדכון מהיר של סיכום משתמש"""
+    update_user_profile_fast(chat_id, {"summary": summary})
+
+def increment_code_try_fast(chat_id: str) -> int:
+    """הגדלה מהירה של מספר ניסיונות קוד"""
+    try:
+        profile = get_user_profile_fast(chat_id)
+        current_tries = profile.get("code_try", 0)
+        new_tries = current_tries + 1
+        update_user_profile_fast(chat_id, {"code_try": new_tries})
+        return new_tries
+    except:
+        return 1
+
+def increment_gpt_c_run_count_fast(chat_id: str) -> int:
+    """הגדלה מהירה של מספר הרצות GPT-C"""
+    try:
+        profile = get_user_profile_fast(chat_id)
+        current_count = profile.get("gpt_c_run_count", 0)
+        new_count = current_count + 1
+        update_user_profile_fast(chat_id, {"gpt_c_run_count": new_count})
+        return new_count
+    except:
+        return 1
+
+# 🎯 מערכת עדכון תעודת זהות רגשית מלאה
+def update_emotional_identity_fast(chat_id: str, emotional_data: Dict[str, Any]):
+    """
+    מעדכן את כל שדות התעודת זהות הרגשית - מקור אחד של אמת
+    """
+    try:
+        # 1. קריאת הפרופיל הנוכחי לזיהוי שינויים
+        old_profile = get_user_profile_fast(chat_id)
+        
+        # 2. הוספת timestamp
+        emotional_data["last_update"] = get_israel_time().isoformat()
+        
+        # 3. יצירת הפרופיל החדש
+        new_profile = old_profile.copy()
+        new_profile.update(emotional_data)
+        
+        # 4. זיהוי שינויים
+        changes = _detect_profile_changes(old_profile, new_profile)
+        
+        # 5. עדכון מהיר בקובץ פרופילים נפרד (המקור היחיד של האמת)
+        _update_user_profiles_file(chat_id, emotional_data)
+        
+        # 6. רישום שינויים להיסטוריית הצ'אט
+        if changes:
+            _log_profile_changes_to_chat_history(chat_id, changes)
+        
+        # 7. Google Sheets מתעדכן מהקובץ המקומי (ברקע)
+        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        
+        logging.info(f"✅ תעודת זהות רגשית עודכנה עבור משתמש {chat_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"שגיאה בעדכון תעודת זהות רגשית: {e}")
+        # עדכון בסיסי ללא זיהוי שינויים במקרה של שגיאה
+        emotional_data["last_update"] = get_israel_time().isoformat()
+        _update_user_profiles_file(chat_id, emotional_data)
+        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        return False
+
+def get_emotional_identity_fast(chat_id: str) -> Dict[str, Any]:
+    """קריאה מהירה של תעודת זהות רגשית מקובץ user_profiles.json נפרד"""
+    return get_user_profile_fast(chat_id)
+
+def ensure_emotional_identity_consistency(chat_id: str) -> bool:
+    """
+    מוודא שתעודת הזהות הרגשית זהה בשני המקומות
+    מחזיר True אם הכל תקין, False אם יש אי התאמה
+    """
+    try:
+        # קריאה מהקובץ המקומי
+        local_profile = get_user_profile_fast(chat_id)
+        
+        # קריאה מ-Google Sheets (איטי יותר)
+        from sheets_core import get_user_profile_data
+        sheets_profile = get_user_profile_data(chat_id)
+        
+        # השוואה
+        if local_profile == sheets_profile:
+            logging.info(f"✅ תעודת זהות רגשית תואמת עבור משתמש {chat_id}")
+            return True
+        else:
+            logging.warning(f"⚠️ אי התאמה בתעודת זהות רגשית עבור משתמש {chat_id}")
+            logging.warning(f"מקומי: {local_profile}")
+            logging.warning(f"Google Sheets: {sheets_profile}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"שגיאה בבדיקת עקביות תעודת זהות רגשית: {e}")
+        return False
+
+def get_all_emotional_identity_fields() -> List[str]:
+    """מחזיר את כל שדות התעודת זהות הרגשית"""
+    return [
+        "summary", "age", "pronoun_preference", "occupation_or_role", "attracted_to",
+        "relationship_type", "self_religious_affiliation", "self_religiosity_level",
+        "family_religiosity", "closet_status", "who_knows", "who_doesnt_know",
+        "attends_therapy", "primary_conflict", "trauma_history", "goal_in_course",
+        "language_of_strength", "date_first_seen", "coping_strategies", "fears_concerns",
+        "future_vision", "other_insights", "last_update", "code_try", "gpt_c_run_count"
+    ]
+
+def validate_emotional_identity_data(emotional_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    בודק שכל השדות הנדרשים קיימים ומתאימים
+    מחזיר (תקין, רשימת שגיאות)
+    """
+    errors = []
+    required_fields = get_all_emotional_identity_fields()
+    
+    # בדיקת שדות חובה
+    for field in ["summary", "age", "last_update"]:
+        if field not in emotional_data or not emotional_data[field]:
+            errors.append(f"שדה חובה חסר: {field}")
+    
+    # בדיקת ערכים תקינים
+    if "age" in emotional_data:
+        try:
+            age = int(emotional_data["age"])
+            if age < 13 or age > 120:
+                errors.append("גיל לא תקין (חייב להיות בין 13 ל-120)")
+        except:
+            errors.append("גיל חייב להיות מספר")
+    
+    # בדיקת אורך סיכום
+    if "summary" in emotional_data and len(emotional_data["summary"]) > 1000:
+        errors.append("סיכום ארוך מדי (מקסימום 1000 תווים)")
+    
+    return len(errors) == 0, errors
+
+def force_sync_to_sheets(chat_id: str) -> bool:
+    """
+    מכריח סנכרון מלא ל-Google Sheets
+    שימושי במקרה של אי התאמה או שגיאה
+    """
+    try:
+        # קריאה מהקובץ המקומי
+        local_profile = get_user_profile_fast(chat_id)
+        
+        if not local_profile:
+            logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
+            return False
+        
+        # סנכרון כפוי
+        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        
+        logging.info(f"✅ סנכרון כפוי ל-Google Sheets עבור משתמש {chat_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"שגיאה בסנכרון כפוי: {e}")
+        return False
+
+def cleanup_old_profiles(days_old: int = 90) -> int:
+    """
+    מנקה פרופילים ישנים שלא היו פעילים יותר מ-X ימים
+    מחזיר מספר הפרופילים שנמחקו
+    """
+    try:
+        from config import USER_PROFILES_PATH
+        from datetime import datetime, timedelta
+        
+        # קריאת קובץ הפרופילים
+        try:
+            with open(USER_PROFILES_PATH, 'r', encoding='utf-8') as f:
+                profiles_data = json.load(f)
+        except:
+            return 0
+        
+        # חישוב תאריך גבול
+        cutoff_date = datetime.now() - timedelta(days=days_old)
+        removed_count = 0
+        
+        # בדיקת כל הפרופילים
+        profiles_to_remove = []
+        for chat_id, profile in profiles_data.items():
+            last_update_str = profile.get("last_update", "")
+            if last_update_str:
+                try:
+                    last_update = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
+                    if last_update < cutoff_date:
+                        profiles_to_remove.append(chat_id)
+                except:
+                    # אם יש שגיאה בפרסור התאריך, נמחק
+                    profiles_to_remove.append(chat_id)
+        
+        # מחיקת פרופילים ישנים
+        for chat_id in profiles_to_remove:
+            del profiles_data[chat_id]
+            removed_count += 1
+        
+        # שמירה חזרה
+        if removed_count > 0:
+            with open(USER_PROFILES_PATH, 'w', encoding='utf-8') as f:
+                json.dump(profiles_data, f, ensure_ascii=False, indent=2)
+            
+            logging.info(f"✅ נמחקו {removed_count} פרופילים ישנים (יותר מ-{days_old} ימים)")
+        
+        return removed_count
+        
+    except Exception as e:
+        logging.error(f"שגיאה בניקוי פרופילים ישנים: {e}")
+        return 0
+
+def get_profiles_stats() -> Dict[str, Any]:
+    """
+    מחזיר סטטיסטיקות על קובץ הפרופילים
+    """
+    try:
+        from config import USER_PROFILES_PATH
+        
+        try:
+            with open(USER_PROFILES_PATH, 'r', encoding='utf-8') as f:
+                profiles_data = json.load(f)
+        except:
+            profiles_data = {}
+        
+        total_profiles = len(profiles_data)
+        
+        # חישוב פרופילים פעילים (עדכון ב-30 ימים האחרונים)
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.now() - timedelta(days=30)
+        active_profiles = 0
+        
+        for profile in profiles_data.values():
+            last_update_str = profile.get("last_update", "")
+            if last_update_str:
+                try:
+                    last_update = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
+                    if last_update > cutoff_date:
+                        active_profiles += 1
+                except:
+                    pass
+        
+        return {
+            "total_profiles": total_profiles,
+            "active_profiles": active_profiles,
+            "inactive_profiles": total_profiles - active_profiles,
+            "file_size_mb": os.path.getsize(USER_PROFILES_PATH) / (1024 * 1024) if os.path.exists(USER_PROFILES_PATH) else 0
+        }
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת סטטיסטיקות פרופילים: {e}")
+        return {}
+
+def _detect_profile_changes(old_profile: Dict[str, Any], new_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """מזהה שינויים בין פרופיל ישן לחדש ומחזיר רשימת השינויים"""
+    changes = []
+    
+    # בדיקת כל השדות בפרופיל החדש
+    for field, new_value in new_profile.items():
+        old_value = old_profile.get(field)
+        
+        # אם השדה לא היה קיים או השתנה
+        if field not in old_profile:
+            if new_value is not None and new_value != "":
+                changes.append({
+                    "field": field,
+                    "old_value": None,
+                    "new_value": new_value,
+                    "change_type": "added"
+                })
+        elif old_value != new_value:
+            changes.append({
+                "field": field,
+                "old_value": old_value,
+                "new_value": new_value,
+                "change_type": "updated"
+            })
+    
+    # בדיקת שדות שנמחקו
+    for field in old_profile:
+        if field not in new_profile:
+            changes.append({
+                "field": field,
+                "old_value": old_profile[field],
+                "new_value": None,
+                "change_type": "removed"
+            })
+    
+    return changes
+
+def _log_profile_changes_to_chat_history(chat_id: str, changes: List[Dict[str, Any]]):
+    """רושם שינויים בפרופיל להיסטוריית הצ'אט"""
+    if not changes:
+        return
+    
+    try:
+        # טעינת היסטוריית הצ'אט
+        with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
+            history_data = json.load(f)
+        
+        chat_id = str(chat_id)
+        if chat_id not in history_data:
+            history_data[chat_id] = {"am_context": "", "history": []}
+        
+        # יצירת הודעה על השינויים
+        now = get_israel_time()
+        simple_timestamp = f"{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}"
+        
+        change_messages = []
+        for change in changes:
+            if change["change_type"] == "added":
+                change_messages.append(f"נוסף: {change['field']} = {change['new_value']}")
+            elif change["change_type"] == "updated":
+                change_messages.append(f"עודכן: {change['field']} מ-{change['old_value']} ל-{change['new_value']}")
+            elif change["change_type"] == "removed":
+                change_messages.append(f"הוסר: {change['field']} (היה: {change['old_value']})")
+        
+        if change_messages:
+            profile_update_message = f"[עדכון פרופיל] {' | '.join(change_messages)}"
+            
+            # הוספה להיסטוריה
+            history_data[chat_id]["history"].append({
+                "user": "",
+                "bot": profile_update_message,
+                "timestamp": now.isoformat(),
+                "time": simple_timestamp,
+                "type": "profile_update"
+            })
+            
+            # שמירה
+            with open(CHAT_HISTORY_PATH, "w", encoding="utf-8") as f:
+                json.dump(history_data, f, ensure_ascii=False, indent=2)
+            
+            if should_log_message_debug():
+                logging.info(f"שינויים בפרופיל נרשמו להיסטוריה: {chat_id}")
+    
+    except Exception as e:
+        logging.error(f"שגיאה ברישום שינויים בפרופיל: {e}")
+
+def get_profile_change_history(chat_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """מחזיר היסטוריית שינויים בפרופיל מהצ'אט היסטורי"""
+    try:
+        with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
+            history_data = json.load(f)
+        
+        chat_id = str(chat_id)
+        if chat_id not in history_data or "history" not in history_data[chat_id]:
+            return []
+        
+        # סינון רק הודעות עדכון פרופיל
+        profile_updates = []
+        for entry in history_data[chat_id]["history"]:
+            if entry.get("type") == "profile_update" and entry.get("bot", "").startswith("[עדכון פרופיל]"):
+                profile_updates.append({
+                    "timestamp": entry.get("timestamp"),
+                    "time": entry.get("time"),
+                    "changes": entry.get("bot", "").replace("[עדכון פרופיל] ", "")
+                })
+        
+        # החזרת האחרונים לפי המגבלה
+        return profile_updates[-limit:] if limit else profile_updates
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת היסטוריית שינויים בפרופיל: {e}")
+        return []
+
+def get_field_change_history(chat_id: str, field_name: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """מחזיר היסטוריית שינויים בשדה ספציפי"""
+    try:
+        all_changes = get_profile_change_history(chat_id, limit=50)  # יותר היסטוריה לחיפוש
+        field_changes = []
+        
+        for change in all_changes:
+            changes_text = change["changes"]
+            # חיפוש שינויים בשדה הספציפי
+            if field_name in changes_text:
+                field_changes.append({
+                    "timestamp": change["timestamp"],
+                    "time": change["time"],
+                    "change_description": changes_text
+                })
+        
+        return field_changes[-limit:] if limit else field_changes
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת היסטוריית שינויים בשדה {field_name}: {e}")
+        return []
+
+def get_field_current_value_and_history(chat_id: str, field_name: str) -> Dict[str, Any]:
+    """מחזיר את הערך הנוכחי של שדה והיסטוריית השינויים שלו"""
+    try:
+        # ערך נוכחי
+        current_profile = get_user_profile_fast(chat_id)
+        current_value = current_profile.get(field_name, None)
+        
+        # היסטוריית שינויים
+        field_history = get_field_change_history(chat_id, field_name, limit=10)
+        
+        return {
+            "field_name": field_name,
+            "current_value": current_value,
+            "change_history": field_history,
+            "total_changes": len(field_history)
+        }
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת ערך נוכחי והיסטוריה לשדה {field_name}: {e}")
+        return {
+            "field_name": field_name,
+            "current_value": None,
+            "change_history": [],
+            "total_changes": 0
+        }
+
+def get_recently_changed_fields(chat_id: str, days_back: int = 7) -> Dict[str, Any]:
+    """מחזיר שדות שעברו שינויים בימים האחרונים"""
+    try:
+        from datetime import datetime, timedelta
+        
+        # חישוב תאריך התחלה
+        now = get_israel_time()
+        start_date = now - timedelta(days=days_back)
+        
+        # קבלת כל השינויים
+        all_changes = get_profile_change_history(chat_id, limit=100)
+        
+        # סינון לפי תאריך
+        recent_changes = []
+        changed_fields = set()
+        
+        for change in all_changes:
+            try:
+                change_date = datetime.fromisoformat(change["timestamp"])
+                if change_date >= start_date:
+                    recent_changes.append(change)
+                    # חילוץ שמות השדות מהתיאור
+                    changes_text = change["changes"]
+                    if "עודכן:" in changes_text:
+                        field_part = changes_text.split("עודכן:")[1].split("=")[0].strip()
+                        changed_fields.add(field_part)
+                    elif "נוסף:" in changes_text:
+                        field_part = changes_text.split("נוסף:")[1].split("=")[0].strip()
+                        changed_fields.add(field_part)
+                    elif "הוסר:" in changes_text:
+                        field_part = changes_text.split("הוסר:")[1].split("(")[0].strip()
+                        changed_fields.add(field_part)
+            except:
+                continue
+        
+        return {
+            "period_days": days_back,
+            "total_changes": len(recent_changes),
+            "changed_fields": list(changed_fields),
+            "recent_changes": recent_changes
+        }
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת שדות שעברו שינויים לאחרונה: {e}")
+        return {
+            "period_days": days_back,
+            "total_changes": 0,
+            "changed_fields": [],
+            "recent_changes": []
+        }
+
+def get_profile_evolution_summary(chat_id: str) -> Dict[str, Any]:
+    """מחזיר סיכום התפתחות הפרופיל לאורך זמן"""
+    try:
+        # קבלת כל השינויים
+        all_changes = get_profile_change_history(chat_id, limit=200)
+        
+        if not all_changes:
+            return {
+                "total_changes": 0,
+                "first_change": None,
+                "last_change": None,
+                "most_active_period": None,
+                "field_evolution": {}
+            }
+        
+        # ניתוח התפתחות
+        first_change = all_changes[0]["timestamp"]
+        last_change = all_changes[-1]["timestamp"]
+        
+        # ניתוח שדות לפי תדירות שינויים
+        field_counts = {}
+        for change in all_changes:
+            changes_text = change["changes"]
+            if "עודכן:" in changes_text:
+                field_part = changes_text.split("עודכן:")[1].split("=")[0].strip()
+                field_counts[field_part] = field_counts.get(field_part, 0) + 1
+            elif "נוסף:" in changes_text:
+                field_part = changes_text.split("נוסף:")[1].split("=")[0].strip()
+                field_counts[field_part] = field_counts.get(field_part, 0) + 1
+            elif "הוסר:" in changes_text:
+                field_part = changes_text.split("הוסר:")[1].split("(")[0].strip()
+                field_counts[field_part] = field_counts.get(field_part, 0) + 1
+        
+        # מציאת השדה הפעיל ביותר
+        most_active_field = max(field_counts.items(), key=lambda x: x[1]) if field_counts else None
+        
+        return {
+            "total_changes": len(all_changes),
+            "first_change": first_change,
+            "last_change": last_change,
+            "most_active_field": most_active_field,
+            "field_evolution": field_counts,
+            "changes_per_field": field_counts
+        }
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת סיכום התפתחות פרופיל: {e}")
+        return {
+            "total_changes": 0,
+            "first_change": None,
+            "last_change": None,
+            "most_active_period": None,
+            "field_evolution": {}
+        }
+
+def get_profile_with_change_history(chat_id: str) -> Dict[str, Any]:
+    """מחזיר את הפרופיל הנוכחי עם היסטוריית השינויים"""
+    try:
+        # פרופיל נוכחי
+        current_profile = get_user_profile_fast(chat_id)
+        
+        # היסטוריית שינויים
+        change_history = get_profile_change_history(chat_id, limit=20)
+        
+        # סיכום התפתחות
+        evolution_summary = get_profile_evolution_summary(chat_id)
+        
+        # שדות שעברו שינויים לאחרונה
+        recent_changes = get_recently_changed_fields(chat_id, days_back=7)
+        
+        return {
+            "current_profile": current_profile,
+            "recent_changes": change_history,
+            "evolution_summary": evolution_summary,
+            "recently_changed_fields": recent_changes,
+            "profile_age_days": _calculate_profile_age_days(current_profile.get("last_update")),
+            "total_profile_fields": len(current_profile),
+            "fields_with_values": len([v for v in current_profile.values() if v is not None and v != ""])
+        }
+        
+    except Exception as e:
+        logging.error(f"שגיאה בקבלת פרופיל עם היסטוריית שינויים: {e}")
+        return {
+            "current_profile": {},
+            "recent_changes": [],
+            "evolution_summary": {},
+            "recently_changed_fields": {},
+            "profile_age_days": 0,
+            "total_profile_fields": 0,
+            "fields_with_values": 0
+        }
+
+def _calculate_profile_age_days(last_update: str) -> int:
+    """מחשב את גיל הפרופיל בימים"""
+    try:
+        if not last_update:
+            return 0
+        
+        from datetime import datetime
+        last_update_dt = datetime.fromisoformat(last_update)
+        now = get_israel_time()
+        age_days = (now - last_update_dt).days
+        return max(0, age_days)
+        
+    except Exception:
+        return 0
 
 # אם מפעילים את utils.py ישירות
 if __name__ == "__main__":

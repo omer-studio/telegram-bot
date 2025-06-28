@@ -35,8 +35,6 @@ def create_missing_fields_system_message(chat_id: str) -> str:
         from fields_dict import FIELDS_DICT
         
         profile_data = get_user_state(chat_id).get("profile_data", {})
-        if not profile_data:
-            return ""
         
         key_fields = ["age", "attracted_to", "relationship_type", "self_religious_affiliation", 
                      "closet_status", "pronoun_preference", "occupation_or_role", 
@@ -47,7 +45,10 @@ def create_missing_fields_system_message(chat_id: str) -> str:
                   and FIELDS_DICT[f].get("show_in_prompt", "").strip()]
         
         if len(missing) >= 2:
-            return f"פרטים שהמשתמש עדיין לא סיפר לך וכדאי לשאול אותו במטרה להכיר אותו יותר טוב: {', '.join(missing[:4])}"
+            missing_text = ', '.join(missing[:4])
+            return f"""פרטים שהמשתמש עדיין לא סיפר לך וכדאי לשאול אותו בעדינות וברגישות במטרה להכיר אותו יותר טוב: {missing_text}
+
+אז תבחר אחד מהם שנראה לך הכי מתאים - ותשאל אותו בעדינות וברגישות  - תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו. הוא צריך את זה."""
         return ""
         
     except Exception as e:
@@ -248,34 +249,22 @@ async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id
 
 def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_premium=True, filter_reason="", match_type="unknown"):
     """
-    גרסה סינכרונית של get_main_response - לשימוש ב-thread
-    כולל מדידת ביצועים לאבחון צוואר בקבוק + הקשר אנושי מועשר
+    💎 מנוע gpt_a הראשי - גרסה סינכרונית
     """
-    # 🤖 הוספת מידע רקע נוסף על המשתמש כ-system message נפרד
+    # מדידת זמן התחלה
+    total_start_time = time.time()
+    
+    # שלב 1: הכנת ההודעות
+    prep_start_time = time.time()
+    
+    # הוספת הודעת מערכת לפרופיל חסר אם צריך
     if chat_id:
-        try:
-            from utils import get_holiday_system_message
-            
-            print(f"🔍 [ADDITIONAL_SYSTEMS] Adding extra system messages for chat_id {chat_id}...")
-            
-            # הוספת הודעת חגים דתיים כ-system message נפרד נוסף
-            holiday_message = get_holiday_system_message(chat_id)
-            if holiday_message:
-                full_messages.insert(-1, {"role": "system", "content": holiday_message.strip()})
-                print(f"🎯 [HOLIDAY_SYS] Added holiday message - Length: {len(holiday_message)} chars | Preview: {holiday_message[:60]}...")
-            
-            # 📝 הוספת הודעה חכמה על שדות חסרים
-            missing_fields_message = create_missing_fields_system_message(chat_id)
-            if missing_fields_message:
-                full_messages.insert(-1, {"role": "system", "content": missing_fields_message.strip()})
-                print(f"🎯 [MISSING_FIELDS_SYS] Added missing fields message - Length: {len(missing_fields_message)} chars | Content: {missing_fields_message}")
-                logging.info(f"🎯 [MISSING_FIELDS] נוסף system message עם שדות חסרים למשתמש {chat_id}")
-            
-            print(f"✅ [ADDITIONAL_SYSTEMS] Finished adding extra systems. Total messages now: {len(full_messages)}")
-                
-        except Exception as e:
-            logging.error(f"שגיאה בהוספת מידע רקע: {e}")
-            print(f"❌ [ADDITIONAL_SYSTEMS] Error adding extra systems: {e}")
+        missing_fields_message = create_missing_fields_system_message(chat_id)
+        if missing_fields_message:
+            full_messages.insert(1, {"role": "system", "content": missing_fields_message})
+    
+    prep_time = time.time() - prep_start_time
+    print(f"⚡ [TIMING] Preparation time: {prep_time:.3f}s")
     
     metadata = {"gpt_identifier": "gpt_a", "chat_id": chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_a"]
@@ -318,12 +307,12 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     
     for i, msg in enumerate(full_messages):
         role = msg.get("role", "unknown")
-        content_length = len(msg.get("content", ""))
+        content = msg.get("content", "")
+        content_length = len(content)
         
         if role == "system":
             system_count += 1
-            content_preview = msg.get("content", "")[:100] + "..." if len(msg.get("content", "")) > 100 else msg.get("content", "")
-            print(f"🎯 [SYSTEM_{system_count}] Position: {i} | Length: {content_length} chars | Preview: {content_preview}")
+            print(f"⚙️ [SYSTEM_{system_count}] Position: {i} | Length: {content_length} chars")
         elif role == "user":
             user_count += 1
             print(f"👤 [USER_{user_count}] Position: {i} | Length: {content_length} chars")
@@ -335,10 +324,17 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     print(f"🚀 [SENDING] Request to {model}...")
     print(f"🔍 [GPT_REQUEST_DEBUG] === END ANALYSIS ===\n")
     
+    # שלב 2: קריאה ל-GPT
+    gpt_start_time = time.time()
     try:
         # 🔬 תזמון הטוקן הראשון - צריך להשתמש ב-streaming לזה
         with measure_llm_latency(model):
             response = litellm.completion(**completion_params)
+        gpt_end_time = time.time()
+        gpt_pure_latency = gpt_end_time - gpt_start_time
+        
+        # שלב 3: עיבוד התשובה
+        processing_start_time = time.time()
         
         # 🔬 רישום הטוקן הראשון מבוטל זמנית
         
@@ -352,7 +348,14 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         
         usage = normalize_usage_dict(response.usage, response.model)
         
+        processing_time = time.time() - processing_start_time
+        print(f"⚡ [TIMING] Processing time: {processing_time:.3f}s")
+        
         print(f"✅ [GPT_RESPONSE_DEBUG] Received {len(bot_reply)} chars from {response.model}")
+        print(f"⚡ [DETAILED_TIMING] GPT pure latency: {gpt_pure_latency:.3f}s | Model: {model}")
+        
+        # שלב 4: חישוב עלויות
+        billing_start_time = time.time()
         
         # 🔬 מדידת ביצועים מבוטלת זמנית
         
@@ -383,13 +386,25 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
             except Exception as cost_error:
                 logging.error(f"[💰] שגיאה בחישוב עלות: {cost_error}")
         
+        billing_time = time.time() - billing_start_time
+        print(f"⚡ [TIMING] Billing time: {billing_time:.3f}s")
+        
+        # סיכום זמנים
+        total_time = time.time() - total_start_time
+        print(f"📊 [TIMING_SUMMARY] Total: {total_time:.3f}s | GPT: {gpt_pure_latency:.3f}s | Prep: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
+        
         return {
             "bot_reply": bot_reply, 
             "usage": usage, 
             "model": response.model,
             "used_premium": use_premium,
             "filter_reason": filter_reason,
-            "match_type": match_type
+            "match_type": match_type,
+            "gpt_pure_latency": gpt_pure_latency,
+            "total_time": total_time,
+            "prep_time": prep_time,
+            "processing_time": processing_time,
+            "billing_time": billing_time
         }
         
     except Exception as e:
@@ -454,6 +469,19 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         
         gpt_duration = time.time() - gpt_start_time
         logging.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
+        
+        # מדידה מפורטת של הזמנים
+        print(f"📊 [TIMING_BREAKDOWN] Total GPT time: {gpt_duration:.3f}s")
+        if 'gpt_pure_latency' in gpt_result:
+            pure_latency = gpt_result.get('gpt_pure_latency', 0)
+            total_time = gpt_result.get('total_time', 0)
+            prep_time = gpt_result.get('prep_time', 0)
+            processing_time = gpt_result.get('processing_time', 0)
+            billing_time = gpt_result.get('billing_time', 0)
+            
+            print(f"📊 [TIMING_BREAKDOWN] Pure GPT latency: {pure_latency:.3f}s")
+            print(f"📊 [TIMING_BREAKDOWN] Preparation: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
+            print(f"📊 [TIMING_BREAKDOWN] Total internal time: {total_time:.3f}s | Thread overhead: {gpt_duration - total_time:.3f}s")
         
         # שלב 4: ביטול או עדכון הודעה זמנית
         if temp_message_task:

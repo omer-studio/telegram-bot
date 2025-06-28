@@ -18,9 +18,12 @@ def measure_llm_latency(model_name):
         yield
     finally:
         latency = time.time() - start_time
-        # רזה: רק DEBUG ללוג כללי + רישום לקובץ אם latency גבוה
-        logging.debug(f"[{model_name}] latency: {latency:.2f}s")
+        # מדידה מפורטת יותר - כולל רמת לוגים גבוהה יותר
+        logging.info(f"⚡ [LATENCY] {model_name}: {latency:.3f}s")
+        if latency > 5:  # הורדנו את הסף ל-5 שניות
+            logging.warning(f"🐌 [SLOW_LATENCY] {model_name} איטי: {latency:.2f}s")
         if latency > 10:  # רק אם איטי מאוד
+            logging.error(f"🚨 [VERY_SLOW] {model_name} מאוד איטי: {latency:.2f}s")
             # TODO: Implement performance metric logging if needed
             pass
 

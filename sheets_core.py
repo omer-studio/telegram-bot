@@ -19,7 +19,12 @@ from fields_dict import FIELDS_DICT
 
 _user_data_cache = {}  # Cache לנתוני משתמשים
 _cache_timestamps = {}  # זמני יצירת Cache
-CACHE_DURATION_SECONDS = 300  # 5 דקות cache
+CACHE_DURATION_SECONDS = 600  # 10 דקות cache (הוגדל מ-5 דקות)
+
+# Cache נפרד לנתונים קריטיים עם זמן חיים ארוך יותר
+_critical_data_cache = {}  # Cache לנתונים קריטיים (פרופיל משתמש, הרשאות)
+_critical_cache_timestamps = {}
+CRITICAL_CACHE_DURATION_SECONDS = 1800  # 30 דקות cache לנתונים קריטיים
 
 # ===================================
 # 📊 מונה קריאות Google Sheets API
@@ -76,11 +81,28 @@ def _get_from_cache(cache_key: str):
         return _user_data_cache.get(cache_key)
     return None
 
+def _get_from_critical_cache(cache_key: str):
+    """מחזיר נתונים קריטיים מה-cache אם תקפים"""
+    if cache_key not in _critical_cache_timestamps:
+        return None
+    
+    age = time.time() - _critical_cache_timestamps[cache_key]
+    if age < CRITICAL_CACHE_DURATION_SECONDS:
+        debug_log(f"📥 Critical Cache HIT: {cache_key}")
+        return _critical_data_cache.get(cache_key)
+    return None
+
 def _set_cache(cache_key: str, data):
     """שומר נתונים ב-cache"""
     _user_data_cache[cache_key] = data
     _cache_timestamps[cache_key] = time.time()
     debug_log(f"📤 Cache SET: {cache_key}")
+
+def _set_critical_cache(cache_key: str, data):
+    """שומר נתונים קריטיים ב-cache עם זמן חיים ארוך יותר"""
+    _critical_data_cache[cache_key] = data
+    _critical_cache_timestamps[cache_key] = time.time()
+    debug_log(f"📤 Critical Cache SET: {cache_key}")
 
 def _clear_user_cache(chat_id: str):
     """מנקה cache של משתמש ספציפי (למשל אחרי עדכון)"""
@@ -90,6 +112,15 @@ def _clear_user_cache(chat_id: str):
             del _user_data_cache[key]
         if key in _cache_timestamps:
             del _cache_timestamps[key]
+    
+    # ניקוי גם מה-critical cache
+    critical_keys_to_remove = [key for key in _critical_data_cache.keys() if key.endswith(f":{chat_id}")]
+    for key in critical_keys_to_remove:
+        if key in _critical_data_cache:
+            del _critical_data_cache[key]
+        if key in _critical_cache_timestamps:
+            del _critical_cache_timestamps[key]
+    
     debug_log(f"🗑️ Cache CLEARED for user {chat_id}")
 
 def _cleanup_expired_cache():
@@ -107,8 +138,21 @@ def _cleanup_expired_cache():
         if key in _cache_timestamps:
             del _cache_timestamps[key]
     
-    if expired_keys:
-        debug_log(f"🧹 Cache CLEANUP: removed {len(expired_keys)} expired entries")
+    # ניקוי critical cache
+    critical_expired_keys = []
+    for key, timestamp in _critical_cache_timestamps.items():
+        if (now - timestamp) > CRITICAL_CACHE_DURATION_SECONDS:
+            critical_expired_keys.append(key)
+    
+    for key in critical_expired_keys:
+        if key in _critical_data_cache:
+            del _critical_data_cache[key]
+        if key in _critical_cache_timestamps:
+            del _critical_cache_timestamps[key]
+    
+    total_cleaned = len(expired_keys) + len(critical_expired_keys)
+    if total_cleaned > 0:
+        debug_log(f"🧹 Cache CLEANUP: removed {total_cleaned} expired entries ({len(expired_keys)} regular, {len(critical_expired_keys)} critical)")
 
 # ================================
 # 🔧 פונקציות עזר
@@ -195,8 +239,13 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
     try:
         chat_id = validate_chat_id(chat_id)
         
-        # בדיקת cache קודם
+        # בדיקת critical cache קודם (הרשאות נשמרות יותר זמן)
         cache_key = _get_cache_key("user_access", chat_id)
+        cached_access = _get_from_critical_cache(cache_key)
+        if cached_access is not None:
+            return cached_access
+        
+        # בדיקת cache רגיל
         cached_access = _get_from_cache(cache_key)
         if cached_access is not None:
             return cached_access
@@ -205,7 +254,7 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         
         if not row_index:
             result = {"status": "not_found", "code": None}
-            _set_cache(cache_key, result)
+            _set_critical_cache(cache_key, result)  # שמירה ב-critical cache
             return result
         
         # מונה קריאות ל-API (2 קריאות: status + code)
@@ -215,7 +264,7 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         code = sheet.cell(row_index, 2).value
         
         result = {"status": status, "code": code}
-        _set_cache(cache_key, result)  # שמירה ב-cache
+        _set_critical_cache(cache_key, result)  # שמירה ב-critical cache
         
         debug_log(f"User {chat_id} access check: status={status}, code={code}")
         return result
@@ -425,55 +474,14 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
         return False
 
 def increment_code_try_sync(sheet_states, chat_id: str) -> int:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
-        
-        if not row_index:
-            debug_log(f"User {chat_id} not found in user_states")
-            return 0
-        
-        current_tries = safe_int(sheet_states.cell(row_index, 2).value)
-        new_tries = current_tries + 1
-        
-        sheet_states.update_cell(row_index, 2, str(new_tries))
-        
-        # מחיקת cache אחרי עדכון מונה נסיונות
-        _clear_user_cache(chat_id)
-        
-        debug_log(f"Incremented code_try for user {chat_id}: {current_tries} → {new_tries}")
-        
-        return new_tries
-        
-    except Exception as e:
-        debug_log(f"Error incrementing code_try for {chat_id}: {e}")
-        send_error_notification(f"Error in increment_code_try_sync: {e}")
-        return 0
+    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
+    from utils import increment_code_try_fast
+    return increment_code_try_fast(chat_id)  # מהיר!
 
 def increment_gpt_c_run_count(chat_id: str) -> int:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        current_state = get_user_state(chat_id)
-        
-        if not current_state:
-            debug_log(f"Cannot increment gpt_c for unknown user {chat_id}")
-            return 0
-        
-        current_count = current_state.get("gpt_c_run_count", 0)
-        new_count = current_count + 1
-        
-        success = update_user_state(chat_id, {"gpt_c_run_count": new_count})
-        if success:
-            debug_log(f"Incremented GPT-C count for user {chat_id}: {current_count} → {new_count}")
-            return new_count
-        else:
-            debug_log(f"Failed to increment GPT-C count for user {chat_id}")
-            return current_count
-            
-    except Exception as e:
-        debug_log(f"Error incrementing GPT-C count for {chat_id}: {e}")
-        send_error_notification(f"Error in increment_gpt_c_run_count: {e}")
-        return 0
+    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
+    from utils import increment_gpt_c_run_count_fast
+    return increment_gpt_c_run_count_fast(chat_id)  # מהיר!
 
 def reset_gpt_c_run_count(chat_id: str) -> bool:
     try:
@@ -493,30 +501,26 @@ def reset_gpt_c_run_count(chat_id: str) -> bool:
         return False
 
 def get_user_summary(chat_id: str) -> str:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        state = get_user_state(chat_id)
-        return state.get("summary", "")
-    except Exception as e:
-        debug_log(f"Error getting user summary for {chat_id}: {e}")
-        return ""
+    """עכשיו קורא מהיר מ-chat_history.json"""
+    from utils import get_user_summary_fast
+    return get_user_summary_fast(chat_id)  # מהיר!
 
 def update_user_summary(chat_id: str, new_summary: str) -> bool:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        return update_user_state(chat_id, {"summary": new_summary})
-    except Exception as e:
-        debug_log(f"Error updating user summary for {chat_id}: {e}")
-        return False
+    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
+    from utils import update_user_summary_fast
+    update_user_summary_fast(chat_id, new_summary)  # מהיר!
+    return True
 
 def get_user_profile_data(chat_id: str) -> Dict[str, Any]:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        state = get_user_state(chat_id)
-        return state.get("profile_data", {})
-    except Exception as e:
-        debug_log(f"Error getting user profile for {chat_id}: {e}")
-        return {}
+    """עכשיו קורא מהיר מ-chat_history.json"""
+    from utils import get_user_profile_fast
+    return get_user_profile_fast(chat_id)  # מהיר!
+
+def update_user_profile_data(chat_id: str, profile_updates: Dict[str, Any]) -> bool:
+    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
+    from utils import update_user_profile_fast
+    update_user_profile_fast(chat_id, profile_updates)  # מהיר!
+    return True
 
 def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     """
@@ -547,35 +551,6 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
                 summary_parts.append(clean_value)
     
     return " | ".join(summary_parts)
-
-def update_user_profile_data(chat_id: str, profile_updates: Dict[str, Any]) -> bool:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        current_profile = get_user_profile_data(chat_id)
-        current_profile.update(profile_updates)
-        
-        # יצירת summary אוטומטי מהנתונים החדשים
-        auto_summary = generate_summary_from_profile_data(current_profile)
-        
-        # עדכון הטיימסטאפ
-        from utils import get_israel_time
-        current_timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # עדכון נתוני הפרופיל עם summary אוטומטי ו-last_update
-        updates_to_save = {
-            "profile_data": current_profile,
-            "summary": auto_summary,
-            "last_updated": current_timestamp
-        }
-        
-        debug_log(f"Auto-generated summary for user {chat_id}: {auto_summary}")
-        debug_log(f"Updated last_update timestamp: {current_timestamp}")
-        
-        return update_user_state(chat_id, updates_to_save)
-        
-    except Exception as e:
-        debug_log(f"Error updating user profile for {chat_id}: {e}")
-        return False
 
 def compose_emotional_summary(row: List[str]) -> str:
     try:

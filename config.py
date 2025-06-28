@@ -309,6 +309,16 @@ CHAT_HISTORY_PATH = os.path.join(DATA_DIR, CHAT_HISTORY_FILENAME)
 BOT_ERRORS_PATH = os.path.join(DATA_DIR, BOT_ERRORS_FILENAME)
 CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, CRITICAL_ERRORS_FILENAME)
 
+# 🚀 נתיבי קבצים למערכת ניהול נתונים מקבילה
+USER_PROFILES_PATH = os.path.join(DATA_DIR, "user_profiles.json")
+USER_STATES_PATH = os.path.join(DATA_DIR, "user_states.json")
+SYNC_QUEUE_PATH = os.path.join(DATA_DIR, "sync_queue.json")
+
+# 🔄 הגדרות סנכרון
+SYNC_BATCH_SIZE = 10  # כמות עדכונים לסנכרון במקביל
+SYNC_INTERVAL_SECONDS = 30  # זמן בין סנכרונים
+MAX_SYNC_RETRIES = 3  # מספר ניסיונות סנכרון
+
 def check_config_sanity():
     """
     בודק שכל משתני הקונפיגורציה הקריטיים קיימים.
@@ -342,7 +352,10 @@ def get_config_snapshot():
         "BOT_TRACE_LOG_PATH": BOT_TRACE_LOG_PATH,
         "CHAT_HISTORY_PATH": CHAT_HISTORY_PATH,
         "BOT_ERRORS_PATH": BOT_ERRORS_PATH,
-        "CRITICAL_ERRORS_PATH": CRITICAL_ERRORS_PATH
+        "CRITICAL_ERRORS_PATH": CRITICAL_ERRORS_PATH,
+        "USER_PROFILES_PATH": USER_PROFILES_PATH,
+        "USER_STATES_PATH": USER_STATES_PATH,
+        "SYNC_QUEUE_PATH": SYNC_QUEUE_PATH
     }
 
 # ================================
@@ -415,6 +428,7 @@ def get_model_info(model_name):
     })
 
 # 🤖 הגדרת מודלים - עם 2.5 Flash בשם הנכון!
+# ⚠️ אזהרה: אל תשנה מודלים ללא אישור מפורש! רק המשתמש הראשי משנה מודלים!
 GPT_MODELS = {
     "gpt_a": "gemini/gemini-2.5-flash",             # 🤖 המנוע הראשי - 2.5 Flash החדש! 🚀
     "gpt_b": "gemini/gemini-2.0-flash-exp",         # 🤖 סיכום תשובות - מהיר וחינמי
