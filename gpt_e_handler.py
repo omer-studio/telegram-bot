@@ -120,7 +120,7 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
 דגש מיוחד: השדה "primary_conflict" צריך לשקף במדויק את מה שהמשתמש מתמודד איתו כרגע על בסיס ההיסטוריה האחרונה.
 
 החזר JSON נקי בשורה אחת בלבד, ללא ``` וללא טקסט נוסף.
-דוגמה: {"age": 30, "self_religious_affiliation": "יהודי"}
+דוגמה: {{"age": 30, "self_religious_affiliation": "יהודי"}}
 """
 
     return user_prompt
