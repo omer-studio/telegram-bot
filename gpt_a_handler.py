@@ -40,15 +40,15 @@ def create_missing_fields_system_message(chat_id: str) -> str:
                      "closet_status", "pronoun_preference", "occupation_or_role", 
                      "self_religiosity_level", "primary_conflict", "goal_in_course"]
         
-        missing = [FIELDS_DICT[f]["show_in_prompt"] for f in key_fields 
+        missing = [FIELDS_DICT[f]["missing_question"] for f in key_fields
                   if f in FIELDS_DICT and not str(profile_data.get(f, "")).strip() 
-                  and FIELDS_DICT[f].get("show_in_prompt", "").strip()]
+                  and FIELDS_DICT[f].get("missing_question", "").strip()]
         
         if len(missing) >= 2:
             missing_text = ', '.join(missing[:4])
             return f"""פרטים שהמשתמש עדיין לא סיפר לך וכדאי לשאול אותו בעדינות וברגישות במטרה להכיר אותו יותר טוב: {missing_text}
 
-אז תבחר אחד מהם שנראה לך הכי מתאים - ותשאל אותו בעדינות וברגישות  - תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו. הוא צריך את זה."""
+אז תבחר אחד מהם שנראה לך הכי מתאים - ותשאל אותו בעדינות וברגישות (את השאלות תעשה בכתב מודגש)  - תסביר לו את הרציונל, תסביר לו למה אתה שואל, תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו. הוא צריך את זה."""
         return ""
         
     except Exception as e:

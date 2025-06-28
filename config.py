@@ -379,70 +379,6 @@ UPDATE_PRIORITY = {
     "low": 3          # נתונים סטטיסטיים - לא דחוף
 }
 
-# ✨ זיהוי אוטומטי של סוג המודל וההגדרות המתאימות
-def get_model_info(model_name):
-    """
-    🤖 מחזיר מידע על המודל והגדרות מתאימות
-    """
-    model_configs = {
-        # 🌟 מודלי Gemini מומלצים
-        "gemini/gemini-2.0-flash-exp": {
-            "type": "free_tier",
-            "cost": "חינמי",
-            "speed": "מהיר מאוד",
-            "quality": "מעולה",
-            "note": "מומלץ כמנוע ראשי - איזון מושלם בין מהירות לאיכות"
-        },
-        "gemini/gemini-1.5-pro": {
-            "type": "free_tier", 
-            "cost": "חינמי",
-            "speed": "בינוני",
-            "quality": "מעולה"
-        },
-        "gemini/gemini-1.5-flash": {
-            "type": "free_tier",
-            "cost": "חינמי", 
-            "speed": "מהיר",
-            "quality": "טוב"
-        },
-        "gemini/gemini-2.5-pro": {
-            "type": "paid_tier",
-            "cost": "~$7/מיליון טוקן",
-            "speed": "איטי",
-            "quality": "הטוב ביותר"
-        },
-        "gemini/gemini-2.5-flash": {
-            "type": "paid_tier",
-            "cost": "$0.30/$2.50",
-            "speed": "מהיר מאוד",
-            "quality": "מעולה",
-            "note": "2.5 Flash - הטוב ביותר! איזון מושלם בין מהירות לאיכות"
-        }
-    }
-    
-    return model_configs.get(model_name, {
-        "type": "unknown",
-        "cost": "לא ידוע",
-        "speed": "לא ידוע", 
-        "quality": "לא ידוע"
-    })
-
-# 🤖 הגדרת מודלים - עם 2.5 Flash בשם הנכון!
-# ⚠️ אזהרה: אל תשנה מודלים ללא אישור מפורש! רק המשתמש הראשי משנה מודלים!
-GPT_MODELS = {
-    "gpt_a": "gemini/gemini-1.5-pro",             # 🤖 המנוע הראשי - 2.5 Flash החדש! 🚀
-    "gpt_b": "gemini/gemini-2.0-flash-exp",         # 🤖 סיכום תשובות - מהיר וחינמי
-    "gpt_c": "gemini/gemini-1.5-pro",               # 🤖 חילוץ פרופיל - איכותי וחינמי
-    "gpt_d": "gemini/gemini-1.5-pro",               # 🤖 מיזוג פרופיל - איכותי וחינמי
-    "gpt_e": "gemini/gemini-2.0-flash-exp",         # 🤖 עדכון פרופיל מתקדם - מהיר וחינמי
-}
-
-# 🔄 מודלי fallback - גיבוי חכם
-GPT_FALLBACK_MODELS = {
-    "gpt_a": "gemini/gemini-2.5-flash",               # 🔄 fallback ראשון - Pro יציב וחינמי
-    # שאר ה-GPT מודלים משתמשים במודלים חינמיים אז אין צורך ב-fallback
-}
-
 # 💰 מודל מתקדם (בתשלום) - רק במקרה הצורך הקיצוני
 GPT_PREMIUM_FALLBACK = {
     "gpt_a": "gemini/gemini-1.5-pro",         # 💎 פרימיום - Pro יציב אם Flash לא עובד
@@ -478,3 +414,63 @@ MAX_CHAT_HISTORY_MESSAGES = 30000  # מגבלת היסטוריית שיחה
 MAX_TRACEBACK_LENGTH = 500   # אורך מקסימלי של traceback בהודעות שגיאה
 PRODUCTION_PORT = 8000       # פורט לסביבת ייצור
 DEVELOPMENT_PORT = 10000     # פורט לסביבת פיתוח
+
+MODEL_ROUTES = {
+    # ========= מקרא =========
+    # default       – המודל הראשי (Fast רגיל)
+    # extra_emotion – מודל רגשי מתקדם (שייך רק ל-gpt_a)
+    # fallback1     – fallback מהיר/זול (אם default נכשל)
+    # fallback2     – fallback חירום GPT-4o (אם הכל נכשל)
+    # ========================
+    "gpt_a": {
+        "default": "gemini/gemini-1.5-pro",   # Fast (filter FALSE)
+        "extra_emotion": "gemini/gemini-2.5-flash", # Smart (filter TRUE)
+        "fallback1": "gemini/gemini-2.0-flash-exp", # rate-limit fallback
+        "fallback2": "openai/gpt-4o"              # Emergency paid
+    },
+    "gpt_b": {
+        "default": "gemini/gemini-2.0-flash-exp",
+        "fallback1": "gemini/gemini-1.5-pro",
+        "fallback2": "openai/gpt-4o"
+    },
+    "gpt_c": {
+        "default": "gemini/gemini-1.5-pro",
+        "fallback1": "gemini/gemini-2.0-flash-exp",
+        "fallback2": "openai/gpt-4o"
+    },
+    "gpt_d": {
+        "default": "gemini/gemini-1.5-pro",
+        "fallback1": "gemini/gemini-2.0-flash-exp",
+        "fallback2": "openai/gpt-4o"
+    },
+    "gpt_e": {
+        "default": "gemini/gemini-2.5-pro",
+        "fallback1": "gemini/gemini-2.5-flash",
+        "fallback2": "openai/gpt-4o"
+    },
+}
+
+# --------------------------
+# ⬇️ Generating legacy maps so שאר הקוד ימשיך לעבוד בלי שינוי
+# --------------------------
+GPT_MODELS = {}
+GPT_FALLBACK_MODELS = {}
+GPT_PREMIUM_FALLBACK = {}
+
+for engine, routes in MODEL_ROUTES.items():
+    if engine == "gpt_a":
+        # Smart (extra_emotion) משמש כ-GPT_MODELS
+        GPT_MODELS[engine] = routes.get("extra_emotion", routes["default"])
+        # default משמש כ-fallback ראשון
+        if routes.get("default"):
+            GPT_FALLBACK_MODELS[engine] = routes["default"]
+    else:
+        GPT_MODELS[engine] = routes["default"]
+        if routes.get("fallback1"):
+            GPT_FALLBACK_MODELS[engine] = routes["fallback1"]
+    if routes.get("fallback2"):
+        GPT_PREMIUM_FALLBACK[engine] = routes["fallback2"]
+
+# --------------------------------------------------------------------------
+# סוף SECTION – From here downwards אין שינויי מודלים נוספים.
+# --------------------------------------------------------------------------
