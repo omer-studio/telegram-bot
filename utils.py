@@ -196,12 +196,14 @@ def get_time_greeting_instruction() -> str:
             greeting_guide = "תפתח בברכה 'בוקר טוב🤍' וביטוי של אנרגיה חיובית לתחילת היום"
         elif 11 <= hour < 16:
             greeting_guide = "תפתח בברכה 'צהריים טובים🤍' והתייחס לקצב היום או מה שקורה בשעות האלה"
-        elif 16 <= hour < 20:
+        elif 16 <= hour < 18:
+            greeting_guide = "תפתח בברכה 'אחר הצהריים טובים🤍' "
+        elif 18 <= hour < 21:
             greeting_guide = "תפתח בברכה 'ערב טוב🤍' והתייחס לסיום היום או לתוכניות הערב"
-        elif 20 <= hour < 24:
-            greeting_guide = "תפתח בברכה 'ערב טוב🤍' או 'לילה טוב🤍' והיה יותר רגוע ונעים"
+        elif 21 <= hour < 24:
+            greeting_guide = "תפתח בברכה 'לילה טוב🤍' ותשאל איך עבר היום - תהיה יותר רגוע ונעים"
         else:  # 0-5
-            greeting_guide = "תפתח בברכה 'לילה טוב🤍' והיה מבין שזה זמן מאוחר, שאל אם הכל בסדר"
+            greeting_guide = "תפתח בברכה 'לילה טוב🤍' ותהיה מבין שזה שעת לילה מאוחרת אחרי חצות, שאל אם הכל בסדר"
             
         return f"{greeting_guide}. כן באמצע השיחה התייחס לזמן בצורה טבעית ורלוונטית."
         

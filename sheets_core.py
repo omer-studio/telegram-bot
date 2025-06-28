@@ -287,7 +287,7 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
         timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         new_row = [chat_id, "0", "", "", "", timestamp, "0"]
         
-        sheet_states.append_row(new_row)
+        sheet_states.insert_row(new_row, 3)
         debug_log(f"Added new user {chat_id} to user_states")
         return True
         
@@ -303,7 +303,7 @@ def register_user(sheet, chat_id: str, code_input: str) -> bool:
         timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         
         new_row = [chat_id, str(code_input), "pending", timestamp]
-        sheet.append_row(new_row)
+        sheet.insert_row(new_row, 3)
         
         # מחיקת cache אחרי רישום משתמש חדש
         _clear_user_cache(chat_id)

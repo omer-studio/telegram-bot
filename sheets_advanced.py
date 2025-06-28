@@ -391,7 +391,8 @@ def log_to_sheets_sync(
                 if col_name in log_data:
                     row_data[i] = str(log_data[col_name])
 
-            sheet_log.append_row(row_data)
+            # הכנסת שורה חדשה בשורה 3 (אחרי הכותרות) במקום הוספה בסוף
+            sheet_log.insert_row(row_data, 3)
             debug_log(f"Successfully logged to sheets for message {message_id}", "SheetsLogger")
             return True
         except Exception as e:
