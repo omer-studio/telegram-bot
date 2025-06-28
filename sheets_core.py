@@ -1,87 +1,229 @@
 """
-sheets_core.py - כל הפעולות הבסיסיות של Google Sheets
+sheets_core.py - ליבה לטיפול ב-Google Sheets עם ביצועים מהירים
+מכיל את כל הפונקציות הבסיסיות לקריאה וכתיבה לגיליונות
 """
 
+import gspread
 import json
-import logging
-from datetime import datetime
-from typing import Dict, Optional, Any, List
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
+from oauth2client.service_account import ServiceAccountCredentials
 from config import setup_google_sheets, SUMMARY_FIELD, should_log_sheets_debug
 from notifications import send_error_notification
 from fields_dict import FIELDS_DICT
 
+# ================================
+# 🚀 מנגנון Cache לנתוני משתמשים
+# ================================
+
+_user_data_cache = {}  # Cache לנתוני משתמשים
+_cache_timestamps = {}  # זמני יצירת Cache
+CACHE_DURATION_SECONDS = 300  # 5 דקות cache
+
+# ===================================
+# 📊 מונה קריאות Google Sheets API
+# ===================================
+
+_api_calls_count = 0  # מונה קריאות כולל
+_api_calls_per_minute = {}  # מונה קריאות לפי דקה
+
+def _increment_api_call():
+    """מספר קריאה ל-Google Sheets API"""
+    global _api_calls_count
+    _api_calls_count += 1
+    
+    # מונה לפי דקה
+    minute_key = int(time.time() / 60)
+    if minute_key not in _api_calls_per_minute:
+        _api_calls_per_minute[minute_key] = 0
+    _api_calls_per_minute[minute_key] += 1
+    
+    # ניקוי דקות ישנות (שמור רק 5 דקות אחרונות)
+    old_minutes = [k for k in _api_calls_per_minute.keys() if k < minute_key - 5]
+    for old_minute in old_minutes:
+        del _api_calls_per_minute[old_minute]
+    
+    debug_log(f"🔍 API call #{_api_calls_count} (this minute: {_api_calls_per_minute[minute_key]})")
+
+def get_api_stats():
+    """מחזיר סטטיסטיקות של קריאות API"""
+    current_minute = int(time.time() / 60)
+    calls_this_minute = _api_calls_per_minute.get(current_minute, 0)
+    
+    return {
+        "total_calls": _api_calls_count,
+        "calls_this_minute": calls_this_minute,
+        "calls_per_minute": dict(_api_calls_per_minute)
+    }
+
+def _get_cache_key(operation: str, chat_id: str) -> str:
+    """יוצר מפתח cache"""
+    return f"{operation}:{chat_id}"
+
+def _is_cache_valid(cache_key: str) -> bool:
+    """בודק אם ה-cache עדיין תקף"""
+    if cache_key not in _cache_timestamps:
+        return False
+    
+    age = time.time() - _cache_timestamps[cache_key]
+    return age < CACHE_DURATION_SECONDS
+
+def _get_from_cache(cache_key: str):
+    """מחזיר נתונים מה-cache אם תקפים"""
+    if _is_cache_valid(cache_key):
+        debug_log(f"📥 Cache HIT: {cache_key}")
+        return _user_data_cache.get(cache_key)
+    return None
+
+def _set_cache(cache_key: str, data):
+    """שומר נתונים ב-cache"""
+    _user_data_cache[cache_key] = data
+    _cache_timestamps[cache_key] = time.time()
+    debug_log(f"📤 Cache SET: {cache_key}")
+
+def _clear_user_cache(chat_id: str):
+    """מנקה cache של משתמש ספציפי (למשל אחרי עדכון)"""
+    keys_to_remove = [key for key in _user_data_cache.keys() if key.endswith(f":{chat_id}")]
+    for key in keys_to_remove:
+        if key in _user_data_cache:
+            del _user_data_cache[key]
+        if key in _cache_timestamps:
+            del _cache_timestamps[key]
+    debug_log(f"🗑️ Cache CLEARED for user {chat_id}")
+
+def _cleanup_expired_cache():
+    """ניקוי cache מיותר (נקרא מדי פעם)"""
+    now = time.time()
+    expired_keys = []
+    
+    for key, timestamp in _cache_timestamps.items():
+        if (now - timestamp) > CACHE_DURATION_SECONDS:
+            expired_keys.append(key)
+    
+    for key in expired_keys:
+        if key in _user_data_cache:
+            del _user_data_cache[key]
+        if key in _cache_timestamps:
+            del _cache_timestamps[key]
+    
+    if expired_keys:
+        debug_log(f"🧹 Cache CLEANUP: removed {len(expired_keys)} expired entries")
+
+# ================================
+# 🔧 פונקציות עזר
+# ================================
+
 def debug_log(message: str, component: str = "SheetsCore", chat_id: str = ""):
-    log_message = f"[{component}]"
+    """רישום debug עם תמיכה ב-chat_id"""
     if chat_id:
-        log_message += f"[{chat_id}]"
-    log_message += f" {message}"
-    logging.debug(log_message)
+        print(f"[DEBUG][{component}][{chat_id}] {message}", flush=True)
+    else:
+        print(f"[DEBUG][{component}] {message}", flush=True)
 
 def safe_int(val) -> int:
+    """המרה בטוחה למספר שלם"""
     try:
-        return int(val) if val else 0
+        return int(float(str(val))) if val else 0
     except (ValueError, TypeError):
         return 0
 
 def safe_float(val) -> float:
+    """המרה בטוחה למספר עשרוני"""
     try:
         return float(val) if val else 0.0
     except (ValueError, TypeError):
         return 0.0
 
 def clean_for_storage(data) -> str:
-    if isinstance(data, str):
-        return data.replace('\n', ' ').replace('\r', ' ')[:500]
-    elif isinstance(data, (int, float)):
-        return str(data)
-    elif data is None:
+    """ניקוי נתונים לפני שמירה בגיליון"""
+    if data is None:
         return ""
-    else:
-        return str(data)[:500]
+    text = str(data).strip()
+    text = text.replace('\n', ' ').replace('\r', ' ')
+    text = ' '.join(text.split())
+    return text
 
 def validate_chat_id(chat_id) -> str:
-    if not chat_id:
-        raise ValueError("chat_id cannot be empty")
-    return str(chat_id)
+    """וידוא ש-chat_id תקף"""
+    return str(chat_id).strip()
 
 def find_chat_id_in_sheet(sheet, chat_id: str, col: int = 1) -> Optional[int]:
-    if not sheet:
-        debug_log(f"Sheet is None, cannot search for chat_id {chat_id}")
-        return None
+    """
+    מחפש chat_id בגיליון ומחזיר את מספר השורה
+    עם cache לביצועים מהירים
+    """
+    chat_id = validate_chat_id(chat_id)
+    cache_key = _get_cache_key("find_chat_id", f"{sheet.title}:{chat_id}")
+    
+    # בדיקת cache
+    cached_result = _get_from_cache(cache_key)
+    if cached_result is not None:
+        return cached_result
     
     try:
-        chat_id = validate_chat_id(chat_id)
-        col_values = sheet.col_values(col)
+        all_chat_ids = sheet.col_values(col)
         
-        for i, value in enumerate(col_values, start=1):
-            if str(value) == chat_id:
-                debug_log(f"Found chat_id {chat_id} at row {i}")
-                return i
+        for i, existing_chat_id in enumerate(all_chat_ids):
+            if str(existing_chat_id).strip() == chat_id:
+                row_num = i + 1
+                _set_cache(cache_key, row_num)  # שמירה ב-cache
+                return row_num
         
-        debug_log(f"chat_id {chat_id} not found in column {col}")
+        _set_cache(cache_key, None)  # שמירה ב-cache שלא נמצא
         return None
         
     except Exception as e:
-        debug_log(f"Error searching for chat_id {chat_id}: {e}")
+        debug_log(f"Error finding chat_id {chat_id} in sheet: {e}")
         return None
+
+# ניקוי cache מיותר כל דקה
+import threading
+def _cache_cleanup_thread():
+    while True:
+        time.sleep(60)  # דקה
+        try:
+            _cleanup_expired_cache()
+        except Exception as e:
+            debug_log(f"Error in cache cleanup: {e}")
+
+# הפעלת thread לניקוי cache
+cleanup_thread = threading.Thread(target=_cache_cleanup_thread, daemon=True)
+cleanup_thread.start()
 
 def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
     try:
         chat_id = validate_chat_id(chat_id)
+        
+        # בדיקת cache קודם
+        cache_key = _get_cache_key("user_access", chat_id)
+        cached_access = _get_from_cache(cache_key)
+        if cached_access is not None:
+            return cached_access
+        
         row_index = find_chat_id_in_sheet(sheet, chat_id, col=1)
         
         if not row_index:
-            return {"status": "not_found", "code": None}
+            result = {"status": "not_found", "code": None}
+            _set_cache(cache_key, result)
+            return result
         
+        # מונה קריאות ל-API (2 קריאות: status + code)
+        _increment_api_call()
+        _increment_api_call()
         status = sheet.cell(row_index, 3).value
         code = sheet.cell(row_index, 2).value
         
+        result = {"status": status, "code": code}
+        _set_cache(cache_key, result)  # שמירה ב-cache
+        
         debug_log(f"User {chat_id} access check: status={status}, code={code}")
-        return {"status": status, "code": code}
+        return result
         
     except Exception as e:
         debug_log(f"Error checking access for {chat_id}: {e}")
-        return {"status": "error", "code": None}
+        error_result = {"status": "error", "code": None}
+        return error_result
 
 def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
     try:
@@ -92,7 +234,8 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
             debug_log(f"User {chat_id} already exists in user_states at row {row_index}")
             return True
         
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        from utils import get_israel_time
+        timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         new_row = [chat_id, "0", "", "", "", timestamp, "0"]
         
         sheet_states.append_row(new_row)
@@ -107,10 +250,15 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
 def register_user(sheet, chat_id: str, code_input: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        from utils import get_israel_time
+        timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         
         new_row = [chat_id, str(code_input), "pending", timestamp]
         sheet.append_row(new_row)
+        
+        # מחיקת cache אחרי רישום משתמש חדש
+        _clear_user_cache(chat_id)
+        
         debug_log(f"Registered new user {chat_id} with code {code_input}")
         return True
         
@@ -129,6 +277,10 @@ def approve_user(sheet, chat_id: str) -> bool:
             return False
         
         sheet.update_cell(row_index, 3, "approved")
+        
+        # מחיקת cache אחרי עדכון סטטוס
+        _clear_user_cache(chat_id)
+        
         debug_log(f"Approved user {chat_id}")
         return True
         
@@ -139,9 +291,9 @@ def approve_user(sheet, chat_id: str) -> bool:
 def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
-        gc, sheet_users, sheet_logs, sheet_states = setup_google_sheets()
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
-        sheet_map = {"users": sheet_users, "states": sheet_states, "logs": sheet_logs}
+        sheet_map = {"users": sheet_users, "states": sheet_states, "logs": sheet_log}
         sheet = sheet_map.get(sheet_name)
         
         if not sheet:
@@ -154,6 +306,10 @@ def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
             return False
         
         sheet.delete_rows(row_index)
+        
+        # מחיקת cache אחרי מחיקת משתמש
+        _clear_user_cache(chat_id)
+        
         debug_log(f"Deleted row {row_index} for user {chat_id} from {sheet_name}")
         return True
         
@@ -165,7 +321,15 @@ def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
 def get_user_state(chat_id: str) -> Dict[str, Any]:
     try:
         chat_id = validate_chat_id(chat_id)
-        gc, sheet_users, sheet_logs, sheet_states = setup_google_sheets()
+        
+        # בדיקת cache קודם
+        cache_key = _get_cache_key("user_state", chat_id)
+        cached_state = _get_from_cache(cache_key)
+        if cached_state is not None:
+            return cached_state
+        
+        # אם אין ב-cache, קורא מהשיטס
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
         if not sheet_states:
             debug_log("sheet_states is None", chat_id=chat_id)
@@ -174,8 +338,12 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
         row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
         if not row_index:
             debug_log(f"User {chat_id} not found in user_states")
-            return {}
+            empty_state = {}
+            _set_cache(cache_key, empty_state)  # cache גם תוצאות ריקות
+            return empty_state
         
+        # מונה קריאה ל-API
+        _increment_api_call()
         row_data = sheet_states.row_values(row_index)
         
         state = {
@@ -197,6 +365,8 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
         else:
             state["profile_data"] = {}
         
+        # שמירה ב-cache
+        _set_cache(cache_key, state)
         debug_log(f"Retrieved state for user {chat_id}")
         return state
         
@@ -208,7 +378,7 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
 def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
-        gc, sheet_users, sheet_logs, sheet_states = setup_google_sheets()
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
         if not sheet_states:
             debug_log("sheet_states is None", chat_id=chat_id)
@@ -237,11 +407,16 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
                 debug_log(f"Updated {field} for user {chat_id}")
         
         if updated_fields and "last_updated" not in updates:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            from utils import get_israel_time
+            timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
             sheet_states.update_cell(row_index, column_mapping["last_updated"], timestamp)
             updated_fields.append("last_updated")
         
         debug_log(f"Updated fields {updated_fields} for user {chat_id}")
+        
+        # מחיקת cache אחרי עדכון
+        _clear_user_cache(chat_id)
+        
         return True
         
     except Exception as e:
@@ -262,6 +437,10 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
         new_tries = current_tries + 1
         
         sheet_states.update_cell(row_index, 2, str(new_tries))
+        
+        # מחיקת cache אחרי עדכון מונה נסיונות
+        _clear_user_cache(chat_id)
+        
         debug_log(f"Incremented code_try for user {chat_id}: {current_tries} → {new_tries}")
         
         return new_tries
@@ -379,7 +558,8 @@ def update_user_profile_data(chat_id: str, profile_updates: Dict[str, Any]) -> b
         auto_summary = generate_summary_from_profile_data(current_profile)
         
         # עדכון הטיימסטאפ
-        current_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        from utils import get_israel_time
+        current_timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         
         # עדכון נתוני הפרופיל עם summary אוטומטי ו-last_update
         updates_to_save = {

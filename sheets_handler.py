@@ -14,8 +14,8 @@ from messages import new_user_admin_message
 from notifications import send_error_notification
 from fields_dict import FIELDS_DICT
 
-# יצירת חיבור לגיליונות (מתקן - מחזיר 3 ערכים, לא 4)
-sheet_users, sheet_log, sheet_states = setup_google_sheets()
+# יצירת חיבור לגיליונות (מתקן - עכשיו מחזיר 4 ערכים כמצופה)
+gs_client, sheet_users, sheet_log, sheet_states = setup_google_sheets()
 
 # Aliases לתאימות לאחור:
 debug_log = debug_log

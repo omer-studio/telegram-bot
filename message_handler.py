@@ -20,7 +20,7 @@ from config import (
     MAX_MESSAGE_LENGTH,
     ADMIN_CHAT_ID
 )
-from utils import log_error_stat
+from utils import log_error_stat, get_israel_time
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from datetime import datetime
@@ -99,7 +99,7 @@ async def send_message(update, chat_id, text, is_bot_message=True):
         log_event_to_file({
             "chat_id": chat_id,
             "bot_message": formatted_text,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_israel_time().isoformat(),
             "error": str(e)
         })
         try:
@@ -115,7 +115,7 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     log_event_to_file({
         "chat_id": chat_id,
         "bot_message": formatted_text,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": get_israel_time().isoformat()
     })
     if should_log_message_debug():
         print(f"[BOT_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
@@ -175,7 +175,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_payload = {
             "chat_id": None,
             "message_id": None,
-            "timestamp_start": datetime.now().isoformat()
+            "timestamp_start": get_israel_time().isoformat()
         }
         try:
             chat_id = update.message.chat_id
@@ -207,7 +207,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "chat_id": chat_id,
                         "message_id": message_id,
                         "message_type": "voice",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": get_israel_time().isoformat(),
                         "event_type": "voice_temporarily_disabled"
                     })
                     
@@ -227,7 +227,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "message_id": message_id,
                         "message_type": message_type,
                         "bot_response": appropriate_response,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": get_israel_time().isoformat(),
                         "event_type": "unsupported_message"
                     })
                     
@@ -314,12 +314,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_summary = get_user_summary(chat_id) or ""
             history_messages = get_chat_history_messages(chat_id)
             
+            # יצירת טיימסטמפ והנחיות יום השבוע
+            from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
+            timestamp = create_human_context_for_gpt(chat_id)
+            weekday_instruction = get_weekday_context_instruction()
+            greeting_instruction = get_time_greeting_instruction()
+            
             # בניית ההודעות ל-gpt_a
             messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
+            
+            # 🔍 [DEBUG] הודעת ראשי SYSTEM_PROMPT
+            print(f"\n🔍 [MESSAGE_BUILD_DEBUG] === BUILDING MESSAGES FOR GPT ===")
+            print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
+            
             if current_summary:
                 messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}"})
+                print(f"🎯 [SYSTEM_2] USER SUMMARY - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
+            
+            # הוספת טיימסטמפ והנחיות זמן
+            if timestamp:
+                messages_for_gpt.append({"role": "system", "content": timestamp})
+                print(f"🎯 [SYSTEM_3] TIMESTAMP - Content: {timestamp}")
+            if greeting_instruction:
+                messages_for_gpt.append({"role": "system", "content": greeting_instruction})
+                print(f"🎯 [SYSTEM_4] GREETING - Content: {greeting_instruction}")
+            if weekday_instruction:
+                messages_for_gpt.append({"role": "system", "content": weekday_instruction})
+                print(f"🎯 [SYSTEM_5] WEEKDAY - Content: {weekday_instruction}")
+            
+            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages...")
             messages_for_gpt.extend(history_messages)
-            messages_for_gpt.append({"role": "user", "content": user_msg})
+            
+            # הוספת ההודעה החדשה עם טיימסטמפ
+            user_msg_with_timestamp = f"{timestamp} {user_msg}" if timestamp else user_msg
+            messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
+            print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {bool(timestamp)}")
+            print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
+            print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
 
             # שלב 2: קריאה ל-gpt_a למענה ראשי עם מנגנון הודעות זמניות
             print(f"[DEBUG] 🔥 Calling get_main_response_with_timeout...")
@@ -359,6 +390,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as ex:
         await handle_critical_error(ex, locals().get('chat_id'), locals().get('user_msg'), update)
+
+    from utils import get_israel_time
+    log_event_to_file({
+        "event": "user_message_processed", 
+        "timestamp": get_israel_time().isoformat()
+    })
 
 async def handle_new_user_background(update, context, chat_id, user_msg):
     """מטפל במשתמש חדש ברקע"""
@@ -492,22 +529,20 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
     return gpt_c_usage, gpt_d_usage, gpt_e_result
 
 async def handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, last_bot_message):
-    """מטפל בכל המשימות ברקע - גרסה רזה."""
+    """מטפל בכל המשימות ברקע - גרסה מקבילה ומהירה."""
     try:
         bot_reply = gpt_response["bot_reply"]
         
-        # gpt_b: סיכום (אם צריך)
-        summary_response, new_summary_for_history = await _handle_gpt_b_summary(
-            user_msg, bot_reply, chat_id, message_id
-        )
+        # 🚀 הפעלת משימות במקביל לביצועים מהירים יותר
+        summary_task = asyncio.create_task(_handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id))
+        profile_task = asyncio.create_task(_handle_profile_updates(chat_id, user_msg, message_id, log_payload))
         
-        # עדכון היסטוריה
+        # המתנה לסיום שתי המשימות במקביל
+        summary_response, new_summary_for_history = await summary_task
+        gpt_c_usage, gpt_d_usage, gpt_e_result = await profile_task
+        
+        # עדכון היסטוריה (אחרי שיש לנו את הסיכום)
         update_last_bot_message(chat_id, new_summary_for_history or bot_reply)
-
-        # gpt_c/d/e: עדכון פרופיל וניתוח מתקדם
-        gpt_c_usage, gpt_d_usage, gpt_e_result = await _handle_profile_updates(
-            chat_id, user_msg, message_id, log_payload
-        )
 
         # שמירת לוגים ונתונים נוספים
         # נירמול ה-usage לפני השמירה ב-log
@@ -518,7 +553,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         log_payload.update({
             "gpt_a_response": bot_reply,
             "gpt_a_usage": clean_gpt_response,
-            "timestamp_end": datetime.now().isoformat()
+            "timestamp_end": get_israel_time().isoformat()
         })
         
         # רישום לגיליון Google Sheets
@@ -581,8 +616,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
             print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
             print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
             
-            # קריאה ל-log_to_sheets
-            log_to_sheets(
+            # קריאה ל-log_to_sheets (async)
+            await log_to_sheets(
                 message_id=message_id,
                 chat_id=chat_id,
                 user_msg=user_msg,

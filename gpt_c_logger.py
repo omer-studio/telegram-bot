@@ -7,7 +7,7 @@ gpt_c_logger.py
 
 import os
 import json
-from datetime import datetime
+from utils import get_israel_time
 from typing import Optional
 from config import DATA_DIR
 
@@ -39,7 +39,7 @@ def append_gpt_c_html_update(
     # התיקייה data תמיד קיימת לפי דרישת המשתמש
     
     # יצירת תוכן HTML חדש
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = get_israel_time().strftime("%Y-%m-%d %H:%M:%S")
     
     # המרת הנתונים ל-JSON יפה
     extracted_json = json.dumps(extracted_data, ensure_ascii=False, indent=2)

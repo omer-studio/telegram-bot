@@ -324,8 +324,8 @@ class BillingProtection:
     
     def _get_current_keys(self):
         """מחזיר מפתחות תאריך נוכחיים"""
-        from datetime import datetime
-        now = datetime.now()
+        from utils import get_israel_time
+        now = get_israel_time()
         daily_key = now.strftime("%Y-%m-%d")
         monthly_key = now.strftime("%Y-%m")
         return daily_key, monthly_key
@@ -461,7 +461,8 @@ billing_guard = BillingProtection(
 
 def _load_daily_limits():
     """טוען מגבלות יומיות ומאפס אם יום חדש."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    from utils import get_israel_time
+    today_str = get_israel_time().strftime("%Y-%m-%d")
     limits_file = os.path.join(DATA_DIR, "free_model_limits.json")
     
     try:
@@ -564,8 +565,9 @@ def save_usage_data(usage_data, model_name, cost_agorot=None, chat_id=None, user
     try:
         usage_log_path = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
         
+        from utils import get_israel_time
         log_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_israel_time().isoformat(),
             "model": model_name,
             "usage": normalize_usage_data(usage_data),
             "cost_agorot": cost_agorot,

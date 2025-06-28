@@ -16,9 +16,10 @@ import json
 import litellm
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+import pytz
 
 # ייבוא פונקציות עזר
-from utils import get_chat_history_messages
+from utils import get_chat_history_messages, get_israel_time
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
 from prompts import build_profile_extraction_enhanced_prompt
 from gpt_utils import normalize_usage_dict, safe_get_usage_value
@@ -130,7 +131,7 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
     :param chat_id: מזהה המשתמש
     :return: מילון עם תוצאות הריצה (success, changes, errors)
     """
-    start_time = datetime.now()
+    start_time = get_israel_time()
     logger.info(f"[gpt_e] Starting run_gpt_e for chat_id={chat_id} at {start_time.isoformat()}")
     
     result = {
@@ -266,7 +267,7 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         
         # שלב 7: עדכון סטטיסטיקות
         result['success'] = True
-        result['execution_time'] = (datetime.now() - start_time).total_seconds()
+        result['execution_time'] = (get_israel_time() - start_time).total_seconds()
         
         logger.info(f"[gpt_e] Completed successfully for chat_id={chat_id} in {result['execution_time']:.2f}s")
         
@@ -306,7 +307,7 @@ def log_gpt_e_run(chat_id: str, result: Dict[str, Any]) -> None:
     :param result: תוצאות הריצה
     """
     log_entry = {
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': get_israel_time().isoformat(),
         'chat_id': chat_id,
         'success': result['success'],
         'changes_count': len(result.get('changes', {})),
@@ -351,7 +352,12 @@ def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_times
             try:
                 from datetime import datetime
                 last_run = datetime.fromisoformat(last_gpt_e_timestamp.replace('Z', '+00:00'))
-                now = datetime.now(last_run.tzinfo) if last_run.tzinfo else datetime.now()
+                now = get_israel_time()
+                # וידוא שיש timezone תואם לשני התאריכים
+                if last_run.tzinfo is None:
+                    import pytz
+                    israel_tz = pytz.timezone('Asia/Jerusalem')
+                    last_run = israel_tz.localize(last_run)
                 hours_since_last = (now - last_run).total_seconds() / 3600
                 
                 if hours_since_last >= 24:

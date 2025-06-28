@@ -9,12 +9,13 @@ import logging
 from config import BOT_TRACE_LOG_PATH, CHAT_HISTORY_PATH, gpt_log_path, BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME, DATA_DIR, MAX_LOG_LINES_TO_KEEP, MAX_OLD_LOG_LINES, MAX_CHAT_HISTORY_MESSAGES, MAX_TRACEBACK_LENGTH, config
 from config import should_log_debug_prints, should_log_message_debug, should_log_sheets_debug
 import litellm
+import pytz
 
 def log_event_to_file(event_data, filename=None):  # שומר אירוע ללוג בפורמט JSON lines
     try:
         if filename is None:
             filename = BOT_TRACE_LOG_PATH
-        event_data["timestamp"] = datetime.now().isoformat()
+        event_data["timestamp"] = get_israel_time().isoformat()
         with open(filename, "a", encoding="utf-8") as f:
             f.write(json.dumps(event_data, ensure_ascii=False) + "\n")
         if should_log_debug_prints():
@@ -36,8 +37,9 @@ def update_chat_history(chat_id, user_msg, bot_summary):  # מעדכן היסט�
         if chat_id not in history_data:
             history_data[chat_id] = {"am_context": "", "history": []}
         if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
-            now = datetime.now()
-            simple_timestamp = f"{now.day:02d}/{now.month:02d} {now.hour:02d}:{now.minute:02d}"
+            # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+            now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+            simple_timestamp = f"{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}"
             history_data[chat_id]["history"].append({
                 "user": user_msg,
                 "bot": bot_summary,
@@ -122,14 +124,16 @@ def _calculate_user_stats_from_history(history: list) -> dict:
         return basic_stats
     
     # חישובי זמן בסיסיים
-    now = datetime.now()
+    # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+    now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
     first_contact_dt = datetime.fromisoformat(history[0]["timestamp"])
     last_contact_dt = datetime.fromisoformat(history[-1]["timestamp"])
     days_together = (now - first_contact_dt).days
     hours_since_last = (now - last_contact_dt).total_seconds() / 3600
     
     # מידע על זמן נוכחי
-    israel_tz = datetime.now().astimezone()
+    # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+    israel_tz = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
     current_hour, weekday, day_of_month, month = israel_tz.hour, israel_tz.weekday(), israel_tz.day, israel_tz.month
     weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
     
@@ -166,182 +170,67 @@ def get_user_stats(chat_id: str) -> dict:  # מחזיר סטטיסטיקות מ�
         logging.error(f"שגיאה בקבלת סטטיסטיקות: {e}")
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
 
-def _get_greeting_by_hour(hour: int) -> str:
-    """מחזיר ברכה מתאימה לפי השעה."""
-    if 6 <= hour <= 11: return "בוקר טוב!"
-    elif 12 <= hour <= 15: return "צהריים טובים!"
-    elif 17 <= hour <= 21: return "ערב טוב!"
-    elif 21 <= hour <= 23 or 0 <= hour <= 3: return "לילה טוב!"
-    return ""
-
-def _get_weekday_message(weekday: str) -> str:
-    """מחזיר הודעה מתאימה ליום השבוע."""
-    day_messages = {
-        "ראשון": "איך מתחיל השבוע?", "שני": "איך עובר השבוע?", 
-        "שלישי": "איך מרגיש השבוע?", "רביעי": "אמצע השבוע, איך זה עובר?", 
-        "חמישי": "איך עבר השבוע? תוכניות לסופש?", "שישי": "איך מסכם את השבוע?", 
-        "שבת": "איך עובר הסופש?"
-    }
-    return day_messages.get(weekday, "")
-
 def create_human_context_for_gpt(chat_id: str) -> str:
-    """יוצר מידע רקע חכם לGPT עם ברכות והצעות חיבור אישי - גרסה רזה."""
+    """שולח טיימסטמפ מצומצם לGPT (ללא יום שבוע - זה יבוא בנפרד)."""
     try:
-        stats, history = get_user_stats_and_history(chat_id)
-        if stats["total_messages"] == 0:
-            return ""
+        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        # טיימסטמפ בפורמט [28/6 18:26] - ללא יום שבוע
+        timestamp = f"[{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}]"
         
-        hours_since = stats.get("hours_since_last_message", 0)
-        current_hour = stats.get("current_hour", 12)
-        weekday = stats.get("weekday_name", "")
-        context_parts = []
-        
-        # ברכת שלום לפי שעה
-        if hours_since >= 3:
-            greeting = _get_greeting_by_hour(current_hour)
-            if greeting:
-                context_parts.append(greeting)
-        
-        # הודעה ליום השבוע
-        if hours_since >= 6 and weekday:
-            day_message = _get_weekday_message(weekday)
-            if day_message:
-                now = datetime.now()
-                context_parts.append(f"אגב היום יום {weekday}, השעה {now.hour:02d}:{now.minute:02d} - {day_message}")
-        
-        # הצעות חיבור אישי
-        if hours_since >= 4:
-            personal_suggestion = _generate_personal_connection_suggestions(stats, current_hour, history)
-            if personal_suggestion:
-                context_parts.append(personal_suggestion)
-        
-        return " ".join(context_parts)
+        return timestamp
     except Exception as e:
-        logging.error(f"שגיאה ביצירת הקשר אנושי: {e}")
+        logging.error(f"שגיאה ביצירת הקשר זמן: {e}")
         return ""
 
-def _get_topic_suggestions(topics: dict) -> list:
-    """מחזיר הצעות בהתבסס על נושאים שהמשתמש מזכיר."""
-    suggestions = []
-    if topics.get("family", 0) >= 3:
-        suggestions.append("💡 הצעה ל-GPT: מזכיר הרבה 'משפחה' - שאל איך הולך מול ההורים")
-    if topics.get("stress", 0) >= 2:
-        suggestions.append("💡 הצעה ל-GPT: נראה לחוץ - שאל אם רוצה לעצור רגע לנשום יחד")
-    if topics.get("work", 0) >= 3:
-        suggestions.append("💡 הצעה ל-GPT: מדבר הרבה על עבודה - שאל 'אפרופו הבוס/העבודה... עדיין רלוונטי?'")
-    if topics.get("relationship", 0) >= 2:
-        suggestions.append("💡 הצעה ל-GPT: מזכיר מערכות יחסים - שאל איך זה מתקדם")
-    return suggestions
-
-def _get_time_based_suggestions(current_hour: int, month: int, day: int, weekday: int) -> list:
-    """מחזיר הצעות בהתבסס על זמן - שעה, יום, חודש."""
-    suggestions = []
-    if 0 <= current_hour <= 3:
-        suggestions.append("💡 הצעה ל-GPT: 03:00 לפנות בוקר - הגב הומוריסטית 'וואו, אתה גם ער? 😉'")
-    elif 4 <= current_hour <= 5:
-        suggestions.append("💡 הצעה ל-GPT: שעה מוקדמת - שאל אם משכים או לא ישן")
-    elif current_hour == 12:
-        suggestions.append("💡 הצעה ל-GPT: 12:00 - שאל מה אוכל לצהריים")
-    
-    if month == 6:
-        suggestions.append("💡 הצעה ל-GPT: יוני = חודש הגאווה 🌈 - שאל איך מרגיש")
-    if month == 12:
-        suggestions.append("💡 הצעה ל-GPT: דצמבר = חגים וסוף שנה - שאל על התוכניות")
-    if weekday == 4 and current_hour >= 16:
-        suggestions.append("💡 הצעה ל-GPT: שישי בערב - שאל איפה עושה ארוחת ערב")
-    if day == 1:
-        suggestions.append("💡 הצעה ל-GPT: ראש חודש - שאל איך מרגיש עם התחילה")
-    
-    return suggestions
-
-def _generate_personal_connection_suggestions(stats: dict, current_hour: int, history: list) -> str:
-    """יוצר הצעות חיבור אישי מבוססות נתוני משתמש - גרסה רזה."""
+def get_time_greeting_instruction() -> str:
+    """מחזיר הנחיה למודל לפתוח בברכה מתאימה לזמן"""
     try:
-        suggestions = []
+        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        hour = now.hour
         
-        # הצעות בהתבסס על נושאים
-        topics = stats.get("main_topics_mentioned", {})
-        if topics:
-            suggestions.extend(_get_topic_suggestions(topics))
+        if 5 <= hour < 11:
+            greeting_guide = "תפתח בברכה 'בוקר טוב!' וביטוי של אנרגיה חיובית לתחילת היום"
+        elif 11 <= hour < 16:
+            greeting_guide = "תפתח בברכה 'צהריים טובים!' והתייחס לקצב היום או מה שקורה בשעות האלה"
+        elif 16 <= hour < 20:
+            greeting_guide = "תפתח בברכה 'ערב טוב!' והתייחס לסיום היום או לתוכניות הערב"
+        elif 20 <= hour < 24:
+            greeting_guide = "תפתח בברכה 'ערב טוב!' או 'לילה טוב!' והיה יותר רגוע ונעים"
+        else:  # 0-5
+            greeting_guide = "תפתח בברכה 'לילה טוב!' והיה מבין שזה זמן מאוחר, שאל אם הכל בסדר"
+            
+        return f"{greeting_guide}. כן באמצע השיחה התייחס לזמן בצורה טבעית ורלוונטית."
         
-        # הצעות בהתבסס על זמן
-        now = datetime.now()
-        suggestions.extend(_get_time_based_suggestions(current_hour, now.month, now.day, now.weekday()))
-        
-        # הצעות בהתבסס על עונה
-        season_suggestion = _get_season_suggestion(now.month)
-        if season_suggestion:
-            suggestions.append(season_suggestion)
-        
-        # הצעות בהתבסס על היסטוריה
-        total_messages = stats.get("total_messages", 0)
-        days_knowing = stats.get("days_knowing_each_other", 0)
-        if total_messages >= 20 and days_knowing >= 7:
-            suggestions.append("💡 הצעה ל-GPT: היסטוריה של שבוע+ ו-20+ הודעות - הראה שזוכר: 'אפרופו...'")
-        
-        if total_messages >= 10:
-            pattern_suggestion = _analyze_conversation_patterns_from_history(history, current_hour)
-            if pattern_suggestion:
-                suggestions.append(pattern_suggestion)
-        
-        if suggestions:
-            import random
-            return random.choice(suggestions)
-        return ""
     except Exception as e:
-        logging.error(f"שגיאה ביצירת הצעות חיבור אישי: {e}")
+        logging.error(f"שגיאה בהנחיות ברכה: {e}")
+        return "תפתח בברכה מתאימה לזמן והתייחס לשעה בצורה טבעית."
+
+def get_weekday_context_instruction() -> str:
+    """מחזיר הנחיה ספציפית לכל יום בשבוע"""
+    try:
+        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        weekday = now.weekday()  # 0=Monday, 6=Sunday
+        
+        weekday_instructions = {
+            0: "היום יום ב' - תחילת שבוע. שאל אותו: 'איך התחיל השבוע? יש תוכניות מיוחדות השבוע? איך הוא מרגיש עם התחלת שבוע חדש?' התייחס באופן חיובי ועודד אותו לשבוע הקרב.",
+            1: "היום יום ג'. שאל אותו: 'איך עבר השבוע עד כה? מה הדבר הכי טוב שקרה השבוע? יש משהו שמאתגר אותך השבוע?' תן לו חיזוק ועצות אם צריך.",
+            2: "היום יום ד' - אמצע השבוע. שאל אותו: 'איך אתה מרגיש באמצע השבוע? מה עוד נשאר לך לעשות עד הסופש? יש משהו שאתה מצפה לו השבוע?' עזור לו לעבור את החלק השני של השבוע.",
+            3: "היום יום ה' - לקראת הסופש. שאל אותו: 'איך אתה מסכם את השבוע? מה הדבר הכי טוב שקרה? יש תוכניות לסופש?' התרגש איתו לקראת הסופש ועזור לו לתכנן.",
+            4: "היום יום ו' - ערב שבת. שאל אותו: 'איך אתה מכין את השבת? יש ארוחת שבת מיוחדת? עם מי אתה נפגש הערב?' התעניין בתוכניות השבת שלו ובמשפחה.",
+            5: "היום שבת - יום מנוחה. שאל אותו: 'איך עובר השבת? עושה משהו נחמד היום? נפגש עם משפחה או חברים?' היה רגוע ונעים, התאם לאווירת השבת.",
+            6: "היום יום א' - סוף הסופש. שאל אותו: 'איך היה הסופש? מה עשית? איך אתה מרגיש לקראת השבוע החדש מחר?' עזור לו להתכונן נפשית לשבוע הבא."
+        }
+        
+        return weekday_instructions.get(weekday, "")
+        
+    except Exception as e:
+        logging.error(f"שגיאה ביצירת הנחיית יום השבוע: {e}")
         return ""
 
-def _analyze_conversation_patterns_from_history(history: list, current_hour: int) -> str:  # מנתח דפוסי שיחה מהיסטוריה
-    try:
-        if len(history) < 10:
-            return ""
-        message_hours = []
-        for entry in history[-15:]:
-            try:
-                timestamp = entry.get("timestamp")
-                if timestamp:
-                    dt = datetime.fromisoformat(timestamp)
-                    message_hours.append(dt.hour)
-            except Exception:
-                continue
-        if not message_hours:
-            return ""
-        suggestions = []
-        night_messages = sum(1 for h in message_hours if h >= 22 or h <= 6)
-        if night_messages >= len(message_hours) * 0.7 and (22 <= current_hour <= 23 or 0 <= current_hour <= 6):
-            suggestions.append("💡 הצעה ל-GPT: נראה כמו 'ינשוף' לילה - הגב 'שוב פגישה לילית? אוהב את השיחות בשעות השקטות'")
-        morning_messages = sum(1 for h in message_hours if 6 <= h <= 10)
-        if morning_messages >= len(message_hours) * 0.6 and 6 <= current_hour <= 10:
-            suggestions.append("💡 הצעה ל-GPT: נראה כמו 'עוף מוקדם' - הגב 'הנה השכמה המוכרת! איך התחלת הבוקר?'")
-        from collections import Counter
-        hour_counts = Counter(message_hours)
-        most_common_hour = hour_counts.most_common(1)
-        if most_common_hour and most_common_hour[0][1] >= 3:
-            favorite_hour = most_common_hour[0][0]
-            if abs(current_hour - favorite_hour) <= 1:
-                suggestions.append(f"💡 הצעה ל-GPT: לרוב כותב ב-{favorite_hour:02d}:00 - הגב 'הנה השעה המועדפת! יש דפוס או סתם קרה?'")
-        today_messages = 0
-        today = datetime.now().date()
-        for entry in history:
-            try:
-                timestamp = entry.get("timestamp")
-                if timestamp:
-                    dt = datetime.fromisoformat(timestamp)
-                    if dt.date() == today:
-                        today_messages += 1
-            except Exception:
-                continue
-        if today_messages >= 5:
-            suggestions.append("💡 הצעה ל-GPT: שלח הרבה הודעות היום - הגב 'ממש פעיל היום! מה קורה?'")
-        if suggestions:  # החזרת הצעה אקראית
-            import random
-            return random.choice(suggestions)
-        return ""
-    except Exception as e:
-        if should_log_debug_prints():
-            logging.error(f"שגיאה בניתוח דפוסי שיחה: {e}")
-        return ""
+
 
 def get_holiday_system_message(chat_id: str) -> str:
     """
@@ -428,7 +317,8 @@ def get_holiday_system_message(chat_id: str) -> str:
                 is_secular = False
                 is_religious = True
         
-        now = datetime.now()
+        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
         today_str = now.strftime("%Y-%m-%d")
         
         # קריאת הטבלה מהקובץ
@@ -492,8 +382,6 @@ def get_holiday_system_message(chat_id: str) -> str:
         logging.error(f"שגיאה בבדיקת חגים דתיים: {e}")
         return ""
 
-
-
 def clean_old_logs() -> None:  # מנקה לוגים ישנים
     try:
         files_to_clean = [BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME]
@@ -528,7 +416,7 @@ def health_check() -> dict:  # בדיקת תקינות המערכת
         except Exception:
             health["openai_connected"] = False
         # בדיקת כתיבה לקבצים
-        test_log = {"test": "health_check", "timestamp": datetime.now().isoformat()}
+        test_log = {"test": "health_check", "timestamp": get_israel_time().isoformat()}
         with open("health_test.json", "w") as f:
             json.dump(test_log, f)
         os.remove("health_test.json")
@@ -549,7 +437,7 @@ def format_error_message(error: Exception, context: str = "") -> str:  # מעצ�
         error_msg += f":\n"
         error_msg += f"📍 סוג: {type(error).__name__}\n"
         error_msg += f"💬 הודעה: {str(error)}\n"
-        error_msg += f"⏰ זמן: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+        error_msg += f"⏰ זמן: {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}\n"
         # הוספת traceback רק בdebug mode
         if should_log_debug_prints():
             tb = traceback.format_exc()
@@ -602,7 +490,8 @@ def send_usage_report(days_back: int = 1):  # שולח דוח usage יומי/ש�
         users = set()
         messages = 0
         errors = 0
-        now = datetime.now()
+        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
         since = now - timedelta(days=days_back)
         with open(gpt_log_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -646,10 +535,131 @@ def update_last_bot_message(chat_id, bot_summary):  # מעדכן את השדה '
                 json.dump(history_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logging.error(f"❌ שגיאה בעדכון תשובת בוט: {e}")
+
+def get_israel_time():
+    """מחזיר את הזמן הנוכחי בישראל"""
+    israel_tz = pytz.timezone('Asia/Jerusalem')
+    return datetime.now(israel_tz)
+
+def add_to_chat_history(user_id, user_message, bot_response):
+    """מוסיף הודעה להיסטוריית הצ'אט"""
+    try:
+        # קובץ ההיסטוריה
+        history_file = "data/chat_history.json"
+        
+        # טוען את הנתונים הקיימים או יוצר קובץ חדש
+        if os.path.exists(history_file):
+            with open(history_file, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+        else:
+            history = {}
+        
+        # יוצר רשומה למשתמש אם לא קיימת
+        if str(user_id) not in history:
+            history[str(user_id)] = {
+                "am_context": "",
+                "history": []
+            }
+        
+        # מוסיף את ההודעה החדשה
+        new_entry = {
+            "user": user_message,
+            "bot": bot_response,
+            "timestamp": get_israel_time().isoformat()
+        }
+        
+        history[str(user_id)]["history"].append(new_entry)
+        
+        # שומר את הנתונים
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+            
+        logging.info(f"💾 נוספה הודעה להיסטוריה עבור משתמש {user_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ שגיאה בהוספת הודעה להיסטוריה: {e}")
+
+def get_chat_history(user_id, limit=None):
+    """מחזיר את ההיסטוריה של משתמש מסוים"""
+    try:
+        history_file = "data/chat_history.json"
+        
+        if not os.path.exists(history_file):
+            return []
+        
+        with open(history_file, 'r', encoding='utf-8') as f:
+            history = json.load(f)
+        
+        user_history = history.get(str(user_id), {}).get("history", [])
+        
+        if limit:
+            return user_history[-limit:]
+        
+        return user_history
+        
+    except Exception as e:
+        logging.error(f"❌ שגיאה בקריאת היסטוריה: {e}")
+        return []
+
+def format_chat_history_for_gpt(user_id, limit=10):
+    """מעצב את היסטוריית הצ'אט בפורמט מתאים ל-GPT"""
+    history = get_chat_history(user_id, limit)
+    
+    if not history:
+        return ""
+    
+    formatted_history = "היסטוריית שיחות קודמות:\n"
+    for entry in history[-limit:]:  # לוקח את ה-limit אחרונות
+        formatted_history += f"משתמש: {entry['user']}\n"
+        formatted_history += f"בוט: {entry['bot']}\n"
+        formatted_history += f"זמן: {entry['timestamp']}\n---\n"
+    
+    return formatted_history
+
+def cleanup_test_users():
+    """מנקה משתמשי בדיקה מקבצי הנתונים"""
+    test_users = ['demo_user_6am', 'working_test_user', 'friday_morning_user', 'timestamp_test']
+    
+    # ניקוי מקובץ ההיסטוריה
+    try:
+        history_file = "data/chat_history.json"
+        if os.path.exists(history_file):
+            with open(history_file, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+            
+            for test_user in test_users:
+                if test_user in history:
+                    del history[test_user]
+                    logging.info(f"🗑️ הוסר משתמש בדיקה {test_user} מהיסטוריית הצ'אט")
+            
+            with open(history_file, 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
+    
+    # ניקוי מקובץ התזכורות
+    try:
+        reminder_file = "data/reminder_state.json"
+        if os.path.exists(reminder_file):
+            with open(reminder_file, 'r', encoding='utf-8') as f:
+                reminders = json.load(f)
+            
+            for test_user in test_users:
+                if test_user in reminders:
+                    del reminders[test_user]
+                    logging.info(f"🗑️ הוסר משתמש בדיקה {test_user} ממערכת התזכורות")
+            
+            with open(reminder_file, 'w', encoding='utf-8') as f:
+                json.dump(reminders, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.error(f"❌ שגיאה בניקוי מערכת התזכורות: {e}")
+
 SECRET_CODES = {  # פקודות סודיות
     "#487chaCha2025": "clear_history",    # מוחק היסטוריית שיחה
     "#512SheetBooM": "clear_sheets",      # מוחק מידע מהגיליונות
     "#734TotalZap": "clear_all",          # מוחק הכל (היסטוריה + גיליונות)
+    "#999PerformanceCheck": "performance_info",  # מידע על ביצועים ו-cache
+    "#888ResetCache": "reset_cache",      # איפוס cache של Google Sheets
 }
 
 def handle_secret_command(chat_id, user_msg):  # טיפול בפקודות סודיות למטרות בדיקה ותחזוקה
@@ -659,22 +669,59 @@ def handle_secret_command(chat_id, user_msg):  # טיפול בפקודות סו�
     if action == "clear_history":
         cleared = clear_chat_history(chat_id)
         msg = "🧹 כל ההיסטוריה שלך נמחקה!" if cleared else "🤷‍♂️ לא נמצאה היסטוריה למחיקה."
-        log_event_to_file({"event": "secret_command", "timestamp": datetime.now().isoformat(), "chat_id": chat_id, "action": "clear_history", "result": cleared})
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_history", "result": cleared})
         _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת היסטוריה בצ'אט {chat_id}.")
         return True, msg
     if action == "clear_sheets":
         deleted_sheet, deleted_state = clear_from_sheets(chat_id)
         msg = "🗑️ כל הנתונים שלך נמחקו מהגיליונות!" if (deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא מידע למחיקה בגיליונות."
-        log_event_to_file({"event": "secret_command", "timestamp": datetime.now().isoformat(), "chat_id": chat_id, "action": "clear_sheets", "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_sheets", "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
         _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת נתונים בגיליונות בצ'אט {chat_id}.")
         return True, msg
     if action == "clear_all":
         cleared = clear_chat_history(chat_id)
         deleted_sheet, deleted_state = clear_from_sheets(chat_id)
         msg = "💣 הכל נמחק! (היסטוריה + גיליונות)" if (cleared or deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא שום מידע למחיקה."
-        log_event_to_file({"event": "secret_command", "timestamp": datetime.now().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
         _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת **הכל** בצ'אט {chat_id}.")
         return True, msg
+    
+    if action == "performance_info":
+        try:
+            from config import get_sheets_cache_info
+            from gpt_a_handler import get_filter_analytics
+            
+            cache_info = get_sheets_cache_info()
+            filter_analytics = get_filter_analytics()
+            
+            msg = f"📊 **דוח ביצועים:**\n\n"
+            msg += f"🗂️ **Google Sheets Cache:**\n"
+            msg += f"• סטטוס: {cache_info['status']}\n"
+            msg += f"• גיל: {cache_info['age_seconds']} שניות\n\n"
+            msg += f"🎯 **GPT Model Filter:**\n"
+            msg += f"• סך החלטות: {filter_analytics.get('total_decisions', 0)}\n"
+            msg += f"• שימוש מודל מתקדם: {filter_analytics.get('premium_usage', 0)}%\n"
+            msg += f"• פילוח: {filter_analytics.get('percentages', {})}\n\n"
+            msg += f"💡 **טיפים לשיפור ביצועים:**\n"
+            msg += f"• Cache חוסך ~2-3 שניות בכל גישה\n"
+            msg += f"• המודל המהיר חוסך ~40% בעלויות\n"
+            msg += f"• מקביליות GPT-B+GPT-C חוסכת ~3-5 שניות"
+            
+            _send_admin_secret_notification(f"ℹ️ הופעל קוד סודי לדוח ביצועים בצ'אט {chat_id}.")
+            return True, msg
+        except Exception as e:
+            return True, f"❌ שגיאה בקבלת מידע ביצועים: {e}"
+    
+    if action == "reset_cache":
+        try:
+            from config import reset_sheets_cache
+            reset_sheets_cache()
+            msg = "🔄 Cache של Google Sheets אופס בהצלחה!\nהגישה הבאה תיצור חיבור חדש."
+            _send_admin_secret_notification(f"🔄 הופעל קוד סודי לאיפוס cache בצ'אט {chat_id}.")
+            return True, msg
+        except Exception as e:
+            return True, f"❌ שגיאה באיפוס cache: {e}"
+
     return False, None
 
 def clear_chat_history(chat_id):  # מוחק היסטוריית צ'אט ספציפי
@@ -724,13 +771,21 @@ def show_gpt_input_examples():  # דוגמאות למה ש-GPT מקבל כקלט
 
 def show_personal_connection_examples():  # דוגמאות להצעות החיבור האישי
     print("🧠 הצעות חיבור: אחרי 4+ שעות | משפחה (3+), לחץ (2+), עבודה (3+) | זמנים מיוחדים")
+
+
+
 # אם מפעילים את utils.py ישירות
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
-        cmd = sys.argv[1]
-        if cmd == "log-status": show_log_status()
-        elif cmd == "gpt-examples": show_gpt_input_examples()
-        elif cmd == "personal-examples": show_personal_connection_examples()
+        command = sys.argv[1]
+        
+        if command == "cleanup-test":
+            cleanup_test_users()
+            print("✅ ניקוי משתמשי בדיקה הושלם")
+        else:
+            print(f"❌ פקודה לא ידועה: {command}")
+            print("פקודות זמינות:")
+            print("  cleanup-test - ניקוי משתמשי בדיקה")
     else:
-        print("שימוש: python utils.py [log-status|gpt-examples|personal-examples]")
+        print("שימוש: python utils.py [cleanup-test]")

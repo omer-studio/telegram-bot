@@ -250,9 +250,11 @@ def log_to_sheets_sync(
     gpt_d_usage=None, gpt_e_usage=None
 ):
     try:
-        gc, sheet_users, sheet_logs, sheet_states = setup_google_sheets()
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
-        now = datetime.now()
+        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        from utils import get_israel_time
+        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
         timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")
         date_only = now.strftime("%d/%m/%Y")
         time_only = now.strftime("%H:%M")
@@ -382,14 +384,14 @@ def log_to_sheets_sync(
 
         # כתיבה לגיליון
         try:
-            header = sheet_logs.row_values(1)
+            header = sheet_log.row_values(1)
             row_data = [""] * len(header)
             
             for i, col_name in enumerate(header):
                 if col_name in log_data:
                     row_data[i] = str(log_data[col_name])
 
-            sheet_logs.append_row(row_data)
+            sheet_log.append_row(row_data)
             debug_log(f"Successfully logged to sheets for message {message_id}", "SheetsLogger")
             return True
         except Exception as e:
@@ -413,7 +415,7 @@ def update_user_profile_sync(chat_id, field_values):
 def log_gpt_usage_to_file(message_id, chat_id, main_usage, summary_usage, extract_usage, gpt_d_usage, gpt_e_usage, total_cost_ils):
     try:
         log_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_israel_time().isoformat(),
             "message_id": message_id,
             "chat_id": chat_id,
             "main_usage": main_usage,

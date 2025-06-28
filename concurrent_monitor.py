@@ -44,6 +44,7 @@ from dataclasses import dataclass, asdict
 from collections import defaultdict, deque
 import logging
 import os
+from utils import get_israel_time
 
 @dataclass
 class UserSession:
@@ -284,7 +285,7 @@ class ConcurrentMonitor:
             error_rate = self.error_count / self.total_requests
         
         return PerformanceMetrics(
-            timestamp=datetime.now(),
+            timestamp=get_israel_time(),
             active_users=len(self.active_sessions),
             queue_length=len(self.user_queue),
             avg_response_time=avg_response_time,
@@ -306,7 +307,7 @@ class ConcurrentMonitor:
                     await self._send_load_alert(metrics)
                 
                 # איפוס מונים כל שעה
-                if datetime.now().minute == 0:
+                if get_israel_time().minute == 0:
                     self.error_count = 0
                     self.total_requests = 0
                 
@@ -352,7 +353,7 @@ class ConcurrentMonitor:
         
         report = f"""
 📊 **דוח ביצועי Concurrent Handling**
-⏰ זמן יצירה: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+⏰ זמן יצירה: {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}
 
 👥 **משתמשים:**
    • פעילים כעת: {stats['current_active_users']}/{stats['max_concurrent_users']}

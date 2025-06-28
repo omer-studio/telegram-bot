@@ -251,31 +251,31 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     גרסה סינכרונית של get_main_response - לשימוש ב-thread
     כולל מדידת ביצועים לאבחון צוואר בקבוק + הקשר אנושי מועשר
     """
-    # 🤖 הוספת מידע רקע על המשתמש כ-system message נפרד
+    # 🤖 הוספת מידע רקע נוסף על המשתמש כ-system message נפרד
     if chat_id:
         try:
-            from utils import create_human_context_for_gpt, get_holiday_system_message
+            from utils import get_holiday_system_message
             
-            # הוספת מידע הרקע הרגיל
-            human_context = create_human_context_for_gpt(chat_id)
-            if human_context:
-                # הוספת מידע הרקע כ-system message נפרד אחרי הפרומט הראשי
-                # זה יגיע לGPT כמידע נפרד ולא יהיה חלק קבוע מהפרומט
-                full_messages.insert(-1, {"role": "system", "content": human_context.strip()})
+            print(f"🔍 [ADDITIONAL_SYSTEMS] Adding extra system messages for chat_id {chat_id}...")
             
             # הוספת הודעת חגים דתיים כ-system message נפרד נוסף
             holiday_message = get_holiday_system_message(chat_id)
             if holiday_message:
                 full_messages.insert(-1, {"role": "system", "content": holiday_message.strip()})
+                print(f"🎯 [HOLIDAY_SYS] Added holiday message - Length: {len(holiday_message)} chars | Preview: {holiday_message[:60]}...")
             
             # 📝 הוספת הודעה חכמה על שדות חסרים
             missing_fields_message = create_missing_fields_system_message(chat_id)
             if missing_fields_message:
                 full_messages.insert(-1, {"role": "system", "content": missing_fields_message.strip()})
+                print(f"🎯 [MISSING_FIELDS_SYS] Added missing fields message - Length: {len(missing_fields_message)} chars | Content: {missing_fields_message}")
                 logging.info(f"🎯 [MISSING_FIELDS] נוסף system message עם שדות חסרים למשתמש {chat_id}")
+            
+            print(f"✅ [ADDITIONAL_SYSTEMS] Finished adding extra systems. Total messages now: {len(full_messages)}")
                 
         except Exception as e:
             logging.error(f"שגיאה בהוספת מידע רקע: {e}")
+            print(f"❌ [ADDITIONAL_SYSTEMS] Error adding extra systems: {e}")
     
     metadata = {"gpt_identifier": "gpt_a", "chat_id": chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_a"]
@@ -304,6 +304,36 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     # הוספת max_tokens רק אם הוא לא None
     if params["max_tokens"] is not None:
         completion_params["max_tokens"] = params["max_tokens"]
+
+    # 🔍 [DEBUG] ניתוח מפורט של המבנה שנשלח ל-GPT
+    print(f"\n🔍 [GPT_REQUEST_DEBUG] === DETAILED GPT REQUEST ANALYSIS ===")
+    print(f"🤖 [MODEL] {model} | Premium: {use_premium} | Reason: {filter_reason}")
+    print(f"📊 [PARAMS] Temperature: {params['temperature']} | Max Tokens: {params.get('max_tokens', 'None')}")
+    print(f"📝 [MESSAGES_COUNT] Total messages: {len(full_messages)}")
+    
+    # ניתוח הודעות לפי סוג
+    system_count = 0
+    user_count = 0
+    assistant_count = 0
+    
+    for i, msg in enumerate(full_messages):
+        role = msg.get("role", "unknown")
+        content_length = len(msg.get("content", ""))
+        
+        if role == "system":
+            system_count += 1
+            content_preview = msg.get("content", "")[:100] + "..." if len(msg.get("content", "")) > 100 else msg.get("content", "")
+            print(f"🎯 [SYSTEM_{system_count}] Position: {i} | Length: {content_length} chars | Preview: {content_preview}")
+        elif role == "user":
+            user_count += 1
+            print(f"👤 [USER_{user_count}] Position: {i} | Length: {content_length} chars")
+        elif role == "assistant":
+            assistant_count += 1
+            print(f"🤖 [ASSISTANT_{assistant_count}] Position: {i} | Length: {content_length} chars")
+    
+    print(f"📈 [SUMMARY] System: {system_count} | User: {user_count} | Assistant: {assistant_count}")
+    print(f"🚀 [SENDING] Request to {model}...")
+    print(f"🔍 [GPT_REQUEST_DEBUG] === END ANALYSIS ===\n")
     
     try:
         # 🔬 תזמון הטוקן הראשון - צריך להשתמש ב-streaming לזה
@@ -321,6 +351,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         bot_reply = re.sub(r'<br\s*/?>', '\n', bot_reply)
         
         usage = normalize_usage_dict(response.usage, response.model)
+        
+        print(f"✅ [GPT_RESPONSE_DEBUG] Received {len(bot_reply)} chars from {response.model}")
         
         # 🔬 מדידת ביצועים מבוטלת זמנית
         
@@ -447,10 +479,12 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                         # אם המחיקה+שליחה נכשלו, נשלח הודעה נוספת כחירום
                         logging.warning(f"⚠️ [EMERGENCY] מחיקה+שליחה נכשלו, שולח הודעה נוספת")
                         try:
-                            await update.message.reply_text(
+                            emergency_text = (
                                 f"מצטער על העיכוב. התשובה שלי:\n\n{gpt_result['bot_reply'][:1000]}..."
                                 if len(gpt_result['bot_reply']) > 1000 else gpt_result['bot_reply']
                             )
+                            formatted_emergency_text = format_text_for_telegram(emergency_text)
+                            await update.message.reply_text(formatted_emergency_text, parse_mode="HTML")
                             gpt_result["message_already_sent"] = True
                         except Exception as emergency_error:
                             logging.error(f"❌ [EMERGENCY] גם הודעת חירום נכשלה: {emergency_error}")

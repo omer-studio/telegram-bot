@@ -205,11 +205,50 @@ FREE_MODEL_DAILY_LIMIT = 100
 #     print(f"❌ [CONFIG] שגיאה בהגדרת אימות עבור Google Vertex AI: {e}")
 
 # הגדרת Google Sheets
+_sheets_cache = None  # Cache גלובלי לחיבורי Google Sheets
+_cache_created_at = None  # זמן יצירת ה-cache
+
+def reset_sheets_cache():
+    """מאפס את ה-cache של Google Sheets - שימושי לפתרון בעיות"""
+    global _sheets_cache, _cache_created_at
+    _sheets_cache = None
+    _cache_created_at = None
+    print("[DEBUG] 🔄 Google Sheets cache reset")
+
+def get_sheets_cache_info():
+    """מחזיר מידע על מצב ה-cache"""
+    global _sheets_cache, _cache_created_at
+    if _sheets_cache is None:
+        return {"status": "empty", "created_at": None, "age_seconds": 0}
+    
+    age_seconds = (time.time() - _cache_created_at) if _cache_created_at else 0
+    return {
+        "status": "active",
+        "created_at": _cache_created_at,
+        "age_seconds": round(age_seconds, 2)
+    }
+
 def setup_google_sheets():
     """
-    מגדיר את החיבור ל-Google Sheets ומחזיר שלושה גיליונות עיקריים.
-    פלט: sheet_users, sheet_log, sheet_states
+    מגדיר את החיבור ל-Google Sheets ומחזיר ארבעה ערכים: client וגיליונות עיקריים.
+    עם מנגנון cache לביצועים מהירים יותר.
+    פלט: gs_client, sheet_users, sheet_log, sheet_states
     """
+    global _sheets_cache, _cache_created_at
+    
+    # אם יש cache תקף, מחזיר אותו
+    if _sheets_cache is not None:
+        try:
+            # בדיקה מהירה שהחיבור עדיין עובד
+            _sheets_cache[1].get('A1')  # בדיקה קטנה על sheet_users
+            cache_age = round(time.time() - _cache_created_at, 1) if _cache_created_at else 0
+            print(f"[DEBUG] ♻️ Using cached Google Sheets connection (age: {cache_age}s)")
+            return _sheets_cache
+        except Exception as e:
+            print(f"[DEBUG] ⚠️ Cache expired, creating new connection: {e}")
+            _sheets_cache = None
+            _cache_created_at = None
+    
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
     gs_client = gspread.authorize(creds)
@@ -227,8 +266,12 @@ def setup_google_sheets():
             sheet_log = sheet.worksheet(config["SHEET_LOG_TAB"])
             print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_STATES_TAB']}")
             sheet_states = sheet.worksheet(config["SHEET_STATES_TAB"])
-            print(f"[DEBUG] Google Sheets loaded successfully!")
-            return sheet_users, sheet_log, sheet_states
+            print(f"[DEBUG] ✅ Google Sheets loaded successfully and cached!")
+            
+            # שמירה ב-cache עם timestamp
+            _sheets_cache = (gs_client, sheet_users, sheet_log, sheet_states)
+            _cache_created_at = time.time()
+            return _sheets_cache
         except Exception as e:
             print(f"[ERROR] Google Sheets access failed on attempt {attempt}: {e}")
             last_exception = e
@@ -382,7 +425,7 @@ GPT_MODELS = {
 
 # 🔄 מודלי fallback - גיבוי חכם
 GPT_FALLBACK_MODELS = {
-    "gpt_a": "gemini/gemini-1.5-pro",               # 🔄 fallback ראשון - Pro יציב וחינמי
+    "gpt_a": "gemini/gemini-2.5-flash",               # 🔄 fallback ראשון - Pro יציב וחינמי
     # שאר ה-GPT מודלים משתמשים במודלים חינמיים אז אין צורך ב-fallback
 }
 
