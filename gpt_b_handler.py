@@ -11,7 +11,7 @@ import json
 import litellm
 from prompts import BOT_REPLY_SUMMARY_PROMPT
 from config import GPT_MODELS, GPT_PARAMS
-from gpt_utils import normalize_usage_dict
+from gpt_utils import normalize_usage_dict, calculate_gpt_cost
 
 def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
     """
@@ -45,6 +45,18 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             response = litellm.completion(**completion_params)
         summary = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
+        # הוספת חישוב עלות ל-usage
+        try:
+            cost_info = calculate_gpt_cost(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cached_tokens=usage.get("cached_tokens", 0),
+                model_name=response.model,
+                completion_response=response
+            )
+            usage.update(cost_info)
+        except Exception as _cost_e:
+            logging.warning(f"[gpt_b] Cost calc failed: {_cost_e}")
         return {"summary": summary, "usage": usage, "model": response.model}
         
     except Exception as e:

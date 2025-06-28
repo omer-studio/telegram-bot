@@ -11,7 +11,7 @@ import json
 import litellm
 from prompts import build_profile_merge_prompt
 from config import GPT_MODELS, GPT_PARAMS, should_log_data_extraction_debug, should_log_gpt_cost_debug
-from gpt_utils import normalize_usage_dict
+from gpt_utils import normalize_usage_dict, calculate_gpt_cost, extract_json_from_text
 
 def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, message_id=None):
     """
@@ -44,15 +44,25 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         from gpt_utils import measure_llm_latency
         with measure_llm_latency(model):
             response = litellm.completion(**completion_params)
-        content = response.choices[0].message.content.strip()
+        content_raw = response.choices[0].message.content.strip()
+        content = extract_json_from_text(content_raw)
         usage = normalize_usage_dict(response.usage, response.model)
+        
+        try:
+            cost_info = calculate_gpt_cost(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cached_tokens=usage.get("cached_tokens", 0),
+                model_name=response.model,
+                completion_response=response
+            )
+            usage.update(cost_info)
+        except Exception as _cost_e:
+            logging.warning(f"[gpt_d] Cost calc failed: {_cost_e}")
         
         # ניסיון לפרס JSON
         try:
-            if content and content.strip().startswith("{"):
-                extracted_fields = json.loads(content)
-            else:
-                extracted_fields = {}
+            extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
         except json.JSONDecodeError:
             extracted_fields = {}
         

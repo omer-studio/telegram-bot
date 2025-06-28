@@ -2,7 +2,7 @@
 import json
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import time
 import logging
@@ -211,12 +211,69 @@ def get_time_greeting_instruction() -> str:
         logging.error(f"שגיאה בהנחיות ברכה: {e}")
         return "תפתח בברכה מתאימה לזמן והתייחס לשעה בצורה טבעית."
 
-def get_weekday_context_instruction() -> str:
-    """מחזיר הנחיה ספציפית לכל יום בשבוע"""
+def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | None = None) -> str:
+    """מחזיר הנחיה ספציפית לכל יום בשבוע.
+
+    שיקול חדש (2025-06-28):
+    ────────────────────────
+    • אם המשתמש הזכיר כבר היום (יום מתחיל ב-05:00) אחת ממילות הימים
+      ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"],
+      אין צורך לשלוח שוב את ההנחיה – הפונקציה תחזיר מחרוזת ריקה.
+    • אם chat_id או user_msg לא ניתנו, נשמרת התנהגות קודמת (תמיד שולח).
+    """
     try:
+        # שמות ימי השבוע לבדיקה
+        weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
+
+        # ⏰ כלל חדש: לא מזכירים יום-שבוע מחוץ לטווח 05:00-23:00
+        if now.hour >= 23 or now.hour < 5:
+            return ""
+
+        # אם חסר chat_id או user_msg – ממשיכים להתנהגות ברירת מחדל
+        smart_skip = False
+        if chat_id is not None:
+            now = get_israel_time()
+
+            # קביעת התחלת היום (05:00). אם לפני 05:00 – שייך ליום הקודם.
+            start_of_day = now.replace(hour=5, minute=0, second=0, microsecond=0)
+            if now.hour < 5:
+                start_of_day = start_of_day - timedelta(days=1)
+
+            # 1) בדיקת ההודעה הנוכחית
+            if user_msg and any(word in user_msg for word in weekday_words):
+                smart_skip = True
+            else:
+                # 2) בדיקת היסטוריה של היום הנוכחי
+                try:
+                    with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
+                        history_data = json.load(f)
+                    history = history_data.get(str(chat_id), {}).get("history", [])
+                except (FileNotFoundError, json.JSONDecodeError):
+                    history = []
+
+                for entry in reversed(history):  # מהר לענייו – סורק מהסוף
+                    ts = entry.get("timestamp")
+                    if not ts:
+                        continue
+                    try:
+                        entry_dt = datetime.fromisoformat(ts)
+                    except ValueError:
+                        continue
+                    # עוצר אם יצאנו מהיום הנוכחי
+                    if entry_dt < start_of_day:
+                        break
+                    # בודק רק הודעות משתמש
+                    if any(word in entry.get("user", "") for word in weekday_words):
+                        smart_skip = True
+                        break
+
+        if smart_skip:
+            return ""
+
+        # ––– בניית הנחיה כבעבר –––
         now = get_israel_time()
         weekday = now.weekday()  # 0=Monday, 6=Sunday
-        
+
         weekday_instructions = {
             0: "היום יום ב' - תחילת שבוע. שאל אותו: 'איך התחיל השבוע? יש תוכניות מיוחדות השבוע? איך הוא מרגיש עם התחלת שבוע חדש?' התייחס באופן חיובי ועודד אותו לשבוע הקרב.",
             1: "היום יום ג'. שאל אותו: 'איך עבר השבוע עד כה? מה הדבר הכי טוב שקרה השבוע? יש משהו שמאתגר אותך השבוע?' תן לו חיזוק ועצות אם צריך.",
@@ -226,14 +283,12 @@ def get_weekday_context_instruction() -> str:
             5: "היום שבת - יום מנוחה. שאל אותו: 'איך עובר השבת? עושה משהו נחמד היום? נפגש עם משפחה או חברים?' היה רגוע ונעים, התאם לאווירת השבת.",
             6: "היום יום א' - סוף הסופש. שאל אותו: 'איך היה הסופש? מה עשית? איך אתה מרגיש לקראת השבוע החדש מחר?' עזור לו להתכונן נפשית לשבוע הבא."
         }
-        
+
         return weekday_instructions.get(weekday, "")
-        
+
     except Exception as e:
         logging.error(f"שגיאה ביצירת הנחיית יום השבוע: {e}")
         return ""
-
-
 
 def get_holiday_system_message(chat_id: str) -> str:
     """

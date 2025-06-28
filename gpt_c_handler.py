@@ -11,7 +11,7 @@ import litellm
 import re
 from prompts import build_profile_extraction_enhanced_prompt
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_extraction_debug, should_log_gpt_cost_debug
-from gpt_utils import normalize_usage_dict, measure_llm_latency
+from gpt_utils import normalize_usage_dict, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 
 def extract_user_info(user_msg, chat_id=None, message_id=None):
     """
@@ -38,7 +38,9 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     try:
         with measure_llm_latency(model):
             response = litellm.completion(**completion_params)
-        content = response.choices[0].message.content.strip()
+        content_raw = response.choices[0].message.content.strip()
+        content = extract_json_from_text(content_raw)
+
         usage = normalize_usage_dict(response.usage, response.model)
         
         # ניסיון לפרס JSON
@@ -53,6 +55,18 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
             print(f"💰 [GPT-C] עלות: {usage.get('cost_total', 0):.6f}$ | טוקנים: {usage.get('total_tokens', 0)}")
         if should_log_data_extraction_debug():
             print(f"📋 [GPT-C] נתונים שחולצו: {json.dumps(extracted_fields, ensure_ascii=False, indent=2)}")
+        
+        try:
+            cost_info = calculate_gpt_cost(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cached_tokens=usage.get("cached_tokens", 0),
+                model_name=response.model,
+                completion_response=response
+            )
+            usage.update(cost_info)
+        except Exception as _cost_e:
+            logging.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
         
         return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
         
@@ -71,7 +85,9 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 
                 with measure_llm_latency(fallback_model):
                     response = litellm.completion(**completion_params)
-                content = response.choices[0].message.content.strip()
+                content_raw = response.choices[0].message.content.strip()
+                content = extract_json_from_text(content_raw)
+
                 usage = normalize_usage_dict(response.usage, response.model)
                 
                 # ניסיון לפרס JSON
@@ -88,6 +104,18 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                     print(f"💰 [GPT-C FALLBACK] עלות: {usage.get('cost_total', 0):.6f}$ | טוקנים: {usage.get('total_tokens', 0)}")
                 if should_log_data_extraction_debug():
                     print(f"📋 [GPT-C FALLBACK] נתונים שחולצו: {json.dumps(extracted_fields, ensure_ascii=False, indent=2)}")
+                
+                try:
+                    cost_info = calculate_gpt_cost(
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0),
+                        cached_tokens=usage.get("cached_tokens", 0),
+                        model_name=response.model,
+                        completion_response=response
+                    )
+                    usage.update(cost_info)
+                except Exception as _cost_e:
+                    logging.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
                 
                 return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
                 

@@ -606,3 +606,47 @@ def print_budget_status():
 
 # יצירת instance גלובלי
 smart_manager = SmartGeminiManager()
+
+# =====================================
+# 🔍 JSON Extraction Helper (code-fence safe)
+# =====================================
+
+def extract_json_from_text(text: str) -> str:
+    """Attempts to extract a JSON string from model output.
+
+    1. Removes markdown code fences such as ```json ... ``` or ``` ... ```
+    2. Tries to locate the first '{' and the matching closing '}' balancing braces.
+       Returns the substring if found, otherwise returns the original cleaned text.
+
+    This makes parsing responses from GPT/Gemini that insist on wrapping JSON
+    with code fences or adding short explanations much more robust.
+    """
+    import re
+
+    if not text:
+        return text
+
+    # Remove code fences (opening and closing)
+    cleaned = re.sub(r"^```(?:json)?\\s*", "", text.strip(), flags=re.IGNORECASE)
+    cleaned = re.sub(r"\\s*```$", "", cleaned).strip()
+
+    # If already starts with { return as-is
+    if cleaned.startswith("{"):
+        return cleaned
+
+    # Try to locate first JSON object within the text
+    start = cleaned.find("{")
+    if start == -1:
+        return cleaned
+
+    brace_level = 0
+    for idx in range(start, len(cleaned)):
+        ch = cleaned[idx]
+        if ch == '{':
+            brace_level += 1
+        elif ch == '}':
+            brace_level -= 1
+            if brace_level == 0:
+                return cleaned[start:idx+1]
+    # If we reach here – unmatched braces; fallback to cleaned text
+    return cleaned

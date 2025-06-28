@@ -157,13 +157,18 @@ def calculate_costs_unified(usage_dict: Dict) -> Dict[str, float]:
         completion_tokens = safe_int(usage_dict.get("completion_tokens", 0))
         cached_tokens = safe_int(usage_dict.get("cached_tokens", 0))
         
-        cost_usd = calculate_gpt_cost(
-            model_name=model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cached_tokens=cached_tokens
-        )
-        
+        existing_cost_usd = safe_float(usage_dict.get("cost_total", 0))
+        if existing_cost_usd > 0:
+            cost_usd = existing_cost_usd
+        else:
+            cost_info = calculate_gpt_cost(
+                model_name=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cached_tokens=cached_tokens
+            )
+            # calculate_gpt_cost מחזיר dict – נשלוף רק cost_total (יהיה 0 אם אין completion_response)
+            cost_usd = safe_float(cost_info.get("cost_total", 0))
         cost_ils = cost_usd * USD_TO_ILS
         cost_agorot = cost_ils * 100
         

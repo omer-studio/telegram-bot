@@ -15,9 +15,11 @@ import time
 import re
 from prompts import SYSTEM_PROMPT
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
-from gpt_utils import normalize_usage_dict, billing_guard, measure_llm_latency
+from gpt_utils import normalize_usage_dict, billing_guard, measure_llm_latency, calculate_gpt_cost
 from notifications import alert_billing_issue, send_error_notification
-# ייבוא format_text_for_telegram הועבר לתוך הפונקציות כדי למנוע circular import
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from message_handler import format_text_for_telegram  # for type checkers only
 # מערכת ביצועים מבוטלת זמנית
 
 # ייבוא הפילטר החכם
@@ -48,7 +50,7 @@ def create_missing_fields_system_message(chat_id: str) -> str:
             missing_text = ', '.join(missing[:4])
             return f"""פרטים שהמשתמש עדיין לא סיפר לך וכדאי לשאול אותו בעדינות וברגישות במטרה להכיר אותו יותר טוב: {missing_text}
 
-אז תבחר אחד מהם שנראה לך הכי מתאים - ותשאל אותו בעדינות וברגישות (את השאלות תעשה בכתב מודגש)  - תסביר לו את הרציונל, תסביר לו למה אתה שואל, תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו. הוא צריך את זה."""
+תסביר לו את הרציונל, תסביר לו למה אתה שואל, תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו - תבחר אחד מהשאלות שנראית לך הכי מתאימה - ורק אם זה מרגיש לך מתאים אז תשאל אותו בעדינות וברגישות ותשלב את זה באלגנטיות. (את השאלות תעשה בכתב מודגש)"""
         return ""
         
     except Exception as e:
@@ -190,62 +192,52 @@ def should_use_premium_model(user_message, chat_history_length=0):
 
 async def send_temporary_message_after_delay(update, chat_id, delay_seconds=5):
     """
-    שולח הודעה זמנית אחרי דיליי מסוים ומחזיר את ה-message_id שלה
+    שולח הודעה זמנית אחרי דיליי מסוים ומחזיר את האובייקט Message שלה
+
+    השינוי (החזרת האובייקט עצמו ולא רק ה-id) מאפשר לנו למחוק את ההודעה בקלות באמצעות
+    await temp_message.delete()‎ בלי ״ציד״ אחר ה-bot, מה שפגע במחיקה בעבר.
     """
     await asyncio.sleep(delay_seconds)
     try:
         temp_message = await update.message.reply_text("⏳ אני עובד על תשובה בשבילך... זה מיד אצלך...")
-        logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id} | message_id={temp_message.message_id}")
-        return temp_message.message_id
+        logging.info(
+            f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id} | message_id={temp_message.message_id}"
+        )
+        return temp_message  # מחזירים את האובייקט עצמו
     except Exception as e:
         logging.error(f"❌ [TEMP_MSG] שגיאה בשליחת הודעה זמנית: {e}")
         return None
 
-async def delete_temporary_message_and_send_new(update, chat_id, temp_message_id, new_text):
+async def delete_temporary_message_and_send_new(update, temp_message, new_text):
     """
-    מוחק הודעה זמנית ושולח הודעה חדשה
+    מוחק את ההודעה הזמנית (אם קיימת) ושולח למשתמש את התשובה האמיתית.
+
+    ✅ שיפור: משתמשים ב-temp_message.delete()‎ – בטוח ופשוט יותר, אין צורך להתאמץ להשיג את ה-bot.
     """
-    from message_handler import format_text_for_telegram  # ייבוא מקומי למניעת circular import
+    from message_handler import format_text_for_telegram  # local import to avoid circular
     formatted_text = format_text_for_telegram(new_text)
-    
+
     try:
-        # מחיקת ההודעה הזמנית - תיקון הגישה ל-bot
-        bot = None
-        
-        # ניסיון 1: מ-update עצמו
-        if hasattr(update, 'get_bot'):
-            bot = update.get_bot()
-        # ניסיון 2: מ-message 
-        elif hasattr(update, 'message') and hasattr(update.message, 'get_bot'):
-            bot = update.message.get_bot()
-        # ניסיון 3: מ-callback_query אם זה callback
-        elif hasattr(update, 'callback_query') and hasattr(update.callback_query, 'get_bot'):
-            bot = update.callback_query.get_bot()
-        # ניסיון 4: גישה ישירה ל-bot (ייתכן שקיים במקרים מסוימים)
-        elif hasattr(update, 'message') and hasattr(update.message, 'bot'):
-            bot = update.message.bot
-        
-        if bot:
-            await bot.delete_message(chat_id=chat_id, message_id=temp_message_id)
-            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית נמחקה | chat_id={chat_id} | message_id={temp_message_id}")
-        else:
-            logging.warning(f"⚠️ [DELETE_MSG] לא ניתן לגשת ל-bot object, מדלג על מחיקה")
-            
-        # שליחת הודעה חדשה
+        # מחיקת ההודעה הזמנית
+        if temp_message is not None:
+            try:
+                await temp_message.delete()
+                logging.info(
+                    f"🗑️ [DELETE_MSG] הודעה זמנית נמחקה | chat_id={temp_message.chat_id} | message_id={temp_message.message_id}"
+                )
+            except Exception as del_err:
+                logging.warning(
+                    f"⚠️ [DELETE_MSG] לא הצלחתי למחוק את ההודעה הזמנית: {del_err} – ממשיך לשליחה"
+                )
+
+        # שליחת ההודעה החדשה
         await update.message.reply_text(formatted_text, parse_mode="HTML")
-        logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
+        logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={temp_message.chat_id if temp_message else 'unknown'}")
         return True
-        
-    except Exception as e:
-        logging.error(f"❌ [DELETE_MSG] שגיאה במחיקת הודעה זמנית: {e}")
-        # אם המחיקה נכשלה, נשלח הודעה חדשה בלי למחוק
-        try:
-            await update.message.reply_text(formatted_text, parse_mode="HTML")
-            logging.info(f"📤 [FALLBACK_MSG] נשלחה הודעה חדשה (ללא מחיקה) | chat_id={chat_id}")
-            return True
-        except Exception as e2:
-            logging.error(f"❌ [FALLBACK_MSG] שגיאה גם בהודעה חדשה: {e2}")
-            return False
+
+    except Exception as send_err:
+        logging.error(f"❌ [DELETE_MSG] כשל במחיקה/שליחה: {send_err}")
+        return False
 
 def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_premium=True, filter_reason="", match_type="unknown"):
     """
@@ -257,8 +249,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     # שלב 1: הכנת ההודעות
     prep_start_time = time.time()
     
-    # הוספת הודעת מערכת לפרופיל חסר אם צריך
-    if chat_id:
+    # לא שולחים בקשה לשאלות רגישות אם מופעל extra_emotion (use_premium == True)
+    if chat_id and not use_premium:
         missing_fields_message = create_missing_fields_system_message(chat_id)
         if missing_fields_message:
             full_messages.insert(1, {"role": "system", "content": missing_fields_message})
@@ -347,6 +339,19 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         bot_reply = re.sub(r'<br\s*/?>', '\n', bot_reply)
         
         usage = normalize_usage_dict(response.usage, response.model)
+        
+        # הוספת נתוני עלות מדויקים ל-usage על סמך completion_response
+        try:
+            cost_info = calculate_gpt_cost(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cached_tokens=usage.get("cached_tokens", 0),
+                model_name=response.model,
+                completion_response=response
+            )
+            usage.update(cost_info)
+        except Exception as _cost_e:
+            logging.warning(f"[gpt_a] לא הצלחתי לחשב עלות usage: {_cost_e}")
         
         processing_time = time.time() - processing_start_time
         print(f"⚡ [TIMING] Processing time: {processing_time:.3f}s")
@@ -442,7 +447,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
     
     # שלב 2: הכנת טיימר להודעה זמנית
     temp_message_task = None
-    temp_message_id = None
+    temp_message = None
     
     if update and chat_id:
         # התחלת טיימר להודעה זמנית (אחרי 5 שניות)
@@ -486,36 +491,46 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         # שלב 4: ביטול או עדכון הודעה זמנית
         if temp_message_task:
             if not temp_message_task.done():
-                # GPT הסתיים לפני 5 שניות - מבטלים הודעה זמנית
+                # GPT הסתיים לפני שההודעה הזמנית נשלחה – מבטלים אותה
                 temp_message_task.cancel()
-                logging.info(f"✅ [TIMING] GPT מהיר ({gpt_duration:.1f}s) - הודעה זמנית בוטלה")
+                logging.info(
+                    f"✅ [TIMING] GPT מהיר ({gpt_duration:.1f}s) - הודעה זמנית בוטלה לפני שנשלחה"
+                )
             else:
-                # הודעה זמנית כבר נשלחה - מוחקים ושולחים חדשה
-                temp_message_id = await temp_message_task
-                if temp_message_id and update and chat_id:
+                # ההודעה הזמנית נשלחה – מוחקים אותה ושולחים את התשובה
+                temp_message = await temp_message_task
+                if temp_message and update:
                     success = await delete_temporary_message_and_send_new(
-                        update, 
-                        chat_id, 
-                        temp_message_id, 
+                        update,
+                        temp_message,
                         gpt_result["bot_reply"]
                     )
                     if success:
-                        logging.info(f"🔄 [TIMING] GPT איטי ({gpt_duration:.1f}s) - הודעה זמנית נמחקה ונשלחה חדשה")
-                        # מסמנים שההודעה כבר נשלחה דרך המחיקה והשליחה
+                        logging.info(
+                            f"🔄 [TIMING] GPT איטי ({gpt_duration:.1f}s) - הודעה זמנית נמחקה ונשלחה חדשה"
+                        )
                         gpt_result["message_already_sent"] = True
                     else:
-                        # אם המחיקה+שליחה נכשלו, נשלח הודעה נוספת כחירום
-                        logging.warning(f"⚠️ [EMERGENCY] מחיקה+שליחה נכשלו, שולח הודעה נוספת")
+                        # אם המחיקה/שליחה נכשלו, ננסה לשלוח חירום
+                        logging.warning(
+                            f"⚠️ [EMERGENCY] מחיקה/שליחה נכשלו, שולח הודעת חירום"
+                        )
                         try:
                             emergency_text = (
                                 f"מצטער על העיכוב. התשובה שלי:\n\n{gpt_result['bot_reply'][:1000]}..."
-                                if len(gpt_result['bot_reply']) > 1000 else gpt_result['bot_reply']
+                                if len(gpt_result['bot_reply']) > 1000
+                                else gpt_result["bot_reply"]
                             )
+                            from message_handler import format_text_for_telegram  # local import to avoid circular
                             formatted_emergency_text = format_text_for_telegram(emergency_text)
-                            await update.message.reply_text(formatted_emergency_text, parse_mode="HTML")
+                            await update.message.reply_text(
+                                formatted_emergency_text, parse_mode="HTML"
+                            )
                             gpt_result["message_already_sent"] = True
                         except Exception as emergency_error:
-                            logging.error(f"❌ [EMERGENCY] גם הודעת חירום נכשלה: {emergency_error}")
+                            logging.error(
+                                f"❌ [EMERGENCY] גם הודעת חירום נכשלה: {emergency_error}"
+                            )
         
         return gpt_result
         

@@ -22,7 +22,7 @@ import pytz
 from utils import get_chat_history_messages, get_israel_time
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
 from prompts import build_profile_extraction_enhanced_prompt
-from gpt_utils import normalize_usage_dict, safe_get_usage_value
+from gpt_utils import normalize_usage_dict, safe_get_usage_value, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from config import GPT_MODELS, GPT_PARAMS
 
 # הגדרת לוגר
@@ -119,7 +119,8 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
 
 דגש מיוחד: השדה "primary_conflict" צריך לשקף במדויק את מה שהמשתמש מתמודד איתו כרגע על בסיס ההיסטוריה האחרונה.
 
-החזר JSON בלבד:
+החזר JSON נקי בשורה אחת בלבד, ללא ``` וללא טקסט נוסף.
+דוגמה: {"age": 30, "self_religious_affiliation": "יהודי"}
 """
 
     return user_prompt
@@ -185,12 +186,12 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                 "store": True
             }
             
-            from gpt_utils import measure_llm_latency
             with measure_llm_latency(model):
                 response = litellm.completion(**completion_params)
             
             # חילוץ התוכן מהתגובה
-            content = response.choices[0].message.content.strip()
+            content_raw = response.choices[0].message.content.strip()
+            content = extract_json_from_text(content_raw)
             logger.info(f"[gpt_e] Received response from GPT: {content[:200]}...")
             
             # נירמול usage באופן בטוח
@@ -203,6 +204,18 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
             
             # עדכון ה-usage עם cached_tokens
             usage["cached_tokens"] = cached_tokens
+            
+            try:
+                cost_info = calculate_gpt_cost(
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    cached_tokens=usage.get("cached_tokens", 0),
+                    model_name=response.model,
+                    completion_response=response
+                )
+                usage.update(cost_info)
+            except Exception as _cost_e:
+                logger.warning(f"[gpt_e] Cost calc failed: {_cost_e}")
             
             result['tokens_used'] = response.usage.total_tokens
             result['cost_data'] = usage
