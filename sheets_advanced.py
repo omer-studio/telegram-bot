@@ -252,7 +252,7 @@ def log_to_sheets_sync(
     try:
         gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
-        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
+        
         from utils import get_israel_time
         now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
         timestamp_full = now.strftime("%Y-%m-%d %H:%M:%S")

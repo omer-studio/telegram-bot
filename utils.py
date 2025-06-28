@@ -11,6 +11,11 @@ from config import should_log_debug_prints, should_log_message_debug, should_log
 import litellm
 import pytz
 
+def get_israel_time():
+    """מחזיר את הזמן הנוכחי בישראל"""
+    israel_tz = pytz.timezone('Asia/Jerusalem')
+    return datetime.now(israel_tz)
+
 def log_event_to_file(event_data, filename=None):  # שומר אירוע ללוג בפורמט JSON lines
     try:
         if filename is None:
@@ -37,8 +42,7 @@ def update_chat_history(chat_id, user_msg, bot_summary):  # מעדכן היסט�
         if chat_id not in history_data:
             history_data[chat_id] = {"am_context": "", "history": []}
         if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
-            # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-            now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+            now = get_israel_time()
             simple_timestamp = f"{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}"
             history_data[chat_id]["history"].append({
                 "user": user_msg,
@@ -124,16 +128,14 @@ def _calculate_user_stats_from_history(history: list) -> dict:
         return basic_stats
     
     # חישובי זמן בסיסיים
-    # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-    now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+    now = get_israel_time()
     first_contact_dt = datetime.fromisoformat(history[0]["timestamp"])
     last_contact_dt = datetime.fromisoformat(history[-1]["timestamp"])
     days_together = (now - first_contact_dt).days
     hours_since_last = (now - last_contact_dt).total_seconds() / 3600
     
     # מידע על זמן נוכחי
-    # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-    israel_tz = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+    israel_tz = get_israel_time()
     current_hour, weekday, day_of_month, month = israel_tz.hour, israel_tz.weekday(), israel_tz.day, israel_tz.month
     weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
     
@@ -173,8 +175,7 @@ def get_user_stats(chat_id: str) -> dict:  # מחזיר סטטיסטיקות מ�
 def create_human_context_for_gpt(chat_id: str) -> str:
     """שולח טיימסטמפ מצומצם לGPT (ללא יום שבוע - זה יבוא בנפרד)."""
     try:
-        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        now = get_israel_time()
         # טיימסטמפ בפורמט [28/6 18:26] - ללא יום שבוע
         timestamp = f"[{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}]"
         
@@ -186,8 +187,7 @@ def create_human_context_for_gpt(chat_id: str) -> str:
 def get_time_greeting_instruction() -> str:
     """מחזיר הנחיה למודל לפתוח בברכה מתאימה לזמן"""
     try:
-        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        now = get_israel_time()
         hour = now.hour
         
         if 5 <= hour < 11:
@@ -210,8 +210,7 @@ def get_time_greeting_instruction() -> str:
 def get_weekday_context_instruction() -> str:
     """מחזיר הנחיה ספציפית לכל יום בשבוע"""
     try:
-        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        now = get_israel_time()
         weekday = now.weekday()  # 0=Monday, 6=Sunday
         
         weekday_instructions = {
@@ -317,8 +316,7 @@ def get_holiday_system_message(chat_id: str) -> str:
                 is_secular = False
                 is_religious = True
         
-        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        now = get_israel_time()
         today_str = now.strftime("%Y-%m-%d")
         
         # קריאת הטבלה מהקובץ
@@ -490,8 +488,7 @@ def send_usage_report(days_back: int = 1):  # שולח דוח usage יומי/ש�
         users = set()
         messages = 0
         errors = 0
-        # TODO: בעתיד לקחת אזור זמן מפרופיל המשתמש
-        now = get_israel_time()  # משתמש באזור זמן ישראל במקום timezone לוקלי
+        now = get_israel_time()
         since = now - timedelta(days=days_back)
         with open(gpt_log_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -535,11 +532,6 @@ def update_last_bot_message(chat_id, bot_summary):  # מעדכן את השדה '
                 json.dump(history_data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logging.error(f"❌ שגיאה בעדכון תשובת בוט: {e}")
-
-def get_israel_time():
-    """מחזיר את הזמן הנוכחי בישראל"""
-    israel_tz = pytz.timezone('Asia/Jerusalem')
-    return datetime.now(israel_tz)
 
 def add_to_chat_history(user_id, user_message, bot_response):
     """מוסיף הודעה להיסטוריית הצ'אט"""
@@ -783,9 +775,21 @@ if __name__ == "__main__":
         if command == "cleanup-test":
             cleanup_test_users()
             print("✅ ניקוי משתמשי בדיקה הושלם")
+        elif command == "clean-old-errors":
+            print("🧹 מנקה שגיאות ישנות...")
+            try:
+                from notifications import clear_old_critical_error_users
+                removed_count = clear_old_critical_error_users()
+                print(f"✅ הוסרו {removed_count} שגיאות ישנות")
+            except Exception as e:
+                print(f"❌ שגיאה: {e}")
         else:
             print(f"❌ פקודה לא ידועה: {command}")
             print("פקודות זמינות:")
             print("  cleanup-test - ניקוי משתמשי בדיקה")
+            print("  clean-old-errors - ניקוי שגיאות ישנות")
     else:
-        print("שימוש: python utils.py [cleanup-test]")
+        print("שימוש: python utils.py [פקודה]")
+        print("פקודות זמינות:")
+        print("  cleanup-test - ניקוי משתמשי בדיקה")
+        print("  clean-old-errors - ניקוי שגיאות ישנות")

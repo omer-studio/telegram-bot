@@ -18,12 +18,151 @@ from config import (
     ADMIN_CHAT_ID,
     BOT_TOKEN
 )
-from utils import log_error_stat
+from utils import log_error_stat, get_israel_time
+
+# קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
+CRITICAL_ERROR_USERS_FILE = "data/critical_error_users.json"
+
+def _load_critical_error_users():
+    """טוען רשימת משתמשים שקיבלו הודעות שגיאה קריטיות"""
+    try:
+        if os.path.exists(CRITICAL_ERROR_USERS_FILE):
+            with open(CRITICAL_ERROR_USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        logging.error(f"Error loading critical error users: {e}")
+        return {}
+
+def _save_critical_error_users(users_data):
+    """שומר רשימת משתמשים שקיבלו הודעות שגיאה קריטיות"""
+    try:
+        os.makedirs(os.path.dirname(CRITICAL_ERROR_USERS_FILE), exist_ok=True)
+        with open(CRITICAL_ERROR_USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users_data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.error(f"Error saving critical error users: {e}")
+
+def _add_user_to_critical_error_list(chat_id: str, error_message: str):
+    """מוסיף משתמש לרשימת מי שקיבל הודעת שגיאה קריטית"""
+    try:
+        users_data = _load_critical_error_users()
+        users_data[str(chat_id)] = {
+            "timestamp": get_israel_time().isoformat(),
+            "error_message": error_message,
+            "recovered": False
+        }
+        _save_critical_error_users(users_data)
+        logging.info(f"Added user {chat_id} to critical error list")
+    except Exception as e:
+        logging.error(f"Error adding user to critical error list: {e}")
+
+async def _send_user_friendly_error_message(update, chat_id: str):
+    """שולח הודעת שגיאה ידידותית למשתמש"""
+    try:
+        user_friendly_message = (
+            "🙏 מתנצל, יש בעיה - הבוט כרגע לא עובד.\n\n"
+            "נסה שוב מאוחר יותר, הודעתי הרגע לעומר והוא יטפל בזה בהקדם. 🔧\n\n"
+            "אני אודיע לך ברגע שהכל יחזור לעבוד! 💚"
+        )
+        
+        if update and hasattr(update, 'message') and hasattr(update.message, 'reply_text'):
+            await update.message.reply_text(user_friendly_message)
+        else:
+            # אם אין update זמין, ננסה לשלוח ישירות דרך bot API
+            bot = telegram.Bot(token=BOT_TOKEN)
+            await bot.send_message(chat_id=chat_id, text=user_friendly_message)
+        
+        # הוספת המשתמש לרשימת מי שקיבל הודעת שגיאה
+        _add_user_to_critical_error_list(chat_id, user_friendly_message)
+        
+        logging.info(f"Sent user-friendly error message to user {chat_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to send user-friendly error message to {chat_id}: {e}")
+        return False
+
+async def send_recovery_messages_to_affected_users():
+    """שולח הודעות התאוששות לכל המשתמשים שקיבלו הודעות שגיאה"""
+    try:
+        users_data = _load_critical_error_users()
+        recovery_message = "👋  היי, חזרתי! הבעיה נפתרה והכל עובד שוב כרגיל. 😊\n\nאפשר לשלוח לי הודעה ואענה כרגיל!"
+        
+        bot = telegram.Bot(token=BOT_TOKEN)
+        recovered_users = []
+        
+        for chat_id, user_info in users_data.items():
+            if not user_info.get("recovered", False):
+                try:
+                    await bot.send_message(chat_id=chat_id, text=recovery_message)
+                    user_info["recovered"] = True
+                    user_info["recovery_timestamp"] = get_israel_time().isoformat()
+                    recovered_users.append(chat_id)
+                    logging.info(f"Sent recovery message to user {chat_id}")
+                    
+                    # מעט השהיה בין הודעות כדי לא לעמוס על טלגרם
+                    await asyncio.sleep(0.5)
+                    
+                except Exception as e:
+                    logging.error(f"Failed to send recovery message to {chat_id}: {e}")
+        
+        # שמירת המצב המעודכן
+        _save_critical_error_users(users_data)
+        
+        # התראה לאדמין על מספר ההתאוששויות
+        if recovered_users:
+            admin_message = f"✅ נשלחו הודעות התאוששות ל-{len(recovered_users)} משתמשים שקיבלו הודעות שגיאה קריטיות"
+            send_admin_notification(admin_message)
+        
+        return len(recovered_users)
+        
+    except Exception as e:
+        logging.error(f"Error sending recovery messages: {e}")
+        return 0
+
+def clear_old_critical_error_users(days_old: int = 7):
+    """מנקה משתמשים ישנים מרשימת השגיאות הקריטיות"""
+    try:
+        users_data = _load_critical_error_users()
+        current_time = get_israel_time()
+        cleaned_users = {}
+        
+        for chat_id, user_info in users_data.items():
+            try:
+                error_time = datetime.fromisoformat(user_info["timestamp"])
+                if hasattr(error_time, 'tzinfo') and error_time.tzinfo is None:
+                    # אם אין timezone, נניח שזה זמן ישראל
+                    import pytz
+                    israel_tz = pytz.timezone('Asia/Jerusalem')
+                    error_time = israel_tz.localize(error_time)
+                
+                days_diff = (current_time - error_time).days
+                
+                # שומר רק אם זה פחות מהמספר ימים הנדרש או שעדיין לא התאושש
+                if days_diff < days_old or not user_info.get("recovered", False):
+                    cleaned_users[chat_id] = user_info
+                    
+            except Exception as e:
+                logging.error(f"Error processing user {chat_id} in cleanup: {e}")
+                # במקרה של שגיאה, שומר את המשתמש
+                cleaned_users[chat_id] = user_info
+        
+        _save_critical_error_users(cleaned_users)
+        removed_count = len(users_data) - len(cleaned_users)
+        
+        if removed_count > 0:
+            logging.info(f"Cleaned {removed_count} old critical error users")
+        
+        return removed_count
+        
+    except Exception as e:
+        logging.error(f"Error in clear_old_critical_error_users: {e}")
+        return 0
 
 def write_deploy_commit_to_log(commit):
     """שומר commit של דפלוי בקובץ לוג."""
     log_file = BOT_TRACE_LOG_PATH
-    from utils import get_israel_time
     with open(log_file, "a", encoding="utf-8") as f:
         entry = {
             "type": "deploy_commit",
@@ -60,7 +199,6 @@ def get_commit_7first(commit):
 
 def send_deploy_notification(success=True, error_message=None, deploy_duration=None):
     """שולח הודעה לאדמין על סטטוס דפלוי."""
-    from utils import get_israel_time
     timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
     project = emoji_or_na(os.getenv('RENDER_SERVICE_NAME', None))
     environment = emoji_or_na(os.getenv('RENDER_ENVIRONMENT', None))
@@ -157,7 +295,6 @@ def send_admin_notification(message, urgent=False):
     """שולח הודעה כללית לאדמין."""
     try:
         prefix = "🚨 הודעה דחופה לאדמין: 🚨" if urgent else "ℹ️ הודעה לאדמין:"
-        from utils import get_israel_time
         notification_text = f"{prefix}\n\n{message}\n\n⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
 
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
@@ -184,7 +321,6 @@ def send_admin_secret_command_notification(message: str):
     פלט: אין (שולח הודעה)
     """
     try:
-        from utils import get_israel_time
         notification_text = (
             f"🔑 *הפעלה של קוד סודי בבוט!* 🔑\n\n"
             f"{message}\n\n"
@@ -217,7 +353,6 @@ def log_error_to_file(error_data, send_telegram=True):
             if isinstance(v, (dict, list)):
                 print(f"[DEBUG][log_error_to_file][ALERT] {k} הוא {type(v)}! ערך: {v}")
         error_file = BOT_ERRORS_PATH
-        from utils import get_israel_time
         error_data["timestamp"] = get_israel_time().isoformat()
         # יצירה אוטומטית של הקובץ אם לא קיים
         if not os.path.exists(error_file):
@@ -273,9 +408,26 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     print("[DEBUG][handle_critical_error][locals]:")
     for k, v in locals().items():
         print(f"[DEBUG][handle_critical_error][locals] {k} = {v} (type: {type(v)})")
+    
+    # שליחת הודעה ידידותית למשתמש
+    if chat_id:
+        try:
+            await _send_user_friendly_error_message(update, str(chat_id))
+        except Exception as e:
+            logging.error(f"Failed to send user-friendly error message: {e}")
+    
     log_error_stat("critical_error")
+    
+    # התראה מפורטת לאדמין
+    admin_error_message = f"🚨 שגיאה קריטית בבוט:\n{str(error)}"
+    if chat_id:
+        admin_error_message += f"\nמשתמש: {chat_id}"
+    if user_msg:
+        admin_error_message += f"\nהודעה: {user_msg[:200]}"
+    admin_error_message += f"\n⚠️ המשתמש קיבל הודעה ידידותית ויקבל התראה כשהבוט יחזור לעבוד"
+    
     send_error_notification(
-        error_message=error,
+        error_message=admin_error_message,
         chat_id=chat_id,
         user_msg=user_msg,
         error_type="שגיאה קריטית - הבוט לא הצליח לענות למשתמש"
@@ -316,7 +468,6 @@ def send_concurrent_alert(alert_type: str, details: dict):
     """
     try:
         if alert_type == "max_users_reached":
-            from utils import get_israel_time
             message = (
                 f"🔴 **התראת עומס מקסימלי**\n"
                 f"👥 הגענו למספר המקסימלי של משתמשים: {details.get('active_users', 0)}/{details.get('max_users', 10)}\n"
@@ -341,7 +492,6 @@ def send_concurrent_alert(alert_type: str, details: dict):
                 f"🚨 יש לבדוק אם Google Sheets מגיב כראוי"
             )
         elif alert_type == "concurrent_error":
-            from utils import get_israel_time  
             message = (
                 f"❌ **שגיאה במערכת Concurrent**\n"
                 f"🔧 רכיב: {details.get('component', 'לא ידוע')}\n"
@@ -413,7 +563,6 @@ def send_admin_alert(message, alert_level="info"):
         }
         
         icon = icons.get(alert_level, "📊")
-        from utils import get_israel_time
         timestamp = get_israel_time().strftime("%H:%M:%S")
         
         alert_text = f"{icon} **התראת מערכת** ({timestamp})\n\n{message}"
@@ -569,13 +718,11 @@ def mark_user_active(chat_id: str):
 
 def _is_allowed_time() -> bool:
     """בודק אם השעה הנוכחית מותרת לשליחת הודעות (7:00-22:00)."""
-    from utils import get_israel_time
     return 7 <= get_israel_time().hour <= 22
 
 def _mark_reminder_delayed(chat_id: str) -> None:
     """מסמן תזכורת כנדחית עד הבוקר."""
     global _reminder_state
-    from utils import get_israel_time
     _reminder_state[str(chat_id)] = {
         "reminder_delayed": True,
         "delayed_at": get_israel_time().isoformat(),
@@ -586,7 +733,6 @@ def _mark_reminder_delayed(chat_id: str) -> None:
 def _mark_reminder_sent(chat_id: str) -> None:
     """מסמן תזכורת כנשלחה וניקוי מצב דחייה."""
     global _reminder_state
-    from utils import get_israel_time
     _reminder_state[str(chat_id)] = {"reminder_sent": True, "sent_at": get_israel_time().isoformat()}
     _save_reminder_state()
 
@@ -602,7 +748,6 @@ async def send_gentle_reminder(chat_id: str) -> bool:
     """שולח תזכורת עדינה למשתמש רק בשעות מותרות (7:00-22:00)."""
     try:
         if not _is_allowed_time():
-            from utils import get_israel_time
             current_hour = get_israel_time().hour
             logging.info(f"[REMINDER] ⏰ Delaying reminder for {chat_id} - current time {current_hour:02d}:00 outside 07:00-22:00")
             _mark_reminder_delayed(chat_id)
@@ -649,7 +794,6 @@ async def send_gentle_reminder(chat_id: str) -> bool:
 def _mark_user_inactive(chat_id: str) -> None:
     """מסמן משתמש כלא פעיל כדי שלא ינסה לשלוח לו תזכורות."""
     global _reminder_state
-    from utils import get_israel_time
     _reminder_state[str(chat_id)] = {
         "user_inactive": True, 
         "marked_inactive_at": get_israel_time().isoformat(),
@@ -723,7 +867,6 @@ def auto_cleanup_old_users():
             history_data = json.load(f)
         
         _load_reminder_state()
-        from utils import get_israel_time
         now = get_israel_time()
         cleanup_candidates = []
         
@@ -839,7 +982,6 @@ async def check_and_send_gentle_reminders():
             history_data = json.load(f)
         
         reminders_sent = 0
-        from utils import get_israel_time
         now = get_israel_time()
         total_users = len(history_data)
         

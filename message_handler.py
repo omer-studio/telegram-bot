@@ -385,13 +385,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await end_monitoring_user(str(chat_id), True)
 
         except Exception as ex:
-            await handle_critical_error(ex, chat_id, user_msg, update)
-            await end_monitoring_user(str(chat_id), False)
+            # ניסיון לחלץ chat_id מה-update אם הוא לא זמין ב-locals
+            chat_id_from_update = None
+            user_msg_from_update = None
+            try:
+                if update and hasattr(update, 'message') and hasattr(update.message, 'chat_id'):
+                    chat_id_from_update = update.message.chat_id
+                if update and hasattr(update, 'message') and hasattr(update.message, 'text'):
+                    user_msg_from_update = update.message.text
+            except:
+                pass
+            
+            await handle_critical_error(ex, chat_id_from_update, user_msg_from_update, update)
 
     except Exception as ex:
-        await handle_critical_error(ex, locals().get('chat_id'), locals().get('user_msg'), update)
+        # ניסיון לחלץ chat_id מה-update אם הוא לא זמין ב-locals
+        chat_id_from_update = None
+        user_msg_from_update = None
+        try:
+            if update and hasattr(update, 'message') and hasattr(update.message, 'chat_id'):
+                chat_id_from_update = update.message.chat_id
+            if update and hasattr(update, 'message') and hasattr(update.message, 'text'):
+                user_msg_from_update = update.message.text
+        except:
+            pass
+        
+        await handle_critical_error(ex, chat_id_from_update, user_msg_from_update, update)
 
-    from utils import get_israel_time
     log_event_to_file({
         "event": "user_message_processed", 
         "timestamp": get_israel_time().isoformat()

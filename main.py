@@ -140,7 +140,7 @@ async def on_startup():
     פונקציית אתחול שרת — בודקת תקינות, שולחת התראה אם יש בעיה, ומגדירה webhook בטלגרם אם צריך.
     """
     from utils import health_check
-    from notifications import send_error_notification
+    from notifications import send_error_notification, send_recovery_messages_to_affected_users
     
     # וודא שהבוט מוגדר
     get_bot_app()
@@ -152,6 +152,19 @@ async def on_startup():
     except Exception as e:
         from traceback import format_exc
         send_error_notification(f"[STARTUP] שגיאה בבדיקת תקינות: {e}\n{format_exc()}")
+    
+    # --- שליחת הודעות התאוששות אוטומטית ---
+    try:
+        print("🔄 בודק אם יש משתמשים שמחכים להודעות התאוששות...")
+        recovered_count = await send_recovery_messages_to_affected_users()
+        if recovered_count > 0:
+            print(f"✅ נשלחו הודעות התאוששות ל-{recovered_count} משתמשים!")
+        else:
+            print("ℹ️  אין משתמשים שמחכים להודעות התאוששות")
+    except Exception as e:
+        print(f"⚠️ שגיאה בשליחת הודעות התאוששות: {e}")
+        # לא עוצרים את ההפעלה בגלל זה
+    
     # --- הגדרת webhook בטלגרם ---
     try:
         from config import TELEGRAM_BOT_TOKEN
@@ -172,6 +185,7 @@ async def on_startup():
     print('✅ FastAPI פעיל ועובד')
     print('✅ Telegram webhook מוגדר נכון')
     print('✅ כל ה-handlers פעילים')
+    print('✅ הודעות התאוששות נשלחו (אם היו נחוצות)')
     print('✅ המערכת מוכנה לקבלת הודעות!')
     print('='*80)
 
