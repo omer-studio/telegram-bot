@@ -38,6 +38,7 @@ from fields_dict import FIELDS_DICT
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active
+from utils import should_send_time_greeting, get_time_greeting_instruction
 
 def format_text_for_telegram(text):
     """
@@ -340,6 +341,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
         try:
+            # --- יצירת רשומה בהיסטוריה מראש ---
+            # זה מונע מצב שבו ההודעה הנוכחית מגיעה שוב לפני שתשובת GPT הקודמת נשמרה,
+            # וכך נמנע שליחת ברכת "בוקר/לילה טוב" כפולה (Race-condition).
+            history_entry_created = False
+            try:
+                update_chat_history(chat_id, user_msg, "")
+                history_entry_created = True
+            except Exception as hist_err:
+                logging.warning(f"[HISTORY] לא הצלחתי ליצור רשומת היסטוריה מוקדמת: {hist_err}")
 
             # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
             current_summary = get_user_summary(chat_id) or ""
@@ -349,7 +359,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
             timestamp = create_human_context_for_gpt(chat_id)
             weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
-            greeting_instruction = get_time_greeting_instruction()
+            # ברכה מותאמת זמן נשלחת רק בתחילת השיחה (אין היסטוריה קודמת)
+            from utils import should_send_time_greeting
+            greeting_instruction = ""
+            try:
+                if should_send_time_greeting(chat_id):
+                    greeting_instruction = get_time_greeting_instruction()
+            except Exception as greet_err:
+                logging.warning(f"[GREETING] שגיאה בהערכת greeting: {greet_err}")
             
             # בניית ההודעות ל-gpt_a
             messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -405,7 +422,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update_user_processing_stage(str(chat_id), "sending_response")
             if not gpt_response.get("message_already_sent", False):
                 await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
-            update_chat_history(chat_id, user_msg, "")
+
+            # אם כבר יצרנו רשומה מקדימה – אין צורך להוסיף שנית
+            if not history_entry_created:
+                update_chat_history(chat_id, user_msg, "")
             
             # 🕐 מדידת זמן סיום - מהרגע שהמשתמש לחץ אנטר עד התשובה
             user_request_end_time = time.time()
@@ -563,7 +583,19 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
             else:
                 gpt_c_usage[key] = value
         
-        update_user_profile(chat_id, updated_profile)
+        # 1. עדכון פרופיל מהיר בקובץ המקומי  ➜ Google Sheets יסתנכרן ברקע
+        await update_user_profile(chat_id, updated_profile)
+
+        # 2. הפקת SUMMARY אוטומטי על-פי הפרופיל המעודכן ושמירתו בקובץ המקומי
+        try:
+            from sheets_core import generate_summary_from_profile_data, update_user_summary
+
+            auto_summary = generate_summary_from_profile_data(updated_profile)
+            if auto_summary:  # שומר רק אם מתקבל טקסט כלשהו
+                update_user_summary(chat_id, auto_summary)
+        except Exception as summary_err:
+            logging.error(f"Error generating\saving auto summary: {summary_err}")
+        
         log_payload["gpt_c_data"] = gpt_c_usage
         log_payload["gpt_d_data"] = gpt_d_usage
         

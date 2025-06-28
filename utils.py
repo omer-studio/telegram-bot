@@ -1548,6 +1548,58 @@ def _calculate_profile_age_days(last_update: str) -> int:
     except Exception:
         return 0
 
+# === NEW HELPER ===
+def should_send_time_greeting(chat_id: str) -> bool:
+    """קובע האם יש צורך לשלוח ברכת זמן (בוקר טוב/לילה טוב).
+
+    כללים:
+    1. אם אין היסטוריה ➜ True.
+    2. אם עברו פחות מ־2 שעות מההודעה/תגובה האחרונה ➜ False (שיחה רציפה).
+    3. אם עברו ≥2 שעות אבל בלוק הזמן (morning/afternoon/evening/night) לא השתנה ➜ False.
+    4. אם עברו ≥2 שעות *וגם* עברנו לבלוק זמן חדש ➜ True.
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        now = get_israel_time()
+
+        # קריאת היסטוריה גולמית
+        try:
+            with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
+                history_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            history_data = {}
+
+        chat_id_str = str(chat_id)
+        last_timestamp = None
+
+        if chat_id_str in history_data and history_data[chat_id_str].get("history"):
+            last_entry = history_data[chat_id_str]["history"][-1]
+            try:
+                last_timestamp = datetime.fromisoformat(last_entry.get("timestamp"))
+            except Exception:
+                last_timestamp = None
+
+        # 1) אין היסטוריה כלל
+        if last_timestamp is None:
+            return True
+
+        hours_since = (now - last_timestamp).total_seconds() / 3600.0
+
+        # 2) שיחה רציפה (<2h)
+        if hours_since < 2:
+            return False
+
+        # 3) עברו ≥2h – נבדוק שינוי בלוק זמן
+        current_block = _get_time_of_day(now.hour)
+        previous_block = _get_time_of_day(last_timestamp.hour)
+
+        return current_block != previous_block
+
+    except Exception as e:
+        logging.error(f"שגיאה ב-should_send_time_greeting: {e}")
+        return False
+
 # אם מפעילים את utils.py ישירות
 if __name__ == "__main__":
     import sys

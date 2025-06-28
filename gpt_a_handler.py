@@ -569,4 +569,6 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
     
     use_premium, filter_reason, match_type = should_use_premium_model(user_message, chat_history_length)
     
-    return get_main_response_sync(full_messages, chat_id, message_id, use_premium, filter_reason, match_type) 
+    return get_main_response_sync(full_messages, chat_id, message_id, use_premium, filter_reason, match_type)
+
+# פונקציית enforce_single_question הוסרה – הכל עובר דרך המודל בהתאם להנחיות בפרומט 
