@@ -430,7 +430,7 @@ def get_model_info(model_name):
 # 🤖 הגדרת מודלים - עם 2.5 Flash בשם הנכון!
 # ⚠️ אזהרה: אל תשנה מודלים ללא אישור מפורש! רק המשתמש הראשי משנה מודלים!
 GPT_MODELS = {
-    "gpt_a": "gemini/gemini-2.5-flash",             # 🤖 המנוע הראשי - 2.5 Flash החדש! 🚀
+    "gpt_a": "gemini/gemini-1.5-pro",             # 🤖 המנוע הראשי - 2.5 Flash החדש! 🚀
     "gpt_b": "gemini/gemini-2.0-flash-exp",         # 🤖 סיכום תשובות - מהיר וחינמי
     "gpt_c": "gemini/gemini-1.5-pro",               # 🤖 חילוץ פרופיל - איכותי וחינמי
     "gpt_d": "gemini/gemini-1.5-pro",               # 🤖 מיזוג פרופיל - איכותי וחינמי
