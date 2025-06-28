@@ -39,3 +39,21 @@ summary_updates.html
 
 # Ignore recycle bin folder
 /recycle_bin/
+
+# Ignore cleanup directories
+/recycle_bin_cleanup/
+
+# Ignore pytest cache
+.pytest_cache/
+
+# Ignore old log files in root
+bot.log
+
+# Ignore performance monitoring files (disabled)
+performance_summary.json
+performance_metrics.jsonl
+gpt_d_performance.jsonl
+
+# Ignore test user files
+*test_user*.json
+*gap_test*.json

@@ -28,7 +28,31 @@ from notifications import alert_billing_issue, send_error_notification
 # סף מילים למודל מתקדם
 LONG_MESSAGE_THRESHOLD = 50  # מעל 50 מילים = מודל מתקדם
 
-
+def create_missing_fields_system_message(chat_id: str) -> str:
+    """יוצר system message חכם עם שדות חסרים שכדאי לשאול עליהם"""
+    try:
+        from sheets_core import get_user_state
+        from fields_dict import FIELDS_DICT
+        
+        profile_data = get_user_state(chat_id).get("profile_data", {})
+        if not profile_data:
+            return ""
+        
+        key_fields = ["age", "attracted_to", "relationship_type", "self_religious_affiliation", 
+                     "closet_status", "pronoun_preference", "occupation_or_role", 
+                     "self_religiosity_level", "primary_conflict", "goal_in_course"]
+        
+        missing = [FIELDS_DICT[f]["show_in_prompt"] for f in key_fields 
+                  if f in FIELDS_DICT and not str(profile_data.get(f, "")).strip() 
+                  and FIELDS_DICT[f].get("show_in_prompt", "").strip()]
+        
+        if len(missing) >= 2:
+            return f"פרטים שהמשתמש עדיין לא סיפר לך וכדאי לשאול אותו במטרה להכיר אותו יותר טוב: {', '.join(missing[:4])}"
+        return ""
+        
+    except Exception as e:
+        logging.error(f"שגיאה ביצירת הודעת שדות חסרים: {e}")
+        return ""
 
 # מילות מפתח שמצדיקות מודל מתקדם
 PREMIUM_MODEL_KEYWORDS = [
@@ -78,42 +102,16 @@ PREMIUM_MODEL_KEYWORDS = [
     "נמאס", "למות", "רוצה להיות חופשי", "מרגיש צעיר", "אמצע החיים"
 ]
 
-# דפוסי ביטויים מורכבים (regex)
+# דפוסי ביטויים מורכבים (regex) - רזה וחד
 COMPLEX_PATTERNS = [
-    # שאלות ודילמות כלליות
-    r"מה\s+עושים\s+כש",           # "מה עושים כש..."
-    r"איך\s+להתמודד\s+עם",        # "איך להתמודד עם..."
-    r"צריך\s+עצה\s+ב",            # "צריך עצה ב..."
-    r"לא\s+יודע\s+איך",           # "לא יודע איך..."
-    r"מה\s+דעתך\s+על",            # "מה דעתך על..."
-    r"איך\s+אתה\s+חושב",          # "איך אתה חושב..."
-    
-    # רגשות ומצבי נפש קשים
-    r"לא\s+מרגיש\s+שלם",          # "לא מרגיש שלם"
-    r"אני\s+תקוע",                # "אני תקוע"
-    r"אני\s+שונא\s+את\s+עצמי",    # "אני שונא את עצמי"
-    r"לא\s+מצליח\s+לאהוב",        # "לא מצליח לאהוב את עצמי"
-    r"מה\s+עובר\s+עלי",           # "מה עובר עליי"
-    r"מרגיש\s+אבוד",              # "מרגיש אבוד"
-    r"מרגיש\s+תקוע",              # "מרגיש תקוע"
-    r"לא\s+מרגיש\s+חלק",          # "לא מרגיש חלק מהכלל"
-    
-    # קבלה עצמית ומאבקים פנימיים
-    r"לא\s+שלם\s+עם",             # "לא שלם עם עצמי", "לא שלם עם הנטייה"
-    r"קושי\s+ל[ק|כ]בל",           # "קושי לקבל את עצמי" (עם תמיכה בטעויות כתיב)
-    r"עדיין\s+לא\s+שלם",          # "עדיין לא שלם עם זה"
-    r"משהו\s+לא\s+יושב",          # "משהו לא יושב טוב"
-    r"התמודדות\s+עם",             # "התמודדות עם הזהות שלי"
-    
-    # זוגיות וחיפוש
-    r"נשוי\s+ל",                  # "נשוי לאישה", "נשוי לבת זוג"
-    r"לא\s+מצליח\s+למצוא",        # "לא מצליח למצוא זוגיות"
-    r"רוצה\s+כבר\s+להיות",        # "רוצה כבר להיות אחרי זה"
-    
-    # ביטויי כניעה ויאוש
-    r"יצאתי\s+אבל\s+לא\s+באמת",   # "יצאתי אבל לא באמת"
-    r"לא\s+יודע\s+מה\s+עובר",     # "לא יודע מה עובר עליי"
-    r"בא\s+לי\s+להיות\s+חופשי",   # "בא לי להיות חופשי"
+    # שאלות מורכבות
+    r"מה\s+עושים\s+כש|איך\s+להתמודד\s+עם|צריך\s+עצה\s+ב|לא\s+יודע\s+איך",
+    # מצבי נפש קשים  
+    r"לא\s+מרגיש\s+שלם|אני\s+תקוע|מרגיש\s+אבוד|אני\s+שונא\s+את\s+עצמי",
+    # קבלה עצמית
+    r"לא\s+שלם\s+עם|קושי\s+ל[ק|כ]בל|עדיין\s+לא\s+שלם|התמודדות\s+עם",
+    # זוגיות ובדידות
+    r"נשוי\s+ל|לא\s+מצליח\s+למצוא|יצאתי\s+אבל\s+לא\s+באמת"
 ]
 
 # משתנה גלובלי לעקיבה אחר ההחלטות
@@ -256,12 +254,26 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     # 🤖 הוספת מידע רקע על המשתמש כ-system message נפרד
     if chat_id:
         try:
-            from utils import create_human_context_for_gpt
+            from utils import create_human_context_for_gpt, get_holiday_system_message
+            
+            # הוספת מידע הרקע הרגיל
             human_context = create_human_context_for_gpt(chat_id)
             if human_context:
                 # הוספת מידע הרקע כ-system message נפרד אחרי הפרומט הראשי
                 # זה יגיע לGPT כמידע נפרד ולא יהיה חלק קבוע מהפרומט
                 full_messages.insert(-1, {"role": "system", "content": human_context.strip()})
+            
+            # הוספת הודעת חגים דתיים כ-system message נפרד נוסף
+            holiday_message = get_holiday_system_message(chat_id)
+            if holiday_message:
+                full_messages.insert(-1, {"role": "system", "content": holiday_message.strip()})
+            
+            # 📝 הוספת הודעה חכמה על שדות חסרים
+            missing_fields_message = create_missing_fields_system_message(chat_id)
+            if missing_fields_message:
+                full_messages.insert(-1, {"role": "system", "content": missing_fields_message.strip()})
+                logging.info(f"🎯 [MISSING_FIELDS] נוסף system message עם שדות חסרים למשתמש {chat_id}")
+                
         except Exception as e:
             logging.error(f"שגיאה בהוספת מידע רקע: {e}")
     

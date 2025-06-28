@@ -37,6 +37,7 @@ from gpt_utils import normalize_usage_dict
 from fields_dict import FIELDS_DICT
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
+from notifications import mark_user_active
 
 def format_text_for_telegram(text):
     """
@@ -179,6 +180,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             chat_id = update.message.chat_id
             message_id = update.message.message_id
+            
+            # 🫶 איפוס מצב תזכורת - המשתמש הגיב
+            mark_user_active(chat_id)
+            
             if update.message.text:
                 user_msg = update.message.text
             else:
@@ -407,120 +412,102 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
+async def _handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id):
+    """מטפל בסיכום ההודעה עם gpt_b."""
+    if len(bot_reply) <= 150:  # הודעה קצרה - לא צריך סיכום
+        print(f"[DEBUG] הודעה קצרה ({len(bot_reply)} תווים), לא צריך סיכום")
+        return None, None
+    
+    try:
+        print(f"[DEBUG] הודעה ארוכה ({len(bot_reply)} תווים), מבקש סיכום")
+        summary_response = await asyncio.to_thread(
+            get_summary, user_msg=user_msg, bot_reply=bot_reply, 
+            chat_id=chat_id, message_id=message_id
+        )
+        return summary_response, summary_response.get("summary")
+    except Exception as e:
+        logging.error(f"Error in gpt_b (summary): {e}")
+        return None, None
+
+async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
+    """מטפל בעדכון הפרופיל עם gpt_c/d ו-gpt_e."""
+    gpt_c_usage, gpt_d_usage, gpt_e_result = {}, {}, None
+    
+    try:
+        if not should_run_gpt_c(user_msg):
+            print(f"[DEBUG] לא צריך gpt_c - ההודעה לא מכילה מידע חדש")
+            return gpt_c_usage, gpt_d_usage, gpt_e_result
+        
+        # הפעלת gpt_c
+        gpt_c_run_count = increment_gpt_c_run_count(chat_id)
+        print(f"[DEBUG] gpt_c_run_count: {gpt_c_run_count}")
+        
+        # קבלת פרופיל קיים
+        existing_profile = get_user_summary(chat_id)
+        try:
+            existing_profile = json.loads(existing_profile) if existing_profile else {}
+        except:
+            existing_profile = {}
+        
+        # עדכון פרופיל עם gpt_d
+        updated_profile, combined_usage = smart_update_profile_with_gpt_d(
+            existing_profile=existing_profile,
+            user_message=user_msg,
+            interaction_id=message_id
+        )
+        
+        # הפרדת נתוני gpt_c ו-gpt_d
+        for key, value in combined_usage.items():
+            if key.startswith("gpt_d_") or key in ["field_conflict_resolution"]:
+                gpt_d_usage[key] = value
+            else:
+                gpt_c_usage[key] = value
+        
+        update_user_profile(chat_id, updated_profile)
+        log_payload["gpt_c_data"] = gpt_c_usage
+        log_payload["gpt_d_data"] = gpt_d_usage
+        
+        # gpt_e: ניתוח מתקדם
+        try:
+            user_state = get_user_state(chat_id)
+            gpt_e_result = execute_gpt_e_if_needed(
+                chat_id=chat_id,
+                gpt_c_run_count=gpt_c_run_count,
+                last_gpt_e_timestamp=user_state.get("last_gpt_e_timestamp")
+            )
+            
+            if gpt_e_result:
+                log_payload["gpt_e_data"] = {
+                    "success": gpt_e_result.get("success", False),
+                    "changes_count": len(gpt_e_result.get("changes", {})),
+                    "tokens_used": gpt_e_result.get("tokens_used", 0),
+                    "cost_data": gpt_e_result.get("cost_data", {})
+                }
+        except Exception as e:
+            logging.error(f"Error in gpt_e: {e}")
+            
+    except Exception as e:
+        logging.error(f"Error in profile update: {e}")
+    
+    return gpt_c_usage, gpt_d_usage, gpt_e_result
+
 async def handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, last_bot_message):
-    """מטפל בכל המשימות ברקע - gpt_b, gpt_c, עדכון היסטוריה, לוגים"""
+    """מטפל בכל המשימות ברקע - גרסה רזה."""
     try:
         bot_reply = gpt_response["bot_reply"]
         
-        # gpt_b: יצירת תמצית לתשובת הבוט (רק אם ההודעה ארוכה)
-        new_summary_for_history = None
-        summary_response = None
+        # gpt_b: סיכום (אם צריך)
+        summary_response, new_summary_for_history = await _handle_gpt_b_summary(
+            user_msg, bot_reply, chat_id, message_id
+        )
         
-        # בדיקה אם ההודעה ארוכה מספיק כדי להצדיק סיכום
-        if len(bot_reply) > 150:  # סף של 150 תווים
-            try:
-                print(f"[DEBUG] הודעת הבוט ארוכה ({len(bot_reply)} תווים), קורא ל-gpt_b לסיכום")
-                summary_response = await asyncio.to_thread(
-                    get_summary,
-                    user_msg=user_msg,
-                    bot_reply=bot_reply,
-                    chat_id=chat_id,
-                    message_id=message_id
-                )
-                new_summary_for_history = summary_response.get("summary")
-            except Exception as e:
-                logging.error(f"Error in gpt_b (summary): {e}")
-        else:
-            print(f"[DEBUG] הודעת הבוט קצרה ({len(bot_reply)} תווים), לא קורא ל-gpt_b")
+        # עדכון היסטוריה
+        update_last_bot_message(chat_id, new_summary_for_history or bot_reply)
 
-        # עדכון היסטוריה סופי עם תמצית או תשובה מלאה
-        if new_summary_for_history:
-            update_last_bot_message(chat_id, new_summary_for_history)
-        else:
-            update_last_bot_message(chat_id, bot_reply)
-
-        # gpt_c: עדכון פרופיל משתמש
-        gpt_c_response = None
-        gpt_d_usage = None
-        gpt_e_result = None
-        try:
-            # בדיקה אם יש טעם להפעיל gpt_c
-            if should_run_gpt_c(user_msg):
-                # הגדלת מונה gpt_c
-                gpt_c_run_count = increment_gpt_c_run_count(chat_id)
-                print(f"[DEBUG] gpt_c_run_count incremented to: {gpt_c_run_count}")
-                
-                # בחירת ההודעה הנכונה ל-gpt_c: מקוצרת אם קוצרה, אחרת מקורית
-                bot_message_for_gpt_c = new_summary_for_history if new_summary_for_history else bot_reply
-                
-                print(f"[DEBUG] קורא ל-gpt_c עם user_msg: {user_msg}")
-                print(f"[DEBUG] bot_message_for_gpt_c: {bot_message_for_gpt_c}")
-                
-                # קבלת הפרופיל הקיים
-                existing_profile = get_user_summary(chat_id)
-                if existing_profile:
-                    try:
-                        existing_profile = json.loads(existing_profile)
-                    except:
-                        existing_profile = {}
-                else:
-                    existing_profile = {}
-                
-                # שימוש בפונקציה החכמה עם gpt_d
-                updated_profile, combined_usage = smart_update_profile_with_gpt_d(
-                    existing_profile=existing_profile,
-                    user_message=user_msg,
-                    interaction_id=message_id
-                )
-                
-                # הפרדת נתוני gpt_c ו-gpt_d
-                gpt_c_usage = {}
-                gpt_d_usage = {}
-                
-                for key, value in combined_usage.items():
-                    if key.startswith("gpt_d_") or key in ["field_conflict_resolution"]:
-                        gpt_d_usage[key] = value
-                    else:
-                        gpt_c_usage[key] = value
-                
-                print(f"[DEBUG] מעדכן פרופיל עם: {updated_profile}")
-                update_user_profile(chat_id, updated_profile)
-                log_payload["gpt_c_data"] = gpt_c_usage
-                log_payload["gpt_d_data"] = gpt_d_usage
-                
-                # gpt_e: בדיקה והפעלה אם צריך
-                try:
-                    user_state = get_user_state(chat_id)
-                    last_gpt_e_timestamp = user_state.get("last_gpt_e_timestamp")
-                    
-                    gpt_e_result = execute_gpt_e_if_needed(
-                        chat_id=chat_id,
-                        gpt_c_run_count=gpt_c_run_count,
-                        last_gpt_e_timestamp=last_gpt_e_timestamp
-                    )
-                    
-                    if gpt_e_result:
-                        print(f"[DEBUG] gpt_e executed successfully for chat_id={chat_id}")
-                        log_payload["gpt_e_data"] = {
-                            "success": gpt_e_result.get("success", False),
-                            "changes_count": len(gpt_e_result.get("changes", {})),
-                            "tokens_used": gpt_e_result.get("tokens_used", 0),
-                            "execution_time": gpt_e_result.get("execution_time", 0),
-                            "cost_data": gpt_e_result.get("cost_data", {}),
-                            "errors": gpt_e_result.get("errors", [])
-                        }
-                    else:
-                        print(f"[DEBUG] gpt_e conditions not met for chat_id={chat_id}")
-                        
-                except Exception as e:
-                    print(f"[ERROR] שגיאה ב-gpt_e: {e}")
-                    logging.error(f"Error in gpt_e: {e}")
-                
-            else:
-                print(f"[DEBUG] לא קורא ל-gpt_c - ההודעה לא נראית מכילה מידע חדש: {user_msg}")
-        except Exception as e:
-            print(f"[ERROR] שגיאה ב-gpt_c: {e}")
-            logging.error(f"Error in gpt_c (profile update): {e}")
+        # gpt_c/d/e: עדכון פרופיל וניתוח מתקדם
+        gpt_c_usage, gpt_d_usage, gpt_e_result = await _handle_profile_updates(
+            chat_id, user_msg, message_id, log_payload
+        )
 
         # שמירת לוגים ונתונים נוספים
         # נירמול ה-usage לפני השמירה ב-log

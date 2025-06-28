@@ -9,7 +9,7 @@ from datetime import datetime
 import json
 import litellm
 import re
-from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
+from prompts import build_profile_extraction_enhanced_prompt
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_extraction_debug, should_log_gpt_cost_debug
 from gpt_utils import normalize_usage_dict, measure_llm_latency
 
@@ -24,7 +24,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     
     completion_params = {
         "model": model,
-        "messages": [{"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT}, {"role": "user", "content": user_msg}],
+        "messages": [{"role": "system", "content": build_profile_extraction_enhanced_prompt()}, {"role": "user", "content": user_msg}],
         "temperature": params["temperature"],
         "metadata": metadata,
         "store": True

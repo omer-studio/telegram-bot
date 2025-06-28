@@ -329,39 +329,38 @@ BOT_REPLY_SUMMARY_PROMPT = (
 
 # --- 5. פרומט gpt_c - חילוץ ועדכון משופר (gpt_c) ---
 # משמש ל-gpt_c שמחלץ מידע חדש ועדכן את הפרופיל הקיים בסיכום קריא ומדויק
-PROFILE_EXTRACTION_ENHANCED_PROMPT = (
-    """
+
+def build_profile_extraction_enhanced_prompt():
+    """בונה את הפרומט גpt_c דינמית עם השדות מ-fields_dict.py"""
+    from fields_dict import get_fields_with_prompt_text, get_field_prompt_text
+    
+    # בניית רשימת השדות המותרים
+    profile_fields = get_fields_with_prompt_text()
+    fields_list = "\n".join([f"- {field}: {get_field_prompt_text(field)}" for field in profile_fields 
+                           if field not in ["last_update", "summary", "date_first_seen"]])  # השדות האלה לא רלוונטיים לחילוץ
+    
+    return f"""
 ROLE:
 אתה מקבל הודעת טקסט של משתמש בטלגרם
 המטרה שלך היא לחלץ ממנה מידע אישי
 החזר JSON עם רק השדות שנאמרו במפורש בהודעה
-אם לא נאמר כלום — החזר {} בלבד
+אם לא נאמר כלום — החזר {{}} בלבד
 
 שדות מותרים:
-- age: גיל (מספר בין 18 ל־99 בלבד)
-- relationship_type: מצב זוגי / משפחתי (למשל: רווק, גרוש, נשוי לגבר, בזוגיות עם גבר כבר 3 שנים)
-- parental_status: ילדים/נכדים (למשל: "2 ילדים מהנישואים", "בעיצומו של תהליך פונדקאות")
-- occupation_or_role: עיסוק בפועל (למשל: סטודנט למשפטים, מורה, עובד בהייטק)
-- self_religious_affiliation: זהות דתית או אתנית (יהודי, ערבי, דרוזי, מוסלמי, נוצרי, אתאיסט וכו')
-- self_religiosity_level: רמת דתיות (חילוני, דתי, מסורתי, חרדי, לא דתי)
-- family_religiosity: הרקע הדתי במשפחה שגדלת בה (חילונית, דתית, חרדית, מסורתית)
-- closet_status: מצב הארון (למשל: "כולם יודעים חוץ מהמשפחה", "בארון לגמרי")
-- who_knows: מי כן יודע עליו (שמות או קבוצות, כמו: אמא, אבא, חברים)
-- who_doesnt_know: מי לא יודע עליו (ציין במפורש, למשל: סבתא, הבוס)
-- attracted_to: משיכה מינית (למשל: "נמשך לגברים בלבד", "גם לגברים וגם לנשים")
-- attends_therapy: האם הוא בטיפול רגשי / קבוצתי (למשל: "מטופל אצל פסיכולוג", "חבר בקבוצת גברים")
-- primary_conflict: הקונפליקט המרכזי בחייו כרגע
-- trauma_history: טראומות משמעותיות מהעבר (בניסוח עדין וזהיר)
-- goal_in_course: מה הוא רוצה להשיג כתוצאה מהקורס
-- fears_concerns: פחדים או חששות
-- future_vision: איך היה רוצה לראות את עצמו בעתיד
+{fields_list}
     """
-)
 
-# --- 6. פרומט gpt_d - מיזוג פרופיל (gpt_d) ---
-# משמש ל-gpt_d שמבצע מיזוג חכם של שדות פרופיל חדשים עם פרופיל קיים
-PROFILE_MERGE_PROMPT = (
-    """
+def build_profile_merge_prompt():
+    """בונה את הפרומט gpt_d דינמית עם השדות מ-fields_dict.py"""
+    from fields_dict import get_fields_with_prompt_text
+    
+    # בניית רשימת השדות המותרים (רק שמות השדות)
+    profile_fields = get_fields_with_prompt_text()
+    fields_names = [field for field in profile_fields 
+                   if field not in ["last_update", "summary", "date_first_seen"]]  # השדות האלה לא רלוונטיים למיזוג
+    fields_list = ", ".join(fields_names)
+    
+    return f"""
 אתה מקבל שדות חדשים שחולצו מהודעת משתמש
 המטרה שלך היא לבצע מיזוג חכם ואיכותי של המידע
 
@@ -373,11 +372,11 @@ PROFILE_MERGE_PROMPT = (
 5. אם משהו לא ברור - השאר את השדה הקיים
 
 שדות מותרים:
-age, relationship_type, parental_status, occupation_or_role, 
-self_religious_affiliation, self_religiosity_level, family_religiosity,
-closet_status, who_knows, who_doesnt_know, attracted_to, attends_therapy,
-primary_conflict, trauma_history, goal_in_course, fears_concerns, future_vision
+{fields_list}
 
 החזר רק JSON תקין, ללא הסברים נוספים.
     """
-)
+
+# לתאימות לאחור - שימוש בפונקציות הדינמיות
+PROFILE_EXTRACTION_ENHANCED_PROMPT = build_profile_extraction_enhanced_prompt()
+PROFILE_MERGE_PROMPT = build_profile_merge_prompt()

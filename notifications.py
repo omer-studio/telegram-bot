@@ -1,9 +1,4 @@
-"""
-notifications.py
-----------------
-קובץ זה מרכז את כל הפונקציות להתראות, שגיאות, ודיווחים לאדמין.
-הרציונל: ריכוז כל ניהול ההתראות, שגיאות, ודיווחי מערכת במקום אחד, כולל שליחה לטלגרם ולוגים.
-"""
+"""מרכז התראות, שגיאות ודיווחים לאדמין."""
 import json
 import os
 import re
@@ -25,11 +20,7 @@ from config import (
 from utils import log_error_stat
 
 def write_deploy_commit_to_log(commit):
-    """
-    שומר commit של דפלוי בקובץ לוג ייעודי.
-    קלט: commit (str)
-    פלט: אין (שומר לקובץ)
-    """
+    """שומר commit של דפלוי בקובץ לוג."""
     log_file = BOT_TRACE_LOG_PATH
     with open(log_file, "a", encoding="utf-8") as f:
         entry = {
@@ -40,10 +31,7 @@ def write_deploy_commit_to_log(commit):
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 def get_last_deploy_commit_from_log():
-    """
-    מחפש את ה-commit האחרון מהלוג.
-    פלט: commit (str) או None
-    """
+    """מחזיר את ה-commit האחרון מהלוג."""
     log_file = BOT_TRACE_LOG_PATH
     if not os.path.exists(log_file):
         return None
@@ -69,11 +57,7 @@ def get_commit_7first(commit):
     return commit[:7]
 
 def send_deploy_notification(success=True, error_message=None, deploy_duration=None):
-    """
-    שולח הודעה לאדמין על הצלחת/כישלון דפלוי, כולל פרטים.
-    קלט: success (bool), error_message (str), deploy_duration (int/None)
-    פלט: אין (שולח הודעה)
-    """
+    """שולח הודעה לאדמין על סטטוס דפלוי."""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     project = emoji_or_na(os.getenv('RENDER_SERVICE_NAME', None))
     environment = emoji_or_na(os.getenv('RENDER_ENVIRONMENT', None))
@@ -142,11 +126,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
 
 
 def send_error_notification(error_message: str, chat_id: str = None, user_msg: str = None, error_type: str = "general_error") -> None:
-    """
-    שולח הודעת שגיאה לאדמין עם פירוט מלא (ללא טוקנים/סודות).
-    קלט: error_message (str), chat_id (str), user_msg (str), error_type (str)
-    פלט: אין (שולח הודעה)
-    """
+    """שולח הודעת שגיאה לאדמין."""
     log_error_stat(error_type)
     # מסנן טוקנים/סודות
     def sanitize(msg):
@@ -171,11 +151,7 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
         print(f"[ERROR] לא הצלחתי לשלוח שגיאה לאדמין: {e}")
 
 def send_admin_notification(message, urgent=False):
-    """
-    שולח הודעה כללית לאדמין (רגילה או דחופה).
-    קלט: message (str), urgent (bool)
-    פלט: אין (שולח הודעה)
-    """
+    """שולח הודעה כללית לאדמין."""
     try:
         prefix = "🚨 הודעה דחופה לאדמין: 🚨" if urgent else "ℹ️ הודעה לאדמין:"
         notification_text = f"{prefix}\n\n{message}\n\n⏰ {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
@@ -513,3 +489,236 @@ def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, 
 def alert_system_status(message, level="info"):
     """התראה כללית על סטטוס המערכת"""
     send_admin_alert(f"🤖 **סטטוס מערכת:**\n\n{message}", level)
+
+# מערכת תזכורות עדינות
+
+import asyncio
+from datetime import timedelta
+
+GENTLE_REMINDER_MESSAGE = "היי, רק רציתי לבדוק מה שלומך, מקווה שאתה בטוב. אין לחץ – פשוט רציתי להזכיר לך שאני כאן אם תצטרך ❤️ בא לך לספר לי מה שלומך?"
+REMINDER_INTERVAL_HOURS = 3
+REMINDER_STATE_FILE = os.path.join(os.path.dirname(__file__), "data", "reminder_state.json")
+_reminder_state = {}
+
+def _load_reminder_state():
+    """טוען מצב תזכורות מקובץ JSON."""
+    global _reminder_state
+    try:
+        if os.path.exists(REMINDER_STATE_FILE):
+            with open(REMINDER_STATE_FILE, 'r', encoding='utf-8') as f:
+                _reminder_state = json.load(f)
+                logging.debug(f"[REMINDER] Loaded {len(_reminder_state)} reminder states")
+        else:
+            _reminder_state = {}
+            logging.debug(f"[REMINDER] No reminder state file found, starting fresh")
+    except Exception as e:
+        logging.error(f"[REMINDER] Error loading reminder state: {e}")
+        _reminder_state = {}
+
+def _save_reminder_state():
+    """שומר מצב תזכורות לקובץ JSON."""
+    try:
+        # יצירת תיקיית data אם לא קיימת
+        os.makedirs(os.path.dirname(REMINDER_STATE_FILE), exist_ok=True)
+        
+        with open(REMINDER_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_reminder_state, f, ensure_ascii=False, indent=2)
+        
+        logging.debug(f"[REMINDER] Saved reminder state with {len(_reminder_state)} entries")
+    except Exception as e:
+        logging.error(f"[REMINDER] Error saving reminder state: {e}")
+
+# ==================== פונקציות ממשק ====================
+
+def mark_user_active(chat_id: str):
+    """
+    🟢 מסמן משתמש כפעיל ומאפס את מצב התזכורת שלו
+    
+    מטרה: כשמשתמש שולח הודעה, לאפס את מצב התזכורת שלו
+           כך שיוכל לקבל תזכורת חדשה בעתיד
+    
+    📥 קלט: 
+       - chat_id (str): מזהה הצ'אט של המשתמש
+    📤 פלט: אין
+    
+    🔄 תהליך:
+       1. בודק אם למשתמש יש מצב תזכורת שמור
+       2. אם כן - מוחק אותו מהמילון הגלובלי
+       3. שומר את המצב החדש לקובץ
+    
+    💡 נקרא מ-message_handler.py בכל הודעה מהמשתמש
+    """
+    global _reminder_state
+    chat_id = str(chat_id)
+    
+    if chat_id in _reminder_state:
+        del _reminder_state[chat_id]
+        _save_reminder_state()
+        logging.info(f"[REMINDER] ✅ User {chat_id} became active, reminder state reset")
+    else:
+        logging.debug(f"[REMINDER] User {chat_id} was already active (no reminder state)")
+
+def _is_allowed_time() -> bool:
+    """בודק אם השעה הנוכחית מותרת לשליחת הודעות (7:00-22:00)."""
+    return 7 <= datetime.now().hour <= 22
+
+def _mark_reminder_delayed(chat_id: str) -> None:
+    """מסמן תזכורת כנדחית עד הבוקר."""
+    global _reminder_state
+    _reminder_state[str(chat_id)] = {
+        "reminder_delayed": True,
+        "delayed_at": datetime.now().isoformat(),
+        "scheduled_for_morning": True
+    }
+    _save_reminder_state()
+
+def _mark_reminder_sent(chat_id: str) -> None:
+    """מסמן תזכורת כנשלחה וניקוי מצב דחייה."""
+    global _reminder_state
+    _reminder_state[str(chat_id)] = {"reminder_sent": True, "sent_at": datetime.now().isoformat()}
+    _save_reminder_state()
+
+def _log_to_chat_history(chat_id: str) -> None:
+    """מתעד הודעת תזכורת בהיסטוריית הצ'אט."""
+    try:
+        from utils import update_chat_history
+        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", GENTLE_REMINDER_MESSAGE)
+    except Exception as e:
+        logging.error(f"[REMINDER] Failed to log reminder to chat history: {e}")
+
+async def send_gentle_reminder(chat_id: str) -> bool:
+    """שולח תזכורת עדינה למשתמש רק בשעות מותרות (7:00-22:00)."""
+    try:
+        if not _is_allowed_time():
+            current_hour = datetime.now().hour
+            logging.info(f"[REMINDER] ⏰ Delaying reminder for {chat_id} - current time {current_hour:02d}:00 outside 07:00-22:00")
+            _mark_reminder_delayed(chat_id)
+            return False
+        
+        # שליחת התזכורת
+        bot = telegram.Bot(token=BOT_TOKEN)
+        await bot.send_message(chat_id=chat_id, text=GENTLE_REMINDER_MESSAGE)
+        
+        # תיעוד ועדכון מצב
+        _log_to_chat_history(chat_id)
+        _mark_reminder_sent(chat_id)
+        
+        # התראה לאדמין
+        admin_message = f"🫶 נשלחה תזכורת עדינה למשתמש {chat_id}"
+        try:
+            url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, data={"chat_id": ADMIN_NOTIFICATION_CHAT_ID, "text": admin_message}, timeout=5)
+        except Exception:
+            pass  # לא קריטי אם התראת האדמין נכשלת
+        
+        logging.info(f"[REMINDER] 🫶 Gentle reminder sent to user {chat_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"[REMINDER] ❌ Failed to send reminder to {chat_id}: {e}")
+        return False
+
+async def check_and_send_gentle_reminders():
+    """בודק משתמשים ושולח תזכורות לפי הצורך."""
+    global _reminder_state
+    try:
+        from config import CHAT_HISTORY_PATH
+        
+        # 📂 בדיקת קיום קובץ ההיסטוריה
+        if not os.path.exists(CHAT_HISTORY_PATH):
+            logging.debug(f"[REMINDER] Chat history file not found: {CHAT_HISTORY_PATH}")
+            return
+        
+        # 📖 קריאת היסטוריית כל המשתמשים
+        with open(CHAT_HISTORY_PATH, 'r', encoding='utf-8') as f:
+            history_data = json.load(f)
+        
+        reminders_sent = 0
+        now = datetime.now()
+        total_users = len(history_data)
+        
+        logging.debug(f"[REMINDER] Checking {total_users} users for gentle reminders")
+        
+        # 🔄 לולאה על כל המשתמשים
+        for chat_id, user_data in history_data.items():
+            # ⏭️ דילוג על משתמשים ללא היסטוריה
+            if not user_data.get("history"):
+                continue
+            
+            chat_id_str = str(chat_id)
+            user_reminder_state = _reminder_state.get(chat_id_str, {})
+            
+            # בדיקה אם יש תזכורת נדחית שצריך לשלוח ב-7 בבוקר
+            if user_reminder_state.get("scheduled_for_morning") and 7 <= now.hour <= 22:
+                logging.info(f"[REMINDER] 🌅 Sending delayed reminder to {chat_id} (scheduled for morning)")
+                success = await send_gentle_reminder(chat_id)
+                if success:
+                    reminders_sent += 1
+                continue
+            
+            # ⏭️ דילוג על משתמשים שכבר קיבלו תזכורת
+            if user_reminder_state.get("reminder_sent"):
+                continue
+            
+            # 🕐 חישוב זמן מהאינטראקציה האחרונה
+            last_entry = user_data["history"][-1]
+            last_contact_str = last_entry.get("timestamp")
+            
+            if not last_contact_str:
+                continue
+            
+            try:
+                last_contact_time = datetime.fromisoformat(last_contact_str)
+                time_since_last = now - last_contact_time
+                hours_since = time_since_last.total_seconds() / 3600
+                
+                # ✅ בדיקה: האם עברו מספיק שעות
+                if time_since_last >= timedelta(hours=REMINDER_INTERVAL_HOURS):
+                    logging.debug(f"[REMINDER] User {chat_id} needs reminder ({hours_since:.1f}h since last contact)")
+                    success = await send_gentle_reminder(chat_id)
+                    if success:
+                        reminders_sent += 1
+                else:
+                    logging.debug(f"[REMINDER] User {chat_id} too recent ({hours_since:.1f}h < {REMINDER_INTERVAL_HOURS}h)")
+                        
+            except ValueError as e:
+                logging.warning(f"[REMINDER] Invalid timestamp for user {chat_id}: {last_contact_str}")
+                continue
+        
+        # 📊 דיווח סיכום
+        if reminders_sent > 0:
+            logging.info(f"[REMINDER] ✅ Sent {reminders_sent} gentle reminders out of {total_users} users")
+        else:
+            logging.debug(f"[REMINDER] No reminders needed for {total_users} users")
+            
+    except Exception as e:
+        error_msg = f"[REMINDER] Critical error in check_and_send_gentle_reminders: {e}"
+        logging.error(error_msg)
+        send_error_notification(error_msg)
+
+async def gentle_reminder_background_task():
+    """משימת רקע לבדיקת תזכורות כל שעה."""
+    logging.info("[REMINDER] 🚀 Starting gentle reminder background task")
+    
+    # 📂 טעינת מצב התזכורות בהתחלה
+    _load_reminder_state()
+    
+    # 🔄 לולאה אינסופית לבדיקה כל שעה
+    while True:
+        try:
+            logging.debug("[REMINDER] Running hourly reminder check...")
+            await check_and_send_gentle_reminders()
+            
+            # ⏰ המתנה של שעה עד הבדיקה הבאה
+            logging.debug("[REMINDER] ⏱️ Waiting 1 hour until next check...")
+            await asyncio.sleep(3600)  # 3600 שניות = שעה
+            
+        except Exception as e:
+            error_msg = f"[REMINDER] ❌ Error in background task: {e}"
+            logging.error(error_msg)
+            
+            # 🛡️ ממשיך לרוץ גם אחרי שגיאה
+            logging.info("[REMINDER] 🔄 Continuing background task despite error...")
+            await asyncio.sleep(3600)  # ממתין שעה גם במקרה של שגיאה
+
+

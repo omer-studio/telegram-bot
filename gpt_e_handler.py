@@ -4,7 +4,8 @@ gpt_e_handler.py
 מנוע gpt_e: חידוד, תיקון והשלמת פרופיל רגשי על בסיס היסטוריה ופרופיל קיים.
 משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 
-- מופעל כל 50 ריצות gpt_c, או מעל 20 ריצות gpt_c אם עברו 24 שעות מאז הריצה האחרונה.
+- מופעל כל 25 ריצות gpt_c, או מעל 15 ריצות gpt_c אם עברו 24 שעות מאז הריצה האחרונה.
+- מתמקד בעדכון הקונפליקט המרכזי (primary_conflict) ושדות נוספים לפי הצורך.
 - שולח ל-GPT את ההיסטוריה והפרופיל, מקבל שדות חדשים/מתוקנים בלבד.
 - מעדכן Google Sheets, user_state, ולוגים.
 """
@@ -19,7 +20,7 @@ from typing import Dict, List, Optional, Any
 # ייבוא פונקציות עזר
 from utils import get_chat_history_messages
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
-from prompts import PROFILE_EXTRACTION_ENHANCED_PROMPT
+from prompts import build_profile_extraction_enhanced_prompt
 from gpt_utils import normalize_usage_dict, safe_get_usage_value
 from config import GPT_MODELS, GPT_PARAMS
 
@@ -35,13 +36,13 @@ def should_run_gpt_e(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: O
     :param last_gpt_e_timestamp: טיימסטמפ של הריצה האחרונה של gpt_e
     :return: True אם צריך להפעיל gpt_e, False אחרת
     """
-    # תנאי 1: הגענו ל-50 ריצות gpt_c
-    if gpt_c_run_count >= 50:
-        logger.info(f"[gpt_e] Triggering run - gpt_c_run_count >= 50 ({gpt_c_run_count})")
+    # תנאי 1: הגענו ל-25 ריצות gpt_c
+    if gpt_c_run_count >= 25:
+        logger.info(f"[gpt_e] Triggering run - gpt_c_run_count >= 25 ({gpt_c_run_count})")
         return True
     
-    # תנאי 2: מעל 20 ריצות gpt_c ועברו 24 שעות מאז הריצה האחרונה
-    if gpt_c_run_count > 20 and last_gpt_e_timestamp:
+    # תנאי 2: מעל 15 ריצות gpt_c ועברו 24 שעות מאז הריצה האחרונה
+    if gpt_c_run_count > 15 and last_gpt_e_timestamp:
         try:
             last_run = datetime.fromisoformat(last_gpt_e_timestamp.replace('Z', '+00:00'))
             time_since_last_run = datetime.now(last_run.tzinfo) - last_run
@@ -53,6 +54,23 @@ def should_run_gpt_e(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: O
             logger.error(f"[gpt_e] Error parsing last_gpt_e_timestamp: {e}")
     
     return False
+
+def build_fields_list():
+    """בונה רשימת שדות מותרים מfields_dict.py"""
+    from fields_dict import get_fields_with_prompt_text
+    
+    profile_fields = get_fields_with_prompt_text()
+    # סינון שדות לא רלוונטיים לgpt_e
+    relevant_fields = [field for field in profile_fields 
+                      if field not in ["last_update", "summary", "date_first_seen"]]
+    
+    # יצירת רשימה בפורמט קריא
+    fields_list = []
+    for i in range(0, len(relevant_fields), 3):  # 3 שדות בכל שורה
+        row = ", ".join(relevant_fields[i:i+3])
+        fields_list.append(f"- {row}")
+    
+    return "\n".join(fields_list)
 
 def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
     """
@@ -72,10 +90,12 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
             })
     
     # יצירת פרומפט מותאם ל-gpt_e
+    fields_list = build_fields_list()
     user_prompt = f"""
 אתה מקבל היסטוריה של שיחה בין משתמש לבוט, ופרופיל רגשי קיים של המשתמש.
 
 מטרתך: לזהות מידע חדש, לתקן טעויות, ולחדד את הפרופיל הרגשי.
+דגש מיוחד על עדכון השדה "primary_conflict" - הקונפליקט המרכזי שעמו המשתמש מתמודד כרגע.
 
 היסטוריית השיחה (50 הודעות אחרונות):
 {json.dumps(formatted_history, ensure_ascii=False, indent=2)}
@@ -85,19 +105,18 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
 
 הנחיות:
 1. זהה מידע חדש שלא נכלל בפרופיל הקיים
-2. תקן טעויות או אי-דיוקים בפרופיל הקיים
+2. תקן טעויות או אי-דיוקים בפרופיל הקיים  
 3. חדד מידע קיים עם פרטים נוספים
-4. החזר רק שדות חדשים/מתוקנים בפורמט JSON
-5. אם אין מידע חדש - החזר {{}}
-6. אם יש מידע אישי שלא נכנס לשום שדה - הוסף ל-"other_insights"
+4. **השדה primary_conflict הוא קריטי - עדכן אותו אם יש מידע חדש על מה שהמשתמש מתמודד איתו כרגע**
+5. בדוק אם הקונפליקט המרכזי השתנה או התפתח בהודעות האחרונות
+6. החזר רק שדות חדשים/מתוקנים בפורמט JSON
+7. אם אין מידע חדש - החזר {{}}
+8. אם יש מידע אישי שלא נכנס לשום שדה - הוסף ל-"other_insights"
 
 שדות מותרים:
-- age, relationship_type, parental_status, occupation_or_role
-- self_religious_affiliation, self_religiosity_level, family_religiosity
-- closet_status, who_knows, who_doesnt_know, attracted_to
-- attends_therapy, primary_conflict, trauma_history
-- goal_in_course, fears_concerns, future_vision
-- other_insights (מידע אישי נוסף)
+{fields_list}
+
+דגש מיוחד: השדה "primary_conflict" צריך לשקף במדויק את מה שהמשתמש מתמודד איתו כרגע על בסיס ההיסטוריה האחרונה.
 
 החזר JSON בלבד:
 """
@@ -156,7 +175,7 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
             completion_params = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": PROFILE_EXTRACTION_ENHANCED_PROMPT},
+                    {"role": "system", "content": build_profile_extraction_enhanced_prompt()},
                     {"role": "user", "content": user_prompt}
                 ],
                 "temperature": params["temperature"],
@@ -226,6 +245,11 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                     print(f"🔄 [GPT-E] מעדכן {len(changes)} שדות: {list(changes.keys())}")
                     if 'cost_data' in result and result['cost_data']:
                         print(f"💰 [GPT-E] עלות: {result['cost_data'].get('cost_total', 0):.6f}$ | טוקנים: {result['cost_data'].get('total_tokens', 0)}")
+                    
+                    # הדגשה מיוחדת לעדכון primary_conflict
+                    if 'primary_conflict' in changes:
+                        print(f"🎯 [GPT-E] עדכון קונפליקט מרכזי: {changes['primary_conflict'][:100]}...")
+                    
                     update_user_profile(chat_id, changes)
                     result['changes'] = changes
                     logger.info(f"[gpt_e] Profile updated successfully for chat_id={chat_id}")
@@ -301,8 +325,8 @@ def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_times
     בודק אם צריך להפעיל gpt_e ומפעיל אם כן.
     
     התנאים להפעלה:
-    1. gpt_c_run_count >= 50
-    2. או gpt_c_run_count >= 21 AND עברו 24 שעות מאז הריצה האחרונה
+    1. gpt_c_run_count >= 25
+    2. או gpt_c_run_count >= 16 AND עברו 24 שעות מאז הריצה האחרונה
     
     :param chat_id: מזהה המשתמש
     :param gpt_c_run_count: מספר ריצות gpt_c מאז הריצה האחרונה של gpt_e
@@ -310,18 +334,19 @@ def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_times
     :return: תוצאות הריצה אם הופעל, None אם לא הופעל
     """
     logger.info(f"[gpt_e] Checking conditions for chat_id={chat_id}, gpt_c_run_count={gpt_c_run_count}")
+    print(f"🔍 [GPT-E] בדיקת תנאים: gpt_c רץ {gpt_c_run_count} פעמים (gpt_e רץ כל 25 ריצות gpt_c)")
     
     # בדיקה אם יש צורך להפעיל gpt_e
     should_run = False
     reason = ""
     
-    # תנאי 1: 50 ריצות או יותר
-    if gpt_c_run_count >= 50:
+    # תנאי 1: 25 ריצות או יותר
+    if gpt_c_run_count >= 25:
         should_run = True
-        reason = f"gpt_c_run_count >= 50 (current: {gpt_c_run_count})"
+        reason = f"gpt_c_run_count >= 25 (current: {gpt_c_run_count})"
     
-    # תנאי 2: 21-49 ריצות + 24 שעות
-    elif gpt_c_run_count >= 21:
+    # תנאי 2: 16-24 ריצות + 24 שעות
+    elif gpt_c_run_count >= 16:
         if last_gpt_e_timestamp:
             try:
                 from datetime import datetime
@@ -331,7 +356,7 @@ def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_times
                 
                 if hours_since_last >= 24:
                     should_run = True
-                    reason = f"gpt_c_run_count >= 21 ({gpt_c_run_count}) AND 24+ hours passed ({hours_since_last:.1f}h)"
+                    reason = f"gpt_c_run_count >= 16 ({gpt_c_run_count}) AND 24+ hours passed ({hours_since_last:.1f}h)"
                 else:
                     logger.info(f"[gpt_e] Not enough time passed: {hours_since_last:.1f}h < 24h")
             except Exception as e:

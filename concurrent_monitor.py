@@ -263,33 +263,10 @@ class ConcurrentMonitor:
                 await asyncio.sleep(30)
     
     async def _monitor_system_health(self):
-        """
-        💊 ניטור בריאות המערכת וCircuit Breaker (כל 10 שניות)
-        """
+        """💊 ניטור בריאות מבוטל - Circuit Breaker לא מופעל."""
+        # הפונקציה הזו פשוט ישנה - Circuit Breaker מבוטל לחלוטין
         while True:
-            try:
-                current_metrics = self.get_current_metrics()
-                
-                # בדיקת Circuit Breaker - הוחלט מעולם לא להפעיל אותו
-                should_activate_cb = False  # מבוטל לחלוטין - נותן חופש מלא למשתמשים
-                
-                if should_activate_cb and not self.circuit_breaker_active:
-                    self.circuit_breaker_active = True
-                    await self._send_error_alert("circuit_breaker_activated", {
-                        "error_rate": current_metrics.error_rate,
-                        "avg_response_time": current_metrics.avg_response_time,
-                        "active_users": current_metrics.active_users
-                    })
-                    
-                elif not should_activate_cb and self.circuit_breaker_active:
-                    self.circuit_breaker_active = False
-                    await self._send_recovery_alert("circuit_breaker_deactivated")
-                
-                await asyncio.sleep(10)  # בדיקה כל 10 שניות
-                
-            except Exception as e:
-                logging.error(f"[ConcurrentMonitor] Error in health monitoring: {e}")
-                await asyncio.sleep(10)
+            await asyncio.sleep(60)  # חסכון במשאבים
     
     async def log_sheets_operation(self):
         """רישום פעולת Google Sheets"""
@@ -355,21 +332,17 @@ class ConcurrentMonitor:
             logging.error(f"[ConcurrentMonitor] Failed to send load alert: {e}")
     
     def get_stats_summary(self) -> dict:
-        """קבלת סיכום סטטיסטיקות"""
-        current_metrics = self.get_current_metrics()
-        
+        """קבלת סיכום סטטיסטיקות - גרסה רזה."""
+        metrics = self.get_current_metrics()
         return {
-            "current_active_users": current_metrics.active_users,
-            "max_concurrent_users": self.max_users,
-            "avg_response_time_current": current_metrics.avg_response_time,
-            "avg_response_time_hour": current_metrics.avg_response_time,  # פשוט השתמש בערך הנוכחי
-            "avg_active_users_hour": current_metrics.active_users,  # פשוט השתמש בערך הנוכחי
-            "max_active_users_hour": current_metrics.active_users,  # פשוט השתמש בערך הנוכחי
-            "error_rate": current_metrics.error_rate,
+            "active_users": metrics.active_users,
+            "max_users": self.max_users,
+            "avg_response_time": metrics.avg_response_time,
+            "error_rate": metrics.error_rate,
             "total_requests": self.total_requests,
-            "active_sessions": {chat_id: session.stage for chat_id, session in self.active_sessions.items()},
-            "queue_length": current_metrics.queue_length,
-            "rejected_users": current_metrics.rejected_users,
+            "active_sessions": {id: s.stage for id, s in self.active_sessions.items()},
+            "queue_length": metrics.queue_length,
+            "rejected_users": metrics.rejected_users,
             "timeout_count": self.timeout_count
         }
     

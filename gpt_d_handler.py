@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 import json
 import litellm
-from prompts import PROFILE_MERGE_PROMPT
+from prompts import build_profile_merge_prompt
 from config import GPT_MODELS, GPT_PARAMS, should_log_data_extraction_debug, should_log_gpt_cost_debug
 from gpt_utils import normalize_usage_dict
 
@@ -31,7 +31,7 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
 
         completion_params = {
             "model": model,
-            "messages": [{"role": "system", "content": PROFILE_MERGE_PROMPT}, {"role": "user", "content": prompt}],
+            "messages": [{"role": "system", "content": build_profile_merge_prompt()}, {"role": "user", "content": prompt}],
             "temperature": params["temperature"],
             "metadata": metadata,
             "store": True

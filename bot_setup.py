@@ -57,6 +57,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from daily_summary import send_daily_summary
 import pytz
 from message_handler import handle_message
+from notifications import gentle_reminder_background_task
 
 # רשימה לשמירת זמני ביצוע
 execution_times = {}
@@ -421,6 +422,35 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
     
     print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
 
+@time_operation("הגדרת מערכת תזכורות עדינות")
+def setup_gentle_reminders():
+    """מתחיל את משימת הרקע לתזכורות עדינות"""
+    try:
+        # התחלת background task לתזכורות
+        import asyncio
+        import threading
+        
+        def reminder_task():
+            """משימת רקע בthread נפרד לתזכורות"""
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(gentle_reminder_background_task())
+            except Exception as e:
+                print(f"❌ שגיאה במשימת תזכורות רקע: {e}")
+                logging.error(f"Error in reminder background task: {e}")
+        
+        # הפעלה ב-thread נפרד כדי לא לחסום את הבוט
+        reminder_thread = threading.Thread(target=reminder_task, daemon=True)
+        reminder_thread.start()
+        
+        print("✅ מערכת תזכורות עדינות הופעלה (בדיקה כל שעה)")
+        logging.info("Gentle reminder system started")
+        
+    except Exception as e:
+        print(f"⚠️ בעיה בהתחלת מערכת תזכורות: {e}")
+        logging.error(f"Failed to start gentle reminder system: {e}")
+
 @time_operation("הוספת handlers להודעות")
 def setup_message_handlers():
     """מוסיף handlers לטיפול בהודעות טקסט (הודעות קוליות זמנית מבוטלות)"""
@@ -471,6 +501,7 @@ def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבו�
     create_telegram_app()
     connect_google_sheets()
     setup_admin_reports()
+    setup_gentle_reminders()
     setup_message_handlers()
     send_startup_notification_timed()
     

@@ -240,12 +240,13 @@ def setup_google_sheets():
 
 
 # ⚠️ יש להשתמש אך ורק במפתחות מתוך FIELDS_DICT! אין להכניס שמות שדה קשיחים חדשים כאן או בקוד אחר.
-# שדות פרופיל משתמש
-PROFILE_FIELDS = [
-    key for key in [
-        "age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"
-    ] if key in FIELDS_DICT
-]
+# שדות פרופיל משתמש - שימוש בפונקציה מה-fields_dict
+def get_profile_fields():
+    from fields_dict import FIELDS_DICT
+    core_fields = ["age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"]
+    return [key for key in core_fields if key in FIELDS_DICT]
+
+PROFILE_FIELDS = get_profile_fields()
 SUMMARY_FIELD = "summary" if "summary" in FIELDS_DICT else list(FIELDS_DICT.keys())[-1]
 
 # הגדרות לוגים

@@ -9,79 +9,113 @@ FIELDS_DICT - יש להשתמש אך ורק בשמות מה־DICT הזה בכל 
 אין להמציא שמות חדשים או לשנות שמות קיימים ללא עדכון ה־DICT!
 כל שינוי/הוספה/עדכון של שדה יתבצע רק כאן.
 
-כל שדה הוא dict עם מפתח 'label' (שם בעברית) ו-'type' (טיפוס ערך צפוי).
-לדוג' - 'age': {'label': 'גיל', 'type': int}
+כל שדה הוא dict עם מפתח 'label' (שם בעברית), 'type' (טיפוס ערך צפוי), 
+'show_in_summary' (לתצוגה בסיכום) ו-'show_in_prompt' (טקסט מדויק מהפרומטים).
+לדוג' - 'age': {'label': 'גיל', 'type': int, 'show_in_summary': 'בן', 'show_in_prompt': 'גיל (מספר בין 18 ל־99 בלבד)'}
 """
 
 FIELDS_DICT = {
     # --- טבלת משתמשים ---
-    "age": {"label": "גיל", "type": int, "show_in_summary": "בן"},
-    "pronoun_preference": {"label": "לשון פניה (את/אתה/מעורב)", "type": str, "show_in_summary": "לשון פנייה:"},
-    "occupation_or_role": {"label": "עיסוק (מה עושה בחיים?)", "type": str, "show_in_summary": ""},
-    "attracted_to": {"label": "משיכה לגברים/נשים/שניהם (ועוד אופציות)", "type": str, "show_in_summary": "משיכה מינית:"},
-    "relationship_type": {"label": "מצב זוגי / משפחתי (כולל ילדים)", "type": str, "show_in_summary": ""},
-    "self_religious_affiliation": {"label": "יהדות/ערבי/דרוזי/נוצרי/אתאיסט וכו'", "type": str, "show_in_summary": ""},
-    "self_religiosity_level": {"label": "רמת דתיות", "type": str, "show_in_summary": ""},
-    "family_religiosity": {"label": "רמת דתיות משפחתית", "type": str, "show_in_summary": ""},
-    "closet_status": {"label": "האם בארון / יצא / חלקי", "type": str, "show_in_summary": ""},
-    "who_knows": {"label": "מי יודע עליו", "type": str, "show_in_summary": "יודעים עליו:"},
-    "who_doesnt_know": {"label": "מי לא יודע עליו", "type": str, "show_in_summary": "לא יודעים עליו:"},
-    "attends_therapy": {"label": "האם הולך לטיפול פסיכולוגי/רגשי/קבוצה כרגע?", "type": str, "show_in_summary": "נמצא בטיפול:"},
-    "primary_conflict": {"label": "הסיפור / קונפליקט המרכזי שלו בחיים כרגע", "type": str, "show_in_summary": ""},
-    "trauma_history": {"label": "טראומות אם ציין (תנסח בזהירות ובעדינות ועם הרחבה)", "type": str, "show_in_summary": "טראומות שצויינו:"},
-    "goal_in_course": {"label": "מה הוא רוצה שיקרה לו מהקורס (המטרות ששם לעצמו)", "type": str, "show_in_summary": "מטרות בקורס:"},
-    "language_of_strength": {"label": "משפטים מחזקים שהוא משתמש בהם (מה עוזר לו בזמנים קשים?)", "type": str, "show_in_summary": "משפטים שהוא אומר לעצמו ומחזקים אותו:"},
-    "date_first_seen": {"label": "מתי התחילה השיחה איתו", "type": str, "show_in_summary": ""},
-    "coping_strategies": {"label": "מה מרים אותך? מה עוזר לך להתמודד?", "type": str, "show_in_summary": "מה ציין שעוזר לו להתמודד:"},
-    "fears_concerns": {"label": "פחדים וחששות", "type": str, "show_in_summary": "פחדים:"},
-    "future_vision": {"label": "מה החזון לעתיד", "type": str, "show_in_summary": "חזון לעתיד: "},
-    "last_update": {"label": "מתי עודכנה השורה לאחרונה (מתעדכן אוטומטית)", "type": str, "show_in_summary": ""},
-    "summary": {"label": "ת.ז רגשית בסיסית שנשלחת בכל הודעה לgpt כרקע חשוב על המשתתף", "type": str, "show_in_summary": ""},
+    "age": {"label": "גיל", "type": int, "show_in_summary": "בן", "show_in_prompt": "גיל (מספר בין 18 ל־99 בלבד)"},
+    "pronoun_preference": {"label": "לשון פניה (את/אתה/מעורב)", "type": str, "show_in_summary": "לשון פנייה:", "show_in_prompt": "לשון פניה מועדפת"},
+    "occupation_or_role": {"label": "עיסוק (מה עושה בחיים?)", "type": str, "show_in_summary": "", "show_in_prompt": "עיסוק בפועל (למשל: סטודנט למשפטים, מורה, עובד בהייטק)"},
+    "attracted_to": {"label": "משיכה לגברים/נשים/שניהם (ועוד אופציות)", "type": str, "show_in_summary": "משיכה מינית:", "show_in_prompt": "משיכה מינית (למשל: \"נמשך לגברים בלבד\", \"גם לגברים וגם לנשים\")"},
+    "relationship_type": {"label": "מצב זוגי / משפחתי (כולל ילדים)", "type": str, "show_in_summary": "", "show_in_prompt": "מצב זוגי / משפחתי (למשל: רווק, גרוש, נשוי לגבר, בזוגיות עם גבר כבר 3 שנים)"},
+    "parental_status": {"label": "ילדים/נכדים", "type": str, "show_in_summary": "", "show_in_prompt": "ילדים/נכדים (למשל: \"2 ילדים מהנישואים\", \"בעיצומו של תהליך פונדקאות\")"},
+    "self_religious_affiliation": {"label": "יהדות/ערבי/דרוזי/נוצרי/אתאיסט וכו'", "type": str, "show_in_summary": "", "show_in_prompt": "זהות דתית או אתנית (יהודי, ערבי, דרוזי, מוסלמי, נוצרי, אתאיסט וכו')"},
+    "self_religiosity_level": {"label": "רמת דתיות", "type": str, "show_in_summary": "", "show_in_prompt": "רמת דתיות (חילוני, דתי, מסורתי, חרדי, לא דתי)"},
+    "family_religiosity": {"label": "רמת דתיות משפחתית", "type": str, "show_in_summary": "", "show_in_prompt": "הרקע הדתי במשפחה שגדלת בה (חילונית, דתית, חרדית, מסורתית)"},
+    "closet_status": {"label": "האם בארון / יצא / חלקי", "type": str, "show_in_summary": "", "show_in_prompt": "מצב הארון (למשל: \"כולם יודעים חוץ מהמשפחה\", \"בארון לגמרי\")"},
+    "who_knows": {"label": "מי יודע עליו", "type": str, "show_in_summary": "יודעים עליו:", "show_in_prompt": "מי כן יודע עליו (שמות או קבוצות, כמו: אמא, אבא, חברים)"},
+    "who_doesnt_know": {"label": "מי לא יודע עליו", "type": str, "show_in_summary": "לא יודעים עליו:", "show_in_prompt": "מי לא יודע עליו (ציין במפורש, למשל: סבתא, הבוס)"},
+    "attends_therapy": {"label": "האם הולך לטיפול פסיכולוגי/רגשי/קבוצה כרגע?", "type": str, "show_in_summary": "נמצא בטיפול:", "show_in_prompt": "האם הוא בטיפול רגשי / קבוצתי (למשל: \"מטופל אצל פסיכולוג\", \"חבר בקבוצת גברים\")"},
+    "primary_conflict": {"label": "הסיפור / קונפליקט המרכזי שלו בחיים כרגע", "type": str, "show_in_summary": "הקונפליקט המרכזי:", "show_in_prompt": "הקונפליקט המרכזי בחייו כרגע"},
+    "trauma_history": {"label": "טראומות אם ציין (תנסח בזהירות ובעדינות ועם הרחבה)", "type": str, "show_in_summary": "טראומות שצויינו:", "show_in_prompt": "טראומות משמעותיות מהעבר (בניסוח עדין וזהיר)"},
+    "goal_in_course": {"label": "מה הוא רוצה שיקרה לו מהקורס (המטרות ששם לעצמו)", "type": str, "show_in_summary": "מטרות בקורס:", "show_in_prompt": "מה הוא רוצה להשיג כתוצאה מהקורס"},
+    "language_of_strength": {"label": "משפטים מחזקים שהוא משתמש בהם (מה עוזר לו בזמנים קשים?)", "type": str, "show_in_summary": "משפטים שהוא אומר לעצמו ומחזקים אותו:", "show_in_prompt": "משפטים מחזקים"},
+    "date_first_seen": {"label": "מתי התחילה השיחה איתו", "type": str, "show_in_summary": "", "show_in_prompt": "תאריך תחילת השיחה"},
+    "coping_strategies": {"label": "מה מרים אותך? מה עוזר לך להתמודד?", "type": str, "show_in_summary": "מה ציין שעוזר לו להתמודד:", "show_in_prompt": "אסטרטגיות התמודדות"},
+    "fears_concerns": {"label": "פחדים וחששות", "type": str, "show_in_summary": "פחדים:", "show_in_prompt": "פחדים או חששות"},
+    "future_vision": {"label": "מה החזון לעתיד", "type": str, "show_in_summary": "חזון לעתיד: ", "show_in_prompt": "איך היה רוצה לראות את עצמו בעתיד"},
+    "other_insights": {"label": "מידע אישי נוסף", "type": str, "show_in_summary": "", "show_in_prompt": "מידע אישי נוסף"},
+    "last_update": {"label": "מתי עודכנה השורה לאחרונה (מתעדכן אוטומטית)", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "summary": {"label": "ת.ז רגשית בסיסית שנשלחת בכל הודעה לgpt כרקע חשוב על המשתתף", "type": str, "show_in_summary": "", "show_in_prompt": ""},
 
     # --- טבלת הודעות ---
-    "message_id": {"label": "מזהה הודעה", "type": str},
-    "chat_id": {"label": "מזהה משתמש", "type": str},
-    "user_msg": {"label": "הודעת המשתמש", "type": str},
-    "user_summary": {"label": "תמצות הודעת המשתמש", "type": str},
-    "bot_reply": {"label": "תשובת הבוט", "type": str},
-    "bot_summary": {"label": "סיכום תשובת הבוט", "type": str},
-    "total_tokens": {"label": "סך כל הטוקנים", "type": int},
-    "prompt_tokens_total": {"label": "סך טוקנים בפרומט", "type": int},
-    "completion_tokens_total": {"label": "סך טוקנים בתשובה", "type": int},
-    "cached_tokens": {"label": "טוקנים במטמון", "type": int},
-    "total_cost_usd": {"label": "עלות סופית בדולר", "type": float},
-    "total_cost_ils": {"label": "עלות סופית באגורות", "type": int},
-    "usage_prompt_tokens_gpt_a": {"label": "טוקנים פרומט - gpt ראשי", "type": int},
-    "usage_completion_tokens_gpt_a": {"label": "טוקנים תשובה - gpt ראשי", "type": int},
-    "usage_total_tokens_gpt_a": {"label": "סך טוקנים - gpt ראשי", "type": int},
-    "cached_tokens_gpt_a": {"label": "כמה מתוכם זה קשד", "type": int},
-    "cost_gpt_a": {"label": "כמה עלתה הקריאה באגורות", "type": float},
-    "model_gpt_a": {"label": "מודל gpt ראשי", "type": str},
-    "usage_prompt_tokens_gpt_b": {"label": "טוקנים פרומט - gpt מקצר", "type": int},
-    "usage_completion_tokens_gpt_b": {"label": "טוקנים תשובה - gpt מקצר", "type": int},
-    "usage_total_tokens_gpt_b": {"label": "סך טוקנים - gpt מקצר", "type": int},
-    "cached_tokens_gpt_b": {"label": "כמה מתוכם קשד", "type": int},
-    "cost_gpt_b": {"label": "כמה עלה באגורות", "type": float},
-    "model_gpt_b": {"label": "מודל gpt מקצר", "type": str},
-    "usage_prompt_tokens_gpt_c": {"label": "טוקנים פרומט - gpt מחלץ משופר", "type": int},
-    "usage_completion_tokens_gpt_c": {"label": "טוקנים תשובה - gpt מחלץ משופר", "type": int},
-    "usage_total_tokens_gpt_c": {"label": "סך טוקנים - gpt מחלץ משופר", "type": int},
-    "cached_tokens_gpt_c": {"label": "כמה מתוכם קשד", "type": int},
-    "cost_gpt_c": {"label": "כמה עלה באגורות", "type": float},
-    "model_gpt_c": {"label": "מודל gpt מחלץ משופר", "type": str},
-    "usage_prompt_tokens_gpt_d": {"label": "טוקנים פרומט - gpt_d", "type": int},
-    "usage_completion_tokens_gpt_d": {"label": "טוקנים תשובה - gpt_d", "type": int},
-    "usage_total_tokens_gpt_d": {"label": "סך טוקנים - gpt_d", "type": int},
-    "cached_tokens_gpt_d": {"label": "כמה מתוכם קשד - gpt_d", "type": int},
-    "cost_gpt_d": {"label": "כמה עלה באגורות - gpt_d", "type": float},
-    "model_gpt_d": {"label": "מודל gpt_d", "type": str},
-    "usage_prompt_tokens_gpt_e": {"label": "טוקנים פרומט - gpt_e", "type": int},
-    "usage_completion_tokens_gpt_e": {"label": "טוקנים תשובה - gpt_e", "type": int},
-    "usage_total_tokens_gpt_e": {"label": "סך טוקנים - gpt_e", "type": int},
-    "cached_tokens_gpt_e": {"label": "כמה מתוכם קשד - gpt_e", "type": int},
-    "cost_gpt_e": {"label": "כמה עלה באגורות - gpt_e", "type": float},
-    "model_gpt_e": {"label": "מודל gpt_e", "type": str},
-    "timestamp": {"label": "טיימסטפ של ההודעה", "type": str},
-    "date_only": {"label": "תאריך בלבד של ההודעה", "type": str},
-    "time_only": {"label": "שעה בלבד של ההודעה", "type": str}
+    "message_id": {"label": "מזהה הודעה", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "chat_id": {"label": "מזהה משתמש", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "user_msg": {"label": "הודעת המשתמש", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "user_summary": {"label": "תמצות הודעת המשתמש", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "bot_reply": {"label": "תשובת הבוט", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "bot_summary": {"label": "סיכום תשובת הבוט", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "total_tokens": {"label": "סך כל הטוקנים", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "prompt_tokens_total": {"label": "סך טוקנים בפרומט", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "completion_tokens_total": {"label": "סך טוקנים בתשובה", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cached_tokens": {"label": "טוקנים במטמון", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "total_cost_usd": {"label": "עלות סופית בדולר", "type": float, "show_in_summary": "", "show_in_prompt": ""},
+    "total_cost_ils": {"label": "עלות סופית באגורות", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_prompt_tokens_gpt_a": {"label": "טוקנים פרומט - gpt ראשי", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_completion_tokens_gpt_a": {"label": "טוקנים תשובה - gpt ראשי", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_total_tokens_gpt_a": {"label": "סך טוקנים - gpt ראשי", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cached_tokens_gpt_a": {"label": "כמה מתוכם זה קשד", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cost_gpt_a": {"label": "כמה עלתה הקריאה באגורות", "type": float, "show_in_summary": "", "show_in_prompt": ""},
+    "model_gpt_a": {"label": "מודל gpt ראשי", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_prompt_tokens_gpt_b": {"label": "טוקנים פרומט - gpt מקצר", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_completion_tokens_gpt_b": {"label": "טוקנים תשובה - gpt מקצר", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_total_tokens_gpt_b": {"label": "סך טוקנים - gpt מקצר", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cached_tokens_gpt_b": {"label": "כמה מתוכם קשד", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cost_gpt_b": {"label": "כמה עלה באגורות", "type": float, "show_in_summary": "", "show_in_prompt": ""},
+    "model_gpt_b": {"label": "מודל gpt מקצר", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_prompt_tokens_gpt_c": {"label": "טוקנים פרומט - gpt מחלץ משופר", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_completion_tokens_gpt_c": {"label": "טוקנים תשובה - gpt מחלץ משופר", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_total_tokens_gpt_c": {"label": "סך טוקנים - gpt מחלץ משופר", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cached_tokens_gpt_c": {"label": "כמה מתוכם קשד", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cost_gpt_c": {"label": "כמה עלה באגורות", "type": float, "show_in_summary": "", "show_in_prompt": ""},
+    "model_gpt_c": {"label": "מודל gpt מחלץ משופר", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_prompt_tokens_gpt_d": {"label": "טוקנים פרומט - gpt_d", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_completion_tokens_gpt_d": {"label": "טוקנים תשובה - gpt_d", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_total_tokens_gpt_d": {"label": "סך טוקנים - gpt_d", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cached_tokens_gpt_d": {"label": "כמה מתוכם קשד - gpt_d", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cost_gpt_d": {"label": "כמה עלה באגורות - gpt_d", "type": float, "show_in_summary": "", "show_in_prompt": ""},
+    "model_gpt_d": {"label": "מודל gpt_d", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_prompt_tokens_gpt_e": {"label": "טוקנים פרומט - gpt_e", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_completion_tokens_gpt_e": {"label": "טוקנים תשובה - gpt_e", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "usage_total_tokens_gpt_e": {"label": "סך טוקנים - gpt_e", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cached_tokens_gpt_e": {"label": "כמה מתוכם קשד - gpt_e", "type": int, "show_in_summary": "", "show_in_prompt": ""},
+    "cost_gpt_e": {"label": "כמה עלה באגורות - gpt_e", "type": float, "show_in_summary": "", "show_in_prompt": ""},
+    "model_gpt_e": {"label": "מודל gpt_e", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "timestamp": {"label": "טיימסטפ של ההודעה", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "date_only": {"label": "תאריך בלבד של ההודעה", "type": str, "show_in_summary": "", "show_in_prompt": ""},
+    "time_only": {"label": "שעה בלבד של ההודעה", "type": str, "show_in_summary": "", "show_in_prompt": ""}
 } 
+
+# פונקציות נוחות לגישה לשדות
+def get_user_profile_fields():
+    """מחזיר רשימה של שדות פרופיל משתמש בלבד"""
+    user_fields = [
+        "age", "pronoun_preference", "occupation_or_role", "attracted_to", "relationship_type", 
+        "parental_status", "self_religious_affiliation", "self_religiosity_level", "family_religiosity", 
+        "closet_status", "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", 
+        "trauma_history", "goal_in_course", "language_of_strength", "date_first_seen", 
+        "coping_strategies", "fears_concerns", "future_vision", "other_insights", "last_update", "summary"
+    ]
+    return [field for field in user_fields if field in FIELDS_DICT]
+
+def get_summary_fields():
+    """מחזיר רשימה של שדות לסיכום רגשי"""
+    summary_fields = [
+        "age", "pronoun_preference", "occupation_or_role", "attracted_to", "relationship_type",
+        "self_religious_affiliation", "self_religiosity_level", "family_religiosity", "closet_status",
+        "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", "trauma_history",
+        "goal_in_course", "language_of_strength", "date_first_seen", "coping_strategies",
+        "fears_concerns", "future_vision", "last_update"
+    ]
+    return [field for field in summary_fields if field in FIELDS_DICT]
+
+def get_fields_with_prompt_text():
+    """מחזיר רשימה של שדות שיש להם טקסט לפרומט"""
+    return [field for field, info in FIELDS_DICT.items() if info.get("show_in_prompt", "").strip()]
+
+def get_field_prompt_text(field_name):
+    """מחזיר את הטקסט של שדה לשימוש בפרומט"""
+    return FIELDS_DICT.get(field_name, {}).get("show_in_prompt", "") 
