@@ -159,6 +159,9 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         logger.info(f"[gpt_e] Fetching current profile for chat_id={chat_id}")
         current_profile = get_user_summary(chat_id)
         
+        # דיבאג מפורט של הפרופיל הנוכחי
+        print(f"[DEBUG] gpt_e_profile | chat={chat_id} | profile='{current_profile[:35]}{'...' if len(current_profile) > 35 else ''}'")
+        
         if not current_profile:
             current_profile = "אין פרופיל קיים"
             logger.info(f"[gpt_e] No existing profile found for chat_id={chat_id}")

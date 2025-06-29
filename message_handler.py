@@ -68,40 +68,75 @@ def format_text_for_telegram(text):
     # המרת קו תחתון ל-bold (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
     text = re.sub(r'_([^\s_][^_]*[^\s_]|\S)_', r'<b>\1</b>', text)
     
-    # 🚥 הוספת "נשימות" אוטומטיות:
-    # אם כמעט ואין מעברי שורה (פחות מ-2) והטקסט ארוך, נוסיף \n יחיד אחרי . ? ! כאשר
-    # האות/תו הבא הוא עברי/לטיני (לא אימוג׳י או תג HTML).
-    if text.count('\n') < 2 and len(text) > 120:
-        text = re.sub(r'([.!?])\s+(?=[A-Za-z\u0590-\u05FF])', r'\1\n', text)
+    # 🚥 *** כללי נשימות טבעיות - לא למחוק את הכללים האלה!! ***
+    # 1. מחיקת נקודות (.) והוספת מעבר שורה במקומן
+    # 2. עבור סימני שאלה (?) וקריאה (!) - רק מעבר שורה, לא מחיקה
+    # 3. אימוג'ים צמודים לשורה (לא בתחילת שורה)
+    # 4. לא ליצור רווח כפול אלא אם כן יש במקור
+    # 5. אם יש אימוג'י אחרי נקודה - המעבר שורה אחרי האימוג'י
+    # 6. הגנה מפני שורות קצרות מדי (פחות מ-3 תווים)
+    # 7. הגנה על פורמט קיים (אם יש הרבה מעברי שורה - לא לגעת)
+    # *** עובד רק על טקסט ארוך עם מעט מעברי שורה ***
+    if len(text) > 50 and text.count('\n') < len(text) // 60:
+        # הגנה: אם הטקסט כבר מפורמט יפה (הרבה מעברי שורה) - לא לגעת
+        if text.count('\n') > len(text) // 40:  # יותר ממעבר שורה אחד לכל 40 תווים
+            pass  # לא לגעת בטקסט שכבר מפורמט
+        else:
+            # טיפול בנקודות ואימוג'ים - מחיקת נקודות לחלוטין
+            emoji_pattern = r"[^\w\s<>]+"
+            # נקודה + אימוג'י + טקסט אחריו - מחיקת הנקודה
+            text = re.sub(rf'\.(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\2\n', text, flags=re.UNICODE)
+            # נקודה + אימוג'י בסוף משפט - מחיקת הנקודה
+            text = re.sub(rf'\.(\s*)({emoji_pattern})(?=\s*\n|\s*$)', r'\2\n', text, flags=re.UNICODE)
+            # נקודות רגילות - מחיקה והוספת מעבר שורה
+            text = re.sub(r'\.(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\n', text, flags=re.UNICODE)
+            # סימני שאלה וקריאה - רק מעבר שורה (ללא מחיקה)
+            text = re.sub(r'([!?])(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\1\n', text, flags=re.UNICODE)
+            
+            # הגנה מפני שורות קצרות מדי
+            lines = text.split('\n')
+            cleaned_lines = []
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if len(line) >= 3 or line == '' or i == len(lines) - 1:
+                    cleaned_lines.append(line)
+                else:
+                    if cleaned_lines and cleaned_lines[-1] != '':
+                        cleaned_lines[-1] = cleaned_lines[-1] + ' ' + line
+                    else:
+                        cleaned_lines.append(line)
+            text = '\n'.join(cleaned_lines)
 
-    # 🪄 ניקוי מעברי שורה מיותרים:
-    # 1. מחיקת רווחים בקצוות + המרה של \r\n ל-\n
+    # 🪄 ניקוי מעברי שורה מיותרים
     text = text.strip().replace('\r\n', '\n')
-
-    # 2. רצף של 3+ מעברי שורה ➜ 2 (שורה ריקה אחת)
+    # הגנה: לא ליצור רווח כפול חדש אלא אם כן היה במקור
+    # אם יש 3+ מעברי שורה רצופים - נשאיר 2 (שורה ריקה אחת)
     text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # ניקוי כפילויות של תגיות <b> מקוננות פעמיים
+    # ניקוי כפילויות של תגיות <b> מקוננות
     text = re.sub(r'<b>\s*<b>(.*?)</b>\s*</b>', r'<b>\1</b>', text, flags=re.DOTALL)
     
-    # 🆕 החלפת נקודה->שורה חדשה; אימוג׳י (אם קיים) נשאר בסוף השורה, והנקודה מוסרת.
-
-    def _dot_to_newline(match):
-        emoji_part = match.group(1) or ""
-        first_letter = match.group(2)
-        # אם יש אימוג׳י נוסיף רווח לפניו לשמירה על מרווח טבעי בין המילה לאימוג׳י
-        if emoji_part:
-            return f" {emoji_part}\n{first_letter}"
-        else:
-            return f"\n{first_letter}"
-
-    # תבנית: נקודה + רווחים + (אימוג׳י אופציונלי) + רווחים + האות הראשונה של המשפט הבא.
+    # הגנה מפני אימוג'ים בודדים בשורה
     emoji_pattern = r"[^\w\s<>]+"
-    dot_regex = rf"\.\s*(?:({emoji_pattern})\s*)?([A-Za-z\u0590-\u05FF])"
-    text = re.sub(dot_regex, _dot_to_newline, text)
+    lines = text.split('\n')
+    cleaned_lines = []
+    for i, line in enumerate(lines):
+        line = line.strip()
+        # אם השורה מכילה רק אימוג'ים קצרים - נחבר לשורה הקודמת
+        if re.match(rf'^(\s*{emoji_pattern}\s*)+$', line, flags=re.UNICODE) and len(line.strip()) < 10:
+            if cleaned_lines and cleaned_lines[-1] != '':
+                cleaned_lines[-1] = cleaned_lines[-1] + ' ' + line.strip()
+            else:
+                cleaned_lines.append(line)
+        else:
+            cleaned_lines.append(line)
+    text = '\n'.join(cleaned_lines)
     
-    # בדיקה נוספת בסוף: צמצום רצפים של 3+ מעברי שורה שנוצרו כעת
+    # 🧹 ניקוי סופי של מעברי שורה כפולים שנוצרו מהטיפול באימוג'ים
+    # *** הגנה: לא ליצור רווח כפול חדש אלא אם כן היה במקור ***
     text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    # *** כללי הנשימות הטבעיות הסתיימו - לא לשנות! ***
     
     return text
 
@@ -232,7 +267,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id = update.message.chat_id
             message_id = update.message.message_id
             
-            # 🫶 איפוס מצב תזכורת - המשתמש הגיב
+            # איפוס מצב תזכורת - המשתמש הגיב
             mark_user_active(chat_id)
             
             if update.message.text:
@@ -421,7 +456,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from utils import should_send_time_greeting
             greeting_instruction = ""
             try:
-                if should_send_time_greeting(chat_id):
+                if should_send_time_greeting(chat_id, user_msg):
                     greeting_instruction = get_time_greeting_instruction()
             except Exception as greet_err:
                 logging.warning(f"[GREETING] שגיאה בהערכת greeting: {greet_err}")
@@ -434,8 +469,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
             
             if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}"})
+                messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}\n\nחשוב מאוד: השתמש רק במידע שהמשתמש סיפר לך בפועל. אל תמציא מידע נוסף או תערבב עם דוגמאות מהפרומפט. תראה לו שאתה מכיר אותו - אבל רק על בסיס מה שהוא באמת סיפר."})
                 print(f"🎯 [SYSTEM_2] USER SUMMARY - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
+                print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
             
             # הוספת טיימסטמפ והנחיות זמן
             if timestamp:
@@ -508,6 +544,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"🎯 [USER_EXPERIENCE] GPT pure time: {gpt_pure_time:.3f}s | System overhead: {overhead_time:.3f}s")
                 print(f"🎯 [USER_EXPERIENCE] Overhead percentage: {(overhead_time/total_user_experience_time)*100:.1f}%")
             
+            # --- לוג רזה לכל הברכות שנשלחו ---
+            sent_time_greeting = greeting_instruction.strip() if greeting_instruction else None
+            sent_weekday_greeting = weekday_instruction.strip() if weekday_instruction else None
+            sent_holiday_greeting = holiday_message.strip() if 'holiday_message' in locals() and holiday_message else None
+            print(f"[GREETING] ⏰ זמן: {sent_time_greeting[:10] if sent_time_greeting else 'אין'} | 🎉 חג: {sent_holiday_greeting[:10] if sent_holiday_greeting else 'אין'} | 📅 יום: {sent_weekday_greeting[:10] if sent_weekday_greeting else 'אין'}")
+
             # שלב 5: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
             await update_user_processing_stage(str(chat_id), "background_tasks")
             # העברת bot_reply כ-last_bot_message - זה יהיה ההודעה הנוכחית (לא מקוצרת עדיין)
@@ -548,6 +590,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "event": "user_message_processed", 
         "timestamp": get_israel_time().isoformat()
     })
+    logging.info("✅ סיום טיפול בהודעה")
+    print("✅ סיום טיפול בהודעה")
 
 async def handle_new_user_background(update, context, chat_id, user_msg):
     """מטפל במשתמש חדש ברקע"""
@@ -668,7 +712,25 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
 
         # הכנת מידע GPT להתראה
         gpt_c_info_line = f"GPT-C: עודכנו {len(changes_list)} שדות"
-        gpt_d_info_line = "GPT-D: מיזוג בוצע" if gpt_d_usage else "GPT-D: לא הופעל"
+        
+        # GPT-D: רק אם יש ערך קיים בשדה שהוחלף
+        gpt_d_should_run = False
+        extracted_fields = {}
+        for key, value in combined_usage.items():
+            if not key.startswith("gpt_d_") and key not in ["field_conflict_resolution"]:
+                # זה gpt_c usage, נחלץ את השדות שחולצו
+                if key == "extracted_fields":
+                    extracted_fields = value
+                elif isinstance(value, dict) and "extracted_fields" in value:
+                    extracted_fields = value["extracted_fields"]
+        
+        if extracted_fields:
+            for field, new_value in extracted_fields.items():
+                if field in existing_profile and existing_profile[field] and existing_profile[field] != "":
+                    gpt_d_should_run = True
+                    break
+        
+        gpt_d_info_line = "GPT-D: מיזוג בוצע" if gpt_d_usage and gpt_d_should_run else "GPT-D: לא הופעל (אין ערך קיים למיזוג)"
 
         if gpt_e_result:
             gpt_e_info_line = f"GPT-E: הופעל ({len(gpt_e_result.get('changes', {}))} שדות)"
@@ -677,9 +739,24 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                 f"GPT-E: לא הופעל (מופעל כל 25 ריצות GPT-C, כרגע בספירה {gpt_c_run_count})"
             )
 
-        # שליחת הודעת אדמין מאוחדת - רק אם יש שינויים
-        if changes_list:  # ✅ נשלח רק אם יש שינויים
+        # שליחת הודעת אדמין מאוחדת - אם יש פעילות של GPT-C/D/E
+        has_gpt_c_activity = bool(extracted_fields)  # GPT-C החזיר שדות
+        has_gpt_d_activity = bool(gpt_d_usage and gpt_d_should_run)  # GPT-D הופעל
+        has_gpt_e_activity = bool(gpt_e_result and gpt_e_result.get('changes'))  # GPT-E החזיר שינויים
+        
+        if has_gpt_c_activity or has_gpt_d_activity or has_gpt_e_activity:  # ✅ נשלח אם יש פעילות כלשהי
             try:
+                # קבלת הסיכום של תעודת הזהות הרגשית
+                user_summary = get_user_summary(chat_id)
+                try:
+                    if user_summary:
+                        profile_data = json.loads(user_summary) if isinstance(user_summary, str) else user_summary
+                        emotional_summary = profile_data.get("summary", "")
+                    else:
+                        emotional_summary = ""
+                except:
+                    emotional_summary = ""
+                
                 _u._send_admin_profile_overview_notification(
                     chat_id=str(chat_id),
                     user_msg=user_msg,
@@ -687,13 +764,13 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                     gpt_c_info=gpt_c_info_line,
                     gpt_d_info=gpt_d_info_line,
                     gpt_e_info=gpt_e_info_line,
-                    summary=auto_summary if 'auto_summary' in locals() else ''
+                    summary=emotional_summary
                 )
             except Exception as _e_notify:
                 logging.error(f"Failed to send overview admin notification: {_e_notify}")
         else:
-            # 🟢 לוג קצר כשאין שינויים
-            logging.info(f"✅ [ADMIN] אין שינויים בפרופיל למשתמש {chat_id} - לא נשלחה הודעה")
+            # 🟢 לוג קצר כשאין פעילות
+            logging.info(f"✅ [ADMIN] אין פעילות GPT-C/D/E למשתמש {chat_id} - לא נשלחה הודעה")
         
         log_payload["gpt_c_data"] = gpt_c_usage
         log_payload["gpt_d_data"] = gpt_d_usage
@@ -729,10 +806,12 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         
         # 🚀 הפעלת משימות במקביל לביצועים מהירים יותר
         summary_task = asyncio.create_task(_handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id))
-        profile_task = asyncio.create_task(_handle_profile_updates(chat_id, user_msg, message_id, log_payload))
         
-        # המתנה לסיום שתי המשימות במקביל
+        # המתנה לסיום הסיכום לפני הפעלת עדכון הפרופיל
         summary_response, new_summary_for_history = await summary_task
+        
+        # העברת הסיכום לעדכון הפרופיל (לא צריך - הסיכום של תעודת הזהות הרגשית נשלף בתוך הפונקציה)
+        profile_task = asyncio.create_task(_handle_profile_updates(chat_id, user_msg, message_id, log_payload))
         gpt_c_usage, gpt_d_usage, gpt_e_result = await profile_task
         
         # עדכון היסטוריה (אחרי שיש לנו את הסיכום)
@@ -795,20 +874,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 (gpt_e_usage.get("cost_total_ils", 0) if gpt_e_usage else 0)
             )
             
-            print("[DEBUG] ---- log_to_sheets DEBUG ----")
-            print(f"[DEBUG] message_id: {message_id}")
-            print(f"[DEBUG] chat_id: {chat_id}")
-            print(f"[DEBUG] user_msg: {user_msg}")
-            print(f"[DEBUG] bot_reply: {bot_reply}")
-            print(f"[DEBUG] reply_summary: {new_summary_for_history}")
-            print(f"[DEBUG] gpt_a_usage: {gpt_a_usage}")
-            print(f"[DEBUG] gpt_b_usage: {gpt_b_usage}")
-            print(f"[DEBUG] gpt_c_usage: {gpt_c_usage}")
-            print(f"[DEBUG] gpt_d_usage: {gpt_d_usage}")
-            print(f"[DEBUG] gpt_e_usage: {gpt_e_usage}")
-            print(f"[DEBUG] total_tokens_calc: {total_tokens_calc}")
-            print(f"[DEBUG] total_cost_usd_calc: {total_cost_usd_calc}")
-            print(f"[DEBUG] total_cost_ils_calc: {total_cost_ils_calc}")
+            # דיבאג רזה ומלא מידע
+            print(f"[DEBUG] msg={message_id} | user='{user_msg[:35]}{'...' if len(user_msg) > 35 else ''}' | bot='{bot_reply[:35]}{'...' if len(bot_reply) > 35 else ''}' | summary='{(new_summary_for_history[:35] if new_summary_for_history else '') + ('...' if new_summary_for_history and len(new_summary_for_history) > 35 else '')}' | tokens={total_tokens_calc} | cost=${total_cost_usd_calc:.4f} | chat={chat_id}")
             
             # קריאה ל-log_to_sheets (async)
             await log_to_sheets(
@@ -826,14 +893,13 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 gpt_d_usage=gpt_d_usage,
                 gpt_e_usage=gpt_e_usage
             )
-            print("[DEBUG] ---- END log_to_sheets DEBUG ----")
         except Exception as e:
             print(f"[ERROR] שגיאה ב-log_to_sheets: {e}")
             logging.error(f"Error in log_to_sheets: {e}")
         
         log_event_to_file(log_payload)
-        logging.info("---- סיום טיפול בהודעה (משתמש מאושר) ----")
-        print("---- סיום טיפול בהודעה (משתמש מאושר) ----")
+        logging.info("✅ סיום טיפול בהודעה")
+        print("✅ סיום טיפול בהודעה")
         print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
 
     except Exception as ex:

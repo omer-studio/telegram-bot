@@ -110,7 +110,8 @@ def get_summary_fields():
         "self_religious_affiliation", "self_religiosity_level", "family_religiosity", "closet_status",
         "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", "trauma_history",
         "goal_in_course", "language_of_strength", "date_first_seen", "coping_strategies",
-        "fears_concerns", "future_vision", "last_update"
+        "fears_concerns", "future_vision"
+        # ✅ הוסר last_update - זה שדה טכני שלא צריך להיות בסיכום
     ]
     return [field for field in summary_fields if field in FIELDS_DICT]
 

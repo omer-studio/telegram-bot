@@ -93,25 +93,41 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     if isinstance(gpt_c_result, dict):
         extracted_fields = gpt_c_result.get("extracted_fields", {})
         gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
+    
     # 2. אם אין שדות חדשים, מחזירים את הפרופיל הקיים
     if not extracted_fields:
         return existing_profile, gpt_c_usage
-    # 3. מיזוג עם gpt_d
-    changed_fields = extracted_fields.copy()
+    
+    # 3. בדיקה האם יש ערך קיים בשדות שהוחלפו (רק אז נפעיל GPT-D)
+    gpt_d_should_run = False
     if not isinstance(existing_profile, dict):
         existing_profile = {}
-    # מיזוג: שדות חדשים מחליפים קיימים
+    
+    for field, new_value in extracted_fields.items():
+        if field in existing_profile and existing_profile[field] and existing_profile[field] != "":
+            gpt_d_should_run = True
+            break
+    
+    # 4. מיזוג בסיסי: שדות חדשים מחליפים קיימים
     merged_fields = existing_profile.copy()
-    merged_fields.update(changed_fields)
-    gpt_d_result = merge_profile_data(existing_profile, changed_fields, message_id=interaction_id)
-    gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", GPT_MODELS["gpt_d"]))
-    # נסה לפרסר את התוצאה
-    updated_profile = gpt_d_result.get("merged_profile", merged_fields)
-    # 4. איחוד usage
+    merged_fields.update(extracted_fields)
+    
+    # 5. הפעלת GPT-D רק אם יש ערך קיים למיזוג
+    gpt_d_usage = {}
+    if gpt_d_should_run:
+        gpt_d_result = merge_profile_data(existing_profile, extracted_fields, message_id=interaction_id)
+        gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", GPT_MODELS["gpt_d"]))
+        # נסה לפרסר את התוצאה
+        updated_profile = gpt_d_result.get("merged_profile", merged_fields)
+    else:
+        updated_profile = merged_fields
+    
+    # 6. איחוד usage
     combined_usage = {}
     combined_usage.update(gpt_c_usage)
     for k, v in gpt_d_usage.items():
         combined_usage[f"gpt_d_{k}"] = v
+    
     return updated_profile, combined_usage
 
 def smart_update_profile_with_gpt_d_async(existing_profile, user_message, interaction_id=None):

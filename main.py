@@ -125,7 +125,8 @@ async def webhook(request: Request):
         return {"ok": True}
     except Exception as ex:
         print(f"❌ שגיאה ב-webhook: {ex}")
-        return {"error": str(ex)}
+        # ✅ תמיד מחזיר HTTP 200 לטלגרם!
+        return {"ok": False, "error": str(ex)}
 
 @app_fastapi.get("/")
 def root():

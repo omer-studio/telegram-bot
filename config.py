@@ -130,11 +130,20 @@ def should_log_data_extraction_debug():
     """בודק האם להדפיס מידע על חילוץ נתונים מ-GPT C,D,E"""
     return ENABLE_DATA_EXTRACTION_DEBUG
 
+# Helper to mask sensitive strings (defined early to avoid NameError)
+def _mask_sensitive(value: str | None, visible_chars: int = 4) -> str:
+    if not value:
+        return "[empty]"
+    value = str(value)
+    if len(value) <= visible_chars:
+        return value
+    return value[:visible_chars] + "..."
+
 # 🚀 טוקנים וזיהויים
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
-print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", OPENAI_ADMIN_KEY[:5] + "...")
+print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", _mask_sensitive(OPENAI_ADMIN_KEY, 5))
 GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
 
 # הגדרות התראות שגיאות (לבוט הניהולי החדש)
@@ -155,7 +164,7 @@ GEMINI_API_KEY = config.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
     print(f"✅ [CONFIG] Google AI Studio (Gemini) API Key configured")
-    print(f"   Key prefix: {GEMINI_API_KEY[:5]}...")  # 🔒 הפחתה ל-5 תווים לבטיחות
+    print(f"   Key prefix: {_mask_sensitive(GEMINI_API_KEY, 5)}")  # 🔒 הפחתה ל-5 תווים לבטיחות
 else:
     print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
 
@@ -248,7 +257,9 @@ def setup_google_sheets():
     last_exception = None
     for attempt in range(1, max_retries + 1):
         try:
-            print(f"[DEBUG] Attempt {attempt}: Opening Google Sheet with ID: {GOOGLE_SHEET_ID}")
+            # Obfuscate the Sheet ID – show only the first 4 characters to avoid exposing the full key
+            safe_sheet_id = _mask_sensitive(GOOGLE_SHEET_ID, 4)
+            print(f"[DEBUG] Attempt {attempt}: Opening Google Sheet with ID: {safe_sheet_id}")
             sheet = gs_client.open_by_key(GOOGLE_SHEET_ID)
             print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_USER_TAB']}")
             sheet_users = sheet.worksheet(config["SHEET_USER_TAB"])
