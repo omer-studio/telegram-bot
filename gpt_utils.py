@@ -275,9 +275,7 @@ def normalize_usage_dict(usage, model_name=""):
     # fallback
     return {"model": model_name, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_tokens": 0}
 
-# ========================================
-# 🛡️ מערכת הגנה על חיוב (מקור: billing_protection.py)
-# ========================================
+# 🛡️ מערכת הגנה על חיוב
 
 class BillingProtection:
     """
@@ -607,9 +605,7 @@ def print_budget_status():
 # יצירת instance גלובלי
 smart_manager = SmartGeminiManager()
 
-# =====================================
-# 🔍 JSON Extraction Helper (code-fence safe)
-# =====================================
+# 🔍 JSON Extraction Helper
 
 def extract_json_from_text(text: str) -> str:
     """Attempts to extract a JSON string from model output.

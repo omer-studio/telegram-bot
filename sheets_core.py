@@ -236,6 +236,10 @@ cleanup_thread = threading.Thread(target=_cache_cleanup_thread, daemon=True)
 cleanup_thread.start()
 
 def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
+    """
+    בודק הרשאות משתמש לפי chat_id בעמודות לפי כותרות (לא מיקום!)
+    מחזיר: {"status": "approved"/"pending"/"not_found", "code": "קוד או None"}
+    """
     try:
         chat_id = validate_chat_id(chat_id)
         
@@ -250,23 +254,62 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         if cached_access is not None:
             return cached_access
         
-        row_index = find_chat_id_in_sheet(sheet, chat_id, col=1)
+        # קריאת כל הנתונים מהגיליון
+        _increment_api_call()
+        all_values = sheet.get_all_values()
         
-        if not row_index:
+        if not all_values or len(all_values) < 2:
             result = {"status": "not_found", "code": None}
-            _set_critical_cache(cache_key, result)  # שמירה ב-critical cache
+            _set_critical_cache(cache_key, result)
             return result
         
-        # מונה קריאות ל-API (2 קריאות: status + code)
-        _increment_api_call()
-        _increment_api_call()
-        status = sheet.cell(row_index, 3).value
-        code = sheet.cell(row_index, 2).value
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
         
-        result = {"status": status, "code": code}
-        _set_critical_cache(cache_key, result)  # שמירה ב-critical cache
+        # מציאת אינדקסים של העמודות לפי שמות
+        chat_id_col = None
+        code_approve_col = None
+        approved_col = None
         
-        debug_log(f"User {chat_id} access check: status={status}, code={code}")
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i
+            elif header.lower() == "code_approve":
+                code_approve_col = i
+            elif header.lower() == "approved":
+                approved_col = i
+        
+        if chat_id_col is None:
+            result = {"status": "error", "code": None}
+            _set_critical_cache(cache_key, result)
+            return result
+        
+        # חיפוש המשתמש לפי chat_id
+        for row_data in all_values[1:]:  # מתחיל משורה 2
+            if len(row_data) > chat_id_col:
+                existing_chat_id = row_data[chat_id_col] if chat_id_col < len(row_data) else ""
+                
+                # בדיקה: chat_id תואם
+                if str(existing_chat_id).strip() == str(chat_id).strip():
+                    # מציאת הקוד והסטטוס
+                    code = row_data[code_approve_col] if code_approve_col is not None and code_approve_col < len(row_data) else None
+                    approved_status = row_data[approved_col] if approved_col is not None and approved_col < len(row_data) else ""
+                    
+                    # קביעת הסטטוס
+                    if str(approved_status).strip().upper() == "TRUE":
+                        status = "approved"
+                    else:
+                        status = "pending"
+                    
+                    result = {"status": status, "code": code}
+                    _set_critical_cache(cache_key, result)  # שמירה ב-critical cache
+                    
+                    debug_log(f"User {chat_id} access check: status={status}, code={code}")
+                    return result
+        
+        # לא נמצא המשתמש
+        result = {"status": "not_found", "code": None}
+        _set_critical_cache(cache_key, result)
         return result
         
     except Exception as e:
@@ -278,17 +321,51 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
         
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+        # קריאת כל הנתונים כולל כותרות
+        _increment_api_call()
+        all_values = sheet_states.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return False
+        
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקס עמודת chat_id
+        chat_id_col = None
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread uses 1-based indexing
+                break
+        
+        if not chat_id_col:
+            debug_log("chat_id column not found")
+            return False
+        
+        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
         if row_index:
             debug_log(f"User {chat_id} already exists in user_states at row {row_index}")
             return True
         
         from utils import get_israel_time
         timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
-        new_row = [chat_id, "0", "", "", "", timestamp, "0"]
+        
+        # יצירת שורה חדשה עם מיקום נכון של chat_id
+        new_row = [""] * len(headers)  # שורה ריקה באורך הכותרות
+        new_row[chat_id_col - 1] = chat_id  # מיקום chat_id
+        
+        # הוספת ערכים נוספים אם יש עמודות מתאימות
+        for i, header in enumerate(headers):
+            if header.lower() == "code_try":
+                new_row[i] = "1"
+            elif header.lower() in ["created_at", "last_updated"]:
+                new_row[i] = timestamp
+            elif header.lower() == "gpt_c_run_count":
+                new_row[i] = "0"
         
         sheet_states.insert_row(new_row, 3)
-        debug_log(f"Added new user {chat_id} to user_states")
+        debug_log(f"Added new user {chat_id} to user_states with code_try=1")
         return True
         
     except Exception as e:
@@ -297,41 +374,119 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
         return False
 
 def register_user(sheet, chat_id: str, code_input: str) -> bool:
+    """
+    מחפש את הקוד בעמודה code_approve ובודק אם עמודת chat_id ריקה.
+    אם כן - מצמיד את ה-chat_id לאותה שורה.
+    לא מוסיף שורות חדשות!
+    """
     try:
         chat_id = validate_chat_id(chat_id)
-        from utils import get_israel_time
-        timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         
-        new_row = [chat_id, str(code_input), "pending", timestamp]
-        sheet.insert_row(new_row, 3)
+        # קריאת כל הנתונים מהגיליון
+        _increment_api_call()
+        all_values = sheet.get_all_values()
         
-        # מחיקת cache אחרי רישום משתמש חדש
-        _clear_user_cache(chat_id)
+        if not all_values or len(all_values) < 2:
+            debug_log(f"Sheet is empty or has no data rows")
+            return False
         
-        debug_log(f"Registered new user {chat_id} with code {code_input}")
-        return True
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקסים של העמודות לפי שמות (לא מיקום!)
+        code_approve_col = None
+        chat_id_col = None
+        
+        for i, header in enumerate(headers):
+            if header.lower() == "code_approve":
+                code_approve_col = i + 1  # gspread משתמש ב-1-based indexing
+            elif header.lower() == "chat_id":
+                chat_id_col = i + 1
+        
+        if code_approve_col is None or chat_id_col is None:
+            debug_log(f"Required columns not found: code_approve={code_approve_col}, chat_id={chat_id_col}")
+            return False
+        
+        # חיפוש הקוד בעמודה code_approve
+        for row_index, row_data in enumerate(all_values[1:], start=2):  # מתחיל משורה 2
+            if len(row_data) >= max(code_approve_col, chat_id_col):
+                stored_code = row_data[code_approve_col - 1] if code_approve_col <= len(row_data) else ""
+                existing_chat_id = row_data[chat_id_col - 1] if chat_id_col <= len(row_data) else ""
+                
+                # בדיקה: הקוד תואם ועמודת chat_id ריקה
+                if str(stored_code).strip() == str(code_input).strip() and not existing_chat_id.strip():
+                    # מצמידים את ה-chat_id לשורה הזו
+                    _increment_api_call()
+                    sheet.update_cell(row_index, chat_id_col, chat_id)
+                    
+                    # מחיקת cache אחרי עדכון
+                    _clear_user_cache(chat_id)
+                    
+                    debug_log(f"Successfully attached chat_id {chat_id} to code {code_input} at row {row_index}")
+                    return True
+        
+        # לא נמצא קוד תקין או שכל הקודים כבר תפוסים
+        debug_log(f"Code {code_input} not found or already taken for user {chat_id}")
+        return False
         
     except Exception as e:
-        debug_log(f"Error registering user {chat_id}: {e}")
+        debug_log(f"Error registering user {chat_id} with code {code_input}: {e}")
         send_error_notification(f"Error in register_user: {e}")
         return False
 
 def approve_user(sheet, chat_id: str) -> bool:
+    """
+    מחפש את המשתמש לפי chat_id ומעדכן את עמודת 'approved' ל-TRUE
+    עובד לפי שמות כותרות ולא מיקום עמודות!
+    """
     try:
         chat_id = validate_chat_id(chat_id)
-        row_index = find_chat_id_in_sheet(sheet, chat_id, col=1)
         
-        if not row_index:
-            debug_log(f"Cannot approve user {chat_id} - not found")
+        # קריאת כל הנתונים מהגיליון
+        _increment_api_call()
+        all_values = sheet.get_all_values()
+        
+        if not all_values or len(all_values) < 2:
+            debug_log(f"Sheet is empty or has no data rows")
             return False
         
-        sheet.update_cell(row_index, 3, "approved")
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
         
-        # מחיקת cache אחרי עדכון סטטוס
-        _clear_user_cache(chat_id)
+        # מציאת אינדקסים של העמודות לפי שמות
+        chat_id_col = None
+        approved_col = None
         
-        debug_log(f"Approved user {chat_id}")
-        return True
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread משתמש ב-1-based indexing
+            elif header.lower() == "approved":
+                approved_col = i + 1
+        
+        if chat_id_col is None or approved_col is None:
+            debug_log(f"Required columns not found: chat_id={chat_id_col}, approved={approved_col}")
+            return False
+        
+        # חיפוש המשתמש לפי chat_id
+        for row_index, row_data in enumerate(all_values[1:], start=2):  # מתחיל משורה 2
+            if len(row_data) >= chat_id_col:
+                existing_chat_id = row_data[chat_id_col - 1] if chat_id_col <= len(row_data) else ""
+                
+                # בדיקה: chat_id תואם
+                if str(existing_chat_id).strip() == str(chat_id).strip():
+                    # עדכון עמודת approved ל-TRUE
+                    _increment_api_call()
+                    sheet.update_cell(row_index, approved_col, "TRUE")
+                    
+                    # מחיקת cache אחרי עדכון סטטוס
+                    _clear_user_cache(chat_id)
+                    
+                    debug_log(f"Approved user {chat_id} at row {row_index}")
+                    return True
+        
+        # לא נמצא המשתמש
+        debug_log(f"Cannot approve user {chat_id} - not found")
+        return False
         
     except Exception as e:
         debug_log(f"Error approving user {chat_id}: {e}")
@@ -349,7 +504,29 @@ def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
             debug_log(f"Unknown sheet name: {sheet_name}")
             return False
         
-        row_index = find_chat_id_in_sheet(sheet, chat_id, col=1)
+        # קריאת כל הנתונים כולל כותרות
+        _increment_api_call()
+        all_values = sheet.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return False
+        
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקס עמודת chat_id
+        chat_id_col = None
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread uses 1-based indexing
+                break
+        
+        if not chat_id_col:
+            debug_log("chat_id column not found")
+            return False
+        
+        row_index = find_chat_id_in_sheet(sheet, chat_id, col=chat_id_col)
         if not row_index:
             debug_log(f"User {chat_id} not found in {sheet_name}")
             return False
@@ -384,27 +561,65 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
             debug_log("sheet_states is None", chat_id=chat_id)
             return {}
         
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+        # קריאת כל הנתונים כולל כותרות
+        _increment_api_call()
+        all_values = sheet_states.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return {}
+        
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקס עמודת chat_id
+        chat_id_col = None
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread uses 1-based indexing
+                break
+        
+        if not chat_id_col:
+            debug_log("chat_id column not found")
+            return {}
+        
+        # מציאת השורה של המשתמש
+        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
         if not row_index:
             debug_log(f"User {chat_id} not found in user_states")
             empty_state = {}
             _set_cache(cache_key, empty_state)  # cache גם תוצאות ריקות
             return empty_state
         
-        # מונה קריאה ל-API
+        # קריאת שורת הנתונים
         _increment_api_call()
         row_data = sheet_states.row_values(row_index)
         
-        state = {
-            "chat_id": row_data[0] if len(row_data) > 0 else "",
-            "code_try": safe_int(row_data[1]) if len(row_data) > 1 else 0,
-            "summary": row_data[2] if len(row_data) > 2 else "",
-            "last_updated": row_data[3] if len(row_data) > 3 else "",
-            "profile_data": row_data[4] if len(row_data) > 4 else "",
-            "created_at": row_data[5] if len(row_data) > 5 else "",
-            "gpt_c_run_count": safe_int(row_data[6]) if len(row_data) > 6 else 0
-        }
+        # מיפוי דינמי של שדות לעמודות לפי כותרות
+        field_to_col = {}
+        for i, header in enumerate(headers):
+            field_to_col[header.lower()] = i  # 0-based indexing for row_data
         
+        # בניית state לפי כותרות
+        state = {}
+        for field_name in ["chat_id", "code_try", "summary", "last_updated", "profile_data", "created_at", "gpt_c_run_count"]:
+            col_index = field_to_col.get(field_name.lower())
+            if col_index is not None and col_index < len(row_data):
+                value = row_data[col_index]
+                
+                # טיפול מיוחד בשדות מספריים
+                if field_name in ["code_try", "gpt_c_run_count"]:
+                    state[field_name] = safe_int(value)
+                else:
+                    state[field_name] = value
+            else:
+                # ערכי ברירת מחדל
+                if field_name in ["code_try", "gpt_c_run_count"]:
+                    state[field_name] = 0
+                else:
+                    state[field_name] = ""
+        
+        # טיפול מיוחד ב-profile_data (JSON)
         if state["profile_data"]:
             try:
                 state["profile_data"] = json.loads(state["profile_data"])
@@ -433,21 +648,64 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
             debug_log("sheet_states is None", chat_id=chat_id)
             return False
         
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+        # קריאת כל הנתונים כולל כותרות
+        _increment_api_call()
+        all_values = sheet_states.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return False
+        
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקס עמודת chat_id
+        chat_id_col = None
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread uses 1-based indexing
+                break
+        
+        if not chat_id_col:
+            debug_log("chat_id column not found")
+            return False
+        
+        # מציאת השורה של המשתמש
+        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
         if not row_index:
             debug_log(f"User {chat_id} not found in user_states")
             return False
         
-        column_mapping = {
-            "code_try": 2, "summary": 3, "last_updated": 4,
-            "profile_data": 5, "created_at": 6, "gpt_c_run_count": 7
-        }
+        # מיפוי דינמי של שדות לעמודות לפי כותרות
+        field_to_col = {}
+        for i, header in enumerate(headers):
+            field_to_col[header.lower()] = i + 1  # gspread uses 1-based indexing
         
         updated_fields = []
         for field, value in updates.items():
-            if field in column_mapping:
-                col_index = column_mapping[field]
-                
+            # חיפוש העמודה לפי שם השדה
+            col_index = None
+            
+            # חיפוש ישיר
+            if field.lower() in field_to_col:
+                col_index = field_to_col[field.lower()]
+            
+            # חיפוש עם וריאציות נפוצות
+            elif field == "code_try" and "code_try" in field_to_col:
+                col_index = field_to_col["code_try"]
+            elif field == "summary" and "summary" in field_to_col:
+                col_index = field_to_col["summary"]
+            elif field == "last_updated" and "last_updated" in field_to_col:
+                col_index = field_to_col["last_updated"]
+            elif field == "profile_data" and "profile_data" in field_to_col:
+                col_index = field_to_col["profile_data"]
+            elif field == "created_at" and "created_at" in field_to_col:
+                col_index = field_to_col["created_at"]
+            elif field == "gpt_c_run_count" and "gpt_c_run_count" in field_to_col:
+                col_index = field_to_col["gpt_c_run_count"]
+            
+            # עדכון התא אם נמצאה העמודה
+            if col_index:
                 if field == "profile_data" and isinstance(value, dict):
                     value = json.dumps(value, ensure_ascii=False)
                 
@@ -456,17 +714,24 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
                 debug_log(f"Updated {field} for user {chat_id}")
         
         if updated_fields and "last_updated" not in updates:
+            # עדכון otomatik של last_updated אם לא עודכן ידנית
             from utils import get_israel_time
             timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
-            sheet_states.update_cell(row_index, column_mapping["last_updated"], timestamp)
-            updated_fields.append("last_updated")
-        
-        debug_log(f"Updated fields {updated_fields} for user {chat_id}")
+            
+            # חיפוש עמודת last_updated
+            last_updated_col = None
+            if "last_updated" in field_to_col:
+                last_updated_col = field_to_col["last_updated"]
+            
+            if last_updated_col:
+                sheet_states.update_cell(row_index, last_updated_col, timestamp)
+                debug_log(f"Auto-updated last_updated for user {chat_id}")
         
         # מחיקת cache אחרי עדכון
         _clear_user_cache(chat_id)
         
-        return True
+        debug_log(f"Updated {len(updated_fields)} fields for user {chat_id}: {updated_fields}")
+        return len(updated_fields) > 0
         
     except Exception as e:
         debug_log(f"Error updating user state for {chat_id}: {e}")
@@ -474,9 +739,92 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
         return False
 
 def increment_code_try_sync(sheet_states, chat_id: str) -> int:
-    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import increment_code_try_fast
-    return increment_code_try_fast(chat_id)  # מהיר!
+    """מגדיל את מונה code_try ישירות ב-Google Sheets ומחזיר את הערך החדש.
+    ‑ למשתמש חדש (שטרם נוסף ל-user_states) ניצור שורה חדשה עם value=2.
+    ‑ בנוסף מנקה את ה-cache הרלוונטי כדי שהקריאות הבאות יקבלו נתונים מעודכנים.
+    """
+    try:
+        chat_id = validate_chat_id(chat_id)
+
+        # קריאת כל הנתונים כולל כותרות
+        _increment_api_call()
+        all_values = sheet_states.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return -1
+        
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקס עמודת chat_id
+        chat_id_col = None
+        code_try_col = None
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread uses 1-based indexing
+            elif header.lower() == "code_try":
+                code_try_col = i + 1
+        
+        if not chat_id_col:
+            debug_log("chat_id column not found")
+            return -1
+        
+        if not code_try_col:
+            debug_log("code_try column not found")
+            return -1
+
+        # מציאת השורה של המשתמש בגיליון
+        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
+
+        # ♦ משתמש חדש – מוסיפים שורה עם code_try=2 (כי כבר היה לו 1 מההתחלה)
+        if not row_index:
+            from utils import get_israel_time
+            timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # יצירת שורה חדשה עם מיקום נכון של code_try
+            new_row = [""] * len(headers)  # שורה ריקה באורך הכותרות
+            new_row[chat_id_col - 1] = chat_id  # מיקום chat_id
+            new_row[code_try_col - 1] = "2"     # מיקום code_try
+            
+            # הוספת timestamp אם יש עמודה מתאימה
+            for i, header in enumerate(headers):
+                if header.lower() in ["created_at", "last_updated"]:
+                    new_row[i] = timestamp
+                    break
+            
+            sheet_states.insert_row(new_row, 3)
+
+            # מונה קריאת API (insert_row)
+            _increment_api_call()
+
+            # ניקוי cache למשתמש
+            _clear_user_cache(chat_id)
+            debug_log(f"Added new user_state row for {chat_id} with code_try=2")
+            return 2
+
+        # ♦ משתמש קיים – עדכון המונה בעמודת code_try
+        try:
+            current_val = safe_int(sheet_states.cell(row_index, code_try_col).value)
+        except Exception:
+            current_val = 1  # ברירת מחדל 1 במקום 0
+
+        new_val = current_val + 1
+        sheet_states.update_cell(row_index, code_try_col, str(new_val))
+
+        # מונה קריאות API (read + update)
+        _increment_api_call()
+        _increment_api_call()
+
+        # ניקוי cache
+        _clear_user_cache(chat_id)
+        debug_log(f"Incremented code_try for {chat_id}: {current_val} ➜ {new_val}")
+        return new_val
+
+    except Exception as e:
+        debug_log(f"Error incrementing code_try for {chat_id}: {e}")
+        send_error_notification(f"Error in increment_code_try_sync: {e}")
+        return -1
 
 def increment_gpt_c_run_count(chat_id: str) -> int:
     """עכשיו מעדכן מהיר + Google Sheets ברקע"""
@@ -552,23 +900,58 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     
     return " | ".join(summary_parts)
 
-def compose_emotional_summary(row: List[str]) -> str:
+def compose_emotional_summary(row: List[str], headers: List[str] = None) -> str:
+    """
+    יוצר סיכום רגשי משורה לפי כותרות (לא מיקום!)
+    אם לא מעבירים headers, מניח מיקום קלאסי
+    """
     try:
-        if not row or len(row) < 4:
+        if not row:
             return ""
         
-        name = row[1] if len(row) > 1 else ""
-        age = row[2] if len(row) > 2 else ""
-        location = row[3] if len(row) > 3 else ""
-        mood = row[4] if len(row) > 4 else ""
+        # אם יש headers - משתמש בהם
+        if headers and len(headers) > 0:
+            # מיפוי דינמי של שדות לעמודות לפי כותרות
+            field_to_col = {}
+            for i, header in enumerate(headers):
+                field_to_col[header.lower()] = i
+            
+            summary_parts = []
+            
+            # חיפוש שדות לפי כותרות
+            for field_name in ["name", "age", "location", "mood"]:
+                col_index = field_to_col.get(field_name.lower())
+                if col_index is not None and col_index < len(row):
+                    value = row[col_index]
+                    if value and str(value).strip():
+                        if field_name == "name":
+                            summary_parts.append(f"שם: {value}")
+                        elif field_name == "age":
+                            summary_parts.append(f"גיל: {value}")
+                        elif field_name == "location":
+                            summary_parts.append(f"מיקום: {value}")
+                        elif field_name == "mood":
+                            summary_parts.append(f"מצב רוח: {value}")
+            
+            return " | ".join(summary_parts) if summary_parts else ""
         
-        summary_parts = []
-        if name: summary_parts.append(f"שם: {name}")
-        if age: summary_parts.append(f"גיל: {age}")
-        if location: summary_parts.append(f"מיקום: {location}")
-        if mood: summary_parts.append(f"מצב רוח: {mood}")
-        
-        return " | ".join(summary_parts) if summary_parts else ""
+        # אם אין headers - משתמש במיקום קלאסי (למקרה של backward compatibility)
+        else:
+            if len(row) < 4:
+                return ""
+            
+            name = row[1] if len(row) > 1 else ""
+            age = row[2] if len(row) > 2 else ""
+            location = row[3] if len(row) > 3 else ""
+            mood = row[4] if len(row) > 4 else ""
+            
+            summary_parts = []
+            if name: summary_parts.append(f"שם: {name}")
+            if age: summary_parts.append(f"גיל: {age}")
+            if location: summary_parts.append(f"מיקום: {location}")
+            if mood: summary_parts.append(f"מצב רוח: {mood}")
+            
+            return " | ".join(summary_parts) if summary_parts else ""
         
     except Exception as e:
         debug_log(f"Error composing emotional summary: {e}")

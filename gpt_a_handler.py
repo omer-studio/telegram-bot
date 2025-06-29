@@ -31,7 +31,17 @@ if TYPE_CHECKING:
 LONG_MESSAGE_THRESHOLD = 50  # מעל 50 מילים = מודל מתקדם
 
 def create_missing_fields_system_message(chat_id: str) -> str:
-    """יוצר system message חכם עם שדות חסרים שכדאי לשאול עליהם"""
+    """יוצר system message חכם עם שדות חסרים שכדאי לשאול עליהם
+
+    • מתייחס רק לשדות המוגדרים ב-``key_fields`` (שדות ליבה בפרופיל).  
+    • שולף את מצב המשתמש מ-``sheets_core.get_user_state`` ומשווה מול ``FIELDS_DICT`` כדי למצוא אילו
+      שדות עדיין ריקים.  
+    • אם חסרים *לפחות שניים* (✅) – מחזיר טקסט עברי שמסביר לבוט בעדינות לשאול את המשתמש עליהם.  
+    • אם חסר פחות משני שדות (❌) – מחזיר מחרוזת ריקה, וכך לא נשלח דבר ל-GPT.  
+
+    שימו לב: קריאה לפונקציה מתבצעת **רק** כאשר הבוט משתמש במודל *מהיר* (``use_extra_emotion == False``),
+    ולכן לא משפיעה על שיחות שמופעלות במודל המתקדם.
+    """
     try:
         from sheets_core import get_user_state
         from fields_dict import FIELDS_DICT
@@ -147,7 +157,7 @@ def get_filter_analytics():
         "premium_usage": round(((total - filter_decisions_log["default"])/total)*100, 1) if total > 0 else 0
     }
 
-def should_use_premium_model(user_message, chat_history_length=0):
+def should_use_extra_emotion_model(user_message, chat_history_length=0):
     """
     מחליט האם להשתמש במודל המתקדם או במהיר יותר
     
@@ -157,7 +167,7 @@ def should_use_premium_model(user_message, chat_history_length=0):
     3. דפוסי ביטויים מורכבים
     
     Returns:
-        tuple: (should_use_premium: bool, reason: str, match_type: str)
+        tuple: (use_extra_emotion: bool, reason: str, match_type: str)
     """
     # בדיקת אורך הודעה
     word_count = len(user_message.split())
@@ -239,7 +249,7 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
         logging.error(f"❌ [DELETE_MSG] כשל במחיקה/שליחה: {send_err}")
         return False
 
-def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_premium=True, filter_reason="", match_type="unknown"):
+def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_extra_emotion=True, filter_reason="", match_type="unknown"):
     """
     💎 מנוע gpt_a הראשי - גרסה סינכרונית
     """
@@ -249,8 +259,15 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     # שלב 1: הכנת ההודעות
     prep_start_time = time.time()
     
-    # לא שולחים בקשה לשאלות רגישות אם מופעל extra_emotion (use_premium == True)
-    if chat_id and not use_premium:
+    # ---------------------------------------------------------------
+    # ⚙️ חוקיות הזרקת שאלות השלמת הפרופיל
+    # ---------------------------------------------------------------
+    # ✅ מתבצע רק כש:
+    #    1. יש לנו chat_id (כלומר אנחנו בתוך צ'אט רגיל)
+    #    2. משתמשים במודל *מהיר* → use_extra_emotion == False
+    #    3. create_missing_fields_system_message מחזירה טקסט (לפחות 2 שדות חסרים)
+    # אחרת (❌) – לא מכניסים כלום ל-messages.
+    if chat_id and not use_extra_emotion:
         missing_fields_message = create_missing_fields_system_message(chat_id)
         if missing_fields_message:
             full_messages.insert(1, {"role": "system", "content": missing_fields_message})
@@ -265,7 +282,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
     measurement_id = None
     
     # בחירת מודל לפי הפילטר
-    if use_premium:
+    if use_extra_emotion:
         model = GPT_MODELS["gpt_a"]  # המודל המתקדם מ-config
         model_tier = "premium"
         logging.info(f"🎯 [MODEL_SELECTION] משתמש במודל מתקדם: {model} | סיבה: {filter_reason}")
@@ -288,7 +305,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
 
     # 🔍 [DEBUG] ניתוח מפורט של המבנה שנשלח ל-GPT
     print(f"\n🔍 [GPT_REQUEST_DEBUG] === DETAILED GPT REQUEST ANALYSIS ===")
-    print(f"🤖 [MODEL] {model} | Premium: {use_premium} | Reason: {filter_reason}")
+    print(f"🤖 [MODEL] {model} | ExtraEmotion: {use_extra_emotion} | Reason: {filter_reason}")
     print(f"📊 [PARAMS] Temperature: {params['temperature']} | Max Tokens: {params.get('max_tokens', 'None')}")
     print(f"📝 [MESSAGES_COUNT] Total messages: {len(full_messages)}")
     
@@ -356,7 +373,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
         processing_time = time.time() - processing_start_time
         print(f"⚡ [TIMING] Processing time: {processing_time:.3f}s")
         
-        print(f"✅ [GPT_RESPONSE_DEBUG] Received {len(bot_reply)} chars from {response.model}")
+        if should_log_debug_prints():
+            print(f"[GPT_A_RESPONSE] {len(bot_reply)} chars from {response.model}")
         print(f"⚡ [DETAILED_TIMING] GPT pure latency: {gpt_pure_latency:.3f}s | Model: {model}")
         
         # שלב 4: חישוב עלויות
@@ -369,7 +387,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
             try:
                 cost_usd = litellm.completion_cost(completion_response=response)
                 if cost_usd > 0:
-                    billing_status = billing_guard.add_cost(cost_usd, response.model, "paid" if use_premium else "free")
+                    billing_status = billing_guard.add_cost(cost_usd, response.model, "paid" if use_extra_emotion else "free")
                     
                     # התראות לאדמין
                     if billing_status["warnings"]:
@@ -381,7 +399,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
                     alert_billing_issue(
                         cost_usd=cost_usd,
                         model_name=response.model,
-                        tier="paid" if use_premium else "free",
+                        tier="paid" if use_extra_emotion else "free",
                         daily_usage=status["daily_usage"],
                         monthly_usage=status["monthly_usage"],
                         daily_limit=status["daily_limit"],
@@ -402,7 +420,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
             "bot_reply": bot_reply, 
             "usage": usage, 
             "model": response.model,
-            "used_premium": use_premium,
+            "used_extra_emotion": use_extra_emotion,
             "filter_reason": filter_reason,
             "match_type": match_type,
             "gpt_pure_latency": gpt_pure_latency,
@@ -429,7 +447,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_pre
             "bot_reply": "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧", 
             "usage": {}, 
             "model": model,
-            "used_premium": use_premium,
+            "used_extra_emotion": use_extra_emotion,
             "filter_reason": filter_reason,
             "match_type": match_type,
             "error": str(e)
@@ -443,7 +461,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
     user_message = full_messages[-1]["content"] if full_messages else ""
     chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     
-    use_premium, filter_reason, match_type = should_use_premium_model(user_message, chat_history_length)
+    use_extra_emotion, filter_reason, match_type = should_use_extra_emotion_model(user_message, chat_history_length)
     
     # שלב 2: הכנת טיימר להודעה זמנית
     temp_message_task = None
@@ -467,7 +485,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
             full_messages, 
             chat_id, 
             message_id, 
-            use_premium, 
+            use_extra_emotion, 
             filter_reason,
             match_type
         )
@@ -494,7 +512,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 # GPT הסתיים לפני שההודעה הזמנית נשלחה – מבטלים אותה
                 temp_message_task.cancel()
                 logging.info(
-                    f"✅ [TIMING] GPT מהיר ({gpt_duration:.1f}s) - הודעה זמנית בוטלה לפני שנשלחה"
+                    f"✅ [TIMING] GPT איטי ({gpt_duration:.1f}s) - הודעה זמנית בוטלה לפני שנשלחה"
                 )
             else:
                 # ההודעה הזמנית נשלחה – מוחקים אותה ושולחים את התשובה
@@ -553,7 +571,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
             "bot_reply": "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧", 
             "usage": {}, 
             "model": "error",
-            "used_premium": use_premium,
+            "used_extra_emotion": use_extra_emotion,
             "filter_reason": filter_reason,
             "match_type": match_type,
             "error": str(e)
@@ -567,8 +585,8 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
     user_message = full_messages[-1]["content"] if full_messages else ""
     chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     
-    use_premium, filter_reason, match_type = should_use_premium_model(user_message, chat_history_length)
+    use_extra_emotion, filter_reason, match_type = should_use_extra_emotion_model(user_message, chat_history_length)
     
-    return get_main_response_sync(full_messages, chat_id, message_id, use_premium, filter_reason, match_type)
+    return get_main_response_sync(full_messages, chat_id, message_id, use_extra_emotion, filter_reason, match_type)
 
 # פונקציית enforce_single_question הוסרה – הכל עובר דרך המודל בהתאם להנחיות בפרומט 

@@ -13,12 +13,16 @@ import pytz
 import asyncio
 from typing import Dict, Any, List, Tuple
 
+# === Global control flags ===
+# אם True – לא נשלחות התראות אדמין אוטומטיות מתוך update_user_profile_fast
+_disable_auto_admin_profile_notification: bool = False
+
 def get_israel_time():
     """מחזיר את הזמן הנוכחי בישראל"""
     israel_tz = pytz.timezone('Asia/Jerusalem')
     return datetime.now(israel_tz)
 
-def log_event_to_file(event_data, filename=None):  # שומר אירוע ללוג בפורמט JSON lines
+def log_event_to_file(event_data, filename=None):  # ללוג JSON
     try:
         if filename is None:
             filename = BOT_TRACE_LOG_PATH
@@ -32,7 +36,7 @@ def log_event_to_file(event_data, filename=None):  # שומר אירוע ללו�
         if should_log_debug_prints():
             print(traceback.format_exc())
 
-def update_chat_history(chat_id, user_msg, bot_summary):  # מעדכן היסטוריית שיחה בקובץ JSON
+def update_chat_history(chat_id, user_msg, bot_summary):  # עדכון היסטוריה
     try:
         file_path = CHAT_HISTORY_PATH
         try:  # טעינת היסטוריה קיימת
@@ -60,7 +64,7 @@ def update_chat_history(chat_id, user_msg, bot_summary):  # מעדכן היסט�
     except Exception as e:
         logging.error(f"שגיאה בעדכון היסטוריה: {e}")
 
-def get_chat_history_messages(chat_id: str, limit: int = None) -> list:  # מחזיר היסטוריית שיחה בפורמט GPT
+def get_chat_history_messages(chat_id: str, limit: int = None) -> list:  # היסטוריה GPT
     try:
         with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
             history_data = json.load(f)
@@ -86,7 +90,7 @@ def get_chat_history_messages(chat_id: str, limit: int = None) -> list:  # מח�
         logging.info(f"נטענו {len(messages)//2} הודעות מההיסטוריה של {chat_id}")
     return messages
 
-def get_user_stats_and_history(chat_id: str) -> tuple[dict, list]:  # מחזיר סטטיסטיקות והיסטוריה בקריאה אחת
+def get_user_stats_and_history(chat_id: str) -> tuple[dict, list]:  # סטטיסטיקות + היסטוריה
     try:
         with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
             history_data = json.load(f)
@@ -166,7 +170,7 @@ def _calculate_user_stats_from_history(history: list) -> dict:
     })
     return basic_stats
 
-def get_user_stats(chat_id: str) -> dict:  # מחזיר סטטיסטיקות מועשרות על המשתמש
+def get_user_stats(chat_id: str) -> dict:  # סטטיסטיקות משתמש
     try:
         stats, _ = get_user_stats_and_history(chat_id)
         return stats
@@ -225,11 +229,11 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
         # שמות ימי השבוע לבדיקה
         weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
 
-        # ⏰ כלל חדש: לא מזכירים יום-שבוע מחוץ לטווח 05:00-23:00
+        # לא מזכירים יום-שבוע מחוץ לטווח 05:00-23:00
         if now.hour >= 23 or now.hour < 5:
             return ""
 
-        # אם חסר chat_id או user_msg – ממשיכים להתנהגות ברירת מחדל
+        # אם חסר chat_id או user_msg – ברירת מחדל
         smart_skip = False
         if chat_id is not None:
             now = get_israel_time()
@@ -393,7 +397,7 @@ def get_holiday_system_message(chat_id: str) -> str:
             if event["date"] == today_str:
                 audience = event["audience"]
                 
-                # בדיקת התאמה לזהות דתית ורמת דתיות של המשתמש
+                # בדיקת התאמה דתית
                 should_include = False
                 
                 if audience == "all":
@@ -486,7 +490,7 @@ def health_check() -> dict:  # בדיקת תקינות המערכת
             pass
     return health
 
-def format_error_message(error: Exception, context: str = "") -> str:  # מעצב הודעת שגיאה בצורה ברורה
+def format_error_message(error: Exception, context: str = "") -> str:  # הודעת שגיאה
     try:
         error_msg = f"🚨 שגיאה"
         if context:
@@ -505,7 +509,7 @@ def format_error_message(error: Exception, context: str = "") -> str:  # מעצ�
     except:
         return f"🚨 שגיאה בעיצוב הודעת שגיאה: {str(error)}"
 
-def log_error_stat(error_type: str) -> None:  # מעדכן קובץ errors_stats.json עם ספירה לכל error_type
+def log_error_stat(error_type: str) -> None:  # רישום שגיאה
     try:
         stats_path = os.path.join(DATA_DIR, "errors_stats.json")
         try:
@@ -519,7 +523,7 @@ def log_error_stat(error_type: str) -> None:  # מעדכן קובץ errors_stats
     except Exception as e:
         logging.error(f"שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
 
-def send_error_stats_report():  # שולח דוח שגיאות מצטבר לאדמין
+def send_error_stats_report():  # דוח שגיאות
     from notifications import send_admin_notification
     stats_path = os.path.join(DATA_DIR, "errors_stats.json")
     if not os.path.exists(stats_path):
@@ -537,7 +541,7 @@ def send_error_stats_report():  # שולח דוח שגיאות מצטבר לאד
     except Exception as e:
         send_admin_notification(f"[send_error_stats_report] שגיאה בשליחת דוח שגיאות: {e}")
 
-def send_usage_report(days_back: int = 1):  # שולח דוח usage יומי/שבועי לאדמין
+def send_usage_report(days_back: int = 1):  # דוח שימוש
     from datetime import timedelta
     from notifications import send_admin_notification
     if not os.path.exists(gpt_log_path):
@@ -579,7 +583,7 @@ def send_usage_report(days_back: int = 1):  # שולח דוח usage יומי/ש�
     except Exception as e:
         send_admin_notification(f"[send_usage_report] שגיאה בשליחת דוח usage: {e}")
 
-def update_last_bot_message(chat_id, bot_summary):  # מעדכן את השדה 'bot' של השורה האחרונה בהיסטוריה
+def update_last_bot_message(chat_id, bot_summary):  # עדכון הודעה אחרונה
     try:
         file_path = CHAT_HISTORY_PATH
         with open(file_path, encoding="utf-8") as f:
@@ -592,80 +596,8 @@ def update_last_bot_message(chat_id, bot_summary):  # מעדכן את השדה '
     except Exception as e:
         logging.error(f"❌ שגיאה בעדכון תשובת בוט: {e}")
 
-def add_to_chat_history(user_id, user_message, bot_response):
-    """מוסיף הודעה להיסטוריית הצ'אט"""
-    try:
-        # קובץ ההיסטוריה
-        history_file = "data/chat_history.json"
-        
-        # טוען את הנתונים הקיימים או יוצר קובץ חדש
-        if os.path.exists(history_file):
-            with open(history_file, 'r', encoding='utf-8') as f:
-                history = json.load(f)
-        else:
-            history = {}
-        
-        # יוצר רשומה למשתמש אם לא קיימת
-        if str(user_id) not in history:
-            history[str(user_id)] = {
-                "am_context": "",
-                "history": []
-            }
-        
-        # מוסיף את ההודעה החדשה
-        new_entry = {
-            "user": user_message,
-            "bot": bot_response,
-            "timestamp": get_israel_time().isoformat()
-        }
-        
-        history[str(user_id)]["history"].append(new_entry)
-        
-        # שומר את הנתונים
-        with open(history_file, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
-            
-        logging.info(f"💾 נוספה הודעה להיסטוריה עבור משתמש {user_id}")
-        
-    except Exception as e:
-        logging.error(f"❌ שגיאה בהוספת הודעה להיסטוריה: {e}")
-
-def get_chat_history(user_id, limit=None):
-    """מחזיר את ההיסטוריה של משתמש מסוים"""
-    try:
-        history_file = "data/chat_history.json"
-        
-        if not os.path.exists(history_file):
-            return []
-        
-        with open(history_file, 'r', encoding='utf-8') as f:
-            history = json.load(f)
-        
-        user_history = history.get(str(user_id), {}).get("history", [])
-        
-        if limit:
-            return user_history[-limit:]
-        
-        return user_history
-        
-    except Exception as e:
-        logging.error(f"❌ שגיאה בקריאת היסטוריה: {e}")
-        return []
-
-def format_chat_history_for_gpt(user_id, limit=10):
-    """מעצב את היסטוריית הצ'אט בפורמט מתאים ל-GPT"""
-    history = get_chat_history(user_id, limit)
-    
-    if not history:
-        return ""
-    
-    formatted_history = "היסטוריית שיחות קודמות:\n"
-    for entry in history[-limit:]:  # לוקח את ה-limit אחרונות
-        formatted_history += f"משתמש: {entry['user']}\n"
-        formatted_history += f"בוט: {entry['bot']}\n"
-        formatted_history += f"זמן: {entry['timestamp']}\n---\n"
-    
-    return formatted_history
+# הפונקציות get_chat_history ו-format_chat_history_for_gpt הוסרו
+# כי הן כפולות לפונקציה get_chat_history_messages שקיימת כבר
 
 def cleanup_test_users():
     """מנקה משתמשי בדיקה מקבצי הנתונים"""
@@ -713,7 +645,7 @@ SECRET_CODES = {  # פקודות סודיות
     "#888ResetCache": "reset_cache",      # איפוס cache של Google Sheets
 }
 
-def handle_secret_command(chat_id, user_msg):  # טיפול בפקודות סודיות למטרות בדיקה ותחזוקה
+def handle_secret_command(chat_id, user_msg):  # פקודות בדיקה ותחזוקה
     action = SECRET_CODES.get(user_msg.strip())
     if not action:
         return False, None
@@ -793,20 +725,20 @@ def clear_chat_history(chat_id):  # מוחק היסטוריית צ'אט ספצי
         log_event_to_file({"event": "clear_history_error", "chat_id": chat_id, "error": str(e)})
         return False
 
-def clear_from_sheets(chat_id):  # מוחק נתוני משתמש מהגיליונות
+def clear_from_sheets(chat_id):  # מחיקת נתונים
     from sheets_handler import delete_row_by_chat_id
     deleted_sheet = delete_row_by_chat_id(sheet_name=config["SHEET_USER_TAB"], chat_id=chat_id)
     deleted_state = delete_row_by_chat_id(sheet_name=config["SHEET_STATES_TAB"], chat_id=chat_id)
     return deleted_sheet, deleted_state
 
-def _send_admin_secret_notification(message: str):  # שולח הודעה לאדמין על שימוש בקוד סודי
+def _send_admin_secret_notification(message: str):  # התראת קוד סודי
     try:
         from notifications import send_admin_secret_command_notification
         send_admin_secret_command_notification(message)
     except Exception as e:
         logging.error(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")
 
-def show_log_status():  # מציג את מצב הלוגים הנוכחי
+def show_log_status():  # מצב לוגים
     try:
         from config import (ENABLE_DEBUG_PRINTS, ENABLE_GPT_COST_DEBUG, ENABLE_SHEETS_DEBUG, ENABLE_PERFORMANCE_DEBUG, ENABLE_MESSAGE_DEBUG, ENABLE_DATA_EXTRACTION_DEBUG, DEFAULT_LOG_LEVEL)
         print(f"\n🎛️  מצב לוגים: {DEFAULT_LOG_LEVEL}")
@@ -817,11 +749,8 @@ def show_log_status():  # מציג את מצב הלוגים הנוכחי
     except Exception as e:
         print(f"❌ שגיאה: {e}")
 
-def show_gpt_input_examples():  # דוגמאות למה ש-GPT מקבל כקלט
-    print("🤖 מבנה GPT: System + User Info + Context + 15 זוגות הודעות + הודעה חדשה")
-
-def show_personal_connection_examples():  # דוגמאות להצעות החיבור האישי
-    print("🧠 הצעות חיבור: אחרי 4+ שעות | משפחה (3+), לחץ (2+), עבודה (3+) | זמנים מיוחדים")
+# הפונקציות show_gpt_input_examples ו-show_personal_connection_examples הוסרו
+# כי הן פונקציות debug מיותרות
 
 # 🚀 מערכת ניהול פרופילים מהירה - עדכון כפול אוטומטי
 def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
@@ -847,6 +776,13 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any]):
         
         # 3. זיהוי שינויים
         changes = _detect_profile_changes(old_profile, new_profile)
+        
+        # --- שליחת התראת אדמין על כל שינוי (אם לא מושבת) ---
+        if changes and not _disable_auto_admin_profile_notification:
+            try:
+                _send_admin_profile_change_notification(chat_id, changes)
+            except Exception as _notify_e:
+                logging.error(f"Failed to send admin profile change notification: {_notify_e}")
         
         # 4. עדכון מיידי בקובץ פרופילים נפרד (המקור היחיד של האמת)
         _update_user_profiles_file(chat_id, updates)
@@ -915,60 +851,101 @@ def _update_chat_history_profile(chat_id: str, updates: Dict[str, Any]):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 async def _sync_local_to_sheets_background(chat_id: str):
-    """מסנכרן את הקובץ המקומי ל-Google Sheets"""
+    """מסנכרן את הקובץ המקומי ל-Google Sheets לפי שמות כותרות (לא מיקום!)"""
     try:
         # קריאה מהקובץ המקומי (המקור היחיד של האמת)
         local_profile = get_user_profile_fast(chat_id)
+        
+        if not local_profile:
+            logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
+            return
         
         # עדכון Google Sheets מהנתונים המקומיים
         from sheets_core import setup_google_sheets, find_chat_id_in_sheet
         
         gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
-        # עדכון פרופיל בגיליון משתמשים
-        row_index = find_chat_id_in_sheet(sheet_users, chat_id, col=1)
-        if not row_index:
-            row_index = len(sheet_users.get_all_values()) + 1
-            sheet_users.update_cell(row_index, 1, chat_id)
+        # ✅ עדכון פרופיל בגיליון משתמשים - לפי כותרות!
+        await _sync_to_sheet_by_headers(sheet_users, chat_id, local_profile)
         
-        # מיפוי עמודות לפרופיל
-        profile_column_mapping = {
-            "age": 2, "pronoun_preference": 3, "occupation_or_role": 4, "attracted_to": 5,
-            "relationship_type": 6, "self_religious_affiliation": 7, "self_religiosity_level": 8,
-            "family_religiosity": 9, "closet_status": 10, "who_knows": 11, "who_doesnt_know": 12,
-            "attends_therapy": 13, "primary_conflict": 14, "trauma_history": 15, "goal_in_course": 16,
-            "language_of_strength": 17, "date_first_seen": 18, "coping_strategies": 19, "fears_concerns": 20,
-            "future_vision": 21, "other_insights": 22, "summary": 23, "last_update": 24
-        }
-        
-        # עדכון כל השדות מהקובץ המקומי
-        for field, value in local_profile.items():
-            if field in profile_column_mapping:
-                col_index = profile_column_mapping[field]
-                sheet_users.update_cell(row_index, col_index, str(value))
-        
-        # עדכון בגיליון מצבים
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
-        if not row_index:
-            row_index = len(sheet_states.get_all_values()) + 1
-            sheet_states.update_cell(row_index, 1, chat_id)
-        
-        # עדכון סיכום ומצב
-        if "summary" in local_profile:
-            sheet_states.update_cell(row_index, 3, local_profile["summary"])
-        
-        if "last_update" in local_profile:
-            sheet_states.update_cell(row_index, 4, local_profile["last_update"])
-        
-        # עדכון profile_data כ-JSON
-        profile_json = json.dumps(local_profile, ensure_ascii=False)
-        sheet_states.update_cell(row_index, 5, profile_json)
+        # ✅ עדכון בגיליון מצבים - לפי כותרות!
+        await _sync_to_sheet_by_headers(sheet_states, chat_id, local_profile)
         
         logging.info(f"✅ Google Sheets סונכרן מהקובץ המקומי עבור משתמש {chat_id}")
         
     except Exception as e:
         logging.error(f"שגיאה בסנכרון ל-Google Sheets: {e}")
         # הבוט ממשיך לעבוד גם אם Google Sheets נכשל
+
+async def _sync_to_sheet_by_headers(sheet, chat_id: str, local_profile: Dict[str, Any]):
+    """מסנכרן נתונים לגיליון לפי שמות כותרות (לא מיקום עמודות!)"""
+    try:
+        # קריאת כל הנתונים כולל כותרות
+        all_values = sheet.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            logging.warning(f"גיליון ריק או ללא כותרות")
+            return
+        
+        # שורה ראשונה = כותרות
+        headers = all_values[0]
+        
+        # מציאת אינדקס עמודת chat_id
+        chat_id_col = None
+        for i, header in enumerate(headers):
+            if header.lower() == "chat_id":
+                chat_id_col = i + 1  # gspread uses 1-based indexing
+                break
+        
+        if not chat_id_col:
+            logging.warning(f"לא נמצאה עמודת chat_id בגיליון")
+            return
+        
+        # מציאת השורה של המשתמש
+        from sheets_core import find_chat_id_in_sheet
+        row_index = find_chat_id_in_sheet(sheet, chat_id, col=chat_id_col)
+        
+        # אם המשתמש לא קיים, יוצרים שורה חדשה
+        if not row_index:
+            row_index = len(all_values) + 1
+            sheet.update_cell(row_index, chat_id_col, chat_id)
+        
+        # מיפוי דינמי של שדות לעמודות לפי כותרות
+        field_to_col = {}
+        for i, header in enumerate(headers):
+            field_to_col[header.lower()] = i + 1  # gspread uses 1-based indexing
+        
+        # עדכון כל השדות מהקובץ המקומי לפי כותרות
+        for field, value in local_profile.items():
+            # חיפוש העמודה לפי שם השדה
+            col_index = None
+            
+            # חיפוש ישיר
+            if field.lower() in field_to_col:
+                col_index = field_to_col[field.lower()]
+            
+            # חיפוש עם וריאציות נפוצות
+            elif field == "summary" and "summary" in field_to_col:
+                col_index = field_to_col["summary"]
+            elif field == "last_update" and "last_update" in field_to_col:
+                col_index = field_to_col["last_update"]
+            elif field == "code_try" and "code_try" in field_to_col:
+                col_index = field_to_col["code_try"]
+            elif field == "gpt_c_run_count" and "gpt_c_run_count" in field_to_col:
+                col_index = field_to_col["gpt_c_run_count"]
+            
+            # עדכון התא אם נמצאה העמודה
+            if col_index:
+                try:
+                    sheet.update_cell(row_index, col_index, str(value))
+                    logging.debug(f"עודכן שדה {field} בעמודה {col_index} עבור משתמש {chat_id}")
+                except Exception as e:
+                    logging.warning(f"שגיאה בעדכון שדה {field}: {e}")
+        
+        logging.info(f"✅ סונכרן פרופיל למשתמש {chat_id} לפי כותרות")
+        
+    except Exception as e:
+        logging.error(f"שגיאה בסנכרון לפי כותרות: {e}")
 
 def get_user_summary_fast(chat_id: str) -> str:
     """קריאה מהירה של סיכום משתמש מקובץ chat_history.json"""
@@ -1315,240 +1292,9 @@ def _log_profile_changes_to_chat_history(chat_id: str, changes: List[Dict[str, A
     except Exception as e:
         logging.error(f"שגיאה ברישום שינויים בפרופיל: {e}")
 
-def get_profile_change_history(chat_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """מחזיר היסטוריית שינויים בפרופיל מהצ'אט היסטורי"""
-    try:
-        with open(CHAT_HISTORY_PATH, encoding="utf-8") as f:
-            history_data = json.load(f)
-        
-        chat_id = str(chat_id)
-        if chat_id not in history_data or "history" not in history_data[chat_id]:
-            return []
-        
-        # סינון רק הודעות עדכון פרופיל
-        profile_updates = []
-        for entry in history_data[chat_id]["history"]:
-            if entry.get("type") == "profile_update" and entry.get("bot", "").startswith("[עדכון פרופיל]"):
-                profile_updates.append({
-                    "timestamp": entry.get("timestamp"),
-                    "time": entry.get("time"),
-                    "changes": entry.get("bot", "").replace("[עדכון פרופיל] ", "")
-                })
-        
-        # החזרת האחרונים לפי המגבלה
-        return profile_updates[-limit:] if limit else profile_updates
-        
-    except Exception as e:
-        logging.error(f"שגיאה בקבלת היסטוריית שינויים בפרופיל: {e}")
-        return []
+# מערכת tracking מורכבת הוסרה (7 פונקציות מיותרות)
 
-def get_field_change_history(chat_id: str, field_name: str, limit: int = 5) -> List[Dict[str, Any]]:
-    """מחזיר היסטוריית שינויים בשדה ספציפי"""
-    try:
-        all_changes = get_profile_change_history(chat_id, limit=50)  # יותר היסטוריה לחיפוש
-        field_changes = []
-        
-        for change in all_changes:
-            changes_text = change["changes"]
-            # חיפוש שינויים בשדה הספציפי
-            if field_name in changes_text:
-                field_changes.append({
-                    "timestamp": change["timestamp"],
-                    "time": change["time"],
-                    "change_description": changes_text
-                })
-        
-        return field_changes[-limit:] if limit else field_changes
-        
-    except Exception as e:
-        logging.error(f"שגיאה בקבלת היסטוריית שינויים בשדה {field_name}: {e}")
-        return []
-
-def get_field_current_value_and_history(chat_id: str, field_name: str) -> Dict[str, Any]:
-    """מחזיר את הערך הנוכחי של שדה והיסטוריית השינויים שלו"""
-    try:
-        # ערך נוכחי
-        current_profile = get_user_profile_fast(chat_id)
-        current_value = current_profile.get(field_name, None)
-        
-        # היסטוריית שינויים
-        field_history = get_field_change_history(chat_id, field_name, limit=10)
-        
-        return {
-            "field_name": field_name,
-            "current_value": current_value,
-            "change_history": field_history,
-            "total_changes": len(field_history)
-        }
-        
-    except Exception as e:
-        logging.error(f"שגיאה בקבלת ערך נוכחי והיסטוריה לשדה {field_name}: {e}")
-        return {
-            "field_name": field_name,
-            "current_value": None,
-            "change_history": [],
-            "total_changes": 0
-        }
-
-def get_recently_changed_fields(chat_id: str, days_back: int = 7) -> Dict[str, Any]:
-    """מחזיר שדות שעברו שינויים בימים האחרונים"""
-    try:
-        from datetime import datetime, timedelta
-        
-        # חישוב תאריך התחלה
-        now = get_israel_time()
-        start_date = now - timedelta(days=days_back)
-        
-        # קבלת כל השינויים
-        all_changes = get_profile_change_history(chat_id, limit=100)
-        
-        # סינון לפי תאריך
-        recent_changes = []
-        changed_fields = set()
-        
-        for change in all_changes:
-            try:
-                change_date = datetime.fromisoformat(change["timestamp"])
-                if change_date >= start_date:
-                    recent_changes.append(change)
-                    # חילוץ שמות השדות מהתיאור
-                    changes_text = change["changes"]
-                    if "עודכן:" in changes_text:
-                        field_part = changes_text.split("עודכן:")[1].split("=")[0].strip()
-                        changed_fields.add(field_part)
-                    elif "נוסף:" in changes_text:
-                        field_part = changes_text.split("נוסף:")[1].split("=")[0].strip()
-                        changed_fields.add(field_part)
-                    elif "הוסר:" in changes_text:
-                        field_part = changes_text.split("הוסר:")[1].split("(")[0].strip()
-                        changed_fields.add(field_part)
-            except:
-                continue
-        
-        return {
-            "period_days": days_back,
-            "total_changes": len(recent_changes),
-            "changed_fields": list(changed_fields),
-            "recent_changes": recent_changes
-        }
-        
-    except Exception as e:
-        logging.error(f"שגיאה בקבלת שדות שעברו שינויים לאחרונה: {e}")
-        return {
-            "period_days": days_back,
-            "total_changes": 0,
-            "changed_fields": [],
-            "recent_changes": []
-        }
-
-def get_profile_evolution_summary(chat_id: str) -> Dict[str, Any]:
-    """מחזיר סיכום התפתחות הפרופיל לאורך זמן"""
-    try:
-        # קבלת כל השינויים
-        all_changes = get_profile_change_history(chat_id, limit=200)
-        
-        if not all_changes:
-            return {
-                "total_changes": 0,
-                "first_change": None,
-                "last_change": None,
-                "most_active_period": None,
-                "field_evolution": {}
-            }
-        
-        # ניתוח התפתחות
-        first_change = all_changes[0]["timestamp"]
-        last_change = all_changes[-1]["timestamp"]
-        
-        # ניתוח שדות לפי תדירות שינויים
-        field_counts = {}
-        for change in all_changes:
-            changes_text = change["changes"]
-            if "עודכן:" in changes_text:
-                field_part = changes_text.split("עודכן:")[1].split("=")[0].strip()
-                field_counts[field_part] = field_counts.get(field_part, 0) + 1
-            elif "נוסף:" in changes_text:
-                field_part = changes_text.split("נוסף:")[1].split("=")[0].strip()
-                field_counts[field_part] = field_counts.get(field_part, 0) + 1
-            elif "הוסר:" in changes_text:
-                field_part = changes_text.split("הוסר:")[1].split("(")[0].strip()
-                field_counts[field_part] = field_counts.get(field_part, 0) + 1
-        
-        # מציאת השדה הפעיל ביותר
-        most_active_field = max(field_counts.items(), key=lambda x: x[1]) if field_counts else None
-        
-        return {
-            "total_changes": len(all_changes),
-            "first_change": first_change,
-            "last_change": last_change,
-            "most_active_field": most_active_field,
-            "field_evolution": field_counts,
-            "changes_per_field": field_counts
-        }
-        
-    except Exception as e:
-        logging.error(f"שגיאה בקבלת סיכום התפתחות פרופיל: {e}")
-        return {
-            "total_changes": 0,
-            "first_change": None,
-            "last_change": None,
-            "most_active_period": None,
-            "field_evolution": {}
-        }
-
-def get_profile_with_change_history(chat_id: str) -> Dict[str, Any]:
-    """מחזיר את הפרופיל הנוכחי עם היסטוריית השינויים"""
-    try:
-        # פרופיל נוכחי
-        current_profile = get_user_profile_fast(chat_id)
-        
-        # היסטוריית שינויים
-        change_history = get_profile_change_history(chat_id, limit=20)
-        
-        # סיכום התפתחות
-        evolution_summary = get_profile_evolution_summary(chat_id)
-        
-        # שדות שעברו שינויים לאחרונה
-        recent_changes = get_recently_changed_fields(chat_id, days_back=7)
-        
-        return {
-            "current_profile": current_profile,
-            "recent_changes": change_history,
-            "evolution_summary": evolution_summary,
-            "recently_changed_fields": recent_changes,
-            "profile_age_days": _calculate_profile_age_days(current_profile.get("last_update")),
-            "total_profile_fields": len(current_profile),
-            "fields_with_values": len([v for v in current_profile.values() if v is not None and v != ""])
-        }
-        
-    except Exception as e:
-        logging.error(f"שגיאה בקבלת פרופיל עם היסטוריית שינויים: {e}")
-        return {
-            "current_profile": {},
-            "recent_changes": [],
-            "evolution_summary": {},
-            "recently_changed_fields": {},
-            "profile_age_days": 0,
-            "total_profile_fields": 0,
-            "fields_with_values": 0
-        }
-
-def _calculate_profile_age_days(last_update: str) -> int:
-    """מחשב את גיל הפרופיל בימים"""
-    try:
-        if not last_update:
-            return 0
-        
-        from datetime import datetime
-        last_update_dt = datetime.fromisoformat(last_update)
-        now = get_israel_time()
-        age_days = (now - last_update_dt).days
-        return max(0, age_days)
-        
-    except Exception:
-        return 0
-
-# === NEW HELPER ===
+# [מערכת tracking מורכבת נמחקה - חסכנו ~200 שורות]
 def should_send_time_greeting(chat_id: str) -> bool:
     """קובע האם יש צורך לשלוח ברכת זמן (בוקר טוב/לילה טוב).
 
@@ -1599,6 +1345,95 @@ def should_send_time_greeting(chat_id: str) -> bool:
     except Exception as e:
         logging.error(f"שגיאה ב-should_send_time_greeting: {e}")
         return False
+
+# === Admin Notification for profile changes ===
+def _send_admin_profile_change_notification(chat_id: str, changes: List[Dict[str, Any]]):
+    """שולח התראת אדמין מפורטת על שינויים בפרופיל."""
+    if not changes:
+        return
+
+    try:
+        from notifications import send_admin_notification
+
+        # בניית הודעה מפורטת
+        lines = [f"📝 <b>עדכון פרופיל</b> למשתמש <code>{chat_id}</code>:"]
+
+        for change in changes:
+            field = change.get("field")
+            old_val = change.get("old_value") if change.get("old_value") not in [None, ""] else "—"
+            new_val = change.get("new_value") if change.get("new_value") not in [None, ""] else "—"
+            change_type = change.get("change_type")
+
+            if change_type == "added":
+                lines.append(f"➕ <b>{field}</b>: '{new_val}' (חדש)")
+            elif change_type == "updated":
+                lines.append(f"✏️ <b>{field}</b>: '{old_val}' → '{new_val}'")
+            elif change_type == "removed":
+                lines.append(f"➖ <b>{field}</b>: '{old_val}' → נמחק")
+            else:
+                # fallback
+                lines.append(f"🔄 <b>{field}</b>: '{old_val}' → '{new_val}'")
+
+        # שליחה
+        send_admin_notification("\n".join(lines))
+    except Exception as e:
+        logging.error(f"_send_admin_profile_change_notification failed: {e}")
+
+# === Overview Notification combining GPT info and summary ===
+def _send_admin_profile_overview_notification(
+    *,
+    chat_id: str,
+    user_msg: str,
+    changes: List[Dict[str, Any]],
+    gpt_c_info: str,
+    gpt_d_info: str,
+    gpt_e_info: str,
+    summary: str = ""
+):
+    """שולח הודעת אדמין אחת עם סיכום הריצה, הודעת המשתמש, ה-GPTים והסאמרי."""
+    try:
+        from notifications import send_admin_notification
+
+        # כותרת + הודעת המשתמש
+        lines: List[str] = []
+        lines.append("🛠️ <b>עדכון פרופיל (GPT)</b>")
+        lines.append(f"<b>משתמש:</b> <code>{chat_id}</code>")
+        if user_msg:
+            user_msg_trimmed = user_msg.strip()[:300]
+            lines.append("<b>הודעת משתמש:</b>")
+            lines.append(f"<i>{user_msg_trimmed}</i>")
+
+        # פרטי GPT
+        lines.append("")
+        lines.append(gpt_c_info)
+        lines.append(gpt_d_info)
+        lines.append(gpt_e_info)
+
+        # סאמרי
+        if summary is not None:
+            lines.append("")
+            lines.append("<b>Summary:</b>")
+            lines.append(f"{summary if summary else '—'}")
+
+        # שינויים (אם יש)
+        if changes:
+            lines.append("")
+            lines.append("<b>Fields Changed:</b>")
+            for ch in changes:
+                field = ch.get("field")
+                old_val = ch.get("old_value") if ch.get("old_value") not in [None, ""] else "—"
+                new_val = ch.get("new_value") if ch.get("new_value") not in [None, ""] else "—"
+                change_type = ch.get("change_type")
+                if change_type == "added":
+                    lines.append(f"➕ {field}: '{new_val}' (חדש)")
+                elif change_type == "updated":
+                    lines.append(f"✏️ {field}: '{old_val}' → '{new_val}'")
+                elif change_type == "removed":
+                    lines.append(f"➖ {field}: '{old_val}' → נמחק")
+
+        send_admin_notification("\n".join(lines))
+    except Exception as e:
+        logging.error(f"_send_admin_profile_overview_notification failed: {e}")
 
 # אם מפעילים את utils.py ישירות
 if __name__ == "__main__":

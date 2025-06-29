@@ -59,7 +59,7 @@ def format_text_for_telegram(text):
     # המרת כוכביות כפולות (**טקסט**) ל-bold (לפני טיפול בכוכבית בודדת)
     text = re.sub(r'\*\*([^\s*][^*]*[^\s*]|\S)\*\*', r'<b>\1</b>', text)
     
-    # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
+    # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם לא רווחים בקצוות)
     text = re.sub(r'\*([^\s*][^*]*[^\s*]|\S)\*', r'<b>\1</b>', text)
     
     # המרת קו תחתון כפול (__טקסט__) ל-bold (לפני טיפול בודד)
@@ -83,6 +83,25 @@ def format_text_for_telegram(text):
     
     # ניקוי כפילויות של תגיות <b> מקוננות פעמיים
     text = re.sub(r'<b>\s*<b>(.*?)</b>\s*</b>', r'<b>\1</b>', text, flags=re.DOTALL)
+    
+    # 🆕 החלפת נקודה->שורה חדשה; אימוג׳י (אם קיים) נשאר בסוף השורה, והנקודה מוסרת.
+
+    def _dot_to_newline(match):
+        emoji_part = match.group(1) or ""
+        first_letter = match.group(2)
+        # אם יש אימוג׳י נוסיף רווח לפניו לשמירה על מרווח טבעי בין המילה לאימוג׳י
+        if emoji_part:
+            return f" {emoji_part}\n{first_letter}"
+        else:
+            return f"\n{first_letter}"
+
+    # תבנית: נקודה + רווחים + (אימוג׳י אופציונלי) + רווחים + האות הראשונה של המשפט הבא.
+    emoji_pattern = r"[^\w\s<>]+"
+    dot_regex = rf"\.\s*(?:({emoji_pattern})\s*)?([A-Za-z\u0590-\u05FF])"
+    text = re.sub(dot_regex, _dot_to_newline, text)
+    
+    # בדיקה נוספת בסוף: צמצום רצפים של 3+ מעברי שורה שנוצרו כעת
+    text = re.sub(r'\n{3,}', '\n\n', text)
     
     return text
 
@@ -295,8 +314,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
             print("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
             
-            # בדיקה מהירה רק ב-user_states
-            is_first_time = not find_chat_id_in_sheet(context.bot_data["sheet_states"], chat_id, col=1)
+            # בדיקה מהירה רק ב-user_states - לפי כותרות
+            from sheets_core import find_chat_id_in_sheet
+            sheet_states = context.bot_data["sheet_states"]
+            
+            # קריאת כותרות למציאת עמודת chat_id
+            all_values = sheet_states.get_all_values()
+            if all_values and len(all_values) > 0:
+                headers = all_values[0]
+                chat_id_col = None
+                for i, header in enumerate(headers):
+                    if header.lower() == "chat_id":
+                        chat_id_col = i + 1  # gspread uses 1-based indexing
+                        break
+                
+                if chat_id_col:
+                    is_first_time = not find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
+                else:
+                    # fallback למיקום קלאסי אם לא נמצאה עמודת chat_id
+                    is_first_time = not find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+            else:
+                # fallback למיקום קלאסי אם אין כותרות
+                is_first_time = not find_chat_id_in_sheet(sheet_states, chat_id, col=1)
             
             if is_first_time:
                 # אם זה משתמש חדש, עושים את כל הבדיקות המלאות ברקע
@@ -319,8 +358,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
             print("🔍 בודק הרשאות משתמש מול הגיליון...")
             
-            # בדיקה מהירה - אם יש ב-user_states, כנראה מאושר
-            exists_in_states = find_chat_id_in_sheet(context.bot_data["sheet_states"], chat_id, col=1)
+            # בדיקה מהירה - אם יש ב-user_states, כנראה מאושר - לפי כותרות
+            sheet_states = context.bot_data["sheet_states"]
+            
+            # קריאת כותרות למציאת עמודת chat_id
+            all_values = sheet_states.get_all_values()
+            if all_values and len(all_values) > 0:
+                headers = all_values[0]
+                chat_id_col = None
+                for i, header in enumerate(headers):
+                    if header.lower() == "chat_id":
+                        chat_id_col = i + 1  # gspread uses 1-based indexing
+                        break
+                
+                if chat_id_col:
+                    exists_in_states = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
+                else:
+                    # fallback למיקום קלאסי אם לא נמצאה עמודת chat_id
+                    exists_in_states = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+            else:
+                # fallback למיקום קלאסי אם אין כותרות
+                exists_in_states = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
             
             if not exists_in_states:
                 # אם לא קיים ב-user_states, עושים בדיקה מלאה ברקע
@@ -342,7 +400,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             # --- יצירת רשומה בהיסטוריה מראש ---
-            # זה מונע מצב שבו ההודעה הנוכחית מגיעה שוב לפני שתשובת GPT הקודמת נשמרה,
+            # מונע מצב הודעה כפולה לפני שמירת תשובת GPT,
             # וכך נמנע שליחת ברכת "בוקר/לילה טוב" כפולה (Race-condition).
             history_entry_created = False
             try:
@@ -413,10 +471,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_reply = gpt_response["bot_reply"]
             
             # הדפסת מידע על בחירת המודל
-            if gpt_response.get("used_premium"):
-                print(f"🎯 [MODEL_INFO] השתמש במודל מתקדם: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
+            used_extra_emotion = gpt_response.get("used_extra_emotion", gpt_response.get("used_premium"))
+            if used_extra_emotion:
+                print(f"🎯 [MODEL_INFO] השתמש במודל Extra-Emotion: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
             else:
-                print(f"🚀 [MODEL_INFO] השתמש במודל מהיר: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
+                print(f"🚀 [MODEL_INFO] השתמש במודל ברירת-מחדל: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
 
             # שלב 3: שליחת התשובה למשתמש (אלא אם כבר נשלחה דרך עריכת הודעה זמנית)
             await update_user_processing_stage(str(chat_id), "sending_response")
@@ -498,48 +557,52 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
     """מטפל במשתמש לא רשום ברקע"""
     try:
-        exists, code, approved = check_user_access(context.bot_data["sheet"], chat_id)
-        if not exists:
+        # check_user_access מחזיר dict עם status ו-code
+        access_result = check_user_access(context.bot_data["sheet"], chat_id)
+        status = access_result.get("status", "not_found")
+        code = access_result.get("code")
+        
+        if status == "not_found":
+            # משתמש לא קיים - צריך לרשום קוד
             current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
             if current_try is None:
-                current_try = 0
-            if current_try == 0:
                 current_try = 1
 
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
                 await update.message.reply_text(format_text_for_telegram(code_approved_message()))
                 await send_approval_message(update, chat_id)
             else:
-                if current_try == 1:
+                if current_try <= 3:
                     await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
-                elif current_try == 2:
-                    await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
-                elif current_try == 3:
-                    await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
-                elif current_try >= 4:
+                else:
                     await update.message.reply_text(format_text_for_telegram(not_approved_message()))
-        elif not approved:
-            if user_msg.strip() == APPROVE_BUTTON_TEXT:
+                    
+        elif status == "pending":
+            # משתמש רשום אבל לא אישר תנאים
+            if user_msg.strip() == APPROVE_BUTTON_TEXT():
                 approve_user(context.bot_data["sheet"], chat_id)
                 await update.message.reply_text(format_text_for_telegram(nice_keyboard_message()), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
                 await update.message.reply_text(format_text_for_telegram(remove_keyboard_message()), reply_markup=ReplyKeyboardRemove())
                 await update.message.reply_text(format_text_for_telegram(full_access_message()), parse_mode="HTML")
-            elif user_msg.strip() == DECLINE_BUTTON_TEXT:
+            elif user_msg.strip() == DECLINE_BUTTON_TEXT():
                 await update.message.reply_text(format_text_for_telegram("כדי להמשיך, יש לאשר את התנאים."))
                 await send_approval_message(update, chat_id)
             else:
                 await send_approval_message(update, chat_id)
+                
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
 async def _handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id):
     """מטפל בסיכום ההודעה עם gpt_b."""
     if len(bot_reply) <= 150:  # הודעה קצרה - לא צריך סיכום
-        print(f"[DEBUG] הודעה קצרה ({len(bot_reply)} תווים), לא צריך סיכום")
+        if should_log_debug_prints():
+            print(f"[MSG_SUMMARY] הודעה קצרה ({len(bot_reply)} תווים), ללא סיכום")
         return None, None
     
     try:
-        print(f"[DEBUG] הודעה ארוכה ({len(bot_reply)} תווים), מבקש סיכום")
+        if should_log_debug_prints():
+            print(f"[MSG_SUMMARY] הודעה ארוכה ({len(bot_reply)} תווים), מבקש סיכום")
         summary_response = await asyncio.to_thread(
             get_summary, user_msg=user_msg, bot_reply=bot_reply, 
             chat_id=chat_id, message_id=message_id
@@ -584,17 +647,39 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                 gpt_c_usage[key] = value
         
         # 1. עדכון פרופיל מהיר בקובץ המקומי  ➜ Google Sheets יסתנכרן ברקע
+        # השבתת התראות אוטומטיות זמנית כדי שלא תישלח הודעה כפולה
+        import utils as _u
+        _u._disable_auto_admin_profile_notification = True
         await update_user_profile(chat_id, updated_profile)
+        _u._disable_auto_admin_profile_notification = False
 
-        # 2. הפקת SUMMARY אוטומטי על-פי הפרופיל המעודכן ושמירתו בקובץ המקומי
+        # חישוב שינויים להשוואה עבור התראות אדמין
+        changes_list = _u._detect_profile_changes(existing_profile, updated_profile)
+
+        # הכנת מידע GPT להתראה
+        gpt_c_info_line = f"GPT-C: עודכנו {len(changes_list)} שדות"
+        gpt_d_info_line = "GPT-D: מיזוג בוצע" if gpt_d_usage else "GPT-D: לא הופעל"
+
+        if gpt_e_result:
+            gpt_e_info_line = f"GPT-E: הופעל ({len(gpt_e_result.get('changes', {}))} שדות)"
+        else:
+            gpt_e_info_line = (
+                f"GPT-E: לא הופעל (מופעל כל 25 ריצות GPT-C, כרגע בספירה {gpt_c_run_count})"
+            )
+
+        # שליחת הודעת אדמין מאוחדת
         try:
-            from sheets_core import generate_summary_from_profile_data, update_user_summary
-
-            auto_summary = generate_summary_from_profile_data(updated_profile)
-            if auto_summary:  # שומר רק אם מתקבל טקסט כלשהו
-                update_user_summary(chat_id, auto_summary)
-        except Exception as summary_err:
-            logging.error(f"Error generating\saving auto summary: {summary_err}")
+            _u._send_admin_profile_overview_notification(
+                chat_id=str(chat_id),
+                user_msg=user_msg,
+                changes=changes_list,
+                gpt_c_info=gpt_c_info_line,
+                gpt_d_info=gpt_d_info_line,
+                gpt_e_info=gpt_e_info_line,
+                summary=auto_summary if 'auto_summary' in locals() else ''
+            )
+        except Exception as _e_notify:
+            logging.error(f"Failed to send overview admin notification: {_e_notify}")
         
         log_payload["gpt_c_data"] = gpt_c_usage
         log_payload["gpt_d_data"] = gpt_d_usage

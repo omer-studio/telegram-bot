@@ -347,11 +347,7 @@ def log_error_to_file(error_data, send_telegram=True):
     פלט: אין (שומר לוג)
     """
     try:
-        print("[DEBUG][log_error_to_file] --- START ---")
-        for k, v in error_data.items():
-            print(f"[DEBUG][log_error_to_file] {k} = {v} (type: {type(v)})")
-            if isinstance(v, (dict, list)):
-                print(f"[DEBUG][log_error_to_file][ALERT] {k} הוא {type(v)}! ערך: {v}")
+        # DEBUG הודעות הוסרו לטובת ביצועים
         error_file = BOT_ERRORS_PATH
         error_data["timestamp"] = get_israel_time().isoformat()
         # יצירה אוטומטית של הקובץ אם לא קיים
@@ -386,10 +382,6 @@ def log_error_to_file(error_data, send_telegram=True):
             requests.post(url, data=data)
     except Exception as e:
         print(f"💥 שגיאה ברישום שגיאה לקובץ: {e}")
-        print("[DEBUG][log_error_to_file][EXCEPTION] error_data:")
-        for k, v in error_data.items():
-            print(f"[DEBUG][log_error_to_file][EXCEPTION] {k} = {v} (type: {type(v)})")
-        print(traceback.format_exc())
 
 
 def send_startup_notification():
@@ -405,9 +397,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     מטפל בשגיאות קריטיות - שגיאות שמונעות מהבוט לענות למשתמש
     """
     print(f"🚨 שגיאה קריטית: {error}")
-    print("[DEBUG][handle_critical_error][locals]:")
-    for k, v in locals().items():
-        print(f"[DEBUG][handle_critical_error][locals] {k} = {v} (type: {type(v)})")
+    # DEBUG הודעות הוסרו לטובת ביצועים
     
     # שליחת הודעה ידידותית למשתמש
     if chat_id:
@@ -542,9 +532,7 @@ def send_recovery_notification(recovery_type: str, details: dict):
     except Exception as e:
         print(f"[ERROR] Failed to send recovery notification: {e}")
 
-# ========================================
-# 🚨 מערכת התראות אדמין (מקור: admin_alerts.py)
-# ========================================
+# 🚨 מערכת התראות אדמין
 
 def send_admin_alert(message, alert_level="info"):
     """

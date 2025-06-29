@@ -69,9 +69,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # הגדרות גלובליות
 config = load_config()
 
-# ==========================================================
-# 🎛️ הגדרות בקרת לוגים - לשליטה ברמת הפירוט
-# ==========================================================
+# 🎛️ הגדרות בקרת לוגים
 # רמות לוגים זמינות: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # ⚙️ הגדרות ברירת מחדל (ניתן לשנות כאן)
@@ -132,9 +130,7 @@ def should_log_data_extraction_debug():
     """בודק האם להדפיס מידע על חילוץ נתונים מ-GPT C,D,E"""
     return ENABLE_DATA_EXTRACTION_DEBUG
 
-# ==========================================================
 # 🚀 טוקנים וזיהויים
-# ==========================================================
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
@@ -153,9 +149,7 @@ MAX_MESSAGE_LENGTH = 4096  # מגבלת אורך הודעה בטלגרם
 # הגדרת LiteLLM
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
-# ==========================================================
-# 🚀 הגדרת Google AI Studio (Gemini) - מומלץ!
-# ==========================================================
+# 🚀 הגדרת Google AI Studio (Gemini)
 # פשוט יותר מ-Vertex AI - רק API key אחד ללא service accounts מסובכים
 GEMINI_API_KEY = config.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
@@ -165,16 +159,12 @@ if GEMINI_API_KEY:
 else:
     print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
 
-# ==========================================================
-# 🎯 הגדרות מודלים (לא סודיות - נשמרות כאן ולא ב-config.json)
-# ==========================================================
+# 🎯 הגדרות מודלים
 FREE_MODELS = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
 PAID_MODELS = ["gpt-4o-mini", "gpt-4o", "gemini/gemini-2.5-flash"]
 FREE_MODEL_DAILY_LIMIT = 100
 
-# ==========================================================
-# 🔑 הגדרת אימות גלובלית עבור Google Vertex AI (לא בשימוש כרגע)
-# ==========================================================
+# 🔑 הגדרת אימות גלובלית עבור Google Vertex AI (לא בשימוש)
 # השארנו את הקוד הזה כגיבוי למקרה של מעבר עתידי ל-Vertex AI
 # כרגע אנחנו משתמשים ב-Google AI Studio שפשוט יותר ועם GEMINI_API_KEY למעלה
 
@@ -239,7 +229,7 @@ def setup_google_sheets():
     # אם יש cache תקף, מחזיר אותו
     if _sheets_cache is not None:
         try:
-            # בדיקה מהירה שהחיבור עדיין עובד
+            # בדיקת חיבור
             _sheets_cache[1].get('A1')  # בדיקה קטנה על sheet_users
             cache_age = round(time.time() - _cache_created_at, 1) if _cache_created_at else 0
             print(f"[DEBUG] ♻️ Using cached Google Sheets connection (age: {cache_age}s)")
@@ -361,7 +351,7 @@ def get_config_snapshot():
 # ================================
 # 🎯 הגדרת מודלים ופרמטרים מרכזית
 # ================================
-# כל שינוי כאן משפיע על כל מנועי ה-GPT - Single Source of Truth!
+# כל שינוי כאן משפיע על כל מנועי ה-GPT
 
 # ================================
 # 🔧 הגדרות Concurrent Handling
@@ -377,11 +367,6 @@ UPDATE_PRIORITY = {
     "critical": 1,    # היסטוריה + פרופיל - מיידי
     "normal": 2,      # לוגים רגילים - יכול לחכות
     "low": 3          # נתונים סטטיסטיים - לא דחוף
-}
-
-# 💰 מודל מתקדם (בתשלום) - רק במקרה הצורך הקיצוני
-GPT_PREMIUM_FALLBACK = {
-    "gpt_a": "gemini/gemini-1.5-pro",         # 💎 פרימיום - Pro יציב אם Flash לא עובד
 }
 
 GPT_PARAMS = {
