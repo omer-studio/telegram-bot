@@ -216,7 +216,7 @@ def _send_admin_profile_overview_notification(
 ):
     """שליחת הודעת אדמין מרוכזת על כל העדכון (GPT-C/D/E + summary)."""
     try:
-        from notifications import send_admin_notification
+        from notifications import send_admin_notification_raw
 
         lines: List[str] = [f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>"]
 
@@ -277,7 +277,7 @@ def _send_admin_profile_overview_notification(
             lines.append("")
             lines.append("<b>סנכרון</b>: עודכן בקובץ user_profiles.json ולאחר מכן בגוגל שיטס - הכל מסונכרן")
 
-        send_admin_notification("\n".join(lines))
+        send_admin_notification_raw("\n".join(lines))
     except Exception as exc:
         logging.error(f"_send_admin_profile_overview_notification failed: {exc}")
 

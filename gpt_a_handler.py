@@ -443,18 +443,29 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
     except Exception as e:
         logging.error(f"[gpt_a] שגיאה במודל {model}: {e}")
         
-        # 🔬 רישום שגיאה מבוטל זמנית
-        
         # שליחת הודעת שגיאה טכנית לאדמין
         send_error_notification(
-            error_message=f"שגיאה במנוע הראשי (gpt_a) - מודל: {model}, שגיאה: {str(e)}",
+            error_message=f"שגיאה כללית ב-get_main_response_sync: {str(e)}",
             chat_id=chat_id,
-            user_msg=full_messages[-1]["content"] if full_messages else "לא זמין",
+            user_msg=full_messages[-1]["content"] if full_messages else "לא זמין", 
             error_type="gpt_a_engine_error"
         )
         
+        error_reply = "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧"
+        # 🐛 DEBUG: שליחת הודעת שגיאה
+        print("=" * 80)
+        print("❌ ERROR MESSAGE DEBUG")
+        print("=" * 80)
+        print(f"📝 ERROR TEXT: {repr(error_reply)}")
+        print(f"📊 LENGTH: {len(error_reply)} chars")
+        print(f"📊 NEWLINES: {error_reply.count(chr(10))}")
+        print(f"📊 DOTS: {error_reply.count('.')}")
+        print(f"📊 QUESTIONS: {error_reply.count('?')}")
+        print(f"📊 EXCLAMATIONS: {error_reply.count('!')}")
+        print("=" * 80)
+        
         return {
-            "bot_reply": "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧", 
+            "bot_reply": error_reply, 
             "usage": {}, 
             "model": model,
             "used_extra_emotion": use_extra_emotion,
@@ -540,6 +551,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                                     if len(gpt_result['bot_reply']) > 1000
                                     else gpt_result["bot_reply"]
                                 )
+                                # 🐛 DEBUG: שליחת הודעת חירום
+                                print("=" * 80)
+                                print("🚨 EMERGENCY MESSAGE DEBUG")
+                                print("=" * 80)
+                                print(f"📝 EMERGENCY TEXT: {repr(emergency_text)}")
+                                print(f"📊 LENGTH: {len(emergency_text)} chars")
+                                print(f"📊 NEWLINES: {emergency_text.count(chr(10))}")
+                                print(f"📊 DOTS: {emergency_text.count('.')}")
+                                print(f"📊 QUESTIONS: {emergency_text.count('?')}")
+                                print(f"📊 EXCLAMATIONS: {emergency_text.count('!')}")
+                                print("=" * 80)
                                 from message_handler import format_text_for_telegram  # local import to avoid circular
                                 formatted_emergency_text = format_text_for_telegram(emergency_text)
                                 await update.message.reply_text(
@@ -576,6 +598,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                                         if len(gpt_result['bot_reply']) > 1000
                                         else gpt_result["bot_reply"]
                                     )
+                                    # 🐛 DEBUG: שליחת הודעת חירום
+                                    print("=" * 80)
+                                    print("🚨 EMERGENCY MESSAGE DEBUG")
+                                    print("=" * 80)
+                                    print(f"📝 EMERGENCY TEXT: {repr(emergency_text)}")
+                                    print(f"📊 LENGTH: {len(emergency_text)} chars")
+                                    print(f"📊 NEWLINES: {emergency_text.count(chr(10))}")
+                                    print(f"📊 DOTS: {emergency_text.count('.')}")
+                                    print(f"📊 QUESTIONS: {emergency_text.count('?')}")
+                                    print(f"📊 EXCLAMATIONS: {emergency_text.count('!')}")
+                                    print("=" * 80)
                                     from message_handler import format_text_for_telegram  # local import to avoid circular
                                     formatted_emergency_text = format_text_for_telegram(emergency_text)
                                     await update.message.reply_text(
@@ -624,6 +657,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                         if not gpt_result.get("message_already_sent", False) and update:
                             try:
                                 error_reply = "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧"
+                                # 🐛 DEBUG: שליחת הודעת שגיאה
+                                print("=" * 80)
+                                print("❌ ERROR MESSAGE DEBUG")
+                                print("=" * 80)
+                                print(f"📝 ERROR TEXT: {repr(error_reply)}")
+                                print(f"📊 LENGTH: {len(error_reply)} chars")
+                                print(f"📊 NEWLINES: {error_reply.count(chr(10))}")
+                                print(f"📊 DOTS: {error_reply.count('.')}")
+                                print(f"📊 QUESTIONS: {error_reply.count('?')}")
+                                print(f"📊 EXCLAMATIONS: {error_reply.count('!')}")
+                                print("=" * 80)
                                 from message_handler import format_text_for_telegram
                                 formatted_error = format_text_for_telegram(error_reply)
                                 await update.message.reply_text(formatted_error, parse_mode="HTML")
@@ -661,6 +705,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 if not gpt_result.get("message_already_sent", False) and update:
                     try:
                         error_reply = "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧"
+                        # 🐛 DEBUG: שליחת הודעת שגיאה
+                        print("=" * 80)
+                        print("❌ ERROR MESSAGE DEBUG")
+                        print("=" * 80)
+                        print(f"📝 ERROR TEXT: {repr(error_reply)}")
+                        print(f"📊 LENGTH: {len(error_reply)} chars")
+                        print(f"📊 NEWLINES: {error_reply.count(chr(10))}")
+                        print(f"📊 DOTS: {error_reply.count('.')}")
+                        print(f"📊 QUESTIONS: {error_reply.count('?')}")
+                        print(f"📊 EXCLAMATIONS: {error_reply.count('!')}")
+                        print("=" * 80)
                         from message_handler import format_text_for_telegram
                         formatted_error = format_text_for_telegram(error_reply)
                         await update.message.reply_text(formatted_error, parse_mode="HTML")
@@ -684,6 +739,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 if temp_message:
                     # ננסה לשלוח תשובה רגילה במקום למחוק
                     error_reply = "מצטער, יש לי בעיה טכנית זמנית. העברתי את הפרטים לעומר שיבדוק את זה. נסה שוב בעוד כמה דקות 🔧"
+                    # 🐛 DEBUG: שליחת הודעת שגיאה
+                    print("=" * 80)
+                    print("❌ ERROR MESSAGE DEBUG")
+                    print("=" * 80)
+                    print(f"📝 ERROR TEXT: {repr(error_reply)}")
+                    print(f"📊 LENGTH: {len(error_reply)} chars")
+                    print(f"📊 NEWLINES: {error_reply.count(chr(10))}")
+                    print(f"📊 DOTS: {error_reply.count('.')}")
+                    print(f"📊 QUESTIONS: {error_reply.count('?')}")
+                    print(f"📊 EXCLAMATIONS: {error_reply.count('!')}")
+                    print("=" * 80)
                     from message_handler import format_text_for_telegram
                     formatted_error = format_text_for_telegram(error_reply)
                     await update.message.reply_text(formatted_error, parse_mode="HTML")

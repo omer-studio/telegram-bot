@@ -47,6 +47,17 @@ def format_text_for_telegram(text):
     - _טקסט_ -> <b>טקסט</b> (bold) – במקום italic
     - מנקה תגי HTML לא נתמכים (<br>) ומאחד הדגשות (<i> → <b>) תוך שמירת <u>
     """
+    # 🐛 DEBUG: שמירת הטקסט המקורי
+    original_text = text
+    debug_info = {
+        "original_length": len(text),
+        "original_newlines": text.count('\n'),
+        "original_dots": text.count('.'),
+        "original_questions": text.count('?'),
+        "original_exclamations": text.count('!'),
+        "original_emojis": len(re.findall(r'[^\w\s<>]+', text, flags=re.UNICODE))
+    }
+    
     # ניקוי תגי HTML לא נתמכים
     text = text.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
     
@@ -68,28 +79,21 @@ def format_text_for_telegram(text):
     # המרת קו תחתון ל-bold (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
     text = re.sub(r'_([^\s_][^_]*[^\s_]|\S)_', r'<b>\1</b>', text)
     
-    # 🚥 *** כללי נשימות טבעיות - לא למחוק את הכללים האלה!! ***
-    # 1. מחיקת נקודות (.) והוספת מעבר שורה במקומן
-    # 2. עבור סימני שאלה (?) וקריאה (!) - רק מעבר שורה, לא מחיקה
-    # 3. אימוג'ים צמודים לשורה (לא בתחילת שורה)
-    # 4. לא ליצור רווח כפול אלא אם כן יש במקור
-    # 5. אם יש אימוג'י אחרי נקודה - המעבר שורה אחרי האימוג'י
-    # 6. הגנה מפני שורות קצרות מדי (פחות מ-3 תווים)
-    # 7. הגנה על פורמט קיים (אם יש הרבה מעברי שורה - לא לגעת)
-    # *** עובד רק על טקסט ארוך עם מעט מעברי שורה ***
+    # 🚨🚨🚨 *** כללי נשימות טבעיות - אסור למחוק בשום מצב! *** 🚨🚨🚨
+    # ⚠️  אזהרה: שינוי הכללים האלה יהרוס את הפורמט הטבעי של הטקסט! ⚠️
+    # 🚫 אסור לשנות את הקוד הבא! 🚫
+    # DO NOT DELETE OR MODIFY THESE RULES – BREAKS FORMATTING!
     if len(text) > 50 and text.count('\n') < len(text) // 60:
         # הגנה: אם הטקסט כבר מפורמט יפה (הרבה מעברי שורה) - לא לגעת
         if text.count('\n') > len(text) // 40:  # יותר ממעבר שורה אחד לכל 40 תווים
             pass  # לא לגעת בטקסט שכבר מפורמט
         else:
-            # טיפול בנקודות ואימוג'ים - מחיקת נקודות לחלוטין
+            # טיפול בנקודות ואימוג'ים - מחיקת הנקודות לחלוטין
             emoji_pattern = r"[^\w\s<>]+"
             # נקודה + אימוג'י + טקסט אחריו - מחיקת הנקודה
             text = re.sub(rf'\.(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\2\n', text, flags=re.UNICODE)
             # נקודה + אימוג'י בסוף משפט - מחיקת הנקודה
             text = re.sub(rf'\.(\s*)({emoji_pattern})(?=\s*\n|\s*$)', r'\2\n', text, flags=re.UNICODE)
-            # נקודות רגילות - מחיקה והוספת מעבר שורה
-            text = re.sub(r'\.(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\n', text, flags=re.UNICODE)
             # סימני שאלה וקריאה - רק מעבר שורה (ללא מחיקה)
             text = re.sub(r'([!?])(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\1\n', text, flags=re.UNICODE)
             
@@ -136,7 +140,50 @@ def format_text_for_telegram(text):
     # *** הגנה: לא ליצור רווח כפול חדש אלא אם כן היה במקור ***
     text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # *** כללי הנשימות הטבעיות הסתיימו - לא לשנות! ***
+    # 🚨🚨🚨 *** כללי הנשימות הטבעיות הסתיימו - אסור לשנות! *** 🚨🚨🚨
+    # ⚠️  אזהרה: שינוי הקוד מעל יהרוס את הפורמט הטבעי של הטקסט! ⚠️
+    # 🚫 אסור למחוק או לשנות את הכללים! 🚫
+    # DO NOT DELETE OR MODIFY THESE RULES – BREAKS FORMATTING!
+    
+    # 🐛 DEBUG: עדכון מידע על הטקסט הסופי
+    debug_info.update({
+        "final_length": len(text),
+        "final_newlines": text.count('\n'),
+        "final_dots": text.count('.'),
+        "final_questions": text.count('?'),
+        "final_exclamations": text.count('!'),
+        "final_emojis": len(re.findall(r'[^\w\s<>]+', text, flags=re.UNICODE)),
+        "length_change": len(text) - len(original_text),
+        "newlines_change": text.count('\n') - original_text.count('\n'),
+        "dots_change": text.count('.') - original_text.count('.'),
+        "questions_change": text.count('?') - original_text.count('?'),
+        "exclamations_change": text.count('!') - original_text.count('!')
+    })
+    
+    # 🐛 DEBUG: הדפסת מידע מפורט
+    print("=" * 80)
+    print("🔍 FORMAT_TEXT_FOR_TELEGRAM DEBUG")
+    print("=" * 80)
+    print(f"📊 STATS:")
+    print(f"   אורך: {debug_info['original_length']} → {debug_info['final_length']} ({debug_info['length_change']:+d})")
+    print(f"   מעברי שורה: {debug_info['original_newlines']} → {debug_info['final_newlines']} ({debug_info['newlines_change']:+d})")
+    print(f"   נקודות: {debug_info['original_dots']} → {debug_info['final_dots']} ({debug_info['dots_change']:+d})")
+    print(f"   סימני שאלה: {debug_info['original_questions']} → {debug_info['final_questions']} ({debug_info['questions_change']:+d})")
+    print(f"   סימני קריאה: {debug_info['original_exclamations']} → {debug_info['final_exclamations']} ({debug_info['exclamations_change']:+d})")
+    print(f"   אימוג'ים: {debug_info['original_emojis']} → {debug_info['final_emojis']}")
+    print()
+    print(f"📝 ORIGINAL TEXT ({len(original_text)} chars):")
+    print(f"   {repr(original_text)}")
+    print()
+    print(f"✨ FORMATTED TEXT ({len(text)} chars):")
+    print(f"   {repr(text)}")
+    print()
+    print(f"👀 VISUAL COMPARISON:")
+    print("   ORIGINAL:")
+    print(f"   {original_text}")
+    print("   FORMATTED:")
+    print(f"   {text}")
+    print("=" * 80)
     
     return text
 
@@ -148,6 +195,20 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     פלט: אין (שולחת הודעה)
     # מהלך מעניין: עדכון היסטוריה ולוגים רק אם ההודעה נשלחה בהצלחה.
     """
+    # 🐛 DEBUG: מידע על השליחה
+    print("=" * 80)
+    print("📤 SEND_MESSAGE DEBUG")
+    print("=" * 80)
+    print(f"📊 CHAT_ID: {chat_id}")
+    print(f"📊 IS_BOT_MESSAGE: {is_bot_message}")
+    print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
+    print(f"   {repr(text)}")
+    print(f"📊 NEWLINES: {text.count(chr(10))}")
+    print(f"📊 DOTS: {text.count('.')}")
+    print(f"📊 QUESTIONS: {text.count('?')}")
+    print(f"📊 EXCLAMATIONS: {text.count('!')}")
+    print("=" * 80)
+    
     # מיפוי פורמטים לפני שליחה
     formatted_text = format_text_for_telegram(text)
     

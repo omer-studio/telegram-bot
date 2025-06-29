@@ -67,6 +67,17 @@ async def _send_user_friendly_error_message(update, chat_id: str):
         )
         
         if update and hasattr(update, 'message') and hasattr(update.message, 'reply_text'):
+            # 🐛 DEBUG: שליחה בלי פורמטינג!
+            print("=" * 80)
+            print("🚨 WARNING: SENDING MESSAGE WITHOUT FORMATTING!")
+            print("=" * 80)
+            print(f"📝 MESSAGE: {repr(user_friendly_message)}")
+            print(f"📊 LENGTH: {len(user_friendly_message)} chars")
+            print(f"📊 NEWLINES: {user_friendly_message.count(chr(10))}")
+            print(f"📊 DOTS: {user_friendly_message.count('.')}")
+            print(f"📊 QUESTIONS: {user_friendly_message.count('?')}")
+            print(f"📊 EXCLAMATIONS: {user_friendly_message.count('!')}")
+            print("=" * 80)
             await update.message.reply_text(user_friendly_message)
         else:
             # אם אין update זמין, ננסה לשלוח ישירות דרך bot API
@@ -313,6 +324,27 @@ def send_admin_notification(message, urgent=False):
             print(f"[DEBUG] admin_msg | chat={data.get('chat_id', 'N/A')} | status=sent")
         else:
             print(f"[DEBUG] admin_msg | chat={data.get('chat_id', 'N/A')} | status=fail | code={response.status_code}")
+
+    except Exception as e:
+        print(f"💥 שגיאה בשליחת הודעה: {e}")
+
+def send_admin_notification_raw(message):
+    """שולח הודעה לאדמין בלי הכותרת האוטומטית - רק עם זמן בסוף."""
+    try:
+        notification_text = f"{message}\n\n⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
+
+        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
+        data = {
+            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
+            "text": notification_text,
+            "parse_mode": "HTML"
+        }
+
+        response = requests.post(url, data=data, timeout=10)
+        if response.status_code == 200:
+            print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=sent")
+        else:
+            print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=fail | code={response.status_code}")
 
     except Exception as e:
         print(f"💥 שגיאה בשליחת הודעה: {e}")
