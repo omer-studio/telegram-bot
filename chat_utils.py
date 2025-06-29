@@ -106,10 +106,14 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
         with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
             history_data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
+        if should_log_message_debug():
+            print(f"[HISTORY_DEBUG] לא נמצא קובץ היסטוריה: {CHAT_HISTORY_PATH}")
         return []
 
     chat_id = str(chat_id)
     if chat_id not in history_data or "history" not in history_data[chat_id]:
+        if should_log_message_debug():
+            print(f"[HISTORY_DEBUG] אין היסטוריה עבור chat_id={chat_id} בקובץ {CHAT_HISTORY_PATH}")
         return []
 
     history = history_data[chat_id]["history"]
@@ -117,15 +121,19 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
     last_entries = history if len(history) < max_entries else history[-max_entries:]
 
     messages: List[Dict[str, str]] = []
+    user_count = 0
+    assistant_count = 0
     for entry in last_entries:
         user_content = entry["user"]
         if "time" in entry:
             user_content = f"[{entry['time']}] {entry['user']}"
         messages.append({"role": "user", "content": user_content})
+        user_count += 1
         messages.append({"role": "assistant", "content": entry["bot"]})
+        assistant_count += 1
 
     if should_log_message_debug():
-        logging.info(f"נטענו {len(messages)//2} הודעות מההיסטוריה של {chat_id}")
+        print(f"[HISTORY_DEBUG] נשלחה היסטוריה מ-{CHAT_HISTORY_PATH} | chat_id={chat_id} | סה\"כ הודעות={len(messages)} | user={user_count} | assistant={assistant_count}")
     return messages
 
 
@@ -573,6 +581,7 @@ def should_send_time_greeting(chat_id: str, user_msg: str | None = None) -> bool
         if user_msg:
             basic_greeting_pattern = r'^(היי|שלום|אהלן|הי|שלום לך|אהלן לך).{0,2}$'
             if re.match(basic_greeting_pattern, user_msg.strip(), re.IGNORECASE):
+                print(f"[GREETING_DEBUG] זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={chat_id}")
                 return True
 
         effective_now = utils.get_effective_time("datetime")

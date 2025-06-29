@@ -308,11 +308,29 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
         if changes:
             _log_profile_changes_to_chat_history(chat_id, changes)
 
-        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
+        try:
+            import asyncio
+            asyncio.run(_sync_local_to_sheets_background(chat_id))
+        except RuntimeError:
+            # אם כבר יש event loop פעיל, נשתמש ב-create_task
+            try:
+                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+            except RuntimeError:
+                # אם גם זה לא עובד, נדלג על הסנכרון
+                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
     except Exception as exc:
         logging.error(f"שגיאה בעדכון פרופיל מהיר: {exc}")
         _update_user_profiles_file(chat_id, updates)
-        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        # 🔧 תיקון: אותו תיקון גם כאן
+        try:
+            import asyncio
+            asyncio.run(_sync_local_to_sheets_background(chat_id))
+        except RuntimeError:
+            try:
+                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+            except RuntimeError:
+                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
 
 
 def get_user_summary_fast(chat_id: str) -> str:
@@ -362,14 +380,30 @@ def update_emotional_identity_fast(chat_id: str, emotional_data: Dict[str, Any])
         _update_user_profiles_file(chat_id, emotional_data)
         if changes:
             _log_profile_changes_to_chat_history(chat_id, changes)
-        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
+        try:
+            import asyncio
+            asyncio.run(_sync_local_to_sheets_background(chat_id))
+        except RuntimeError:
+            try:
+                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+            except RuntimeError:
+                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
         logging.info(f"✅ תעודת זהות רגשית עודכנה עבור משתמש {chat_id}")
         return True
     except Exception as exc:
         logging.error(f"שגיאה בעדכון תעודת זהות רגשית: {exc}")
         emotional_data["last_update"] = utils.get_israel_time().isoformat()
         _update_user_profiles_file(chat_id, emotional_data)
-        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        # 🔧 תיקון: אותו תיקון גם כאן
+        try:
+            import asyncio
+            asyncio.run(_sync_local_to_sheets_background(chat_id))
+        except RuntimeError:
+            try:
+                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+            except RuntimeError:
+                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
         return False
 
 
@@ -449,7 +483,16 @@ def force_sync_to_sheets(chat_id: str) -> bool:
         if not local_profile:
             logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
             return False
-        asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
+        try:
+            import asyncio
+            asyncio.run(_sync_local_to_sheets_background(chat_id))
+        except RuntimeError:
+            try:
+                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
+            except RuntimeError:
+                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
+                return False
         logging.info(f"✅ סנכרון כפוי ל-Google Sheets עבור משתמש {chat_id}")
         return True
     except Exception as exc:

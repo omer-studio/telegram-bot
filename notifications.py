@@ -432,6 +432,10 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     """
     מטפל בשגיאות קריטיות - שגיאות שמונעות מהבוט לענות למשתמש
     """
+    # הוספת לוג להודעה נכנסת גם בשגיאות קריטיות
+    if chat_id and user_msg and update and update.message:
+        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (CRITICAL ERROR)")
+    
     print(f"🚨 שגיאה קריטית: {error}")
     # DEBUG הודעות הוסרו לטובת ביצועים
     
@@ -571,28 +575,33 @@ def send_recovery_notification(recovery_type: str, details: dict):
 # 🚨 מערכת התראות אדמין
 
 def send_admin_alert(message, alert_level="info"):
-    """
-    🚨 שולח התראה לאדמין בטלגרם
-    
-    Args:
-        message: הודעת ההתראה
-        alert_level: "info", "warning", "critical"
-    """
+    """שולח התראה לאדמין בטלגרם"""
     try:
-        # אייקונים לפי רמת חומרה
-        icons = {
-            "info": "📊",
+        # בחירת אייקון לפי רמת ההתראה
+        icon_map = {
+            "info": "ℹ️",
             "warning": "⚠️", 
-            "critical": "🚨"
+            "critical": "🚨",
+            "success": "✅",
+            "error": "❌"
         }
+        icon = icon_map.get(alert_level, "ℹ️")
         
-        icon = icons.get(alert_level, "📊")
         timestamp = get_israel_time().strftime("%H:%M:%S")
         
         alert_text = f"{icon} **התראת מערכת** ({timestamp})\n\n{message}"
         
-        # שליחה אסינכרונית (לא חוסמת)
-        asyncio.create_task(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
+        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
+        try:
+            import asyncio
+            asyncio.run(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
+        except RuntimeError:
+            # אם כבר יש event loop פעיל, נשתמש ב-create_task
+            try:
+                asyncio.create_task(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
+            except RuntimeError:
+                # אם גם זה לא עובד, נדלג על השליחה
+                logging.debug(f"לא ניתן לשלוח התראה לאדמין - אין event loop")
         
         # גם ללוג
         logging.warning(f"[🚨 אדמין] {message}")

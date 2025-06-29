@@ -39,6 +39,7 @@ from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active
 from utils import should_send_time_greeting, get_time_greeting_instruction
+import profile_utils as _pu
 
 def format_text_for_telegram(text):
     """
@@ -99,6 +100,12 @@ def format_text_for_telegram(text):
     
     # אימוג'י בסוף משפט - מעבר שורה (רק אם אין כבר מעבר שורה לפני)
     text = re.sub(rf'({emoji_pattern})(\s*)(?=[.!?]|$)', r'\1\n', text, flags=re.UNICODE)
+
+    # 🚨 תיקון חשוב: טיפול באימוג'ים בתחילת משפט - מחבר אותם לשורה הקודמת
+    # זה מונע מצב שבו אימוג'י נמצא בשורה נפרדת בתחילת משפט
+    text = re.sub(rf'\n(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r' \2\n', text, flags=re.UNICODE)
+    # גם טיפול במקרה שבו אימוג'י נמצא בתחילת שורה ללא טקסט אחריו
+    text = re.sub(rf'\n(\s*)({emoji_pattern})(\s*)$', r' \2', text, flags=re.UNICODE)
 
     # הגבלת כמות אימוג'ים לפי יחס של 1 לכל 40 תווים (לא כולל סימני פיסוק)
     emojis = re.findall(emoji_pattern, text, flags=re.UNICODE)
@@ -670,6 +677,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_new_user_background(update, context, chat_id, user_msg):
     """מטפל במשתמש חדש ברקע"""
     try:
+        # הוספת לוג להודעה נכנסת
+        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (NEW USER)")
+        
         is_first_time = ensure_user_state_row(
             context.bot_data["sheet"],           
             context.bot_data["sheet_states"],    
@@ -685,6 +695,9 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
     """מטפל במשתמש לא רשום ברקע"""
     try:
+        # הוספת לוג להודעה נכנסת
+        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (UNREGISTERED)")
+        
         # check_user_access מחזיר dict עם status ו-code
         access_result = check_user_access(context.bot_data["sheet"], chat_id)
         status = access_result.get("status", "not_found")
@@ -782,7 +795,7 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
         _u._disable_auto_admin_profile_notification = False
 
         # חישוב שינויים להשוואה עבור התראות אדמין
-        changes_list = _u._detect_profile_changes(existing_profile, updated_profile)
+        changes_list = _pu._detect_profile_changes(existing_profile, updated_profile)
 
         # הכנת מידע GPT להתראה
         gpt_c_info_line = f"GPT-C: עודכנו {len(changes_list)} שדות"
@@ -831,7 +844,7 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                 except:
                     emotional_summary = ""
                 
-                _u._send_admin_profile_overview_notification(
+                _pu._send_admin_profile_overview_notification(
                     chat_id=str(chat_id),
                     user_msg=user_msg,
                     changes=changes_list,
