@@ -497,7 +497,12 @@ def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
         chat_id = validate_chat_id(chat_id)
         gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
         
-        sheet_map = {"users": sheet_users, "states": sheet_states, "logs": sheet_log}
+        # מיפוי שמות גיליונות לגיליונות
+        sheet_map = {
+            "user_profiles": sheet_users,
+            "user_states": sheet_states, 
+            "log": sheet_log
+        }
         sheet = sheet_map.get(sheet_name)
         
         if not sheet:

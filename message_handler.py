@@ -482,6 +482,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not gpt_response.get("message_already_sent", False):
                 await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
 
+            # שלב 4: בדיקת חגים אחרי התשובה
+            from utils import get_holiday_system_message
+            try:
+                holiday_message = get_holiday_system_message(str(chat_id), bot_reply)
+                if holiday_message:
+                    print(f"🎯 [HOLIDAY] שולח הודעת חג: {holiday_message}")
+                    await send_message_with_retry(update, chat_id, holiday_message, is_bot_message=True)
+            except Exception as holiday_err:
+                logging.warning(f"[HOLIDAY] שגיאה בהערכת חגים: {holiday_err}")
+
             # אם כבר יצרנו רשומה מקדימה – אין צורך להוסיף שנית
             if not history_entry_created:
                 update_chat_history(chat_id, user_msg, "")
@@ -498,7 +508,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"🎯 [USER_EXPERIENCE] GPT pure time: {gpt_pure_time:.3f}s | System overhead: {overhead_time:.3f}s")
                 print(f"🎯 [USER_EXPERIENCE] Overhead percentage: {(overhead_time/total_user_experience_time)*100:.1f}%")
             
-            # שלב 4: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
+            # שלב 5: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
             await update_user_processing_stage(str(chat_id), "background_tasks")
             # העברת bot_reply כ-last_bot_message - זה יהיה ההודעה הנוכחית (לא מקוצרת עדיין)
             asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, bot_reply))
@@ -667,19 +677,23 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                 f"GPT-E: לא הופעל (מופעל כל 25 ריצות GPT-C, כרגע בספירה {gpt_c_run_count})"
             )
 
-        # שליחת הודעת אדמין מאוחדת
-        try:
-            _u._send_admin_profile_overview_notification(
-                chat_id=str(chat_id),
-                user_msg=user_msg,
-                changes=changes_list,
-                gpt_c_info=gpt_c_info_line,
-                gpt_d_info=gpt_d_info_line,
-                gpt_e_info=gpt_e_info_line,
-                summary=auto_summary if 'auto_summary' in locals() else ''
-            )
-        except Exception as _e_notify:
-            logging.error(f"Failed to send overview admin notification: {_e_notify}")
+        # שליחת הודעת אדמין מאוחדת - רק אם יש שינויים
+        if changes_list:  # ✅ נשלח רק אם יש שינויים
+            try:
+                _u._send_admin_profile_overview_notification(
+                    chat_id=str(chat_id),
+                    user_msg=user_msg,
+                    changes=changes_list,
+                    gpt_c_info=gpt_c_info_line,
+                    gpt_d_info=gpt_d_info_line,
+                    gpt_e_info=gpt_e_info_line,
+                    summary=auto_summary if 'auto_summary' in locals() else ''
+                )
+            except Exception as _e_notify:
+                logging.error(f"Failed to send overview admin notification: {_e_notify}")
+        else:
+            # 🟢 לוג קצר כשאין שינויים
+            logging.info(f"✅ [ADMIN] אין שינויים בפרופיל למשתמש {chat_id} - לא נשלחה הודעה")
         
         log_payload["gpt_c_data"] = gpt_c_usage
         log_payload["gpt_d_data"] = gpt_d_usage

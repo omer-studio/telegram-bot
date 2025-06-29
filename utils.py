@@ -229,6 +229,9 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
         # שמות ימי השבוע לבדיקה
         weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
 
+        # קבלת הזמן הנוכחי
+        now = get_israel_time()
+
         # לא מזכירים יום-שבוע מחוץ לטווח 05:00-23:00
         if now.hour >= 23 or now.hour < 5:
             return ""
@@ -236,8 +239,6 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
         # אם חסר chat_id או user_msg – ברירת מחדל
         smart_skip = False
         if chat_id is not None:
-            now = get_israel_time()
-
             # קביעת התחלת היום (05:00). אם לפני 05:00 – שייך ליום הקודם.
             start_of_day = now.replace(hour=5, minute=0, second=0, microsecond=0)
             if now.hour < 5:
@@ -275,172 +276,86 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
             return ""
 
         # ––– בניית הנחיה כבעבר –––
-        now = get_israel_time()
         weekday = now.weekday()  # 0=Monday, 6=Sunday
+        # המרה לפורמט שלנו: 1=ראשון, 2=שני, ..., 7=שבת
+        israel_weekday = (weekday + 1) % 7 + 1  # המרה: 0->1, 1->2, ..., 6->7
 
         weekday_instructions = {
-            0: "היום יום ב' - תחילת שבוע. שאל אותו: 'איך התחיל השבוע? יש תוכניות מיוחדות השבוע? איך הוא מרגיש עם התחלת שבוע חדש?' התייחס באופן חיובי ועודד אותו לשבוע הקרב.",
-            1: "היום יום ג'. שאל אותו: 'איך עבר השבוע עד כה? מה הדבר הכי טוב שקרה השבוע? יש משהו שמאתגר אותך השבוע?' תן לו חיזוק ועצות אם צריך.",
-            2: "היום יום ד' - אמצע השבוע. שאל אותו: 'איך אתה מרגיש באמצע השבוע? מה עוד נשאר לך לעשות עד הסופש? יש משהו שאתה מצפה לו השבוע?' עזור לו לעבור את החלק השני של השבוע.",
-            3: "היום יום ה' - לקראת הסופש. שאל אותו: 'איך אתה מסכם את השבוע? מה הדבר הכי טוב שקרה? יש תוכניות לסופש?' התרגש איתו לקראת הסופש ועזור לו לתכנן.",
-            4: "היום יום ו' - ערב שבת. שאל אותו: 'איך אתה מכין את השבת? יש ארוחת שבת מיוחדת? עם מי אתה נפגש הערב?' התעניין בתוכניות השבת שלו ובמשפחה.",
-            5: "היום שבת - יום מנוחה. שאל אותו: 'איך עובר השבת? עושה משהו נחמד היום? נפגש עם משפחה או חברים?' היה רגוע ונעים, התאם לאווירת השבת.",
-            6: "היום יום א' - סוף הסופש. שאל אותו: 'איך היה הסופש? מה עשית? איך אתה מרגיש לקראת השבוע החדש מחר?' עזור לו להתכונן נפשית לשבוע הבא."
+            1: "היום יום ראשון - תחילת שבוע. שאל אותו: 'איך התחיל השבוע? יש תוכניות מיוחדות השבוע? איך הוא מרגיש עם התחלת שבוע חדש?' התייחס באופן חיובי ועודד אותו לשבוע הקרב.",
+            2: "היום יום שני.",
+            3: "היום יום שלישי.",
+            4: "היום יום רביעי.",
+            5: "היום יום חמישי - הסופש קרב! שאל אותו: 'איך אתה מרגיש לסיים את השבוע? יש תוכניות לסופש? מתכנן לצאת? לטייל? להיפגש עם מישהו?' עודד אותו לקראת הסופש.",
+            6: "היום יום שישי - ערב שבת. שאל אותו: 'איך אתה מכין את השבת? יש ארוחת ערב חגיגית? עם מי אתה נפגש הערב?' התעניין בתוכניות השבת שלו ובמשפחה.",
+            7: "היום שבת - יום מנוחה. שאל אותו: 'איך עוברת לך השבת? אתה עושה משהו מיוחד? נח? מחר מתחיל שבוע חדש - איך אתה מרגיש לקראת זה?' היה רגוע ונעים, התאם לאווירת השבת."
         }
 
-        return weekday_instructions.get(weekday, "")
+        return weekday_instructions.get(israel_weekday, "")
 
     except Exception as e:
         logging.error(f"שגיאה ביצירת הנחיית יום השבוע: {e}")
         return ""
 
-def get_holiday_system_message(chat_id: str) -> str:
+def get_holiday_system_message(chat_id: str, bot_reply: str = "") -> str:
     """
     מחזיר הודעת SYSTEM לחגים דתיים רלוונטיים לפי זהות דתית ורמת דתיות.
     
     הלוגיקה:
-    1. self_religious_affiliation (זהות): יהודי/ערבי/דרוזי/נוצרי/אתאיסט/שומרוני
-    2. self_religiosity_level (רמת דתיות): דתי/חילוני/מסורתי/חרדי/דתי לאומי/לא דתי
+    1. בדיקה שהתאריך של היום מופיע בטבלת החגים
+    2. בדיקה שהבוט לא הזכיר כבר את המילים של החג בתשובה שלו
+    3. אם יש חג ולא הזכיר - מחזיר הודעה
     
     דוגמאות:
-    - אין מידע → יהודי חילוני (ברירת מחדל)
-    - יהודי + דתי → חגים + צומות יהודיים
-    - יהודי + חילוני → רק חגים יהודיים (לא צומות)
-    - ערבי → חגים מוסלמיים
-    - דרוזי → חגים דרוזיים
-    - אתאיסט → כמו יהודי חילוני (אירועים כלליים + חגים יהודיים)
-    
-    הערה: חודש הגאווה ואירועים כלליים מתייחסים אליהם כאותו דבר.
+    - אין חג היום → מחזיר ""
+    - יש חג אבל הבוט כבר הזכיר "חנוכה" → מחזיר ""
+    - יש חג והבוט לא הזכיר → מחזיר הודעה
     """
     try:
         from sheets_core import get_user_profile_data
-        from datetime import datetime
         import json
-        import os
+        import datetime
         
-        # קבלת נתוני המשתמש
-        user_data = get_user_profile_data(chat_id)
-        if not user_data:
-            return ""
+        # טעינת טבלת החגים
+        with open('special_events.json', 'r', encoding='utf-8') as f:
+            events = json.load(f)
         
-        religious_affiliation = user_data.get("self_religious_affiliation", "").lower() if user_data.get("self_religious_affiliation") else ""
-        religiosity_level = user_data.get("self_religiosity_level", "").lower() if user_data.get("self_religiosity_level") else ""
-        
-        # שלב 1: זיהוי זהות דתית/אתנית מ-self_religious_affiliation
-        # ברירת מחדל: יהודי (אם אין מידע)
-        is_jewish = True  
-        is_muslim = False
-        is_christian = False  
-        is_druze = False
-        
-        if religious_affiliation:
-            if "יהודי" in religious_affiliation or "jewish" in religious_affiliation:
-                is_jewish = True
-            elif "ערבי" in religious_affiliation:
-                is_jewish = False
-                if "נוצרי" in religious_affiliation or "christian" in religious_affiliation:
-                    is_christian = True  # ערבי נוצרי מפורש
-                else:
-                    is_muslim = True     # ערבי ללא פירוט → מוסלמי (ברירת מחדל)
-            elif "דרוזי" in religious_affiliation or "druze" in religious_affiliation:
-                is_jewish = False
-                is_druze = True
-            elif "נוצרי" in religious_affiliation or "christian" in religious_affiliation:
-                is_jewish = False 
-                is_christian = True
-            elif "אתאיסט" in religious_affiliation or "atheist" in religious_affiliation:
-                is_jewish = True  # אתאיסט = יהודי חילוני
-            elif "שומרוני" in religious_affiliation:
-                is_jewish = True  # שומרוני נחשב יהודי לצורך חגים
-        
-        # שלב 2: זיהוי רמת דתיות מ-self_religiosity_level + ברירות מחדל חכמות
-        is_religious = False  # דתי/חרדי/מסורתי (יקבל צומות)
-        is_secular = True     # חילוני/לא דתי (לא יקבל צומות)
-        
-        if religiosity_level:
-            if any(word in religiosity_level for word in ["דתי", "חרדי", "מסורתי", "שומר מסורת", "דתי לאומי"]):
-                is_religious = True  
-                is_secular = False
-            elif any(word in religiosity_level for word in ["חילוני", "לא דתי"]):
-                is_secular = True
-                is_religious = False
+        # תאריך היום (יום מתחיל ב-5 בבוקר)
+        now = datetime.datetime.now()
+        if now.hour < 5:
+            # אם לפני 5 בבוקר - זה שייך ליום הקודם
+            today = (now - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
         else:
-            # ברירות מחדל כשאין מידע על רמת דתיות:
-            if is_jewish:
-                # יהודי ללא מידע → חילוני (ברירת מחדל)
-                is_secular = True
-                is_religious = False
-            elif is_druze:
-                # דרוזי ללא מידע → דתי (רוב המשפחות דתיות)
-                is_secular = False
-                is_religious = True
-            elif is_muslim or is_christian:
-                # מוסלמי/נוצרי ללא מידע → נניח שמחגגים חגים
-                is_secular = False
-                is_religious = True
+            today = now.strftime('%Y-%m-%d')
         
-        now = get_israel_time()
-        today_str = now.strftime("%Y-%m-%d")
+        # חיפוש חגים היום
+        relevant_events = []
+        for event in events:
+            if event.get('date') == today:
+                relevant_events.append(event)
         
-        # קריאת הטבלה מהקובץ
-        try:
-            events_file = os.path.join(os.path.dirname(__file__), "special_events.json")
-            with open(events_file, 'r', encoding='utf-8') as f:
-                events_data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            logging.warning(f"לא ניתן לקרוא קובץ special_events.json: {e}")
+        # אם אין חגים היום - לא מחזירים כלום
+        if not relevant_events:
             return ""
         
-        # מציאת אירועים רלוונטיים לתאריך היום
-        relevant_events = []
-        for event in events_data:
-            if event["date"] == today_str:
-                audience = event["audience"]
-                
-                # בדיקת התאמה דתית
-                should_include = False
-                
-                if audience == "all":
-                    should_include = True
-                elif audience == "jewish_family" and is_jewish:
-                    # חגים יהודיים - לכל היהודים (דתיים וחילוניים)
-                    should_include = True
-                elif audience == "jewish_fast" and is_jewish and is_religious:
-                    # צומות יהודיים - רק ליהודים דתיים/מסורתיים/חרדים
-                    should_include = True
-                elif audience == "muslim" and is_muslim:
-                    # חגים מוסלמיים - לכל המוסלמים
-                    should_include = True
-                elif audience == "christian" and is_christian:
-                    # חגים נוצריים - לכל הנוצרים
-                    should_include = True
-                elif audience == "druze" and is_druze:
-                    # חגים דרוזיים - לכל הדרוזים
-                    should_include = True
-                elif audience == "lgbtq":  
-                    # חודש הגאווה - אירוע כללי לכולם
-                    should_include = True
-                elif audience == "mixed":
-                    # אירועים מעורבים - לכולם
-                    should_include = True
-                
-                if should_include:
-                    relevant_events.append(event)
-        
-        # יצירת הודעות
-        if relevant_events:
-            messages = []
+        # בדיקה שהבוט לא הזכיר כבר את המילים
+        if bot_reply:
+            bot_reply_lower = bot_reply.lower()
             for event in relevant_events:
-                suggestion = event["suggestion"]
-                event_name = event["event"]
-                messages.append(f"שים לב: היום {event_name}. {suggestion}")
-            
-            return " ".join(messages)
+                keywords = event.get('keywords', [])
+                for keyword in keywords:
+                    if keyword.lower() in bot_reply_lower:
+                        # הבוט כבר הזכיר את החג - לא מחזירים כלום
+                        return ""
         
-        return ""
+        # יש חג והבוט לא הזכיר - מחזירים הודעה
+        event = relevant_events[0]  # לוקחים את הראשון
+        event_name = event.get('event', '')
+        suggestion = event.get('suggestion', '')
+        
+        return f"בוט יקר!! שים לב שהיום זה יום מיוחד - יש מועד מיוחד בישראל: {event_name}. {suggestion}"
         
     except Exception as e:
-        logging.error(f"שגיאה בבדיקת חגים דתיים: {e}")
+        print(f"שגיאה בפונקציה get_holiday_system_message: {e}")
         return ""
 
 def clean_old_logs() -> None:  # מנקה לוגים ישנים
@@ -656,17 +571,17 @@ def handle_secret_command(chat_id, user_msg):  # פקודות בדיקה ותח�
         _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת היסטוריה בצ'אט {chat_id}.")
         return True, msg
     if action == "clear_sheets":
-        deleted_sheet, deleted_state = clear_from_sheets(chat_id)
-        msg = "🗑️ כל הנתונים שלך נמחקו מהגיליונות!" if (deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא מידע למחיקה בגיליונות."
-        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_sheets", "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
-        _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת נתונים בגיליונות בצ'אט {chat_id}.")
+        deleted_profile, deleted_state, deleted_log, deleted_local = clear_from_sheets(chat_id)
+        msg = "🗑️ כל הנתונים האישיים שלך נמחקו! (נשמר רק code_approve)" if (deleted_profile or deleted_state or deleted_log or deleted_local) else "🤷‍♂️ לא נמצא מידע למחיקה בגיליונות או קבצים מקומיים."
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_sheets", "deleted_profile": deleted_profile, "deleted_state": deleted_state, "deleted_log": deleted_log, "deleted_local": deleted_local})
+        _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת נתונים אישיים (שומר code_approve) בצ'אט {chat_id}.")
         return True, msg
     if action == "clear_all":
         cleared = clear_chat_history(chat_id)
-        deleted_sheet, deleted_state = clear_from_sheets(chat_id)
-        msg = "💣 הכל נמחק! (היסטוריה + גיליונות)" if (cleared or deleted_sheet or deleted_state) else "🤷‍♂️ לא נמצא שום מידע למחיקה."
-        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
-        _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת **הכל** בצ'אט {chat_id}.")
+        deleted_profile, deleted_state, deleted_log, deleted_local = clear_from_sheets(chat_id)
+        msg = "💣 הכל נמחק! (היסטוריה + נתונים אישיים + קבצים מקומיים, נשמר רק code_approve)" if (cleared or deleted_profile or deleted_state or deleted_log or deleted_local) else "🤷‍♂️ לא נמצא שום מידע למחיקה."
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_profile": deleted_profile, "deleted_state": deleted_state, "deleted_log": deleted_log, "deleted_local": deleted_local})
+        _send_admin_secret_notification(f"❗ הופעל קוד סודי למחיקת **הכל** (שומר code_approve) בצ'אט {chat_id}.")
         return True, msg
     
     if action == "performance_info":
@@ -726,10 +641,42 @@ def clear_chat_history(chat_id):  # מוחק היסטוריית צ'אט ספצי
         return False
 
 def clear_from_sheets(chat_id):  # מחיקת נתונים
-    from sheets_handler import delete_row_by_chat_id
-    deleted_sheet = delete_row_by_chat_id(sheet_name=config["SHEET_USER_TAB"], chat_id=chat_id)
-    deleted_state = delete_row_by_chat_id(sheet_name=config["SHEET_STATES_TAB"], chat_id=chat_id)
-    return deleted_sheet, deleted_state
+    from sheets_core import delete_row_by_chat_id
+    deleted_profile = delete_row_by_chat_id(sheet_name="user_profiles", chat_id=chat_id)
+    deleted_state = delete_row_by_chat_id(sheet_name="user_states", chat_id=chat_id)
+    deleted_log = delete_row_by_chat_id(sheet_name="log", chat_id=chat_id)
+    
+    # מחיקת נתונים מהקבצים המקומיים
+    deleted_local_profiles = _clear_user_from_local_files(chat_id)
+    
+    return deleted_profile, deleted_state, deleted_log, deleted_local_profiles
+
+def _clear_user_from_local_files(chat_id: str) -> bool:
+    """מוחק את המשתמש מכל הקבצים המקומיים"""
+    try:
+        chat_id_str = str(chat_id)
+        deleted_any = False
+        
+        # מחיקה מ-user_profiles.json
+        try:
+            from config import USER_PROFILES_PATH
+            if os.path.exists(USER_PROFILES_PATH):
+                with open(USER_PROFILES_PATH, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if chat_id_str in data:
+                    data.pop(chat_id_str)
+                    with open(USER_PROFILES_PATH, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
+                    deleted_any = True
+                    logging.info(f"🗑️ נמחק משתמש {chat_id} מקובץ user_profiles.json")
+        except Exception as e:
+            logging.error(f"שגיאה במחיקת משתמש {chat_id} מ-user_profiles.json: {e}")
+        
+        return deleted_any
+        
+    except Exception as e:
+        logging.error(f"שגיאה כללית במחיקת משתמש {chat_id} מהקבצים המקומיים: {e}")
+        return False
 
 def _send_admin_secret_notification(message: str):  # התראת קוד סודי
     try:
@@ -1394,42 +1341,45 @@ def _send_admin_profile_overview_notification(
     try:
         from notifications import send_admin_notification
 
-        # כותרת + הודעת המשתמש
+        # בניית הודעה מקוצרת עם אימוג'ים
         lines: List[str] = []
-        lines.append("🛠️ <b>עדכון פרופיל (GPT)</b>")
-        lines.append(f"<b>משתמש:</b> <code>{chat_id}</code>")
+        
+        # כותרת מקוצרת
+        lines.append(f"🛠️ עדכון פרופיל למשתמש ({chat_id})")
+        
+        # הודעת משתמש מקוצרת
         if user_msg:
-            user_msg_trimmed = user_msg.strip()[:300]
-            lines.append("<b>הודעת משתמש:</b>")
-            lines.append(f"<i>{user_msg_trimmed}</i>")
-
-        # פרטי GPT
+            user_msg_trimmed = user_msg.strip()[:100] + "..." if len(user_msg.strip()) > 100 else user_msg.strip()
+            lines.append(f"*{user_msg_trimmed}*")
+        
+        # פרטי GPT עם אימוג'ים והדגשה
         lines.append("")
-        lines.append(gpt_c_info)
-        lines.append(gpt_d_info)
-        lines.append(gpt_e_info)
+        lines.append(f"🤖 **GPT-C**: {gpt_c_info}")
+        lines.append(f"🔧 **GPT-D**: {gpt_d_info}")
+        lines.append(f"🧠 **GPT-E**: {gpt_e_info}")
 
-        # סאמרי
-        if summary is not None:
+        # סאמרי (רק אם יש)
+        if summary and summary.strip():
             lines.append("")
-            lines.append("<b>Summary:</b>")
-            lines.append(f"{summary if summary else '—'}")
+            lines.append(f"📝 **Summary**: {summary[:200]}{'...' if len(summary) > 200 else ''}")
 
-        # שינויים (אם יש)
+        # שינויים (רק אם יש)
         if changes:
             lines.append("")
-            lines.append("<b>Fields Changed:</b>")
-            for ch in changes:
+            lines.append("📊 **שדות שהשתנו**:")
+            for ch in changes[:3]:  # מקסימום 3 שינויים
                 field = ch.get("field")
-                old_val = ch.get("old_value") if ch.get("old_value") not in [None, ""] else "—"
                 new_val = ch.get("new_value") if ch.get("new_value") not in [None, ""] else "—"
                 change_type = ch.get("change_type")
                 if change_type == "added":
-                    lines.append(f"➕ {field}: '{new_val}' (חדש)")
+                    lines.append(f"➕ {field}: {new_val}")
                 elif change_type == "updated":
-                    lines.append(f"✏️ {field}: '{old_val}' → '{new_val}'")
+                    lines.append(f"✏️ {field}: {new_val}")
                 elif change_type == "removed":
-                    lines.append(f"➖ {field}: '{old_val}' → נמחק")
+                    lines.append(f"➖ {field}: נמחק")
+            
+            if len(changes) > 3:
+                lines.append(f"... ועוד {len(changes) - 3} שינויים")
 
         send_admin_notification("\n".join(lines))
     except Exception as e:

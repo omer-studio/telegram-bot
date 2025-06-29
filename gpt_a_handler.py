@@ -14,7 +14,7 @@ import threading
 import time
 import re
 from prompts import SYSTEM_PROMPT
-from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS
+from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_debug_prints
 from gpt_utils import normalize_usage_dict, billing_guard, measure_llm_latency, calculate_gpt_cost
 from notifications import alert_billing_issue, send_error_notification
 from typing import TYPE_CHECKING

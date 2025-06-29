@@ -301,7 +301,6 @@ CRITICAL_ERRORS_PATH = os.path.join(DATA_DIR, CRITICAL_ERRORS_FILENAME)
 
 # 🚀 נתיבי קבצים למערכת ניהול נתונים מקבילה
 USER_PROFILES_PATH = os.path.join(DATA_DIR, "user_profiles.json")
-USER_STATES_PATH = os.path.join(DATA_DIR, "user_states.json")
 SYNC_QUEUE_PATH = os.path.join(DATA_DIR, "sync_queue.json")
 
 # 🔄 הגדרות סנכרון
@@ -344,7 +343,6 @@ def get_config_snapshot():
         "BOT_ERRORS_PATH": BOT_ERRORS_PATH,
         "CRITICAL_ERRORS_PATH": CRITICAL_ERRORS_PATH,
         "USER_PROFILES_PATH": USER_PROFILES_PATH,
-        "USER_STATES_PATH": USER_STATES_PATH,
         "SYNC_QUEUE_PATH": SYNC_QUEUE_PATH
     }
 
