@@ -44,10 +44,13 @@ def format_text_for_telegram(text):
     """
     ממיר פורמטים מווואטסאפ לפורמט HTML של טלגרם:
     - *טקסט* -> <b>טקסט</b> (bold)
-    - _טקסט_ -> <b>טקסט</b> (bold) – במקום italic
+    - _טקסט_ -> <u>טקסט</u> (underline)
     - מנקה תגי HTML לא נתמכים (<br>) ומאחד הדגשות (<i> → <b>) תוך שמירת <u>
+    - מגביל כמות אימוג'ים ליחס 1:40 תווים, מפוזרים לאורך הטקסט
     """
-    # 🐛 DEBUG: שמירת הטקסט המקורי
+    import re
+    # הגדרה מדויקת של אימוג'ים בלבד (לא תופס סימני פיסוק רגילים)
+    emoji_pattern = r"[\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]"
     original_text = text
     debug_info = {
         "original_length": len(text),
@@ -55,78 +58,97 @@ def format_text_for_telegram(text):
         "original_dots": text.count('.'),
         "original_questions": text.count('?'),
         "original_exclamations": text.count('!'),
-        "original_emojis": len(re.findall(r'[^\w\s<>]+', text, flags=re.UNICODE))
+        "original_emojis": len(re.findall(emoji_pattern, text, flags=re.UNICODE))
     }
-    
-    # ניקוי תגי HTML לא נתמכים
-    text = text.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
-    
-    # המרת הדגשה נטויה (i) לבולד אחיד; שומר על underline (u) כפי שהוא
-    text = text.replace('<i>', '<b>').replace('</i>', '</b>')
-    
-    # קיבוץ רווחי שורות מרובים לשורה ריקה אחת
-    text = re.sub(r'\n\s*\n+', '\n\n', text.strip())
-    
-    # המרת כוכביות כפולות (**טקסט**) ל-bold (לפני טיפול בכוכבית בודדת)
-    text = re.sub(r'\*\*([^\s*][^*]*[^\s*]|\S)\*\*', r'<b>\1</b>', text)
-    
-    # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם לא רווחים בקצוות)
-    text = re.sub(r'\*([^\s*][^*]*[^\s*]|\S)\*', r'<b>\1</b>', text)
-    
-    # המרת קו תחתון כפול (__טקסט__) ל-bold (לפני טיפול בודד)
-    text = re.sub(r'__([^\s_][^_]*[^\s_]|\S)__', r'<b>\1</b>', text)
-    
-    # המרת קו תחתון ל-bold (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
-    text = re.sub(r'_([^\s_][^_]*[^\s_]|\S)_', r'<b>\1</b>', text)
-    
+
     # 🚨🚨🚨 *** כללי נשימות טבעיות - אסור למחוק בשום מצב! *** 🚨🚨🚨
     # ⚠️  אזהרה: שינוי הכללים האלה יהרוס את הפורמט הטבעי של הטקסט! ⚠️
     # 🚫 אסור לשנות את הקוד הבא! 🚫
     # DO NOT DELETE OR MODIFY THESE RULES – BREAKS FORMATTING!
-    if len(text) > 50 and text.count('\n') < len(text) // 60:
-        # הגנה: אם הטקסט כבר מפורמט יפה (הרבה מעברי שורה) - לא לגעת
-        if text.count('\n') > len(text) // 40:  # יותר ממעבר שורה אחד לכל 40 תווים
-            pass  # לא לגעת בטקסט שכבר מפורמט
-        else:
-            # טיפול בנקודות ואימוג'ים - מחיקת הנקודות לחלוטין
-            emoji_pattern = r"[^\w\s<>]+"
-            # נקודה + אימוג'י + טקסט אחריו - מחיקת הנקודה
-            text = re.sub(rf'\.(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\2\n', text, flags=re.UNICODE)
-            # נקודה + אימוג'י בסוף משפט - מחיקת הנקודה
-            text = re.sub(rf'\.(\s*)({emoji_pattern})(?=\s*\n|\s*$)', r'\2\n', text, flags=re.UNICODE)
-            # סימני שאלה וקריאה - רק מעבר שורה (ללא מחיקה)
-            text = re.sub(r'([!?])(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\1\n', text, flags=re.UNICODE)
+    
+    # 🧹 שלב 1: ניקוי מעברי שורה (חוץ מ-2 ברצף)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    # 🎨 שלב 2: המרת פורמטים (לפני הפורמטינג של הנקודות!)
+    # המרת הדגשה נטויה (i) לבולד אחיד; שומר על underline (u) כפי שהוא
+    text = text.replace('<i>', '<b>').replace('</i>', '</b>')
+    # המרת כוכביות כפולות (**טקסט**) ל-bold (לפני טיפול בכוכבית בודדת)
+    text = re.sub(r'\*\*([^\s*][^*]*[^\s*]|\S)\*\*', r'<b>\1</b>', text)
+    # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם לא רווחים בקצוות)
+    text = re.sub(r'\*([^\s*][^*]*[^\s*]|\S)\*', r'<b>\1</b>', text)
+    # המרת קו תחתון כפול (__טקסט__) ל-underline (לפני טיפול בודד)
+    text = re.sub(r'__([^\s_][^_]*[^\s_]|\S)__', r'<u>\1</u>', text)
+    # המרת קו תחתון ל-underline (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
+    text = re.sub(r'_([^\s_][^_]*[^\s_]|\S)_', r'<u>\1</u>', text)
+    
+    # 🎯 שלב 3: כללי נשימות טבעיות
+    # טיפול בנקודות - מחיקת הנקודות לחלוטין
+    
+    # נקודה + אימוג'י + טקסט אחריו - מחיקת הנקודה, מעבר שורה אחרי האימוג'י
+    text = re.sub(rf'\.(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\2\n', text, flags=re.UNICODE)
+    # נקודה + אימוג'י + סוף משפט - מחיקת הנקודה, מעבר שורה אחרי האימוג'י
+    text = re.sub(rf'\.(\s*)({emoji_pattern})(\s*)(?=[.!?]|$)', r'\2\n', text, flags=re.UNICODE)
+    # נקודה רגילה - מחיקת הנקודה, מעבר שורה
+    text = re.sub(r'\.(\s*)', r'\n', text)
+    # ניקוי רווחים מיותרים אחרי מעבר שורה
+    text = re.sub(r'\n\s+', '\n', text)
+    
+    # טיפול בסימני שאלה וקריאה - רק מעבר שורה, לא מחיקה
+    text = re.sub(r'(\?)(\s*)(?=\S|\s+\S)', r'\1\n', text)  # סימן שאלה + מעבר שורה אם יש תו לא-רווח אחריו (כולל אחרי רווחים)
+    text = re.sub(r'(!)(\s*)(?=\S|\s+\S)', r'\1\n', text)   # סימן קריאה + מעבר שורה אם יש תו לא-רווח אחריו (כולל אחרי רווחים)
+    
+    # אימוג'י בסוף משפט - מעבר שורה (רק אם אין כבר מעבר שורה לפני)
+    text = re.sub(rf'({emoji_pattern})(\s*)(?=[.!?]|$)', r'\1\n', text, flags=re.UNICODE)
+
+    # הגבלת כמות אימוג'ים לפי יחס של 1 לכל 40 תווים (לא כולל סימני פיסוק)
+    emojis = re.findall(emoji_pattern, text, flags=re.UNICODE)
+    if len(emojis) > 0:
+        # מסננים החוצה סימני פיסוק חשובים
+        punctuation_chars = '?!.,;:()[]{}"\'-'
+        real_emojis = [emoji for emoji in emojis if emoji not in punctuation_chars]
+        
+        max_emojis = max(1, len(text) // 40)  # מינימום 1 אימוג'י
+        if len(real_emojis) > max_emojis:
+            # פיזור חכם: בוחרים אימוג'ים מפוזרים לאורך הטקסט
+            emoji_positions = []
+            for emoji in real_emojis:
+                pos = text.find(emoji)
+                if pos != -1:
+                    emoji_positions.append((pos, emoji))
             
-            # הגנה מפני שורות קצרות מדי
-            lines = text.split('\n')
-            cleaned_lines = []
-            for i, line in enumerate(lines):
-                line = line.strip()
-                if len(line) >= 3 or line == '' or i == len(lines) - 1:
-                    cleaned_lines.append(line)
-                else:
-                    if cleaned_lines and cleaned_lines[-1] != '':
-                        cleaned_lines[-1] = cleaned_lines[-1] + ' ' + line
-                    else:
-                        cleaned_lines.append(line)
-            text = '\n'.join(cleaned_lines)
+            # ממיינים לפי מיקום
+            emoji_positions.sort(key=lambda x: x[0])
+            
+            # בוחרים אימוג'ים מפוזרים
+            selected_emojis = []
+            if len(emoji_positions) <= max_emojis:
+                selected_emojis = [pos[1] for pos in emoji_positions]
+            else:
+                # מחשבים מרווח שווה
+                step = len(text) // (max_emojis + 1)
+                for i in range(max_emojis):
+                    target_pos = (i + 1) * step
+                    # בוחרים את האימוג'י הקרוב ביותר למיקום המטרה
+                    closest_emoji = min(emoji_positions, key=lambda x: abs(x[0] - target_pos))
+                    selected_emojis.append(closest_emoji[1])
+                    emoji_positions.remove(closest_emoji)  # מונעים כפילות
+            
+            # מחליפים את כל האימוג'ים באימוג'ים הנבחרים
+            for emoji in real_emojis:
+                if emoji not in selected_emojis:
+                    text = text.replace(emoji, '', 1)  # מוחקים רק את ההופעה הראשונה
 
     # 🪄 ניקוי מעברי שורה מיותרים
     text = text.strip().replace('\r\n', '\n')
-    # הגנה: לא ליצור רווח כפול חדש אלא אם כן היה במקור
-    # אם יש 3+ מעברי שורה רצופים - נשאיר 2 (שורה ריקה אחת)
     text = re.sub(r'\n{3,}', '\n\n', text)
-    
     # ניקוי כפילויות של תגיות <b> מקוננות
     text = re.sub(r'<b>\s*<b>(.*?)</b>\s*</b>', r'<b>\1</b>', text, flags=re.DOTALL)
-    
+
     # הגנה מפני אימוג'ים בודדים בשורה
-    emoji_pattern = r"[^\w\s<>]+"
     lines = text.split('\n')
     cleaned_lines = []
     for i, line in enumerate(lines):
         line = line.strip()
-        # אם השורה מכילה רק אימוג'ים קצרים - נחבר לשורה הקודמת
         if re.match(rf'^(\s*{emoji_pattern}\s*)+$', line, flags=re.UNICODE) and len(line.strip()) < 10:
             if cleaned_lines and cleaned_lines[-1] != '':
                 cleaned_lines[-1] = cleaned_lines[-1] + ' ' + line.strip()
@@ -135,16 +157,8 @@ def format_text_for_telegram(text):
         else:
             cleaned_lines.append(line)
     text = '\n'.join(cleaned_lines)
-    
-    # 🧹 ניקוי סופי של מעברי שורה כפולים שנוצרו מהטיפול באימוג'ים
-    # *** הגנה: לא ליצור רווח כפול חדש אלא אם כן היה במקור ***
     text = re.sub(r'\n{3,}', '\n\n', text)
-    
-    # 🚨🚨🚨 *** כללי הנשימות הטבעיות הסתיימו - אסור לשנות! *** 🚨🚨🚨
-    # ⚠️  אזהרה: שינוי הקוד מעל יהרוס את הפורמט הטבעי של הטקסט! ⚠️
-    # 🚫 אסור למחוק או לשנות את הכללים! 🚫
-    # DO NOT DELETE OR MODIFY THESE RULES – BREAKS FORMATTING!
-    
+
     # 🐛 DEBUG: עדכון מידע על הטקסט הסופי
     debug_info.update({
         "final_length": len(text),
@@ -152,15 +166,14 @@ def format_text_for_telegram(text):
         "final_dots": text.count('.'),
         "final_questions": text.count('?'),
         "final_exclamations": text.count('!'),
-        "final_emojis": len(re.findall(r'[^\w\s<>]+', text, flags=re.UNICODE)),
+        "final_emojis": len(re.findall(emoji_pattern, text, flags=re.UNICODE)),
         "length_change": len(text) - len(original_text),
         "newlines_change": text.count('\n') - original_text.count('\n'),
         "dots_change": text.count('.') - original_text.count('.'),
         "questions_change": text.count('?') - original_text.count('?'),
         "exclamations_change": text.count('!') - original_text.count('!')
     })
-    
-    # 🐛 DEBUG: הדפסת מידע מפורט
+
     print("=" * 80)
     print("🔍 FORMAT_TEXT_FOR_TELEGRAM DEBUG")
     print("=" * 80)
@@ -184,7 +197,7 @@ def format_text_for_telegram(text):
     print("   FORMATTED:")
     print(f"   {text}")
     print("=" * 80)
-    
+
     return text
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
