@@ -154,6 +154,7 @@ ADMIN_NOTIFICATION_CHAT_ID = "111709341"  # ה־chat_id שלך בבוט admin
 ADMIN_CHAT_ID = ADMIN_NOTIFICATION_CHAT_ID  # alias לעקביות
 BOT_TOKEN = TELEGRAM_BOT_TOKEN  # alias לעקביות
 MAX_MESSAGE_LENGTH = 4096  # מגבלת אורך הודעה בטלגרם
+MAX_CODE_TRIES = 3  # מספר מקסימלי של ניסיונות קוד
 
 # הגדרת LiteLLM
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY

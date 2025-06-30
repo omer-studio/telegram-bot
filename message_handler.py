@@ -78,6 +78,10 @@ def format_text_for_telegram(text):
         "formatting_applied": True
     }
 
+    # 🔢 שלב 0 – ניקוי עיצוב קיים
+    # מנקה תגיות HTML קיימות כדי למנוע בלבול
+    text = re.sub(r'<[^>]+>', '', text)
+    
     # 🔢 שלב 1 – המרת סימני Markdown לתגיות HTML
     # 🔁 המרות: תחילה ממירים הדגשה כפולה (bold), אחר כך הדגשה בודדת (underline), כדי למנוע חפיפות
     text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
@@ -200,7 +204,7 @@ async def _handle_holiday_check(update, chat_id, bot_reply):
         
         holiday_message = get_holiday_system_message(str(chat_id), bot_reply)
         if holiday_message:
-            await send_message_with_retry(update, chat_id, holiday_message, is_bot_message=False, is_gpt_a_response=False)
+            await send_system_message(update, chat_id, holiday_message)
             
     except Exception as e:
         logging.error(f"שגיאה בבדיקת חגים: {e}")
@@ -244,7 +248,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     else:
         formatted_text = text
         print(f"🚫 [FORMATTING] דולג על פורמטינג (לא תשובת GPTA)")
-
+    
     if should_log_message_debug():
         print(f"[SEND_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
     
@@ -325,7 +329,7 @@ async def send_approval_message(update, chat_id):
     except Exception as e:
         logging.error(f"[ERROR] שליחת הודעת אישור נכשלה: {e}")
         # ניסיון שליחה רגילה ללא מקלדת
-        await send_message_with_retry(update, chat_id, approval_msg, is_bot_message=False, is_gpt_a_response=False)
+        await send_system_message(update, chat_id, approval_msg)
 
 def detect_message_type(message):
     """
@@ -409,7 +413,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # הודעה למשתמש שהתכונה לא זמינה כרגע
                     voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
-                    await send_message_with_retry(update, chat_id, voice_message, is_bot_message=False, is_gpt_a_response=False)
+                    await send_system_message(update, chat_id, voice_message)
                     
                     # רישום להיסטוריה ולוגים
                     log_event_to_file({
@@ -440,18 +444,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "event_type": "unsupported_message"
                     })
                     
-                    await send_message_with_retry(update, chat_id, appropriate_response, is_bot_message=False, is_gpt_a_response=False)
+                    await send_system_message(update, chat_id, appropriate_response)
                     await end_monitoring_user(str(chat_id), True)
                     return
 
             # 🚀 התחלת ניטור concurrent
             if not await start_monitoring_user(str(chat_id), str(message_id)):
-                await send_message_with_retry(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.", is_bot_message=False, is_gpt_a_response=False)
+                await send_system_message(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
                 return
 
             did, reply = handle_secret_command(chat_id, user_msg)
             if did:
-                await send_message_with_retry(update, chat_id, reply, is_bot_message=False, is_gpt_a_response=False)
+                await send_system_message(update, chat_id, reply)
                 await end_monitoring_user(str(chat_id), True)
                 return
             log_payload["chat_id"] = chat_id
@@ -627,7 +631,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # שלב 3: שליחת התשובה למשתמש (אלא אם כבר נשלחה דרך עריכת הודעה זמנית)
             await update_user_processing_stage(str(chat_id), "sending_response")
             if not gpt_response.get("message_already_sent", False):
-                await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
+                await send_gpta_response(update, chat_id, bot_reply)
 
             # 🚀 שלב 4: הפעלת כל המשימות ברקע מיד אחרי שליחת התשובה - בלי לחכות!
             await update_user_processing_stage(str(chat_id), "background_tasks")
@@ -793,7 +797,7 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         if is_first_time:
             welcome_messages = get_welcome_messages()
             for message in welcome_messages:
-                await send_message_with_retry(update, chat_id, message, is_bot_message=False, is_gpt_a_response=False)
+                await send_system_message(update, chat_id, message)
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
@@ -804,17 +808,21 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (UNREGISTERED)")
         
         # משתמש לא קיים - צריך לרשום קוד
-        current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
-        
         if register_user(context.bot_data["sheet"], chat_id, user_msg):
             # קוד תקין - הצלחה!
-            await send_message_with_retry(update, chat_id, code_approved_message(), is_bot_message=False, is_gpt_a_response=False)
+            await send_system_message(update, chat_id, code_approved_message())
             await send_approval_message(update, chat_id)
         else:
-            # קוד לא תקין - נגמרו הניסיונות?
-            await send_message_with_retry(update, chat_id, get_retry_message_by_attempt(current_try), is_bot_message=False, is_gpt_a_response=False)
-            if current_try >= MAX_CODE_TRIES:
-                await send_message_with_retry(update, chat_id, not_approved_message(), is_bot_message=False, is_gpt_a_response=False)
+            # קוד לא תקין - הגדלת מספר הניסיון ושליחת הודעת שגיאה
+            from sheets_core import increment_code_try_sync
+            current_try = increment_code_try_sync(context.bot_data["sheet_states"], chat_id)
+            if current_try <= 0:
+                current_try = 1
+                
+            if current_try <= 3:
+                await send_system_message(update, chat_id, get_retry_message_by_attempt(current_try))
+            else:
+                await send_system_message(update, chat_id, not_approved_message())
                 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
@@ -827,19 +835,25 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
         
         # משתמש רשום אבל לא אישר תנאים
         if user_msg.strip() == APPROVE_BUTTON_TEXT():
+            # משתמש אישר תנאים
             approve_user(context.bot_data["sheet"], chat_id)
-            await send_message_with_retry(update, chat_id, nice_keyboard_message(), is_bot_message=False, is_gpt_a_response=False)
+            await send_system_message(update, chat_id, nice_keyboard_message())
+            
             # שליחת הודעה עם הסרת מקלדת
             try:
                 await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
             except Exception as e:
                 logging.warning(f"[KEYBOARD_REMOVE] שגיאה בהסרת מקלדת: {e}")
-                await send_message_with_retry(update, chat_id, remove_keyboard_message(), is_bot_message=False, is_gpt_a_response=False)
-            await send_message_with_retry(update, chat_id, full_access_message(), is_bot_message=False, is_gpt_a_response=False)
+                await send_system_message(update, chat_id, remove_keyboard_message())
+            
+            await send_system_message(update, chat_id, full_access_message())
+            
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
-            await send_message_with_retry(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.", is_bot_message=False, is_gpt_a_response=False)
+            # משתמש לא אישר תנאים
+            await send_system_message(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.")
             await send_approval_message(update, chat_id)
         else:
+            # משתמש כתב משהו אחר - שולח שוב את הודעת האישור
             await send_approval_message(update, chat_id)
                 
     except Exception as ex:
@@ -1152,11 +1166,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
-async def send_message_with_retry(update, chat_id, text, is_bot_message=True, is_gpt_a_response=False, max_retries=3):
+async def send_system_message(update, chat_id, text, max_retries=3):
     """
-    שולחת הודעה למשתמש בטלגרם עם מנגנון retry, כולל לוגים ועדכון היסטוריה.
-    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool), is_gpt_a_response (bool), max_retries (int)
-    פלט: bool - האם השליחה הצליחה
+    שולחת הודעה מערכת כמו שהיא, ללא שום פורמטינג אוטומטי.
+    משמש להודעות פתיחה, הודעות שגיאה, הודעות מערכת וכו'.
     """
     
     # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
@@ -1181,30 +1194,21 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, is
 
     # 🐛 DEBUG: מידע על השליחה
     print("=" * 80)
-    print("📤 SEND_MESSAGE_WITH_RETRY DEBUG")
+    print("📤 SEND_SYSTEM_MESSAGE DEBUG")
     print("=" * 80)
     print(f"📊 CHAT_ID: {chat_id}")
-    print(f"📊 IS_BOT_MESSAGE: {is_bot_message}")
-    print(f"📊 IS_GPT_A_RESPONSE: {is_gpt_a_response}")
     print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
     print(f"   {repr(text)}")
     print(f"📊 NEWLINES: {text.count(chr(10))}")
     print(f"📊 DOTS: {text.count('.')}")
-    print(f"📊 QUESTIONS: {text.count('?')}")
-    print(f"📊 EXCLAMATIONS: {text.count('!')}")
     print("=" * 80)
     
-    # 🔧 פורמטינג רק עבור תשובות מGPTA
-    if is_gpt_a_response:
-        print(f"🔧 [FORMATTING] מתחיל פורמטינג לתשובת GPTA: {len(text)} chars")
-        formatted_text = format_text_for_telegram(text)
-        print(f"🔧 [FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
-    else:
-        formatted_text = text
-        print(f"🚫 [FORMATTING] דולג על פורמטינג (לא תשובת GPTA)")
+    # 🚫 אין פורמטינג - הטקסט נשלח כמו שהוא
+    formatted_text = text
+    print(f"🚫 [SYSTEM] שליחת הודעה מערכת ללא פורמטינג")
     
     if should_log_message_debug():
-        print(f"[SEND_MESSAGE_WITH_RETRY] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
+        print(f"[SEND_SYSTEM_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
     
     try:
         bot_id = None
@@ -1214,7 +1218,7 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, is
             bot_id = getattr(update.bot, 'id', None)
         
         if should_log_debug_prints():
-            print(f"[DEBUG] SENDING MESSAGE WITH RETRY: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
+            print(f"[DEBUG] SENDING SYSTEM MESSAGE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
     except Exception as e:
         if should_log_debug_prints():
             print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
@@ -1229,20 +1233,19 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, is
             )
             
             if should_log_message_debug():
-                print(f"[TELEGRAM_REPLY_WITH_RETRY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+                print(f"[TELEGRAM_SYSTEM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
             
-            logging.info(f"[TELEGRAM_REPLY_WITH_RETRY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
+            logging.info(f"[TELEGRAM_SYSTEM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
             
-            # עדכון היסטוריה ולוגים רק אם השליחה הצליחה
-            if is_bot_message:
-                update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", formatted_text)
+            # עדכון היסטוריה ולוגים
+            update_chat_history(chat_id, "[הודעה מערכת]", formatted_text)
             log_event_to_file({
                 "chat_id": chat_id,
-                "bot_message": formatted_text,
+                "system_message": formatted_text,
                 "timestamp": get_israel_time().isoformat()
             })
             if should_log_message_debug():
-                print(f"[BOT_MSG_WITH_RETRY] {formatted_text.replace(chr(10), ' ')[:120]}")
+                print(f"[SYSTEM_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
             
             return True
             
@@ -1262,39 +1265,181 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, is
                         update.message.reply_text(plain_text),
                         timeout=10.0
                     )
-                    logging.warning(f"⚠️ [HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
+                    logging.warning(f"⚠️ [SYSTEM_HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
                     
                     # עדכון היסטוריה ולוגים גם עבור fallback
-                    if is_bot_message:
-                        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", plain_text)
+                    update_chat_history(chat_id, "[הודעה מערכת]", plain_text)
                     log_event_to_file({
                         "chat_id": chat_id,
-                        "bot_message": plain_text,
+                        "system_message": plain_text,
                         "timestamp": get_israel_time().isoformat(),
                         "fallback_used": True
                     })
                     
                     return True
                 except Exception as plain_error:
-                    logging.error(f"❌ [PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
+                    logging.error(f"❌ [SYSTEM_PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
             
             if attempt < max_retries - 1:
                 await asyncio.sleep(1)
-                logging.warning(f"⚠️ [RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
+                logging.warning(f"⚠️ [SYSTEM_RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
             else:
-                logging.error(f"❌ [FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
+                logging.error(f"❌ [SYSTEM_FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
                 
                 # רישום שגיאה סופית
                 log_event_to_file({
                     "chat_id": chat_id,
-                    "bot_message": formatted_text,
+                    "system_message": formatted_text,
                     "timestamp": get_israel_time().isoformat(),
                     "error": str(e),
                     "final_failure": True
                 })
                 try:
                     from notifications import send_error_notification
-                    send_error_notification(error_message=f"[send_message_with_retry] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
+                    send_error_notification(error_message=f"[send_system_message] שליחת הודעה מערכת נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
+                except Exception as notify_err:
+                    if should_log_message_debug():
+                        print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
+                    logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
+                
+                return False
+    
+    return False
+
+async def send_gpta_response(update, chat_id, text, max_retries=3):
+    """
+    מפעילה את הפורמטינג על תשובות GPT-A ואז שולחת אותן.
+    משמש רק לתשובות מהמודל הראשי (GPT-A).
+    """
+    
+    # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
+    if text and ("[עדכון פרופיל]" in text or "[PROFILE_CHANGE]" in text or 
+                 (text.startswith("[") and "]" in text and any(keyword in text for keyword in ["עדכון", "debug", "admin", "system"]))):
+        logging.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={chat_id} | text={text[:100]}")
+        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={chat_id}")
+        print(f"🚨 הודעה חסומה: {text[:200]}...")
+        
+        # שליחת התראה לאדמין על הניסיון
+        try:
+            from notifications import send_error_notification
+            send_error_notification(
+                error_message=f"🚨 CRITICAL: ניסיון לשלוח הודעה פנימית למשתמש! chat_id={chat_id}", 
+                chat_id=chat_id, 
+                user_msg=f"הודעה חסומה: {text[:200]}..."
+            )
+        except Exception as notify_err:
+            logging.error(f"Failed to send critical security notification: {notify_err}")
+        
+        return False
+
+    # 🐛 DEBUG: מידע על השליחה
+    print("=" * 80)
+    print("📤 SEND_GPTA_RESPONSE DEBUG")
+    print("=" * 80)
+    print(f"📊 CHAT_ID: {chat_id}")
+    print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
+    print(f"   {repr(text)}")
+    print(f"📊 NEWLINES: {text.count(chr(10))}")
+    print(f"📊 DOTS: {text.count('.')}")
+    print(f"📊 QUESTIONS: {text.count('?')}")
+    print(f"📊 EXCLAMATIONS: {text.count('!')}")
+    print("=" * 80)
+    
+    # 🔧 פורמטינג עבור תשובות GPT-A
+    print(f"🔧 [GPTA_FORMATTING] מתחיל פורמטינג לתשובת GPTA: {len(text)} chars")
+    formatted_text = format_text_for_telegram(text)
+    print(f"🔧 [GPTA_FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
+    
+    if should_log_message_debug():
+        print(f"[SEND_GPTA_RESPONSE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
+    
+    try:
+        bot_id = None
+        if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
+            bot_id = getattr(update.message.bot, 'id', None)
+        elif hasattr(update, 'bot'):
+            bot_id = getattr(update.bot, 'id', None)
+        
+        if should_log_debug_prints():
+            print(f"[DEBUG] SENDING GPTA RESPONSE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
+    
+    import sys; sys.stdout.flush()
+    
+    for attempt in range(max_retries):
+        try:
+            sent_message = await asyncio.wait_for(
+                update.message.reply_text(formatted_text, parse_mode="HTML"),
+                timeout=10.0
+            )
+            
+            if should_log_message_debug():
+                print(f"[TELEGRAM_GPTA_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+            
+            logging.info(f"[TELEGRAM_GPTA_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
+            
+            # עדכון היסטוריה ולוגים
+            update_chat_history(chat_id, "[תשובת GPT-A]", formatted_text)
+            log_event_to_file({
+                "chat_id": chat_id,
+                "gpta_response": formatted_text,
+                "timestamp": get_israel_time().isoformat()
+            })
+            if should_log_message_debug():
+                print(f"[GPTA_RESPONSE] {formatted_text.replace(chr(10), ' ')[:120]}")
+            
+            return True
+            
+        except asyncio.TimeoutError:
+            logging.warning(f"Timeout on attempt {attempt + 1}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+                continue
+        except Exception as e:
+            error_msg = str(e).lower()
+            
+            # אם השגיאה קשורה לפורמט HTML, ננסה בלי parse_mode
+            if "parse entities" in error_msg or "unsupported start tag" in error_msg or "br" in error_msg:
+                try:
+                    plain_text = re.sub(r'<[^>]+>', '', formatted_text)
+                    sent_message = await asyncio.wait_for(
+                        update.message.reply_text(plain_text),
+                        timeout=10.0
+                    )
+                    logging.warning(f"⚠️ [GPTA_HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
+                    
+                    # עדכון היסטוריה ולוגים גם עבור fallback
+                    update_chat_history(chat_id, "[תשובת GPT-A]", plain_text)
+                    log_event_to_file({
+                        "chat_id": chat_id,
+                        "gpta_response": plain_text,
+                        "timestamp": get_israel_time().isoformat(),
+                        "fallback_used": True
+                    })
+                    
+                    return True
+                except Exception as plain_error:
+                    logging.error(f"❌ [GPTA_PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
+            
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1)
+                logging.warning(f"⚠️ [GPTA_RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
+            else:
+                logging.error(f"❌ [GPTA_FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
+                
+                # רישום שגיאה סופית
+                log_event_to_file({
+                    "chat_id": chat_id,
+                    "gpta_response": formatted_text,
+                    "timestamp": get_israel_time().isoformat(),
+                    "error": str(e),
+                    "final_failure": True
+                })
+                try:
+                    from notifications import send_error_notification
+                    send_error_notification(error_message=f"[send_gpta_response] שליחת תשובת GPT-A נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
                 except Exception as notify_err:
                     if should_log_message_debug():
                         print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)

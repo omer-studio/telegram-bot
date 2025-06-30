@@ -282,13 +282,13 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=8):
             logging.info(f"📤 [TEMP_MSG] משימה בוטלה לפני שליחת הודעה זמנית | chat_id={chat_id}")
             return None
             
-        from message_handler import send_message_with_retry  # local import to avoid circular
+        from message_handler import send_system_message  # local import to avoid circular
         temp_message_text = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך..."
-        await send_message_with_retry(update, chat_id, temp_message_text, is_bot_message=False, is_gpt_a_response=False)
+        await send_system_message(update, chat_id, temp_message_text)
         
-        # נחזיר None כי send_message_with_retry לא מחזיר את האובייקט
+        # נחזיר None כי send_system_message לא מחזיר את האובייקט
         logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
-        return None  # לא מחזירים אובייקט כי send_message_with_retry לא מחזיר
+        return None  # לא מחזירים אובייקט כי send_system_message לא מחזיר
     except asyncio.CancelledError:
         logging.info(f"📤 [TEMP_MSG] משימה בוטלה בזמן שליחת הודעה זמנית | chat_id={chat_id}")
         return None
@@ -300,18 +300,18 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
     """
     מוחק את ההודעה הזמנית (אם קיימת) ושולח למשתמש את התשובה האמיתית.
 
-    ✅ שיפור: משתמשים ב-send_message_with_retry – בטוח ופשוט יותר.
+    ✅ שיפור: משתמשים ב-send_gpta_response – בטוח ופשוט יותר.
     """
-    from message_handler import send_message_with_retry  # local import to avoid circular
+    from message_handler import send_gpta_response  # local import to avoid circular
 
     try:
-        # מחיקת ההודעה הזמנית - לא רלוונטי כי send_message_with_retry לא מחזיר אובייקט
+        # מחיקת ההודעה הזמנית - לא רלוונטי כי send_gpta_response לא מחזיר אובייקט
         if temp_message is not None:
-            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_message_with_retry)")
+            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_gpta_response)")
 
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
-        await send_message_with_retry(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
+        await send_gpta_response(update, chat_id, new_text)
         logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
         return True
 
@@ -602,9 +602,9 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         # שלב 3: שליחת הודעה זמנית אם GPT איטי
         if gpt_duration >= 8.0 and update:
             try:
-                from message_handler import send_message_with_retry
+                from message_handler import send_system_message
                 temp_message_text = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך..."
-                await send_message_with_retry(update, chat_id, temp_message_text, is_bot_message=False, is_gpt_a_response=False)
+                await send_system_message(update, chat_id, temp_message_text)
                 logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
             except Exception as temp_err:
                 logging.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
