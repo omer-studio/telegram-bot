@@ -565,14 +565,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # יצירת טיימסטמפ והנחיות יום השבוע
             from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
-            timestamp = create_human_context_for_gpt(chat_id)
-            weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
-            # ברכה מותאמת זמן נשלחת רק בתחילת השיחה (אין היסטוריה קודמת)
             from utils import should_send_time_greeting
+            
+            # ברכה מותאמת זמן נשלחת רק בתחילת השיחה (אין היסטוריה קודמת)
             greeting_instruction = ""
+            timestamp = ""
+            weekday_instruction = ""
+            
             try:
                 if should_send_time_greeting(chat_id, user_msg):
+                    # רק אם צריך לשלוח ברכה - מוסיף גם טיימסטמפ ויום שבוע
+                    timestamp = create_human_context_for_gpt(chat_id)
+                    weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
                     greeting_instruction = get_time_greeting_instruction()
+                    print(f"[GREETING_DEBUG] שולח ברכה + טיימסטמפ + יום שבוע עבור chat_id={chat_id}")
+                else:
+                    print(f"[GREETING_DEBUG] לא שולח ברכה עבור chat_id={chat_id} - המשך שיחה רגיל")
             except Exception as greet_err:
                 logging.warning(f"[GREETING] שגיאה בהערכת greeting: {greet_err}")
             

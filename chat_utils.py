@@ -143,6 +143,24 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
                 print(f"[SECURITY] מסנן הודעה פנימית: {bot_content[:50]}...")
             continue
         
+        # 🚨 SECURITY: מנע הודעות מערכת מלהישלח ל-GPT
+        if user_content and user_content.startswith("[הודעה"):
+            if should_log_message_debug():
+                print(f"[SECURITY] מסנן הודעת מערכת מהמשתמש: {user_content[:50]}...")
+            continue
+        
+        # 🚨 SECURITY: מנע הודעות מערכת מהבוט מלהישלח ל-GPT
+        if bot_content and ("[הודעה אוטומטית מהבוט]" in bot_content or "[הודעה מערכת]" in bot_content):
+            if should_log_message_debug():
+                print(f"[SECURITY] מסנן הודעת מערכת מהבוט: {bot_content[:50]}...")
+            continue
+        
+        # 🚨 SECURITY: מנע הודעות תשובה פנימיות מלהישלח ל-GPT
+        if bot_content and "[תשובת GPT-A]" in bot_content:
+            if should_log_message_debug():
+                print(f"[SECURITY] מסנן הודעת תשובה פנימית: {bot_content[:50]}...")
+            continue
+        
         # הוספת טיימסטמפ להודעת user אם יש
         if "time" in entry and user_content.strip():
             user_content = f"[{entry['time']}] {entry['user']}"

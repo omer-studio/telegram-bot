@@ -383,38 +383,23 @@ def increment_gpt_c_run_count_fast(chat_id: str) -> int:
 
 def update_emotional_identity_fast(chat_id: str, emotional_data: Dict[str, Any]):
     try:
-        old_profile = get_user_profile_fast(chat_id)
+        # ✅ תיקון: הוספת timestamp לנתונים הרגשיים
         emotional_data["last_update"] = utils.get_israel_time().isoformat()
-        new_profile = {**old_profile, **emotional_data}
-        changes = _detect_profile_changes(old_profile, new_profile)
-
-        _update_user_profiles_file(chat_id, emotional_data)
-        if changes:
-            _log_profile_changes_to_chat_history(chat_id, changes)
-        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
-        try:
-            import asyncio
-            asyncio.run(_sync_local_to_sheets_background(chat_id))
-        except RuntimeError:
-            try:
-                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
-            except RuntimeError:
-                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
+        
+        # ✅ תיקון: שימוש ב-update_user_profile_fast במקום _update_user_profiles_file ישירות
+        # זה יבטיח שהסיכום יתעדכן אוטומטית
+        update_user_profile_fast(chat_id, emotional_data, send_admin_notification=False)
+        
         logging.info(f"✅ תעודת זהות רגשית עודכנה עבור משתמש {chat_id}")
         return True
     except Exception as exc:
         logging.error(f"שגיאה בעדכון תעודת זהות רגשית: {exc}")
-        emotional_data["last_update"] = utils.get_israel_time().isoformat()
-        _update_user_profiles_file(chat_id, emotional_data)
-        # 🔧 תיקון: אותו תיקון גם כאן
+        # ✅ תיקון: גם במקרה של שגיאה, נשתמש ב-update_user_profile_fast
         try:
-            import asyncio
-            asyncio.run(_sync_local_to_sheets_background(chat_id))
-        except RuntimeError:
-            try:
-                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
-            except RuntimeError:
-                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
+            emotional_data["last_update"] = utils.get_israel_time().isoformat()
+            update_user_profile_fast(chat_id, emotional_data, send_admin_notification=False)
+        except Exception as fallback_exc:
+            logging.error(f"שגיאה גם בניסיון הגיבוי: {fallback_exc}")
         return False
 
 

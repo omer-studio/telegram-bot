@@ -884,20 +884,30 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
         return ""
     
     try:
-        from fields_dict import FIELDS_DICT
+        from fields_dict import get_summary_fields, FIELDS_DICT
     except ImportError:
         # fallback אם לא ניתן לייבא
         return ""
     
+    # ✅ תיקון: הסרת שדות טכניים שלא אמורים להיות בסיכום
+    clean_profile = {k: v for k, v in profile_data.items() if k not in ["last_update", "summary", "code_try", "gpt_c_run_count"]}
+    
     summary_parts = []
+    
+    # ✅ תיקון: משתמש ברשימת השדות הנכונה מ-fields_dict
+    summary_fields = get_summary_fields()
     
     # עובר על השדות לפי הסדר שהם מופיעים ב-fields_dict
     for field_name, field_info in FIELDS_DICT.items():
-        # רק שדות שיש להם show_in_summary
-        if "show_in_summary" not in field_info:
+        # ✅ תיקון: רק שדות שיש להם show_in_summary ולא ריק
+        if "show_in_summary" not in field_info or not field_info["show_in_summary"]:
             continue
             
-        field_value = profile_data.get(field_name, "")
+        # ✅ תיקון: רק שדות שנמצאים ברשימת השדות לסיכום
+        if field_name not in summary_fields:
+            continue
+            
+        field_value = clean_profile.get(field_name, "")
         
         # רק אם השדה מלא
         if field_value and str(field_value).strip():
