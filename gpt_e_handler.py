@@ -125,7 +125,7 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
 
     return user_prompt
 
-def run_gpt_e(chat_id: str) -> Dict[str, Any]:
+async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
     """
     מבצע חידוד ותיקון פרופיל רגשי למשתמש לפי ההנחיות.
     
@@ -146,7 +146,7 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
     try:
         # שלב 1: שליפת היסטוריית שיחה
         logger.info(f"[gpt_e] Fetching chat history for chat_id={chat_id}")
-        chat_history = get_chat_history_messages(chat_id, limit=50)
+        chat_history = get_chat_history_messages(chat_id, limit=15)
         
         if not chat_history:
             result['errors'].append("No chat history found")
@@ -193,9 +193,15 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                 response = litellm.completion(**completion_params)
             
             # חילוץ התוכן מהתגובה
-            content_raw = response.choices[0].message.content.strip()
+            content_raw = response.choices[0].message.content
+            if content_raw is None:
+                result['errors'].append("Empty response content from GPT")
+                logger.error(f"[gpt_e] Empty response content from GPT for chat_id={chat_id}")
+                return result
+            
+            content_raw = content_raw.strip()
             content = extract_json_from_text(content_raw)
-            logger.info(f"[gpt_e] Received response from GPT: {content[:200]}...")
+            logger.info(f"[gpt_e] Received response from GPT: {content[:200] if content else 'None'}...")
             
             # נירמול usage באופן בטוח
             usage = normalize_usage_dict(response.usage, response.model)
@@ -267,10 +273,12 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                     if 'primary_conflict' in changes:
                         print(f"🎯 [GPT-E] עדכון קונפליקט מרכזי: {changes['primary_conflict'][:100]}...")
                     
-                    update_user_profile(chat_id, changes)
+                    # 🔧 הסרה: לא מעדכנים כאן כדי למנוע כפילות עם _handle_profile_updates
+                    # await update_user_profile(chat_id, changes)
+                    
                     result['changes'] = changes
-                    logger.info(f"[gpt_e] Profile updated successfully for chat_id={chat_id}")
-                    print(f"✅ [GPT-E] עדכון הפרופיל הושלם בהצלחה")
+                    logger.info(f"[gpt_e] Changes prepared for profile update: {changes}")
+                    print(f"✅ [GPT-E] השינויים מוכנים לעדכון פרופיל")
                 else:
                     logger.info(f"[gpt_e] No meaningful changes found for chat_id={chat_id}")
             else:
@@ -293,7 +301,7 @@ def run_gpt_e(chat_id: str) -> Dict[str, Any]:
     
     return result
 
-def update_user_state_after_gpt_e(chat_id: str, result: Dict[str, Any]) -> None:
+async def update_user_state_after_gpt_e(chat_id: str, result: Dict[str, Any]) -> None:
     """
     מעדכן את מצב המשתמש לאחר ריצת gpt_e.
     
@@ -337,7 +345,7 @@ def log_gpt_e_run(chat_id: str, result: Dict[str, Any]) -> None:
     
     logger.info(f"[gpt_e] Run log: {json.dumps(log_entry, ensure_ascii=False)}")
 
-def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: str = None) -> Optional[Dict[str, Any]]:
+async def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: str = None) -> Optional[Dict[str, Any]]:
     """
     בודק אם צריך להפעיל gpt_e ומפעיל אם כן.
     
@@ -393,11 +401,11 @@ def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_times
     
     if should_run:
         logger.info(f"[gpt_e] Conditions met for chat_id={chat_id}: {reason}")
-        result = run_gpt_e(chat_id)
+        result = await run_gpt_e(chat_id)
         
         # עדכון מצב המשתמש ולוגים
         if result['success']:
-            update_user_state_after_gpt_e(chat_id, result)
+            await update_user_state_after_gpt_e(chat_id, result)
         
         log_gpt_e_run(chat_id, result)
         

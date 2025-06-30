@@ -78,7 +78,8 @@ async def _send_user_friendly_error_message(update, chat_id: str):
             print(f"📊 QUESTIONS: {user_friendly_message.count('?')}")
             print(f"📊 EXCLAMATIONS: {user_friendly_message.count('!')}")
             print("=" * 80)
-            await update.message.reply_text(user_friendly_message)
+            from message_handler import send_message_with_retry
+            await send_message_with_retry(update, chat_id, user_friendly_message)
         else:
             # אם אין update זמין, ננסה לשלוח ישירות דרך bot API
             bot = telegram.Bot(token=BOT_TOKEN)
@@ -593,7 +594,6 @@ def send_admin_alert(message, alert_level="info"):
         
         # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
         try:
-            import asyncio
             asyncio.run(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
         except RuntimeError:
             # אם כבר יש event loop פעיל, נשתמש ב-create_task
@@ -683,7 +683,6 @@ def alert_system_status(message, level="info"):
 
 # מערכת תזכורות עדינות
 
-import asyncio
 from datetime import timedelta
 
 GENTLE_REMINDER_MESSAGE = "היי, רק רציתי לבדוק מה שלומך, מקווה שאתה בטוב. אין לחץ – פשוט רציתי להזכיר לך מה שלומך?"

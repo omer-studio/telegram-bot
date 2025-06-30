@@ -43,202 +43,173 @@ import profile_utils as _pu
 
 def format_text_for_telegram(text):
     """
-    ממיר פורמטים מווואטסאפ לפורמט HTML של טלגרם:
-    - *טקסט* -> <b>טקסט</b> (bold)
-    - _טקסט_ -> <u>טקסט</u> (underline)
-    - מנקה תגי HTML לא נתמכים (<br>) ומאחד הדגשות (<i> → <b>) תוך שמירת <u>
-    - מגביל כמות אימוג'ים ליחס 1:40 תווים, מפוזרים לאורך הטקסט
+    פורמטינג טקסט לטלגרם לפי כללים מדויקים - גרסה רשמית ומתוקנת
+    מטרה: לטשטש את הפער בין שפה אנושית לשפה מודלית ולייצר טקסט טבעי, מדורג וקריא
     """
     import re
-    # הגדרה מדויקת של אימוג'ים בלבד (לא תופס סימני פיסוק רגילים)
-    emoji_pattern = r"[\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]"
+    import time
+    
+    # 🛡️ הגנה נוספת: מעקב זמן לכל הריצה של הפונקציה
+    start_time = time.time()
+    
+    # רג'קס לזיהוי אימוג'ים - מוגדר כ־compile object
+    emoji_pattern = re.compile(
+        r"[\U0001F600-\U0001F64F"
+        r"\U0001F300-\U0001F6FF"
+        r"\U0001F700-\U0001F77F"
+        r"\U0001F780-\U0001F7FF"
+        r"\U0001F800-\U0001F8FF"
+        r"\U0001F900-\U0001F9FF"
+        r"\U0001FA00-\U0001FA6F"
+        r"\U0001FA70-\U0001FAFF"
+        r"\U00002702-\U000027B0"
+        r"\U000024C2-\U0001F251]"
+    )
+    
     original_text = text
     debug_info = {
-        "original_length": len(text),
-        "original_newlines": text.count('\n'),
-        "original_dots": text.count('.'),
-        "original_questions": text.count('?'),
-        "original_exclamations": text.count('!'),
-        "original_emojis": len(re.findall(emoji_pattern, text, flags=re.UNICODE))
+        "removed_dots": 0,
+        "added_line_breaks": 0,
+        "total_emojis": 0,
+        "emojis_removed": 0,
+        "text_length_before": len(text),
+        "text_length_after": 0,
+        "formatting_applied": True
     }
 
-    # 🚨🚨🚨 *** כללי נשימות טבעיות - אסור למחוק בשום מצב! *** 🚨🚨🚨
-    # ⚠️  אזהרה: שינוי הכללים האלה יהרוס את הפורמט הטבעי של הטקסט! ⚠️
-    # 🚫 אסור לשנות את הקוד הבא! 🚫
-    # DO NOT DELETE OR MODIFY THESE RULES – BREAKS FORMATTING!
+    # 🔢 שלב 1 – המרת סימני Markdown לתגיות HTML
+    # תחילה ממירים הדגשה כפולה (bold), אחר כך הדגשה בודדת (underline), כדי למנוע חפיפות
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+    text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
+    text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
+    text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
     
-    # 🧹 שלב 1: ניקוי מעברי שורה (חוץ מ-2 ברצף)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    # 🔢 שלב 2 – ניקוי HTML בסיסי
+    # <br>, <br/>, <br /> → \n
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    # <i> → <b>
+    text = re.sub(r'<i>', '<b>', text)
+    text = re.sub(r'</i>', '</b>', text)
     
-    # 🎨 שלב 2: המרת פורמטים (לפני הפורמטינג של הנקודות!)
-    # המרת הדגשה נטויה (i) לבולד אחיד; שומר על underline (u) כפי שהוא
-    text = text.replace('<i>', '<b>').replace('</i>', '</b>')
-    # המרת כוכביות כפולות (**טקסט**) ל-bold (לפני טיפול בכוכבית בודדת)
-    text = re.sub(r'\*\*([^\s*][^*]*[^\s*]|\S)\*\*', r'<b>\1</b>', text)
-    # המרת כוכביות ל-bold (רק כשיש טקסט ביניהם לא רווחים בקצוות)
-    text = re.sub(r'\*([^\s*][^*]*[^\s*]|\S)\*', r'<b>\1</b>', text)
-    # המרת קו תחתון כפול (__טקסט__) ל-underline (לפני טיפול בודד)
-    text = re.sub(r'__([^-\s_][^_]*[^-\s_]|\S)__', r'<u>\1</u>', text)
-    # המרת קו תחתון ל-underline (רק כשיש טקסט ביניהם ללא רווחים בקצוות)
-    text = re.sub(r'_([^-\s_][^_]*[^-\s_]|\S)_', r'<u>\1</u>', text)
-    
-    # 🚨 שלב חדש: אם יש אימוג'י לפני <u>...> או <b>...> - להכניס אותו פנימה
-    text = re.sub(rf'({emoji_pattern})\s*<(u|b)>(.*?)</\2>', r'<\2>\1 \3</\2>', text, flags=re.UNICODE)
+    # מנקה תגיות כפולות מקוננות עם הגבלת לולאה בטוחה
+    for tag in ['b', 'u']:
+        pattern = fr'(<{tag}>)+(.+?)(</{tag}>)+'
+        loop_limit = 10
+        for _ in range(loop_limit):
+            new_text = re.sub(pattern, fr'<{tag}>\2</{tag}>', text)
+            if new_text == text:
+                break
+            text = new_text
 
-    # 🚨 שלב חדש: אם יש אימוג'י אחרי תגית סגורה - להכניס אותו פנימה
-    # זה מטפל במקרה: <u>טקסט</u>? 🤔 -> <u>טקסט? 🤔</u>
-    # במקום ליצור תגית חדשה, נזיז את התגית הקיימת
-    text = re.sub(rf'<(u|b)>(.*?)</\1>(\s*[!?]?\s*)({emoji_pattern})', r'<\1>\2\3\4</\1>', text, flags=re.UNICODE)
+    # 🔢 שלב 3 – ניקוי ראשוני של מעברי שורה
+    # שומר רק על מעברי שורה כפולים (\n\n) – כל שאר מעברי השורה נמחקים זמנית
+    text = re.sub(r'\n(?!\n)', ' ', text)
+    
+    # 🔢 שלב 4 – נשימות: פיסוק → שורות
+    # ספירת נקודות לפני המחיקה
+    debug_info["removed_dots"] = len(re.findall(r'\.(\s*)', text))
+    
+    # טיפול מיוחד: נקודה + אימוג'י → אימוג'י + מעבר שורה
+    text = re.sub(r'\.(\s*)(' + emoji_pattern.pattern + r')', r' \2\n', text)
+    
+    # נקודה רגילה → מעבר שורה
+    text = re.sub(r'\.(\s*)', '\n', text)
+    
+    # סימן שאלה/קריאה + אימוג'י → נשארים יחד + מעבר שורה אחרי שניהם
+    text = re.sub(r'([?!])\s*(' + emoji_pattern.pattern + r')', r'\1 \2\n', text)
+    
+    # סימן שאלה/קריאה בלי אימוג'י → נשאר + מעבר שורה
+    text = re.sub(r'([?!])(?!\s*' + emoji_pattern.pattern + r')', r'\1\n', text)
+    
+    # אימוג'י באמצע משפט → מעבר שורה אחרי האימוג'י (אם אין פיסוק אחריו)
+    text = re.sub(r'(' + emoji_pattern.pattern + r')(?!\s*[.!?]|\s*\n)', r'\1\n', text)
+    
+    # אימוג'י בסוף משפט → נשאר + מעבר שורה
+    text = re.sub(r'(' + emoji_pattern.pattern + r')(\s*)$', r'\1\n', text, flags=re.MULTILINE)
 
-    # הוספת מעבר שורה אחרי </u> או </b> אם יש סימן שאלה/קריאה/סוף שורה
-    text = re.sub(r'(</[ub]>)([!?])', r'\1\2\n', text)
-    text = re.sub(r'(</[ub]>)(\s*)$', r'\1\n', text, flags=re.MULTILINE)
-    
-    # 🎯 שלב 3: כללי נשימות טבעיות
-    # טיפול בנקודות - מחיקת הנקודות לחלוטין
-    
-    # נקודה + אימוג'י + טקסט אחריו - מחיקת הנקודה, מעבר שורה אחרי האימוג'י
-    text = re.sub(rf'\.(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r'\2\n', text, flags=re.UNICODE)
-    # נקודה + אימוג'י + סוף משפט - מחיקת הנקודה, מעבר שורה אחרי האימוג'י
-    text = re.sub(rf'\.(\s*)({emoji_pattern})(\s*)(?=[.!?]|$)', r'\2\n', text, flags=re.UNICODE)
-    # נקודה רגילה - מחיקת הנקודה, מעבר שורה
-    text = re.sub(r'\.(\s*)', r'\n', text)
-    # ניקוי רווחים מיותרים אחרי מעבר שורה
+    # 🔢 שלב 5 – ניקוי רווחים אחרי החלפת נקודות
     text = re.sub(r'\n\s+', '\n', text)
+
+    # 🔢 שלב 6 – מניעת אימוג'ים בתחילת שורה
+    # מחברים אימוג'י לשורה שלפניו רק אם הוא באמת בתחילת שורה (לא אחרי שבירה שנוצרה על ידו)
+    # לא מחברים אימוג'י לשורה שלפניו אם הוא יצר שבירה בעצמו
+    text = re.sub(r'\n(' + emoji_pattern.pattern + r')(?!\n)', r' \1', text)
+
+    # 🔢 שלב 7 – אימוג'י לפני תגיות <b> / <u>
+    # מכניסים אימוג'י לתוך התגית
+    text = re.sub(r'(' + emoji_pattern.pattern + r')[\s.,]*(<(b|u)>)', r'\2\1 ', text)
+
+    # 🔢 שלב 8 – הגבלת אימוג'ים
+    # יחס מקסימלי: 1 אימוג'י לכל 40 תווים
+    all_emojis = emoji_pattern.findall(text)
+    debug_info["total_emojis"] = len(all_emojis)
     
-    # טיפול בסימני שאלה וקריאה - רק מעבר שורה, לא מחיקה
-    text = re.sub(r'(\?)(\s*)(?=\S|\s+\S)', r'\1\n', text)  # סימן שאלה + מעבר שורה אם יש תו לא-רווח אחריו (כולל אחרי רווחים)
-    text = re.sub(r'(!)(\s*)(?=\S|\s+\S)', r'\1\n', text)   # סימן קריאה + מעבר שורה אם יש תו לא-רווח אחריו (כולל אחרי רווחים)
-    
-    # אימוג'י בסוף משפט - מעבר שורה (רק אם אין כבר מעבר שורה לפני)
-    text = re.sub(rf'({emoji_pattern})(\s*)(?=[.!?]|$)', r'\1\n', text, flags=re.UNICODE)
-
-    # 🚨 תיקון חשוב: טיפול באימוג'ים בתחילת משפט - מחבר אותם לשורה הקודמת
-    # זה מונע מצב שבו אימוג'י נמצא בשורה נפרדת בתחילת משפט
-    text = re.sub(rf'\n(\s*)({emoji_pattern})(\s+)(?=[A-Za-z\u0590-\u05FF])', r' \2\n', text, flags=re.UNICODE)
-    # גם טיפול במקרה שבו אימוג'י נמצא בתחילת שורה ללא טקסט אחריו
-    text = re.sub(rf'\n(\s*)({emoji_pattern})(\s*)$', r' \2', text, flags=re.UNICODE)
-    
-    # 🚨 תיקון נוסף: טיפול באימוג'ים שנמצאים אחרי תגי HTML
-    # זה מטפל במקרה שבו אימוג'י נמצא בשורה נפרדת אחרי תג HTML
-    text = re.sub(rf'</[bu]>\s*\n\s*({emoji_pattern})', r'</[bu]> \1', text, flags=re.UNICODE)
-    text = re.sub(rf'</[bu]>\s*({emoji_pattern})', r'</[bu]> \1', text, flags=re.UNICODE)
-
-    # 🚨 תיקון קריטי: הוספת מעבר שורה אחרי תגי HTML סגורים
-    text = re.sub(r'(</[bu]>)(\s*)(?=\S)', r'\1\n\2', text)
-
-    # הגבלת כמות אימוג'ים לפי יחס של 1 לכל 40 תווים (לא כולל סימני פיסוק)
-    emojis = re.findall(emoji_pattern, text, flags=re.UNICODE)
-    if len(emojis) > 0:
-        # מסננים החוצה סימני פיסוק חשובים
-        punctuation_chars = '?!.,;:()[]{}"\'-'
-        real_emojis = [emoji for emoji in emojis if emoji not in punctuation_chars and len(emoji) > 0]
-        
-        max_emojis = max(1, len(text) // 40)  # מינימום 1 אימוג'י
-        if len(real_emojis) > max_emojis:
-            # פיזור חכם: בוחרים אימוג'ים מפוזרים לאורך הטקסט
-            emoji_positions = []
-            for emoji in real_emojis:
-                pos = text.find(emoji)
-                if pos != -1:
-                    emoji_positions.append((pos, emoji))
+    if len(all_emojis) > 0:
+        allowed = max(1, len(text) // 40)
+        if len(all_emojis) > allowed:
+            keep_every = len(all_emojis) // allowed if allowed < len(all_emojis) else 1
+            keep = {i for i in range(len(all_emojis)) if i % keep_every == 0}
             
-            # ממיינים לפי מיקום
-            emoji_positions.sort(key=lambda x: x[0])
+            count = -1
+            def emoji_replacer(m):
+                nonlocal count
+                count += 1
+                return m.group(0) if count in keep else ''
             
-            # בוחרים אימוג'ים מפוזרים
-            selected_emojis = []
-            if len(emoji_positions) <= max_emojis:
-                selected_emojis = [pos[1] for pos in emoji_positions]
-            else:
-                # מחשבים מרווח שווה
-                step = len(text) // (max_emojis + 1)
-                for i in range(max_emojis):
-                    target_pos = (i + 1) * step
-                    # בוחרים את האימוג'י הקרוב ביותר למיקום המטרה
-                    closest_emoji = min(emoji_positions, key=lambda x: abs(x[0] - target_pos))
-                    selected_emojis.append(closest_emoji[1])
-                    emoji_positions.remove(closest_emoji)  # מונעים כפילות
-            
-            # מחליפים את כל האימוג'ים באימוג'ים הנבחרים
-            emojis_to_remove = [emoji for emoji in real_emojis if emoji not in selected_emojis]
-            for emoji in reversed(emojis_to_remove):
-                # מוצאים את כל ההופעות של האימוג'י
-                emoji_positions_in_text = []
-                start = 0
-                while True:
-                    pos = text.find(emoji, start)
-                    if pos == -1:
-                        break
-                    emoji_positions_in_text.append(pos)
-                    start = pos + 1
-                
-                # מוחקים רק את ההופעה הראשונה (הכי שמאלית)
-                if emoji_positions_in_text:
-                    first_pos = emoji_positions_in_text[0]
-                    text = text[:first_pos] + text[first_pos + len(emoji):]
+            text = emoji_pattern.sub(emoji_replacer, text)
+            debug_info["emojis_removed"] = len(all_emojis) - len(emoji_pattern.findall(text))
 
-    # 🪄 ניקוי מעברי שורה מיותרים
-    text = text.strip().replace('\r\n', '\n')
+    # 🔢 שלב 9 – ניקוי סופי
+    # רצף של יותר מ־2 מעברי שורה → מצמצמים ל־2 בלבד
     text = re.sub(r'\n{3,}', '\n\n', text)
-    # ניקוי כפילויות של תגיות <b> מקוננות
-    text = re.sub(r'<b>\s*<b>(.*?)</b>\s*</b>', r'<b>\1</b>', text, flags=re.DOTALL)
-
-    # הגנה מפני אימוג'ים בודדים בשורה
+    
+    # שורות שמכילות רק אימוג'ים → מחוברות לשורה שמעליה
     lines = text.split('\n')
-    cleaned_lines = []
+    cleaned = []
     for i, line in enumerate(lines):
-        line = line.strip()
-        if re.match(rf'^(\s*{emoji_pattern}\s*)+$', line, flags=re.UNICODE) and len(line.strip()) < 10:
-            if cleaned_lines and cleaned_lines[-1] != '':
-                cleaned_lines[-1] = cleaned_lines[-1] + ' ' + line.strip()
-            else:
-                cleaned_lines.append(line)
+        if emoji_pattern.fullmatch(line.strip()) and i > 0:
+            cleaned[-1] += ' ' + line.strip()
         else:
-            cleaned_lines.append(line)
-    text = '\n'.join(cleaned_lines)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+            cleaned.append(line.strip())
+    text = '\n'.join(cleaned)
 
-    # 🐛 DEBUG: עדכון מידע על הטקסט הסופי
-    debug_info.update({
-        "final_length": len(text),
-        "final_newlines": text.count('\n'),
-        "final_dots": text.count('.'),
-        "final_questions": text.count('?'),
-        "final_exclamations": text.count('!'),
-        "final_emojis": len(re.findall(emoji_pattern, text, flags=re.UNICODE)),
-        "length_change": len(text) - len(original_text),
-        "newlines_change": text.count('\n') - original_text.count('\n'),
-        "dots_change": text.count('.') - original_text.count('.'),
-        "questions_change": text.count('?') - original_text.count('?'),
-        "exclamations_change": text.count('!') - original_text.count('!')
-    })
+    # בדיקת timeout לפני הסיום
+    if time.time() - start_time > 2:
+        raise TimeoutError("format_text לקחה יותר מדי זמן — ייתכן לולאה אינסופית")
 
-    print("=" * 80)
-    print("🔍 FORMAT_TEXT_FOR_TELEGRAM DEBUG")
-    print("=" * 80)
-    print(f"📊 STATS:")
-    print(f"   אורך: {debug_info['original_length']} → {debug_info['final_length']} ({debug_info['length_change']:+d})")
-    print(f"   מעברי שורה: {debug_info['original_newlines']} → {debug_info['final_newlines']} ({debug_info['newlines_change']:+d})")
-    print(f"   נקודות: {debug_info['original_dots']} → {debug_info['final_dots']} ({debug_info['dots_change']:+d})")
-    print(f"   סימני שאלה: {debug_info['original_questions']} → {debug_info['final_questions']} ({debug_info['questions_change']:+d})")
-    print(f"   סימני קריאה: {debug_info['original_exclamations']} → {debug_info['final_exclamations']} ({debug_info['exclamations_change']:+d})")
-    print(f"   אימוג'ים: {debug_info['original_emojis']} → {debug_info['final_emojis']}")
-    print()
-    print(f"📝 ORIGINAL TEXT ({len(original_text)} chars):")
-    print(f"   {repr(original_text)}")
-    print()
-    print(f"✨ FORMATTED TEXT ({len(text)} chars):")
-    print(f"   {repr(text)}")
-    print()
-    print(f"👀 VISUAL COMPARISON:")
-    print("   ORIGINAL:")
-    print(f"   {original_text}")
-    print("   FORMATTED:")
-    print(f"   {text}")
-    print("=" * 80)
-
+    # 🛠️ שלב 10 – DEBUG INFO
+    debug_info["text_length_after"] = len(text)
+    debug_info["added_line_breaks"] = text.count('\n')
+    
+    # בדיקה שהתוצר הסופי עומד בכללים
+    final_dots = text.count('.')
+    if final_dots > 0:
+        # מסירת נקודות שנותרו (אם יש)
+        text = text.replace('.', '')
+        debug_info["final_dots_removed"] = final_dots
+    
+    # עדכון אורך סופי אחרי ניקוי נקודות
+    debug_info["text_length_after"] = len(text)
+    
+    # לצורך בדיקות: שמור גם את הטקסט לפני ואחרי הפורמטינג
+    debug_info["original_text"] = original_text
+    debug_info["formatted_text"] = text
+    
     return text
+
+async def _handle_holiday_check(update, chat_id, bot_reply):
+    """
+    בודק אם יש חג או אירוע מיוחד היום ושולח הודעה מתאימה
+    """
+    try:
+        from chat_utils import get_holiday_system_message
+        
+        holiday_message = get_holiday_system_message(str(chat_id), bot_reply)
+        if holiday_message:
+            await send_message_with_retry(update, chat_id, holiday_message)
+            
+    except Exception as e:
+        logging.error(f"שגיאה בבדיקת חגים: {e}")
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True):
@@ -248,6 +219,14 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     פלט: אין (שולחת הודעה)
     # מהלך מעניין: עדכון היסטוריה ולוגים רק אם ההודעה נשלחה בהצלחה.
     """
+    
+    # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
+    if text and ("[עדכון פרופיל]" in text or "[PROFILE_CHANGE]" in text or 
+                 (text.startswith("[") and "]" in text and any(keyword in text for keyword in ["עדכון", "debug", "admin", "system"]))):
+        logging.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={chat_id} | text={text[:100]}")
+        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={chat_id}")
+        return
+    
     # 🐛 DEBUG: מידע על השליחה
     print("=" * 80)
     print("📤 SEND_MESSAGE DEBUG")
@@ -325,10 +304,27 @@ async def send_approval_message(update, chat_id):
     פלט: אין (שולחת הודעה)
     """
     approval_msg = approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה."
-    await update.message.reply_text(
-        format_text_for_telegram(approval_msg),
-        reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
-    )
+    # ❌ לא עושים פורמטינג להודעות מערכת - רק לתשובות GPT-A
+    
+    try:
+        await update.message.reply_text(
+            approval_msg,
+            reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
+        )
+        
+        # עדכון היסטוריה ולוגים
+        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", approval_msg)
+        log_event_to_file({
+            "chat_id": chat_id,
+            "bot_message": approval_msg,
+            "timestamp": get_israel_time().isoformat(),
+            "message_type": "approval_request"
+        })
+        
+    except Exception as e:
+        logging.error(f"[ERROR] שליחת הודעת אישור נכשלה: {e}")
+        # ניסיון שליחה רגילה ללא מקלדת
+        await send_message_with_retry(update, chat_id, approval_msg, is_bot_message=False)
 
 def detect_message_type(message):
     """
@@ -367,7 +363,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב gpt, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
     from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
-    
+
+    # 🐞 דיבאג היסטוריה - כמה הודעות יש בקובץ
+    try:
+        from chat_utils import get_user_stats_and_history
+        chat_id = update.message.chat_id if hasattr(update, 'message') and hasattr(update.message, 'chat_id') else None
+        if chat_id:
+            stats, history = get_user_stats_and_history(chat_id)
+            print(f"[HISTORY_DEBUG] יש {len(history)} הודעות היסטוריה לצ'אט {chat_id}")
+            for i, entry in enumerate(history[-3:]):
+                user = entry.get('user', '')
+                bot = entry.get('bot', '')
+                print(f"  {i}: user=\"{user}\" | bot=\"{bot[:60]}{'...' if len(bot)>60 else ''}\"")
+    except Exception as e:
+        print(f"[HISTORY_DEBUG] שגיאה בדיבאג היסטוריה: {e}")
+
     # 🕐 מדידת זמן התחלה - מהרגע שהמשתמש לחץ אנטר
     user_request_start_time = time.time()
     
@@ -398,9 +408,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # הודעה למשתמש שהתכונה לא זמינה כרגע
                     voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
-                    await update.message.reply_text(
-                        format_text_for_telegram(voice_message)
-                    )
+                    await send_message_with_retry(update, chat_id, voice_message, is_bot_message=False)
                     
                     # רישום להיסטוריה ולוגים
                     log_event_to_file({
@@ -431,18 +439,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "event_type": "unsupported_message"
                     })
                     
-                    await update.message.reply_text(format_text_for_telegram(appropriate_response))
+                    await send_message_with_retry(update, chat_id, appropriate_response, is_bot_message=False)
                     await end_monitoring_user(str(chat_id), True)
                     return
 
             # 🚀 התחלת ניטור concurrent
             if not await start_monitoring_user(str(chat_id), str(message_id)):
-                await update.message.reply_text(format_text_for_telegram("⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות."))
+                await send_message_with_retry(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.", is_bot_message=False)
                 return
 
             did, reply = handle_secret_command(chat_id, user_msg)
             if did:
-                await update.message.reply_text(format_text_for_telegram(reply))
+                await send_message_with_retry(update, chat_id, reply, is_bot_message=False)
                 await end_monitoring_user(str(chat_id), True)
                 return
             log_payload["chat_id"] = chat_id
@@ -560,7 +568,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
             current_summary = get_user_summary(chat_id) or ""
-            history_messages = get_chat_history_messages(chat_id)
+            history_messages = get_chat_history_messages(chat_id, limit=15)  # 🔧 הגבלה ל-15 הודעות לחסוך בטוקנים
             
             # יצירת טיימסטמפ והנחיות יום השבוע
             from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
@@ -632,45 +640,120 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not gpt_response.get("message_already_sent", False):
                 await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
 
-            # שלב 4: בדיקת חגים אחרי התשובה
-            from utils import get_holiday_system_message
-            try:
-                holiday_message = get_holiday_system_message(str(chat_id), bot_reply)
-                if holiday_message:
-                    print(f"🎯 [HOLIDAY] שולח הודעת חג: {holiday_message}")
-                    await send_message_with_retry(update, chat_id, holiday_message, is_bot_message=True)
-            except Exception as holiday_err:
-                logging.warning(f"[HOLIDAY] שגיאה בהערכת חגים: {holiday_err}")
-
-            # אם כבר יצרנו רשומה מקדימה – אין צורך להוסיף שנית
-            if not history_entry_created:
-                update_chat_history(chat_id, user_msg, "")
-            
-            # 🕐 מדידת זמן סיום - מהרגע שהמשתמש לחץ אנטר עד התשובה
-            user_request_end_time = time.time()
-            total_user_experience_time = user_request_end_time - user_request_start_time
-            
-            # 📊 הדפסת מדידות מפורטות
-            print(f"🎯 [USER_EXPERIENCE] Total time from webhook to response: {total_user_experience_time:.3f}s")
-            if 'gpt_pure_latency' in gpt_response:
-                gpt_pure_time = gpt_response.get('gpt_pure_latency', 0)
-                overhead_time = total_user_experience_time - gpt_pure_time
-                print(f"🎯 [USER_EXPERIENCE] GPT pure time: {gpt_pure_time:.3f}s | System overhead: {overhead_time:.3f}s")
-                print(f"🎯 [USER_EXPERIENCE] Overhead percentage: {(overhead_time/total_user_experience_time)*100:.1f}%")
-            
-            # --- לוג רזה לכל הברכות שנשלחו ---
-            sent_time_greeting = greeting_instruction.strip() if greeting_instruction else None
-            sent_weekday_greeting = weekday_instruction.strip() if weekday_instruction else None
-            sent_holiday_greeting = holiday_message.strip() if 'holiday_message' in locals() and holiday_message else None
-            print(f"[GREETING] ⏰ זמן: {sent_time_greeting[:10] if sent_time_greeting else 'אין'} | 🎉 חג: {sent_holiday_greeting[:10] if sent_holiday_greeting else 'אין'} | 📅 יום: {sent_weekday_greeting[:10] if sent_weekday_greeting else 'אין'}")
-
-            # שלב 5: הפעלת משימות רקע (gpt_b, gpt_c, עדכון היסטוריה סופי, לוגים)
+            # 🚀 שלב 4: הפעלת כל המשימות ברקע מיד אחרי שליחת התשובה - בלי לחכות!
             await update_user_processing_stage(str(chat_id), "background_tasks")
-            # העברת bot_reply כ-last_bot_message - זה יהיה ההודעה הנוכחית (לא מקוצרת עדיין)
-            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, bot_reply))
             
-            # סיום ניטור משתמש
-            await end_monitoring_user(str(chat_id), True)
+            # הפעלת כל המשימות ברקע במקביל אמיתי
+            background_tasks = [
+                # משימת רקע 1: סיכום ועדכון פרופיל
+                asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, bot_reply)),
+                
+                # משימת רקע 2: בדיקת חגים - הוסרה זמנית עד לתיקון
+                asyncio.create_task(_handle_holiday_check(update, chat_id, bot_reply)),
+                
+                # משימת רקע 3: עדכון היסטוריה - הוסרה זמנית עד לתיקון
+                # asyncio.create_task(_handle_history_update(chat_id, user_msg, history_entry_created))
+            ]
+            
+            # המתנה לכל המשימות לסיום במקביל
+            results = await asyncio.gather(*background_tasks, return_exceptions=True)
+            
+            # חילוץ התוצאות - יש שני tasks
+            background_result = results[0] if not isinstance(results[0], Exception) else None
+            holiday_result = results[1] if not isinstance(results[1], Exception) else None
+            
+            # עדכון היסטוריה (אחרי שיש לנו את הסיכום)
+            if background_result:
+                summary_response, new_summary_for_history, gpt_c_usage, gpt_d_usage, gpt_e_result = background_result
+                update_last_bot_message(chat_id, new_summary_for_history or bot_reply)
+            else:
+                summary_response, new_summary_for_history, gpt_c_usage, gpt_d_usage, gpt_e_result = None, None, {}, {}, None
+                update_last_bot_message(chat_id, bot_reply)
+
+            # שמירת לוגים ונתונים נוספים
+            # נירמול ה-usage לפני השמירה ב-log
+            clean_gpt_response = {k: v for k, v in gpt_response.items() if k != "bot_reply"}
+            if "usage" in clean_gpt_response:
+                clean_gpt_response["usage"] = normalize_usage_dict(clean_gpt_response["usage"], gpt_response.get("model", ""))
+            
+            log_payload.update({
+                "gpt_a_response": bot_reply,
+                "gpt_a_usage": clean_gpt_response,
+                "timestamp_end": get_israel_time().isoformat()
+            })
+            
+            # רישום לגיליון Google Sheets
+            try:
+                from config import GPT_MODELS
+                
+                # חילוץ נתונים מ-gpt_response
+                gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", GPT_MODELS["gpt_a"]))
+                
+                # חילוץ נתונים מ-summary_response (עם בדיקת None)
+                gpt_b_usage = summary_response.get("usage", {}) if summary_response else {}
+                if not gpt_b_usage and summary_response:
+                    gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", GPT_MODELS["gpt_b"]))
+                
+                # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
+                gpt_c_usage = log_payload.get("gpt_c_data", {})
+                
+                # חילוץ נתונים מ-gpt_e_result (עם בדיקת None)
+                gpt_e_usage = {}
+                if gpt_e_result and gpt_e_result.get("cost_data"):
+                    gpt_e_usage = gpt_e_result["cost_data"]
+                
+                # חישוב סכומים
+                total_tokens_calc = (
+                    gpt_a_usage.get("total_tokens", 0) + 
+                    gpt_b_usage.get("total_tokens", 0) + 
+                    gpt_c_usage.get("total_tokens", 0) +
+                    (gpt_d_usage.get("total_tokens", 0) if gpt_d_usage else 0) +
+                    (gpt_e_usage.get("total_tokens", 0) if gpt_e_usage else 0)
+                )
+                
+                total_cost_usd_calc = (
+                    gpt_a_usage.get("cost_total", 0) + 
+                    gpt_b_usage.get("cost_total", 0) + 
+                    gpt_c_usage.get("cost_total", 0) +
+                    (gpt_d_usage.get("cost_total", 0) if gpt_d_usage else 0) +
+                    (gpt_e_usage.get("cost_total", 0) if gpt_e_usage else 0)
+                )
+                
+                total_cost_ils_calc = (
+                    gpt_a_usage.get("cost_total_ils", 0) + 
+                    gpt_b_usage.get("cost_total_ils", 0) + 
+                    gpt_c_usage.get("cost_total_ils", 0) +
+                    (gpt_d_usage.get("cost_total_ils", 0) if gpt_d_usage else 0) +
+                    (gpt_e_usage.get("cost_total_ils", 0) if gpt_e_usage else 0)
+                )
+                
+                # דיבאג רזה ומלא מידע
+                print(f"[DEBUG] msg={message_id} | user='{user_msg[:35]}{'...' if len(user_msg) > 35 else ''}' | bot='{bot_reply[:35]}{'...' if len(bot_reply) > 35 else ''}' | summary='{(new_summary_for_history[:35] if new_summary_for_history else '') + ('...' if new_summary_for_history and len(new_summary_for_history) > 35 else '')}' | tokens={total_tokens_calc} | cost=${total_cost_usd_calc:.4f} | chat={chat_id}")
+                
+                # קריאה ל-log_to_sheets (async)
+                await log_to_sheets(
+                    message_id=message_id,
+                    chat_id=chat_id,
+                    user_msg=user_msg,
+                    reply_text=bot_reply,
+                    reply_summary=new_summary_for_history or "",
+                    main_usage=gpt_a_usage,
+                    summary_usage=gpt_b_usage,
+                    extract_usage=gpt_c_usage,
+                    total_tokens=total_tokens_calc,
+                    cost_usd=total_cost_usd_calc,
+                    cost_ils=total_cost_ils_calc,
+                    gpt_d_usage=gpt_d_usage,
+                    gpt_e_usage=gpt_e_usage
+                )
+            except Exception as e:
+                print(f"[ERROR] שגיאה ב-log_to_sheets: {e}")
+                logging.error(f"Error in log_to_sheets: {e}")
+            
+            log_event_to_file(log_payload)
+            logging.info("✅ סיום טיפול בהודעה")
+            print("✅ סיום טיפול בהודעה")
+            print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
 
         except Exception as ex:
             # ניסיון לחלץ chat_id מה-update אם הוא לא זמין ב-locals
@@ -721,7 +804,7 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         if is_first_time:
             welcome_messages = get_welcome_messages()
             for message in welcome_messages:
-                await send_message(update, chat_id, message)
+                await send_message_with_retry(update, chat_id, message)
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
@@ -743,23 +826,28 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 current_try = 1
 
             if register_user(context.bot_data["sheet"], chat_id, user_msg):
-                await update.message.reply_text(format_text_for_telegram(code_approved_message()))
+                await send_message_with_retry(update, chat_id, code_approved_message(), is_bot_message=False)
                 await send_approval_message(update, chat_id)
             else:
                 if current_try <= 3:
-                    await update.message.reply_text(format_text_for_telegram(get_retry_message_by_attempt(current_try)))
+                    await send_message_with_retry(update, chat_id, get_retry_message_by_attempt(current_try), is_bot_message=False)
                 else:
-                    await update.message.reply_text(format_text_for_telegram(not_approved_message()))
+                    await send_message_with_retry(update, chat_id, not_approved_message(), is_bot_message=False)
                     
         elif status == "pending":
             # משתמש רשום אבל לא אישר תנאים
             if user_msg.strip() == APPROVE_BUTTON_TEXT():
                 approve_user(context.bot_data["sheet"], chat_id)
-                await update.message.reply_text(format_text_for_telegram(nice_keyboard_message()), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
-                await update.message.reply_text(format_text_for_telegram(remove_keyboard_message()), reply_markup=ReplyKeyboardRemove())
-                await update.message.reply_text(format_text_for_telegram(full_access_message()), parse_mode="HTML")
+                await send_message_with_retry(update, chat_id, nice_keyboard_message(), is_bot_message=False)
+                # שליחת הודעה עם הסרת מקלדת
+                try:
+                    await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
+                except Exception as e:
+                    logging.warning(f"[KEYBOARD_REMOVE] שגיאה בהסרת מקלדת: {e}")
+                    await send_message_with_retry(update, chat_id, remove_keyboard_message(), is_bot_message=False)
+                await send_message_with_retry(update, chat_id, full_access_message(), is_bot_message=False)
             elif user_msg.strip() == DECLINE_BUTTON_TEXT():
-                await update.message.reply_text(format_text_for_telegram("כדי להמשיך, יש לאשר את התנאים."))
+                await send_message_with_retry(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.", is_bot_message=False)
                 await send_approval_message(update, chat_id)
             else:
                 await send_approval_message(update, chat_id)
@@ -852,6 +940,38 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
         
         gpt_d_info_line = "GPT-D: מיזוג בוצע" if gpt_d_usage and gpt_d_should_run else "GPT-D: לא הופעל (אין ערך קיים למיזוג)"
 
+        # gpt_e: ניתוח מתקדם - מעביר לכאן כדי שהאדמין יקבל הודעה גם על GPT-E
+        try:
+            user_state = get_user_state(chat_id)
+            # 🔧 תיקון: קריאה async לפונקציה execute_gpt_e_if_needed
+            gpt_e_result = await execute_gpt_e_if_needed(
+                chat_id=chat_id,
+                gpt_c_run_count=gpt_c_run_count,
+                last_gpt_e_timestamp=user_state.get("last_gpt_e_timestamp")
+            )
+            
+            if gpt_e_result:
+                log_payload["gpt_e_data"] = {
+                    "success": gpt_e_result.get("success", False),
+                    "changes_count": len(gpt_e_result.get("changes", {})),
+                    "tokens_used": gpt_e_result.get("tokens_used", 0),
+                    "cost_data": gpt_e_result.get("cost_data", {})
+                }
+                
+                # 🔧 הוספת שינויים של GPT-E ל-changes_list
+                gpt_e_changes = gpt_e_result.get("changes", {})
+                if gpt_e_changes:
+                    for field, new_value in gpt_e_changes.items():
+                        changes_list.append({
+                            "field": field,
+                            "old_value": "",  # GPT-E לא מחזיר ערך ישן
+                            "new_value": new_value,
+                            "change_type": "added"  # GPT-E בדרך כלל מוסיף שדות חדשים
+                        })
+        except Exception as e:
+            logging.error(f"Error in gpt_e: {e}")
+            gpt_e_result = None
+
         if gpt_e_result:
             gpt_e_info_line = f"GPT-E: הופעל ({len(gpt_e_result.get('changes', {}))} שדות)"
         else:
@@ -892,27 +1012,38 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
             # 🟢 לוג קצר כשאין פעילות
             logging.info(f"✅ [ADMIN] אין פעילות GPT-C/D/E למשתמש {chat_id} - לא נשלחה הודעה")
         
+        # 🔧 עדכון בפועל של הפרופיל אם יש שינויים של GPT-E
+        if gpt_e_result and gpt_e_result.get('changes'):
+            try:
+                gpt_e_changes = gpt_e_result.get('changes', {})
+                if gpt_e_changes:
+                    await update_user_profile(chat_id, gpt_e_changes)
+                    logging.info(f"✅ [GPT-E] עדכון פרופיל הושלם עבור משתמש {chat_id}: {list(gpt_e_changes.keys())}")
+            except Exception as update_error:
+                logging.error(f"❌ [GPT-E] שגיאה בעדכון פרופיל: {update_error}")
+        
         log_payload["gpt_c_data"] = gpt_c_usage
         log_payload["gpt_d_data"] = gpt_d_usage
         
+        # 🔧 הסרה: GPT-E כבר רץ למעלה, לא צריך לרוץ שוב
         # gpt_e: ניתוח מתקדם
-        try:
-            user_state = get_user_state(chat_id)
-            gpt_e_result = execute_gpt_e_if_needed(
-                chat_id=chat_id,
-                gpt_c_run_count=gpt_c_run_count,
-                last_gpt_e_timestamp=user_state.get("last_gpt_e_timestamp")
-            )
-            
-            if gpt_e_result:
-                log_payload["gpt_e_data"] = {
-                    "success": gpt_e_result.get("success", False),
-                    "changes_count": len(gpt_e_result.get("changes", {})),
-                    "tokens_used": gpt_e_result.get("tokens_used", 0),
-                    "cost_data": gpt_e_result.get("cost_data", {})
-                }
-        except Exception as e:
-            logging.error(f"Error in gpt_e: {e}")
+        # try:
+        #     user_state = get_user_state(chat_id)
+        #     gpt_e_result = await execute_gpt_e_if_needed(
+        #         chat_id=chat_id,
+        #         gpt_c_run_count=gpt_c_run_count,
+        #         last_gpt_e_timestamp=user_state.get("last_gpt_e_timestamp")
+        #     )
+        #     
+        #     if gpt_e_result:
+        #         log_payload["gpt_e_data"] = {
+        #             "success": gpt_e_result.get("success", False),
+        #             "changes_count": len(gpt_e_result.get("changes", {})),
+        #             "tokens_used": gpt_e_result.get("tokens_used", 0),
+        #             "cost_data": gpt_e_result.get("cost_data", {})
+        #         }
+        # except Exception as e:
+        #     logging.error(f"Error in gpt_e: {e}")
             
     except Exception as e:
         logging.error(f"Error in profile update: {e}")
@@ -924,15 +1055,21 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
     try:
         bot_reply = gpt_response["bot_reply"]
         
-        # 🚀 הפעלת משימות במקביל לביצועים מהירים יותר
-        summary_task = asyncio.create_task(_handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id))
+        # 🚀 הפעלת כל המשימות במקביל אמיתי - בלי לחכות!
+        tasks = [
+            asyncio.create_task(_handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id)),
+            asyncio.create_task(_handle_profile_updates(chat_id, user_msg, message_id, log_payload))
+        ]
         
-        # המתנה לסיום הסיכום לפני הפעלת עדכון הפרופיל
-        summary_response, new_summary_for_history = await summary_task
+        # המתנה לכל המשימות לסיום במקביל
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # העברת הסיכום לעדכון הפרופיל (לא צריך - הסיכום של תעודת הזהות הרגשית נשלף בתוך הפונקציה)
-        profile_task = asyncio.create_task(_handle_profile_updates(chat_id, user_msg, message_id, log_payload))
-        gpt_c_usage, gpt_d_usage, gpt_e_result = await profile_task
+        # חילוץ התוצאות
+        summary_result = results[0] if not isinstance(results[0], Exception) else (None, None)
+        profile_result = results[1] if not isinstance(results[1], Exception) else ({}, {}, None)
+        
+        summary_response, new_summary_for_history = summary_result if summary_result else (None, None)
+        gpt_c_usage, gpt_d_usage, gpt_e_result = profile_result if profile_result else ({}, {}, None)
         
         # עדכון היסטוריה (אחרי שיש לנו את הסיכום)
         update_last_bot_message(chat_id, new_summary_for_history or bot_reply)
@@ -1026,15 +1163,94 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
         await handle_critical_error(ex, chat_id, user_msg, update)
 
 async def send_message_with_retry(update, chat_id, text, is_bot_message=True, max_retries=3):
+    """
+    שולחת הודעה למשתמש בטלגרם עם מנגנון retry, כולל לוגים ועדכון היסטוריה.
+    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool), max_retries (int)
+    פלט: bool - האם השליחה הצליחה
+    """
+    
+    # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
+    if text and ("[עדכון פרופיל]" in text or "[PROFILE_CHANGE]" in text or 
+                 (text.startswith("[") and "]" in text and any(keyword in text for keyword in ["עדכון", "debug", "admin", "system"]))):
+        logging.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={chat_id} | text={text[:100]}")
+        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={chat_id}")
+        print(f"🚨 הודעה חסומה: {text[:200]}...")
+        
+        # שליחת התראה לאדמין על הניסיון
+        try:
+            from notifications import send_error_notification
+            send_error_notification(
+                error_message=f"🚨 CRITICAL: ניסיון לשלוח הודעה פנימית למשתמש! chat_id={chat_id}", 
+                chat_id=chat_id, 
+                user_msg=f"הודעה חסומה: {text[:200]}..."
+            )
+        except Exception as notify_err:
+            logging.error(f"Failed to send critical security notification: {notify_err}")
+        
+        return False
+
+    # 🐛 DEBUG: מידע על השליחה
+    print("=" * 80)
+    print("📤 SEND_MESSAGE_WITH_RETRY DEBUG")
+    print("=" * 80)
+    print(f"📊 CHAT_ID: {chat_id}")
+    print(f"📊 IS_BOT_MESSAGE: {is_bot_message}")
+    print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
+    print(f"   {repr(text)}")
+    print(f"📊 NEWLINES: {text.count(chr(10))}")
+    print(f"📊 DOTS: {text.count('.')}")
+    print(f"📊 QUESTIONS: {text.count('?')}")
+    print(f"📊 EXCLAMATIONS: {text.count('!')}")
+    print("=" * 80)
+    
+    # מיפוי פורמטים לפני שליחה - פורמטינג מלא
+    print(f"🔧 [FORMATTING] מתחיל פורמטינג לטקסט: {len(text)} chars")
     formatted_text = format_text_for_telegram(text)
+    print(f"🔧 [FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
+    
+    if should_log_message_debug():
+        print(f"[SEND_MESSAGE_WITH_RETRY] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
+    
+    try:
+        bot_id = None
+        if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
+            bot_id = getattr(update.message.bot, 'id', None)
+        elif hasattr(update, 'bot'):
+            bot_id = getattr(update.bot, 'id', None)
+        
+        if should_log_debug_prints():
+            print(f"[DEBUG] SENDING MESSAGE WITH RETRY: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
+    
+    import sys; sys.stdout.flush()
     
     for attempt in range(max_retries):
         try:
-            await asyncio.wait_for(
+            sent_message = await asyncio.wait_for(
                 update.message.reply_text(formatted_text, parse_mode="HTML"),
                 timeout=10.0
             )
+            
+            if should_log_message_debug():
+                print(f"[TELEGRAM_REPLY_WITH_RETRY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+            
+            logging.info(f"[TELEGRAM_REPLY_WITH_RETRY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
+            
+            # עדכון היסטוריה ולוגים רק אם השליחה הצליחה
+            if is_bot_message:
+                update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", formatted_text)
+            log_event_to_file({
+                "chat_id": chat_id,
+                "bot_message": formatted_text,
+                "timestamp": get_israel_time().isoformat()
+            })
+            if should_log_message_debug():
+                print(f"[BOT_MSG_WITH_RETRY] {formatted_text.replace(chr(10), ' ')[:120]}")
+            
             return True
+            
         except asyncio.TimeoutError:
             logging.warning(f"Timeout on attempt {attempt + 1}")
             if attempt < max_retries - 1:
@@ -1047,11 +1263,22 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, ma
             if "parse entities" in error_msg or "unsupported start tag" in error_msg or "br" in error_msg:
                 try:
                     plain_text = re.sub(r'<[^>]+>', '', formatted_text)
-                    await asyncio.wait_for(
+                    sent_message = await asyncio.wait_for(
                         update.message.reply_text(plain_text),
                         timeout=10.0
                     )
                     logging.warning(f"⚠️ [HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
+                    
+                    # עדכון היסטוריה ולוגים גם עבור fallback
+                    if is_bot_message:
+                        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", plain_text)
+                    log_event_to_file({
+                        "chat_id": chat_id,
+                        "bot_message": plain_text,
+                        "timestamp": get_israel_time().isoformat(),
+                        "fallback_used": True
+                    })
+                    
                     return True
                 except Exception as plain_error:
                     logging.error(f"❌ [PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
@@ -1061,6 +1288,23 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, ma
                 logging.warning(f"⚠️ [RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
             else:
                 logging.error(f"❌ [FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
+                
+                # רישום שגיאה סופית
+                log_event_to_file({
+                    "chat_id": chat_id,
+                    "bot_message": formatted_text,
+                    "timestamp": get_israel_time().isoformat(),
+                    "error": str(e),
+                    "final_failure": True
+                })
+                try:
+                    from notifications import send_error_notification
+                    send_error_notification(error_message=f"[send_message_with_retry] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
+                except Exception as notify_err:
+                    if should_log_message_debug():
+                        print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
+                    logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
+                
                 return False
     
     return False

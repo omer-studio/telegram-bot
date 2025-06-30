@@ -115,17 +115,30 @@ class ConcurrentMonitor:
                 if not os.getenv("RENDER"):  # רק בפיתוח מקומי
                     loop = asyncio.get_running_loop()
                     if loop and not loop.is_closed():
-                        asyncio.create_task(self._cleanup_stale_sessions())  # רק זה חשוב!
-                        # לא מפעיל: _collect_metrics_loop, _monitor_system_health (יכולים לגרום לזליגת זיכרון)
+                        # יצירת task עם error handling
+                        cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
+                        cleanup_task.add_done_callback(self._handle_cleanup_error)
                         logging.info("[ConcurrentMonitor] Started essential cleanup only")
                 else:
                     # בסביבת production - מדלגים על כל background tasks
                     logging.info("[ConcurrentMonitor] Skipping background tasks in production")
                 self._background_tasks_started = True
-            except (RuntimeError, AttributeError):
+            except (RuntimeError, AttributeError) as e:
                 # אם אין event loop פעיל, ננסה שוב בפעם הבאה
-                logging.debug("[ConcurrentMonitor] No active event loop, skipping background tasks")
+                logging.debug(f"[ConcurrentMonitor] No active event loop, skipping background tasks: {e}")
                 pass
+            except Exception as e:
+                logging.error(f"[ConcurrentMonitor] Error starting background tasks: {e}")
+                # לא נכשל אם background tasks לא עובדים
+                self._background_tasks_started = True
+        
+    def _handle_cleanup_error(self, task):
+        """טיפול בשגיאות ב-cleanup task"""
+        try:
+            if task.exception():
+                logging.error(f"[ConcurrentMonitor] Cleanup task failed: {task.exception()}")
+        except Exception as e:
+            logging.error(f"[ConcurrentMonitor] Error handling cleanup task: {e}")
         
     async def start_user_session(self, chat_id: str, message_id: str) -> bool:
         """
@@ -216,11 +229,17 @@ class ConcurrentMonitor:
             # בדיקת timeout
             if session.is_timeout():
                 self.timeout_count += 1
-                await self._send_error_alert("session_timeout", {
-                    "chat_id": chat_id,
-                    "duration": response_time,
-                    "stage": session.stage
-                })
+                try:
+                    # 🔧 תיקון: הוספת פרטים ספציפיים יותר למניעת "Unknown error"
+                    await self._send_error_alert("session_timeout", {
+                        "error": f"Session timeout after {response_time:.2f}s",
+                        "chat_id": chat_id,
+                        "duration": response_time,
+                        "stage": session.stage,
+                        "message_id": session.message_id
+                    })
+                except Exception as e:
+                    logging.error(f"[ConcurrentMonitor] Failed to send timeout alert: {e}")
             
             # הסרת הסשן
             self._remove_from_queue(chat_id)
@@ -231,6 +250,13 @@ class ConcurrentMonitor:
             
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Error ending session for {chat_id}: {e}")
+            # ניסיון ניקוי ידני אם end_user_session נכשל
+            try:
+                self._remove_from_queue(chat_id)
+                if chat_id in self.active_sessions:
+                    del self.active_sessions[chat_id]
+            except Exception as cleanup_error:
+                logging.error(f"[ConcurrentMonitor] Failed to manually clean session {chat_id}: {cleanup_error}")
     
     async def _cleanup_stale_sessions(self):
         """
@@ -242,23 +268,47 @@ class ConcurrentMonitor:
             try:
                 stale_sessions = []
                 
-                for chat_id, session in self.active_sessions.items():
+                # יצירת עותק של הרשימה כדי למנוע שגיאות בזמן איטרציה
+                active_sessions_copy = dict(self.active_sessions)
+                
+                for chat_id, session in active_sessions_copy.items():
                     if session.is_timeout():
                         stale_sessions.append(chat_id)
                 
                 # ניקוי סשנים תקועים
                 for chat_id in stale_sessions:
-                    await self.end_user_session(chat_id, success=False)
-                    logging.warning(f"[ConcurrentMonitor] 🧹 Cleaned stale session: {chat_id}")
+                    try:
+                        await self.end_user_session(chat_id, success=False)
+                        logging.warning(f"[ConcurrentMonitor] 🧹 Cleaned stale session: {chat_id}")
+                    except Exception as e:
+                        logging.error(f"[ConcurrentMonitor] Error cleaning stale session {chat_id}: {e}")
+                        # הסרה ידנית אם end_user_session נכשל
+                        try:
+                            self._remove_from_queue(chat_id)
+                            if chat_id in self.active_sessions:
+                                del self.active_sessions[chat_id]
+                        except Exception as cleanup_error:
+                            logging.error(f"[ConcurrentMonitor] Failed to manually clean session {chat_id}: {cleanup_error}")
                 
                 if stale_sessions:
-                    await self._send_error_alert("stale_sessions_cleaned", {
-                        "count": len(stale_sessions),
-                        "sessions": stale_sessions
-                    })
+                    try:
+                        # 🔧 תיקון: הוספת פרטים ספציפיים יותר למניעת "Unknown error"
+                        await self._send_error_alert("stale_sessions_cleaned", {
+                            "error": f"Cleaned {len(stale_sessions)} stale sessions",
+                            "chat_id": "System",  # זה ניקוי מערכת, לא משתמש ספציפי
+                            "count": len(stale_sessions),
+                            "sessions": stale_sessions,
+                            "duration": "30s timeout exceeded"
+                        })
+                    except Exception as e:
+                        logging.error(f"[ConcurrentMonitor] Failed to send cleanup alert: {e}")
                 
                 await asyncio.sleep(30)  # בדיקה כל 30 שניות
                 
+            except asyncio.CancelledError:
+                # Task בוטל - יציאה נקייה
+                logging.info("[ConcurrentMonitor] Cleanup task cancelled")
+                break
             except Exception as e:
                 logging.error(f"[ConcurrentMonitor] Error in cleanup: {e}")
                 await asyncio.sleep(30)
@@ -421,12 +471,18 @@ class ConcurrentMonitor:
         """שליחת התראת שגיאה כללית"""
         try:
             from notifications import send_concurrent_alert
-            send_concurrent_alert("concurrent_error", {
+            # 🔧 תיקון: וידוא שכל השדות הנדרשים קיימים
+            error_details = {
                 "component": alert_type,
                 "error": details.get("error", "Unknown error"),
                 "chat_id": details.get("chat_id", "Unknown"),
-                **details
-            })
+            }
+            # הוספת פרטים נוספים אם קיימים
+            for key, value in details.items():
+                if key not in ["component", "error", "chat_id"]:
+                    error_details[key] = value
+            
+            send_concurrent_alert("concurrent_error", error_details)
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Failed to send error alert: {e}")
     
@@ -435,11 +491,12 @@ class ConcurrentMonitor:
         try:
             from notifications import send_recovery_notification
             current_metrics = self.get_current_metrics()
-            send_recovery_notification("system_recovered", {
+            recovery_details = {
                 "active_users": current_metrics.active_users,
                 "avg_response_time": current_metrics.avg_response_time,
                 "recovery_type": recovery_type
-            })
+            }
+            send_recovery_notification("system_recovered", recovery_details)
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Failed to send recovery alert: {e}")
 

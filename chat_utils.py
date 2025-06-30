@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Tuple
 import re
 import asyncio
+import shutil
 
 from config import (
     CHAT_HISTORY_PATH,
@@ -62,14 +63,19 @@ __all__: List[str] = [
 # ---------------------------------------------------------------------------
 
 def update_chat_history(chat_id, user_msg, bot_summary):
-    """Update the persistent chat-history JSON file."""
+    """Update the persistent chat-history JSON file with backup and corruption protection."""
     try:
         file_path = CHAT_HISTORY_PATH
+        # נסה לטעון את הקובץ
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 history_data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
             history_data = {}
+        except json.JSONDecodeError as e:
+            logging.critical(f"⚠️ קובץ היסטוריה פגום! לא מאפסים אוטומטית – יש לתקן ידנית או לשחזר מגיבוי. שגיאה: {e}")
+            # לא לאפס! לא לדרוס! להתריע חזק ולעצור
+            raise RuntimeError("קובץ היסטוריה פגום – יש לתקן ידנית או לשחזר מגיבוי!")
 
         chat_id = str(chat_id)
         if chat_id not in history_data:
@@ -89,6 +95,10 @@ def update_chat_history(chat_id, user_msg, bot_summary):
 
         # Keep only the last N messages
         history_data[chat_id]["history"] = history_data[chat_id]["history"][-MAX_CHAT_HISTORY_MESSAGES:]
+
+        # שמור גיבוי לפני כתיבה
+        if os.path.exists(file_path):
+            shutil.copyfile(file_path, file_path + ".bak")
 
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(history_data, f, ensure_ascii=False, indent=2)
@@ -117,7 +127,7 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
         return []
 
     history = history_data[chat_id]["history"]
-    max_entries = limit if limit is not None else 15
+    max_entries = limit * 2 if limit is not None else 30  # 🔧 כפול כי כל רשומה יכולה להכיל 2 הודעות
     last_entries = history if len(history) < max_entries else history[-max_entries:]
 
     messages: List[Dict[str, str]] = []
@@ -125,12 +135,30 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
     assistant_count = 0
     for entry in last_entries:
         user_content = entry["user"]
-        if "time" in entry:
+        bot_content = entry["bot"]
+        
+        # 🚨 SECURITY: מנע הודעות פנימיות מלהישלח ל-GPT
+        if bot_content and ("[עדכון פרופיל]" in bot_content or bot_content.startswith("[") and "]" in bot_content):
+            if should_log_message_debug():
+                print(f"[SECURITY] מסנן הודעה פנימית: {bot_content[:50]}...")
+            continue
+        
+        # הוספת טיימסטמפ להודעת user אם יש
+        if "time" in entry and user_content.strip():
             user_content = f"[{entry['time']}] {entry['user']}"
-        messages.append({"role": "user", "content": user_content})
-        user_count += 1
-        messages.append({"role": "assistant", "content": entry["bot"]})
-        assistant_count += 1
+        
+        # שולח רק הודעות עם תוכן
+        if user_content.strip():
+            messages.append({"role": "user", "content": user_content})
+            user_count += 1
+        
+        if bot_content.strip():
+            messages.append({"role": "assistant", "content": bot_content})
+            assistant_count += 1
+        
+        # 🔧 הגבלה על מספר ההודעות הכולל
+        if limit and len(messages) >= limit:
+            break
 
     if should_log_message_debug():
         print(f"[HISTORY_DEBUG] נשלחה היסטוריה מ-{CHAT_HISTORY_PATH} | chat_id={chat_id} | סה\"כ הודעות={len(messages)} | user={user_count} | assistant={assistant_count}")

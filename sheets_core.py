@@ -6,6 +6,7 @@ sheets_core.py - ליבה לטיפול ב-Google Sheets עם ביצועים מה
 import gspread
 import json
 import time
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from oauth2client.service_account import ServiceAccountCredentials
@@ -222,7 +223,6 @@ def find_chat_id_in_sheet(sheet, chat_id: str, col: int = 1) -> Optional[int]:
         return None
 
 # ניקוי cache מיותר כל דקה
-import threading
 def _cache_cleanup_thread():
     while True:
         time.sleep(60)  # דקה

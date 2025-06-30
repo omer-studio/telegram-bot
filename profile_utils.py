@@ -161,39 +161,30 @@ def _detect_profile_changes(old: Dict[str, Any], new: Dict[str, Any]) -> List[Di
 
 
 def _log_profile_changes_to_chat_history(chat_id: str, changes: List[Dict[str, Any]]):
-    if not changes:
-        return
+    """רושם שינויים בפרופיל להיסטוריה לצורכי מעקב (לא נשלח למשתמש)."""
+    
+    # 🚨 SECURITY FIX: לא מוסיף הודעות פרופיל להיסטוריה
+    # כדי למנוע חשיפה של מידע פרטי למשתמש דרך GPT context
+    
+    # רק לוג פנימי לקובץ debug
+    import logging
     try:
-        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-            history_data = json.load(f)
-    except Exception:
-        history_data = {}
-
-    cid = str(chat_id)
-    history_data.setdefault(cid, {"am_context": "", "history": []})
-
-    now = utils.get_israel_time()
-    simple_ts = f"{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}"
-    msg_parts = []
-    for ch in changes:
-        match ch["change_type"]:
-            case "added":
-                msg_parts.append(f"נוסף: {ch['field']} = {ch['new_value']}")
-            case "updated":
-                msg_parts.append(f"עודכן: {ch['field']} מ-{ch['old_value']} ל-{ch['new_value']}")
-            case "removed":
-                msg_parts.append(f"הוסר: {ch['field']} (היה: {ch['old_value']})")
-    history_data[cid]["history"].append(
-        {
-            "user": "",
-            "bot": f"[עדכון פרופיל] {' | '.join(msg_parts)}",
-            "timestamp": now.isoformat(),
-            "time": simple_ts,
-            "type": "profile_update",
-        }
-    )
-    with open(CHAT_HISTORY_PATH, "w", encoding="utf-8") as f:
-        json.dump(history_data, f, ensure_ascii=False, indent=2)
+        msg_parts = []
+        for ch in changes:
+            match ch["change_type"]:
+                case "added":
+                    msg_parts.append(f"נוסף: {ch['field']} = {ch['new_value']}")
+                case "updated":
+                    msg_parts.append(f"עודכן: {ch['field']} מ-{ch['old_value']} ל-{ch['new_value']}")
+                case "removed":
+                    msg_parts.append(f"הוסר: {ch['field']} (היה: {ch['old_value']})")
+        
+        log_message = f"[PROFILE_CHANGE] chat_id={chat_id} | {' | '.join(msg_parts)}"
+        logging.info(log_message)
+        print(f"🔒 {log_message}")
+        
+    except Exception as e:
+        logging.error(f"שגיאה ברישום שינויים: {e}")
 
 
 # --- admin notification minimal (HTML formatted) --------------------------------

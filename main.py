@@ -171,9 +171,35 @@ async def on_startup():
         from config import TELEGRAM_BOT_TOKEN
         webhook_url = os.getenv("WEBHOOK_URL")
         if webhook_url:
-            set_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
-            resp = requests.post(set_url, json={"url": webhook_url})
-            print(f"[STARTUP] Telegram setWebhook status: {resp.status_code}, resp: {resp.text}")
+            # 🔧 תיקון: retry mechanism למניעת "Too Many Requests"
+            max_retries = 3
+            retry_delay = 2  # שניות
+            
+            for attempt in range(max_retries):
+                try:
+                    set_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
+                    resp = requests.post(set_url, json={"url": webhook_url}, timeout=10)
+                    
+                    if resp.status_code == 200 and resp.json().get('ok'):
+                        print(f"✅ [STARTUP] Telegram webhook הוגדר בהצלחה!")
+                        break
+                    elif resp.status_code == 429:  # Too Many Requests
+                        retry_after = resp.json().get('parameters', {}).get('retry_after', retry_delay)
+                        print(f"⚠️ [STARTUP] Too Many Requests - ממתין {retry_after} שניות... (ניסיון {attempt + 1}/{max_retries})")
+                        time.sleep(retry_after)
+                        continue
+                    else:
+                        print(f"⚠️ [STARTUP] Telegram setWebhook status: {resp.status_code}, resp: {resp.text}")
+                        if attempt < max_retries - 1:
+                            time.sleep(retry_delay)
+                            continue
+                        break
+                except requests.exceptions.RequestException as e:
+                    print(f"⚠️ [STARTUP] שגיאת תקשורת בהגדרת webhook (ניסיון {attempt + 1}): {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        continue
+                    break
         else:
             print("[STARTUP] לא הוגדר WEBHOOK_URL - לא מגדיר webhook בטלגרם.")
     except Exception as e:
