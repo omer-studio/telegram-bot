@@ -125,6 +125,8 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     # 6. איחוד usage
     combined_usage = {}
     combined_usage.update(gpt_c_usage)
+    # הוספת השדות שחולצו מ-GPT-C
+    combined_usage["extracted_fields"] = extracted_fields
     for k, v in gpt_d_usage.items():
         combined_usage[f"gpt_d_{k}"] = v
     

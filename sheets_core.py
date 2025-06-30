@@ -883,6 +883,12 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     if not profile_data:
         return ""
     
+    try:
+        from fields_dict import FIELDS_DICT
+    except ImportError:
+        # fallback אם לא ניתן לייבא
+        return ""
+    
     summary_parts = []
     
     # עובר על השדות לפי הסדר שהם מופיעים ב-fields_dict

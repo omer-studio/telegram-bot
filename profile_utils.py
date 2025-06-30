@@ -37,6 +37,7 @@ __all__: List[str] = [
     "cleanup_old_profiles",
     "get_profiles_stats",
     "_send_admin_profile_overview_notification",
+    "_detect_profile_changes",
 ]
 
 # --- משתנה גלובלי לבקרת התראות אדמין (הכרחי לתאימות) ---
@@ -217,7 +218,7 @@ def _send_admin_profile_overview_notification(
 
         lines.append("")
         lines.append(f"<b>GPT-C</b>: {gpt_c_info}")
-        if changes and "עודכנו" in gpt_c_info and "0" not in gpt_c_info:
+        if changes and len(changes) > 0:  # ✅ תיקון: נשלח גם אם יש רק שינויים מ-GPT-C
             for ch in changes[:2]:
                 field = ch.get("field")
                 old_val = _pretty_val(ch.get("old_value"))
@@ -286,9 +287,11 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
         try:
             from sheets_core import generate_summary_from_profile_data
             auto_summary = generate_summary_from_profile_data(new_profile)
-            # ✅ רק אם הסיכום באמת שונה - מעדכנים אותו
-            if auto_summary and auto_summary != old_profile.get("summary", ""):
+            # ✅ תמיד מעדכנים את הסיכום אם יש שינוי בפרופיל
+            if auto_summary:
                 new_profile["summary"] = auto_summary
+                # הוספת הסיכום לעדכונים שנשלחים
+                updates["summary"] = auto_summary
         except Exception as e:
             logging.debug(f"שגיאה ביצירת סיכום אוטומטי: {e}")
 
@@ -310,18 +313,35 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
             except RuntimeError:
                 # אם גם זה לא עובד, נדלג על הסנכרון
                 logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
-    except Exception as exc:
-        logging.error(f"שגיאה בעדכון פרופיל מהיר: {exc}")
-        _update_user_profiles_file(chat_id, updates)
-        # 🔧 תיקון: אותו תיקון גם כאן
-        try:
-            import asyncio
-            asyncio.run(_sync_local_to_sheets_background(chat_id))
-        except RuntimeError:
+
+        # ✅ שליחת הודעת אדמין אם יש שינויים
+        if send_admin_notification and not _disable_auto_admin_profile_notification and changes:
             try:
-                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
-            except RuntimeError:
-                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
+                from notifications import send_admin_notification_raw
+                changes_text = []
+                for change in changes[:3]:  # רק 3 השינויים הראשונים
+                    field = change.get("field", "")
+                    old_val = _pretty_val(change.get("old_value", ""))
+                    new_val = _pretty_val(change.get("new_value", ""))
+                    change_type = change.get("change_type", "")
+                    
+                    if change_type == "added":
+                        changes_text.append(f"➕ {field}: [{new_val}]")
+                    elif change_type == "updated":
+                        changes_text.append(f"✏️ {field}: [{old_val}] → [{new_val}]")
+                    elif change_type == "removed":
+                        changes_text.append(f"➖ {field}: [{old_val}] → נמחק")
+                
+                if changes_text:
+                    message = f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code></b>\n\n" + "\n".join(changes_text)
+                    send_admin_notification_raw(message)
+            except Exception as e:
+                logging.error(f"שגיאה בשליחת הודעת אדמין: {e}")
+
+        return True
+    except Exception as e:
+        logging.error(f"Error updating profile for {chat_id}: {e}")
+        return False
 
 
 def get_user_summary_fast(chat_id: str) -> str:

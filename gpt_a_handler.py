@@ -195,6 +195,7 @@ COMPLEX_PATTERNS = [
 
 # משתנה גלובלי לעקיבה אחר ההחלטות
 filter_decisions_log = {
+    "first_20_messages": 0,
     "length": 0,
     "keywords": 0, 
     "pattern": 0,
@@ -228,13 +229,21 @@ def should_use_extra_emotion_model(user_message, chat_history_length=0):
     מחליט האם להשתמש במודל המתקדם או במהיר יותר
     
     קריטריונים למודל מתקדם:
-    1. הודעה ארוכה (מעל X מילים)
-    2. מילות מפתח רלוונטיות
-    3. דפוסי ביטויים מורכבים
+    1. 🆕 20 ההודעות הראשונות של משתמש חדש (רושם ראשוני חשוב)
+    2. הודעה ארוכה (מעל X מילים)
+    3. מילות מפתח רלוונטיות
+    4. דפוסי ביטויים מורכבים
     
     Returns:
         tuple: (use_extra_emotion: bool, reason: str, match_type: str)
     """
+    # 🆕 בדיקה 1: 20 ההודעות הראשונות - רושם ראשוני חשוב
+    if chat_history_length <= 20:
+        logging.info(f"🎯 [PREMIUM_FILTER] 20 ההודעות הראשונות: {chat_history_length} הודעות -> מודל מתקדם (רושם ראשוני)")
+        result = True, f"20 ההודעות הראשונות ({chat_history_length}/20) - רושם ראשוני חשוב", "first_20_messages"
+        log_filter_decision(result[2])
+        return result
+    
     # בדיקת אורך הודעה
     word_count = len(user_message.split())
     if word_count > LONG_MESSAGE_THRESHOLD:
@@ -558,7 +567,21 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
     """
     # שלב 1: קביעת מודל לפי פילטר חכם
     user_message = full_messages[-1]["content"] if full_messages else ""
-    chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
+    
+    # 🆕 קבלת מספר ההודעות האמיתי מההיסטוריה
+    chat_history_length = 0
+    if chat_id:
+        try:
+            from chat_utils import get_user_stats
+            user_stats = get_user_stats(chat_id)
+            chat_history_length = user_stats.get("total_messages", 0)
+        except Exception as e:
+            logging.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
+            # fallback לספירה מ-full_messages
+            chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
+    else:
+        # אם אין chat_id, נשתמש בספירה מ-full_messages
+        chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     
     use_extra_emotion, filter_reason, match_type = should_use_extra_emotion_model(user_message, chat_history_length)
     
@@ -643,7 +666,21 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
     💎 גרסה סינכרונית ישנה - לתאימות לאחור
     """
     user_message = full_messages[-1]["content"] if full_messages else ""
-    chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
+    
+    # 🆕 קבלת מספר ההודעות האמיתי מההיסטוריה
+    chat_history_length = 0
+    if chat_id:
+        try:
+            from chat_utils import get_user_stats
+            user_stats = get_user_stats(chat_id)
+            chat_history_length = user_stats.get("total_messages", 0)
+        except Exception as e:
+            logging.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
+            # fallback לספירה מ-full_messages
+            chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
+    else:
+        # אם אין chat_id, נשתמש בספירה מ-full_messages
+        chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     
     use_extra_emotion, filter_reason, match_type = should_use_extra_emotion_model(user_message, chat_history_length)
     

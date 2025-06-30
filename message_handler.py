@@ -928,13 +928,33 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
         # GPT-D: רק אם יש ערך קיים בשדה שהוחלף
         gpt_d_should_run = False
         extracted_fields = {}
+        
+        # חילוץ השדות שחולצו מ-GPT-C
         for key, value in combined_usage.items():
-            if not key.startswith("gpt_d_") and key not in ["field_conflict_resolution"]:
-                # זה gpt_c usage, נחלץ את השדות שחולצו
-                if key == "extracted_fields":
-                    extracted_fields = value
-                elif isinstance(value, dict) and "extracted_fields" in value:
-                    extracted_fields = value["extracted_fields"]
+            if key == "extracted_fields":
+                extracted_fields = value
+                break
+            elif isinstance(value, dict) and "extracted_fields" in value:
+                extracted_fields = value["extracted_fields"]
+                break
+        
+        # אם לא מצאנו ב-combined_usage, ננסה לחלץ ישירות מ-GPT-C
+        if not extracted_fields:
+            from gpt_c_handler import extract_user_info
+            gpt_c_result = extract_user_info(user_msg)
+            if isinstance(gpt_c_result, dict):
+                extracted_fields = gpt_c_result.get("extracted_fields", {})
+        
+        # ✅ תיקון: עדכון הפרופיל עם השדות שחולצו מ-GPT-C אם לא עודכנו עדיין
+        if extracted_fields and not any(ch.get("field") in extracted_fields for ch in changes_list):
+            # אם השדות שחולצו לא נכללו בעדכון, נוסיף אותם
+            for field, value in extracted_fields.items():
+                changes_list.append({
+                    "field": field,
+                    "old_value": existing_profile.get(field, ""),
+                    "new_value": value,
+                    "change_type": "added" if not existing_profile.get(field) else "updated"
+                })
         
         if extracted_fields:
             for field, new_value in extracted_fields.items():
@@ -988,6 +1008,7 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
         has_gpt_d_activity = bool(gpt_d_usage and gpt_d_should_run)  # GPT-D הופעל
         has_gpt_e_activity = bool(gpt_e_result and gpt_e_result.get('changes'))  # GPT-E החזיר שינויים
         
+        # ✅ תיקון: נשלח הודעה גם אם יש רק פעילות GPT-C (חילוץ שדות)
         if has_gpt_c_activity or has_gpt_d_activity or has_gpt_e_activity:  # ✅ נשלח אם יש פעילות כלשהי
             try:
                 # קבלת הסיכום של תעודת הזהות הרגשית
