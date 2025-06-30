@@ -284,7 +284,7 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=8):
             
         from message_handler import send_message_with_retry  # local import to avoid circular
         temp_message_text = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך..."
-        await send_message_with_retry(update, chat_id, temp_message_text, is_bot_message=False)
+        await send_message_with_retry(update, chat_id, temp_message_text, is_bot_message=False, is_gpt_a_response=False)
         
         # נחזיר None כי send_message_with_retry לא מחזיר את האובייקט
         logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
@@ -311,7 +311,7 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
 
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
-        await send_message_with_retry(update, chat_id, new_text)
+        await send_message_with_retry(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
         logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
         return True
 
@@ -604,7 +604,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
             try:
                 from message_handler import send_message_with_retry
                 temp_message_text = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך..."
-                await send_message_with_retry(update, chat_id, temp_message_text, is_bot_message=False)
+                await send_message_with_retry(update, chat_id, temp_message_text, is_bot_message=False, is_gpt_a_response=False)
                 logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
             except Exception as temp_err:
                 logging.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")

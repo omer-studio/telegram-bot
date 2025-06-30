@@ -18,7 +18,8 @@ from config import (
     ADMIN_NOTIFICATION_CHAT_ID, 
     ADMIN_BOT_TELEGRAM_TOKEN,
     MAX_MESSAGE_LENGTH,
-    ADMIN_CHAT_ID
+    ADMIN_CHAT_ID,
+    MAX_CODE_TRIES
 )
 from utils import log_error_stat, get_israel_time
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -43,7 +44,7 @@ import profile_utils as _pu
 
 def format_text_for_telegram(text):
     """
-    פורמטינג טקסט לטלגרם לפי כללים מדויקים - גרסה רשמית ומתוקנת
+    📀 כללי פורמטינג: גרסה רשמית ומתוקנת
     מטרה: לטשטש את הפער בין שפה אנושית לשפה מודלית ולייצר טקסט טבעי, מדורג וקריא
     """
     import re
@@ -52,7 +53,7 @@ def format_text_for_telegram(text):
     # 🛡️ הגנה נוספת: מעקב זמן לכל הריצה של הפונקציה
     start_time = time.time()
     
-    # רג'קס לזיהוי אימוג'ים - מוגדר כ־compile object
+    # רג'קס לזיהוי אימוג'ים
     emoji_pattern = re.compile(
         r"[\U0001F600-\U0001F64F"
         r"\U0001F300-\U0001F6FF"
@@ -78,7 +79,7 @@ def format_text_for_telegram(text):
     }
 
     # 🔢 שלב 1 – המרת סימני Markdown לתגיות HTML
-    # תחילה ממירים הדגשה כפולה (bold), אחר כך הדגשה בודדת (underline), כדי למנוע חפיפות
+    # 🔁 המרות: תחילה ממירים הדגשה כפולה (bold), אחר כך הדגשה בודדת (underline), כדי למנוע חפיפות
     text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
     text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
     text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
@@ -87,11 +88,13 @@ def format_text_for_telegram(text):
     # 🔢 שלב 2 – ניקוי HTML בסיסי
     # <br>, <br/>, <br /> → \n
     text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r'<br\s*/>', '\n', text)
+    text = re.sub(r'<br\s*/\s*>', '\n', text)
     # <i> → <b>
     text = re.sub(r'<i>', '<b>', text)
     text = re.sub(r'</i>', '</b>', text)
     
-    # מנקה תגיות כפולות מקוננות עם הגבלת לולאה בטוחה
+    # מנקה תגיות כפולות מקוננות (כמו <b><b>טקסט</b></b> או <u><u>טקסט</u></u>) עם הגבלת לולאה בטוחה
     for tag in ['b', 'u']:
         pattern = fr'(<{tag}>)+(.+?)(</{tag}>)+'
         loop_limit = 10
@@ -106,41 +109,42 @@ def format_text_for_telegram(text):
     text = re.sub(r'\n(?!\n)', ' ', text)
     
     # 🔢 שלב 4 – נשימות: פיסוק → שורות
+    # 🨁 כל משפט = נשימה → מסתיים במעבר שורה
+    
     # ספירת נקודות לפני המחיקה
     debug_info["removed_dots"] = len(re.findall(r'\.(\s*)', text))
     
-    # טיפול מיוחד: נקודה + אימוג'י → אימוג'י + מעבר שורה
+    # . 🧽 → 🧽\n (מעבר שורה רק אחרי האימוג'י)
     text = re.sub(r'\.(\s*)(' + emoji_pattern.pattern + r')', r' \2\n', text)
     
-    # נקודה רגילה → מעבר שורה
+    # . → מוחלף ב־\n
     text = re.sub(r'\.(\s*)', '\n', text)
     
-    # סימן שאלה/קריאה + אימוג'י → נשארים יחד + מעבר שורה אחרי שניהם
+    # ? או ! → נשארים + \n, אלא אם אחריהם אימוג'י – ואז השבירה תבוא אחרי האימוג'י
+    # כלל קריטי: אין שבירה בין סימן שאלה/קריאה לאימוג'י. רק אחרי שניהם יחד
     text = re.sub(r'([?!])\s*(' + emoji_pattern.pattern + r')', r'\1 \2\n', text)
-    
-    # סימן שאלה/קריאה בלי אימוג'י → נשאר + מעבר שורה
     text = re.sub(r'([?!])(?!\s*' + emoji_pattern.pattern + r')', r'\1\n', text)
     
-    # אימוג'י באמצע משפט → מעבר שורה אחרי האימוג'י (אם אין פיסוק אחריו)
-    text = re.sub(r'(' + emoji_pattern.pattern + r')(?!\s*[.!?]|\s*\n)', r'\1\n', text)
-    
-    # אימוג'י בסוף משפט → נשאר + מעבר שורה
-    text = re.sub(r'(' + emoji_pattern.pattern + r')(\s*)$', r'\1\n', text, flags=re.MULTILINE)
+    # כלל חדש: אם יש אימוג'י באמצע משפט → נשמר + \n אחרי האימוג'י
+    # אבל רק אם אין פיסוק לפניו
+    text = re.sub(r'([^.!?])\s*(' + emoji_pattern.pattern + r')(?!\s*[.!?]|\s*\n)', r'\1 \2\n', text)
 
     # 🔢 שלב 5 – ניקוי רווחים אחרי החלפת נקודות
     text = re.sub(r'\n\s+', '\n', text)
 
     # 🔢 שלב 6 – מניעת אימוג'ים בתחילת שורה
-    # מחברים אימוג'י לשורה שלפניו רק אם הוא באמת בתחילת שורה (לא אחרי שבירה שנוצרה על ידו)
-    # לא מחברים אימוג'י לשורה שלפניו אם הוא יצר שבירה בעצמו
-    text = re.sub(r'\n(' + emoji_pattern.pattern + r')(?!\n)', r' \1', text)
+    # אין לאפשר מצב שבו שורה מתחילה באימוג'י (כולל אחרי פסקה)
+    # מחברים אימוג'י לשורה שלפניו, גם אם יש רווח/מעבר שורה ביניהם
+    # כולל מקרים כמו ?\n🤔 → ? 🤔\n
+    text = re.sub(r'\n(' + emoji_pattern.pattern + r')', r' \1', text)
 
     # 🔢 שלב 7 – אימוג'י לפני תגיות <b> / <u>
-    # מכניסים אימוג'י לתוך התגית
+    # אם אימוג'י מופיע מיד לפני תגית (עם או בלי רווח/פיסוק) – נכניס אותו לתוך התגית
     text = re.sub(r'(' + emoji_pattern.pattern + r')[\s.,]*(<(b|u)>)', r'\2\1 ', text)
 
-    # 🔢 שלב 8 – הגבלת אימוג'ים
+    # 🔢 שלב 8 – הגבלת אימוג'ים + רג'קס זיהוי
     # יחס מקסימלי: 1 אימוג'י לכל 40 תווים
+    # שימור מבוקר לפי פיזור תווים
     all_emojis = emoji_pattern.findall(text)
     debug_info["total_emojis"] = len(all_emojis)
     
@@ -173,23 +177,13 @@ def format_text_for_telegram(text):
             cleaned.append(line.strip())
     text = '\n'.join(cleaned)
 
-    # בדיקת timeout לפני הסיום
-    if time.time() - start_time > 2:
-        raise TimeoutError("format_text לקחה יותר מדי זמן — ייתכן לולאה אינסופית")
-
     # 🛠️ שלב 10 – DEBUG INFO
     debug_info["text_length_after"] = len(text)
     debug_info["added_line_breaks"] = text.count('\n')
     
-    # בדיקה שהתוצר הסופי עומד בכללים
-    final_dots = text.count('.')
-    if final_dots > 0:
-        # מסירת נקודות שנותרו (אם יש)
-        text = text.replace('.', '')
-        debug_info["final_dots_removed"] = final_dots
-    
-    # עדכון אורך סופי אחרי ניקוי נקודות
-    debug_info["text_length_after"] = len(text)
+    # 🛡️ הגנה נוספת: בדיקת timeout
+    if time.time() - start_time > 2:
+        raise TimeoutError("format_text לקחה יותר מדי זמן — ייתכן לולאה אינסופית")
     
     # לצורך בדיקות: שמור גם את הטקסט לפני ואחרי הפורמטינג
     debug_info["original_text"] = original_text
@@ -206,16 +200,16 @@ async def _handle_holiday_check(update, chat_id, bot_reply):
         
         holiday_message = get_holiday_system_message(str(chat_id), bot_reply)
         if holiday_message:
-            await send_message_with_retry(update, chat_id, holiday_message)
+            await send_message_with_retry(update, chat_id, holiday_message, is_bot_message=False, is_gpt_a_response=False)
             
     except Exception as e:
         logging.error(f"שגיאה בבדיקת חגים: {e}")
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
-async def send_message(update, chat_id, text, is_bot_message=True):
+async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_response=False):
     """
     שולחת הודעה למשתמש בטלגרם, כולל לוגים ועדכון היסטוריה.
-    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool)
+    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool), is_gpt_a_response (bool)
     פלט: אין (שולחת הודעה)
     # מהלך מעניין: עדכון היסטוריה ולוגים רק אם ההודעה נשלחה בהצלחה.
     """
@@ -233,6 +227,7 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     print("=" * 80)
     print(f"📊 CHAT_ID: {chat_id}")
     print(f"📊 IS_BOT_MESSAGE: {is_bot_message}")
+    print(f"📊 IS_GPT_A_RESPONSE: {is_gpt_a_response}")
     print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
     print(f"   {repr(text)}")
     print(f"📊 NEWLINES: {text.count(chr(10))}")
@@ -241,9 +236,15 @@ async def send_message(update, chat_id, text, is_bot_message=True):
     print(f"📊 EXCLAMATIONS: {text.count('!')}")
     print("=" * 80)
     
-    # מיפוי פורמטים לפני שליחה
-    formatted_text = format_text_for_telegram(text)
-    
+    # 🔧 פורמטינג רק עבור תשובות מGPTA
+    if is_gpt_a_response:
+        print(f"🔧 [FORMATTING] מתחיל פורמטינג לתשובת GPTA: {len(text)} chars")
+        formatted_text = format_text_for_telegram(text)
+        print(f"🔧 [FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
+    else:
+        formatted_text = text
+        print(f"🚫 [FORMATTING] דולג על פורמטינג (לא תשובת GPTA)")
+
     if should_log_message_debug():
         print(f"[SEND_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
     
@@ -324,7 +325,7 @@ async def send_approval_message(update, chat_id):
     except Exception as e:
         logging.error(f"[ERROR] שליחת הודעת אישור נכשלה: {e}")
         # ניסיון שליחה רגילה ללא מקלדת
-        await send_message_with_retry(update, chat_id, approval_msg, is_bot_message=False)
+        await send_message_with_retry(update, chat_id, approval_msg, is_bot_message=False, is_gpt_a_response=False)
 
 def detect_message_type(message):
     """
@@ -408,7 +409,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # הודעה למשתמש שהתכונה לא זמינה כרגע
                     voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
-                    await send_message_with_retry(update, chat_id, voice_message, is_bot_message=False)
+                    await send_message_with_retry(update, chat_id, voice_message, is_bot_message=False, is_gpt_a_response=False)
                     
                     # רישום להיסטוריה ולוגים
                     log_event_to_file({
@@ -439,18 +440,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "event_type": "unsupported_message"
                     })
                     
-                    await send_message_with_retry(update, chat_id, appropriate_response, is_bot_message=False)
+                    await send_message_with_retry(update, chat_id, appropriate_response, is_bot_message=False, is_gpt_a_response=False)
                     await end_monitoring_user(str(chat_id), True)
                     return
 
             # 🚀 התחלת ניטור concurrent
             if not await start_monitoring_user(str(chat_id), str(message_id)):
-                await send_message_with_retry(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.", is_bot_message=False)
+                await send_message_with_retry(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.", is_bot_message=False, is_gpt_a_response=False)
                 return
 
             did, reply = handle_secret_command(chat_id, user_msg)
             if did:
-                await send_message_with_retry(update, chat_id, reply, is_bot_message=False)
+                await send_message_with_retry(update, chat_id, reply, is_bot_message=False, is_gpt_a_response=False)
                 await end_monitoring_user(str(chat_id), True)
                 return
             log_payload["chat_id"] = chat_id
@@ -509,37 +510,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await end_monitoring_user(str(chat_id), False)
             return
 
-        # שלב 2: בדיקה מהירה של הרשאות (רק ב-user_states)
+        # שלב 2: בדיקה מהירה של הרשאות - בדיקת קיום והרשאה
         try:
             await update_user_processing_stage(str(chat_id), "permission_check")
             logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
             print("🔍 בודק הרשאות משתמש מול הגיליון...")
             
-            # בדיקה מהירה - אם יש ב-user_states, כנראה מאושר - לפי כותרות
-            sheet_states = context.bot_data["sheet_states"]
+            # בדיקה מלאה של הרשאות במקום בדיקה רק של קיום
+            access_result = check_user_access(context.bot_data["sheet"], chat_id)
+            status = access_result.get("status", "not_found")
             
-            # קריאת כותרות למציאת עמודת chat_id
-            all_values = sheet_states.get_all_values()
-            if all_values and len(all_values) > 0:
-                headers = all_values[0]
-                chat_id_col = None
-                for i, header in enumerate(headers):
-                    if header.lower() == "chat_id":
-                        chat_id_col = i + 1  # gspread uses 1-based indexing
-                        break
-                
-                if chat_id_col:
-                    exists_in_states = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
-                else:
-                    # fallback למיקום קלאסי אם לא נמצאה עמודת chat_id
-                    exists_in_states = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
-            else:
-                # fallback למיקום קלאסי אם אין כותרות
-                exists_in_states = find_chat_id_in_sheet(sheet_states, chat_id, col=1)
-            
-            if not exists_in_states:
-                # אם לא קיים ב-user_states, עושים בדיקה מלאה ברקע
+            if status == "not_found":
+                # משתמש לא קיים - טיפול ברקע
                 asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
+                await end_monitoring_user(str(chat_id), True)
+                return
+                
+            elif status == "pending":
+                # משתמש קיים אבל לא אישר תנאים - טיפול באישור
+                asyncio.create_task(handle_pending_user_background(update, context, chat_id, user_msg))
                 await end_monitoring_user(str(chat_id), True)
                 return
                 
@@ -638,7 +627,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # שלב 3: שליחת התשובה למשתמש (אלא אם כבר נשלחה דרך עריכת הודעה זמנית)
             await update_user_processing_stage(str(chat_id), "sending_response")
             if not gpt_response.get("message_already_sent", False):
-                await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True)
+                await send_message_with_retry(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
             # 🚀 שלב 4: הפעלת כל המשימות ברקע מיד אחרי שליחת התשובה - בלי לחכות!
             await update_user_processing_stage(str(chat_id), "background_tasks")
@@ -804,7 +793,7 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         if is_first_time:
             welcome_messages = get_welcome_messages()
             for message in welcome_messages:
-                await send_message_with_retry(update, chat_id, message)
+                await send_message_with_retry(update, chat_id, message, is_bot_message=False, is_gpt_a_response=False)
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
@@ -814,43 +803,44 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         # הוספת לוג להודעה נכנסת
         print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (UNREGISTERED)")
         
-        # check_user_access מחזיר dict עם status ו-code
-        access_result = check_user_access(context.bot_data["sheet"], chat_id)
-        status = access_result.get("status", "not_found")
-        code = access_result.get("code")
+        # משתמש לא קיים - צריך לרשום קוד
+        current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
         
-        if status == "not_found":
-            # משתמש לא קיים - צריך לרשום קוד
-            current_try = increment_code_try(context.bot_data["sheet_states"], chat_id)
-            if current_try is None:
-                current_try = 1
+        if register_user(context.bot_data["sheet"], chat_id, user_msg):
+            # קוד תקין - הצלחה!
+            await send_message_with_retry(update, chat_id, code_approved_message(), is_bot_message=False, is_gpt_a_response=False)
+            await send_approval_message(update, chat_id)
+        else:
+            # קוד לא תקין - נגמרו הניסיונות?
+            await send_message_with_retry(update, chat_id, get_retry_message_by_attempt(current_try), is_bot_message=False, is_gpt_a_response=False)
+            if current_try >= MAX_CODE_TRIES:
+                await send_message_with_retry(update, chat_id, not_approved_message(), is_bot_message=False, is_gpt_a_response=False)
+                
+    except Exception as ex:
+        await handle_critical_error(ex, chat_id, user_msg, update)
 
-            if register_user(context.bot_data["sheet"], chat_id, user_msg):
-                await send_message_with_retry(update, chat_id, code_approved_message(), is_bot_message=False)
-                await send_approval_message(update, chat_id)
-            else:
-                if current_try <= 3:
-                    await send_message_with_retry(update, chat_id, get_retry_message_by_attempt(current_try), is_bot_message=False)
-                else:
-                    await send_message_with_retry(update, chat_id, not_approved_message(), is_bot_message=False)
-                    
-        elif status == "pending":
-            # משתמש רשום אבל לא אישר תנאים
-            if user_msg.strip() == APPROVE_BUTTON_TEXT():
-                approve_user(context.bot_data["sheet"], chat_id)
-                await send_message_with_retry(update, chat_id, nice_keyboard_message(), is_bot_message=False)
-                # שליחת הודעה עם הסרת מקלדת
-                try:
-                    await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
-                except Exception as e:
-                    logging.warning(f"[KEYBOARD_REMOVE] שגיאה בהסרת מקלדת: {e}")
-                    await send_message_with_retry(update, chat_id, remove_keyboard_message(), is_bot_message=False)
-                await send_message_with_retry(update, chat_id, full_access_message(), is_bot_message=False)
-            elif user_msg.strip() == DECLINE_BUTTON_TEXT():
-                await send_message_with_retry(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.", is_bot_message=False)
-                await send_approval_message(update, chat_id)
-            else:
-                await send_approval_message(update, chat_id)
+async def handle_pending_user_background(update, context, chat_id, user_msg):
+    """מטפל במשתמש שמחכה לאישור תנאים"""
+    try:
+        # הוספת לוג להודעה נכנסת
+        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (PENDING)")
+        
+        # משתמש רשום אבל לא אישר תנאים
+        if user_msg.strip() == APPROVE_BUTTON_TEXT():
+            approve_user(context.bot_data["sheet"], chat_id)
+            await send_message_with_retry(update, chat_id, nice_keyboard_message(), is_bot_message=False, is_gpt_a_response=False)
+            # שליחת הודעה עם הסרת מקלדת
+            try:
+                await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
+            except Exception as e:
+                logging.warning(f"[KEYBOARD_REMOVE] שגיאה בהסרת מקלדת: {e}")
+                await send_message_with_retry(update, chat_id, remove_keyboard_message(), is_bot_message=False, is_gpt_a_response=False)
+            await send_message_with_retry(update, chat_id, full_access_message(), is_bot_message=False, is_gpt_a_response=False)
+        elif user_msg.strip() == DECLINE_BUTTON_TEXT():
+            await send_message_with_retry(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.", is_bot_message=False, is_gpt_a_response=False)
+            await send_approval_message(update, chat_id)
+        else:
+            await send_approval_message(update, chat_id)
                 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
@@ -1162,10 +1152,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
-async def send_message_with_retry(update, chat_id, text, is_bot_message=True, max_retries=3):
+async def send_message_with_retry(update, chat_id, text, is_bot_message=True, is_gpt_a_response=False, max_retries=3):
     """
     שולחת הודעה למשתמש בטלגרם עם מנגנון retry, כולל לוגים ועדכון היסטוריה.
-    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool), max_retries (int)
+    קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool), is_gpt_a_response (bool), max_retries (int)
     פלט: bool - האם השליחה הצליחה
     """
     
@@ -1195,6 +1185,7 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, ma
     print("=" * 80)
     print(f"📊 CHAT_ID: {chat_id}")
     print(f"📊 IS_BOT_MESSAGE: {is_bot_message}")
+    print(f"📊 IS_GPT_A_RESPONSE: {is_gpt_a_response}")
     print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
     print(f"   {repr(text)}")
     print(f"📊 NEWLINES: {text.count(chr(10))}")
@@ -1203,10 +1194,14 @@ async def send_message_with_retry(update, chat_id, text, is_bot_message=True, ma
     print(f"📊 EXCLAMATIONS: {text.count('!')}")
     print("=" * 80)
     
-    # מיפוי פורמטים לפני שליחה - פורמטינג מלא
-    print(f"🔧 [FORMATTING] מתחיל פורמטינג לטקסט: {len(text)} chars")
-    formatted_text = format_text_for_telegram(text)
-    print(f"🔧 [FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
+    # 🔧 פורמטינג רק עבור תשובות מGPTA
+    if is_gpt_a_response:
+        print(f"🔧 [FORMATTING] מתחיל פורמטינג לתשובת GPTA: {len(text)} chars")
+        formatted_text = format_text_for_telegram(text)
+        print(f"🔧 [FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
+    else:
+        formatted_text = text
+        print(f"🚫 [FORMATTING] דולג על פורמטינג (לא תשובת GPTA)")
     
     if should_log_message_debug():
         print(f"[SEND_MESSAGE_WITH_RETRY] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)

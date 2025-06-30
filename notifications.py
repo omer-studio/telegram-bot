@@ -79,7 +79,7 @@ async def _send_user_friendly_error_message(update, chat_id: str):
             print(f"📊 EXCLAMATIONS: {user_friendly_message.count('!')}")
             print("=" * 80)
             from message_handler import send_message_with_retry
-            await send_message_with_retry(update, chat_id, user_friendly_message)
+            await send_message_with_retry(update, chat_id, user_friendly_message, is_bot_message=False, is_gpt_a_response=False)
         else:
             # אם אין update זמין, ננסה לשלוח ישירות דרך bot API
             bot = telegram.Bot(token=BOT_TOKEN)
