@@ -429,6 +429,9 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         
         bot_reply = response.choices[0].message.content.strip()
         
+        # 🆕 ניקוי תשובה מטקסט טכני ומאחורי הקלעים
+        bot_reply = clean_bot_response(bot_reply)
+        
         # ניקוי תגי HTML לא נתמכים שהמודל עלול להחזיר
         # <br> תגים לא נתמכים ב-Telegram - צריך להמיר ל-\n
         bot_reply = bot_reply.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
@@ -734,3 +737,54 @@ def detect_profile_question_in_response(bot_reply: str) -> bool:
         logging.info(f"📊 [PROFILE_QUESTION] זוהתה שאלת פרופיל בתשובה | indicators={indicators} | has_question_mark={has_question_mark} | has_keywords={has_profile_keywords} | has_bold={has_bold_text} | has_starters={has_question_starters}")
     
     return is_profile_question
+
+# 🆕 פונקציה לניקוי תשובות מטקסט טכני
+def clean_bot_response(bot_reply: str) -> str:
+    """
+    מנקה את תשובת הבוט מטקסט טכני ומאחורי הקלעים
+    """
+    if not bot_reply:
+        return bot_reply
+    
+    # ניקוי Self-correction ו-Thinking Process
+    patterns_to_remove = [
+        # Self-correction
+        r'---\s*Self-correction.*?(?=\n\n|\n---|\Z)',
+        r'---\s*Self-correction.*',
+        
+        # Thinking Process
+        r'---\s*\[Thinking Process\].*?(?=\n\n|\n---|\Z)',
+        r'---\s*\[Thinking Process\].*',
+        
+        # כל הטקסט אחרי ---
+        r'---\s*.*?(?=\n\n|\Z)',
+        r'---\s*.*',
+        
+        # הערות טכניות
+        r'\(המערכת תמשיך כרגיל.*?\)',
+        r'\(.*?המערכת.*?\)',
+        
+        # טקסט באנגלית טכני
+        r'This adheres to the safety protocol\..*',
+        r'The instruction states.*',
+        r'While it\'s not a direct.*',
+        r'Given the context.*',
+        r'It\'s safer to err.*',
+        
+        # ניקוי שורות ריקות כפולות
+        r'\n\s*\n\s*\n+',
+    ]
+    
+    cleaned_reply = bot_reply
+    
+    for pattern in patterns_to_remove:
+        cleaned_reply = re.sub(pattern, '', cleaned_reply, flags=re.DOTALL | re.IGNORECASE)
+    
+    # ניקוי שורות ריקות בתחילת ובסוף
+    cleaned_reply = cleaned_reply.strip()
+    
+    # אם התשובה ריקה אחרי הניקוי, נחזיר תשובה ברירת מחדל
+    if not cleaned_reply.strip():
+        return "אני כאן איתך. מה עולה לך כרגע? 🤔"
+    
+    return cleaned_reply

@@ -845,17 +845,10 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
         if user_msg.strip() == APPROVE_BUTTON_TEXT():
             # משתמש אישר תנאים
             approve_user(context.bot_data["sheet"], chat_id)
-            await send_system_message(update, chat_id, nice_keyboard_message())
             
-            # שליחת הודעה עם הסרת מקלדת
-            try:
-                await update.message.reply_text(remove_keyboard_message(), reply_markup=ReplyKeyboardRemove())
-            except Exception as e:
-                logging.warning(f"[KEYBOARD_REMOVE] שגיאה בהסרת מקלדת: {e}")
-                await send_system_message(update, chat_id, remove_keyboard_message())
+            # (הוסרו שליחת nice_keyboard_message ו-remove_keyboard_message)
             
             await send_system_message(update, chat_id, full_access_message())
-            
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
             # משתמש לא אישר תנאים
             await send_system_message(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.")

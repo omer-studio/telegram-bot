@@ -685,7 +685,7 @@ def alert_system_status(message, level="info"):
 
 from datetime import timedelta
 
-GENTLE_REMINDER_MESSAGE = "היי, רק רציתי לבדוק מה שלומך, מקווה שאתה בטוב. אין לחץ – פשוט רציתי להזכיר לך מה שלומך?"
+GENTLE_REMINDER_MESSAGE = "?היי, רק רציתי לבדוק מה שלומך, מקווה שאתה בטוב. אין לחץ – פשוט רציתי להזכיר לך שאני כאן ואם בא לך לשתף אז... מה שלומך וזה??"
 REMINDER_INTERVAL_HOURS = 3
 REMINDER_STATE_FILE = os.path.join(os.path.dirname(__file__), "data", "reminder_state.json")
 _reminder_state = {}
