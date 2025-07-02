@@ -309,18 +309,18 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
     """
     מוחק את ההודעה הזמנית (אם קיימת) ושולח למשתמש את התשובה האמיתית.
 
-    ✅ שיפור: משתמשים ב-send_gpta_response – בטוח ופשוט יותר.
+    ✅ שיפור: משתמשים ב-send_message עם is_gpt_a_response=True – בטוח ופשוט יותר.
     """
-    from message_handler import send_gpta_response  # local import to avoid circular
+    from message_handler import send_message  # local import to avoid circular
 
     try:
-        # מחיקת ההודעה הזמנית - לא רלוונטי כי send_gpta_response לא מחזיר אובייקט
+        # מחיקת ההודעה הזמנית - לא רלוונטי כי send_message לא מחזיר אובייקט
         if temp_message is not None:
-            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_gpta_response)")
+            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_message)")
 
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
-        await send_gpta_response(update, chat_id, new_text)
+        await send_message(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
         logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
         return True
 
