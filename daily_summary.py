@@ -22,6 +22,10 @@ def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
     interactions = {}
     call_types_counter = {}
 
+    # בדיקה שקובץ הלוג קיים
+    if not os.path.exists(gpt_log_path):
+        return None
+    
     with open(gpt_log_path, "r", encoding="utf-8") as f:
         for line in f:
             try:

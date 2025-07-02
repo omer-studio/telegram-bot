@@ -54,7 +54,7 @@ from utils import log_event_to_file, update_chat_history, get_chat_history_messa
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from apscheduler.schedulers.background import BackgroundScheduler
-from daily_summary import send_daily_summary
+from daily_summary import send_daily_summary, setup_daily_reports
 import pytz
 from message_handler import handle_message
 from notifications import gentle_reminder_background_task
@@ -512,6 +512,15 @@ def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבו�
     setup_gentle_reminders()
     setup_message_handlers()
     send_startup_notification_timed()
+    
+    # הפעלת דוח יומי מיידי (נוסף לתזמון הקבוע)
+    try:
+        print("🚀 [SETUP] מפעיל דוח יומי מיידי...")
+        setup_daily_reports()
+        print("✅ [SETUP] דוח יומי מיידי הופעל בהצלחה")
+    except Exception as e:
+        print(f"⚠️ [SETUP] שגיאה בהפעלת דוח יומי מיידי: {e}")
+        # לא עוצרים את ההתקנה בגלל זה
     
     # הדפסת סיכום זמני הביצוע
     print_execution_summary()
