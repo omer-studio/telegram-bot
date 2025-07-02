@@ -1,0 +1,93 @@
+name: 🚨 Deploy Safety Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: 🔍 Pre-Deploy Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v3
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+        
+    - name: 🚨 Run Critical Health Check
+      run: |
+        echo "🚨 רץ בדיקת תקינות קריטית..."
+        python3 health_check.py
+      env:
+        # Add any required environment variables for testing
+        TELEGRAM_BOT_TOKEN: "dummy_token_for_testing"
+        MAX_CONCURRENT_USERS: 5
+        
+    - name: ✅ Health Check Passed
+      if: success()
+      run: |
+        echo "🎉 בדיקת תקינות עברה בהצלחה!"
+        echo "✅ הפריסה יכולה להמשיך!"
+        
+    - name: ❌ Health Check Failed
+      if: failure()
+      run: |
+        echo "🚨 בדיקת תקינות נכשלה!"
+        echo "❌ הפריסה נחסמה!"
+        echo "🔧 תתקן את השגיאות לפני שתנסה שוב"
+        exit 1
+
+  # Job נוסף שרץ רק אם health-check עבר
+  deployment-gate:
+    name: 🚪 Deployment Gate
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: success()
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v3
+      
+    - name: 🐍 Setup Python  
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+    
+    - name: 🚨 Post-Deploy Safety Check (Simulation)
+      run: |
+        echo "🚨 מריץ בדיקת post-deploy (סימולציה)..."
+        python3 auto_rollback.py
+      env:
+        TELEGRAM_BOT_TOKEN: "dummy_token_for_testing"
+        ADMIN_BOT_TELEGRAM_TOKEN: "dummy_token_for_testing" 
+        ADMIN_NOTIFICATION_CHAT_ID: "dummy_chat_id"
+        
+    - name: 🎉 Ready for Deployment
+      run: |
+        echo "✅ כל הבדיקות עברו בהצלחה!"
+        echo "✅ מנגנון rollback מוכן ועובד!"
+        echo "🚀 הבוט מוכן לפריסה בטוחה!"
+        
+    # כאן אפשר להוסיף steps של deploy אמיתי
+    # למשל deploy לRender, Railway, Heroku וכו'

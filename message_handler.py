@@ -482,6 +482,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as ex:
             logging.error(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
             print(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
+            
+            # 🔧 הוספה: רישום בטוח למשתמש לרשימת התאוששות
+            try:
+                from notifications import safe_add_user_to_recovery_list
+                if 'chat_id' in locals():
+                    # הערה: כאן אין הודעה מקורית כי השגיאה היא בextraction של ההודעה עצמה
+                    safe_add_user_to_recovery_list(str(chat_id), f"Message extraction error: {str(ex)[:50]}", "")
+            except Exception:
+                pass
+            
             await handle_critical_error(ex, None, None, update)
             await end_monitoring_user(str(chat_id) if 'chat_id' in locals() else "unknown", False)
             return

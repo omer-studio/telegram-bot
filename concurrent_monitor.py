@@ -213,7 +213,7 @@ class ConcurrentMonitor:
             
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Error starting session for {chat_id}: {e}")
-            await self._send_error_alert("start_session_error", {"chat_id": chat_id, "error": str(e)})
+            self._send_error_alert("start_session_error", {"chat_id": chat_id, "error": str(e)})
             return False
     
     async def update_user_stage(self, chat_id: str, stage: str):
@@ -262,7 +262,7 @@ class ConcurrentMonitor:
                 self.timeout_count += 1
                 try:
                     # 🔧 תיקון: הוספת פרטים ספציפיים יותר למניעת "Unknown error"
-                    await self._send_error_alert("session_timeout", {
+                    self._send_error_alert("session_timeout", {
                         "error": f"Session timeout after {response_time:.2f}s",
                         "chat_id": chat_id,
                         "duration": response_time,
@@ -324,7 +324,7 @@ class ConcurrentMonitor:
                 if stale_sessions:
                     try:
                         # 🔧 תיקון: הוספת פרטים ספציפיים יותר למניעת "Unknown error"
-                        await self._send_error_alert("stale_sessions_cleaned", {
+                        self._send_error_alert("stale_sessions_cleaned", {
                             "error": f"Cleaned {len(stale_sessions)} stale sessions",
                             "chat_id": "System",  # זה ניקוי מערכת, לא משתמש ספציפי
                             "count": len(stale_sessions),
@@ -494,7 +494,7 @@ class ConcurrentMonitor:
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Failed to send load warning: {e}")
     
-    async def _send_error_alert(self, alert_type: str, details: dict):
+    def _send_error_alert(self, alert_type: str, details: dict):
         """שליחת התראת שגיאה כללית"""
         try:
             from notifications import send_concurrent_alert
