@@ -551,7 +551,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await end_monitoring_user(str(chat_id), False)
             return
 
-        # שלב 3: משתמש מאושר - שליחת תשובה מיד!
+        # שלב 3: משתמש מאושר
+        # בדיקה אם זה הכפתור "אהלן" - אם כן, מסירים את המקלדת
+        if user_msg.strip() == "אהלן":
+            await update.message.reply_text(
+                "שמח לראות אותך! 😊",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            
+            # עדכון היסטוריה
+            update_chat_history(chat_id, user_msg, "שמח לראות אותך! 😊")
+            
+            await end_monitoring_user(str(chat_id), True)
+            return
+        
+        # שליחת תשובה מיד!
         await update_user_processing_stage(str(chat_id), "gpt_a")
         logging.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
@@ -842,9 +856,15 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             # משתמש אישר תנאים
             approve_user(context.bot_data["sheet"], chat_id)
             
-            # (הוסרו שליחת nice_keyboard_message ו-remove_keyboard_message)
-            
             await send_system_message(update, chat_id, full_access_message())
+            
+            # 🔧 תיקון הבעיה: שליחת מקלדת "אהלן" שתירד אחרי שימוש
+            hello_keyboard = [["אהלן"]]
+            await update.message.reply_text(
+                "אפשר להתחיל להקליד כל דבר כאן! 😊",
+                reply_markup=ReplyKeyboardMarkup(hello_keyboard, one_time_keyboard=True, resize_keyboard=True)
+            )
+            
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
             # משתמש לא אישר תנאים
             await send_system_message(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.")
@@ -1468,3 +1488,5 @@ async def send_gpta_response(update, chat_id, text, max_retries=3):
                 return False
     
     return False
+
+
