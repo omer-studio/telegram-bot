@@ -60,6 +60,12 @@ import requests
 from gpt_c_logger import clear_gpt_c_html_log
 from config import DATA_DIR, PRODUCTION_PORT
 
+# Import uvicorn conditionally to avoid linter errors
+try:
+    import uvicorn
+except ImportError:
+    uvicorn = None
+
 # 🔧 תיקון: מניעת setup מרובה
 _bot_setup_completed = False
 _app_instance = None
@@ -237,47 +243,66 @@ async def main():
     print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")
 
 if __name__ == "__main__":
-    import sys
-    from http.server import SimpleHTTPRequestHandler, HTTPServer
-    import urllib.parse
+    # 🔧 בדיקה אם זה סביבת production (רנדר) או סביבת פיתוח
+    is_production = os.getenv("RENDER") or os.getenv("PORT") or os.getenv("RAILWAY_STATIC_URL")
+    
+    if is_production:
+        # 🚀 סביבת ייצור - רץ עם FastAPI + uvicorn (תומך webhook)
+        print("🚀 רץ בסביבת ייצור עם FastAPI...")
+        if uvicorn is None:
+            print("❌ uvicorn לא מותקן! מתקין...")
+            import subprocess
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "uvicorn"])
+            import uvicorn as uvicorn_module
+        else:
+            uvicorn_module = uvicorn
+        
+        port = int(os.getenv("PORT", PRODUCTION_PORT))
+        print(f"🤖 FastAPI בוט רץ בפורט {port} עם webhook support!")
+        uvicorn_module.run(app_fastapi, host="0.0.0.0", port=port)
+    else:
+        # 🛠️ סביבת פיתוח - רץ עם HTTP server פשוט (לצפייה בלוגים בלבד)
+        import sys
+        from http.server import SimpleHTTPRequestHandler, HTTPServer
+        import urllib.parse
 
-    class GptCLogHandler(SimpleHTTPRequestHandler):
-        def do_GET(self):
-            if self.path.startswith("/data/gpt_c_results.html") or self.path == "/":
-                # Serve the HTML file
-                html_file_path = os.path.join(DATA_DIR, "gpt_c_results.html")
-                
-                # אם הקובץ לא קיים, צור אותו מראש
-                if not os.path.exists(html_file_path):
-                    clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
-                
-                self.send_response(200)
-                self.send_header("Content-type", "text/html; charset=utf-8")
-                self.end_headers()
-                with open(html_file_path, "rb") as f:
-                    self.wfile.write(f.read())
-            else:
-                super().do_GET()
-
-        def do_POST(self):
-            parsed = urllib.parse.urlparse(self.path)
-            if parsed.path.startswith("/data/gpt_c_results.html") or parsed.path == "/":
-                qs = urllib.parse.parse_qs(parsed.query)
-                if "clear" in qs and qs["clear"] == ["1"]:
-                    clear_gpt_c_html_log()
-                    self.send_response(204)
+        class GptCLogHandler(SimpleHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/data/gpt_c_results.html") or self.path == "/":
+                    # Serve the HTML file
+                    html_file_path = os.path.join(DATA_DIR, "gpt_c_results.html")
+                    
+                    # אם הקובץ לא קיים, צור אותו מראש
+                    if not os.path.exists(html_file_path):
+                        clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
+                    
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/html; charset=utf-8")
                     self.end_headers()
-                    return
-            self.send_response(404)
-            self.end_headers()
+                    with open(html_file_path, "rb") as f:
+                        self.wfile.write(f.read())
+                else:
+                    super().do_GET()
 
-    print(f"🤖 בוט רץ בפורט {PRODUCTION_PORT}!")
-    port = PRODUCTION_PORT
-    print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_c_results.html (or just http://localhost:{port}/)")
-    httpd = HTTPServer(("", port), GptCLogHandler)
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
-        httpd.server_close()
+            def do_POST(self):
+                parsed = urllib.parse.urlparse(self.path)
+                if parsed.path.startswith("/data/gpt_c_results.html") or parsed.path == "/":
+                    qs = urllib.parse.parse_qs(parsed.query)
+                    if "clear" in qs and qs["clear"] == ["1"]:
+                        clear_gpt_c_html_log()
+                        self.send_response(204)
+                        self.end_headers()
+                        return
+                self.send_response(404)
+                self.end_headers()
+
+        print(f"🛠️ בוט רץ בסביבת פיתוח בפורט {PRODUCTION_PORT} (לצפייה בלוגים בלבד)!")
+        port = PRODUCTION_PORT
+        print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_c_results.html (or just http://localhost:{port}/)")
+        httpd = HTTPServer(("", port), GptCLogHandler)
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nServer stopped.")
+            httpd.server_close()
 # תודה1
