@@ -22,6 +22,16 @@ def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
     interactions = {}
     call_types_counter = {}
 
+    # יצירת קובץ הלוג אם הוא לא קיים
+    if not os.path.exists(gpt_log_path):
+        print(f"⚠️ קובץ הלוג לא קיים: {gpt_log_path}")
+        print("📝 יוצר קובץ לוג ריק...")
+        os.makedirs(os.path.dirname(gpt_log_path), exist_ok=True)
+        with open(gpt_log_path, "w", encoding="utf-8") as f:
+            pass  # יוצר קובץ ריק
+        print("✅ קובץ לוג נוצר")
+        return None  # אין נתונים לדווח עליהם
+
     with open(gpt_log_path, "r", encoding="utf-8") as f:
         for line in f:
             try:
@@ -63,6 +73,7 @@ def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
         "total_api_calls": total_api_calls,
         "call_types_str": call_types_str,
     }
+
 
 async def send_daily_summary(days_back=1):
     """

@@ -423,16 +423,18 @@ def update_user_profile_sync(chat_id, field_values):
 
 def log_gpt_usage_to_file(message_id, chat_id, main_usage, summary_usage, extract_usage, gpt_d_usage, gpt_e_usage, total_cost_ils):
     try:
+        from utils import get_israel_time
         log_entry = {
             "timestamp": get_israel_time().isoformat(),
-            "message_id": message_id,
+            "interaction_id": message_id,  # שם שהדוח מחפש
             "chat_id": chat_id,
+            "type": "gpt_a",  # סוג שהדוח מחפש
+            "cost_total_ils": total_cost_ils,  # שם שהדוח מחפש
             "main_usage": main_usage,
             "summary_usage": summary_usage,
             "extract_usage": extract_usage,
             "gpt_d_usage": gpt_d_usage,
-            "gpt_e_usage": gpt_e_usage,
-            "total_cost_ils": total_cost_ils
+            "gpt_e_usage": gpt_e_usage
         }
         
         with open(gpt_log_path, "a", encoding="utf-8") as f:
