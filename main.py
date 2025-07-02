@@ -237,47 +237,43 @@ async def main():
     print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")
 
 if __name__ == "__main__":
-    import sys
-    from http.server import SimpleHTTPRequestHandler, HTTPServer
-    import urllib.parse
+    import uvicorn
+    
+    # הוספת endpoint ל-gpt_c log במסגרת FastAPI
+    @app_fastapi.get("/data/gpt_c_results.html")
+    async def serve_gpt_c_log():
+        """מגיש את קובץ ה-log של gpt_c"""
+        html_file_path = os.path.join(DATA_DIR, "gpt_c_results.html")
+        
+        # אם הקובץ לא קיים, צור אותו מראש
+        if not os.path.exists(html_file_path):
+            clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
+        
+        try:
+            with open(html_file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return {"content": content, "type": "html"}
+        except Exception as e:
+            return {"error": f"שגיאה בטעינת הקובץ: {e}"}
+    
+    @app_fastapi.post("/data/gpt_c_results.html")
+    async def clear_gpt_c_log_endpoint():
+        """מנקה את לוג ה-gpt_c"""
+        try:
+            clear_gpt_c_html_log()
+            return {"status": "success", "message": "הלוג נוקה בהצלחה"}
+        except Exception as e:
+            return {"status": "error", "message": f"שגיאה בניקוי הלוג: {e}"}
 
-    class GptCLogHandler(SimpleHTTPRequestHandler):
-        def do_GET(self):
-            if self.path.startswith("/data/gpt_c_results.html") or self.path == "/":
-                # Serve the HTML file
-                html_file_path = os.path.join(DATA_DIR, "gpt_c_results.html")
-                
-                # אם הקובץ לא קיים, צור אותו מראש
-                if not os.path.exists(html_file_path):
-                    clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
-                
-                self.send_response(200)
-                self.send_header("Content-type", "text/html; charset=utf-8")
-                self.end_headers()
-                with open(html_file_path, "rb") as f:
-                    self.wfile.write(f.read())
-            else:
-                super().do_GET()
-
-        def do_POST(self):
-            parsed = urllib.parse.urlparse(self.path)
-            if parsed.path.startswith("/data/gpt_c_results.html") or parsed.path == "/":
-                qs = urllib.parse.parse_qs(parsed.query)
-                if "clear" in qs and qs["clear"] == ["1"]:
-                    clear_gpt_c_html_log()
-                    self.send_response(204)
-                    self.end_headers()
-                    return
-            self.send_response(404)
-            self.end_headers()
-
-    print(f"🤖 בוט רץ בפורט {PRODUCTION_PORT}!")
-    port = PRODUCTION_PORT
-    print(f"Serving gpt_c log at http://localhost:{port}/data/gpt_c_results.html (or just http://localhost:{port}/)")
-    httpd = HTTPServer(("", port), GptCLogHandler)
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
-        httpd.server_close()
+    print(f"🤖 מריץ FastAPI server על פורט {PRODUCTION_PORT}!")
+    print(f"🌐 Webhook זמין ב: http://localhost:{PRODUCTION_PORT}/webhook")
+    print(f"📊 GPT-C log זמין ב: http://localhost:{PRODUCTION_PORT}/data/gpt_c_results.html")
+    
+    # הרצת FastAPI עם uvicorn
+    uvicorn.run(
+        app_fastapi,
+        host="0.0.0.0",
+        port=PRODUCTION_PORT,
+        log_level="info"
+    )
 # תודה1

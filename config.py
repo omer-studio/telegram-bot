@@ -407,8 +407,13 @@ MAX_LOG_LINES_TO_KEEP = 500  # למגבלת לוגים ישנים
 MAX_OLD_LOG_LINES = 1000     # לניקוי לוגים ישנים  
 MAX_CHAT_HISTORY_MESSAGES = 30000  # מגבלת היסטוריית שיחה
 MAX_TRACEBACK_LENGTH = 500   # אורך מקסימלי של traceback בהודעות שגיאה
-PRODUCTION_PORT = 8000       # פורט לסביבת ייצור
+
+# 🚀 הגדרת פורט דינמית - תואמת לפלטפורמות cloud
+# בפלטפורמות כמו Render, Heroku, Railway - הפלטפורמה מגדירה את הפורט דינמית
+PRODUCTION_PORT = int(os.getenv("PORT", 8000))     # פורט דינמי מהפלטפורמה או 8000
 DEVELOPMENT_PORT = 10000     # פורט לסביבת פיתוח
+
+print(f"🔧 [CONFIG] פורט שרת: {PRODUCTION_PORT} (מקור: {'משתנה סביבה PORT' if os.getenv('PORT') else 'ברירת מחדל 8000'})")
 
 MODEL_ROUTES = {
     # ========= מקרא =========
