@@ -731,25 +731,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # דיבאג רזה ומלא מידע
                 print(f"[DEBUG] msg={message_id} | user='{user_msg[:35]}{'...' if len(user_msg) > 35 else ''}' | bot='{bot_reply[:35]}{'...' if len(bot_reply) > 35 else ''}' | summary='{(new_summary_for_history[:35] if new_summary_for_history else '') + ('...' if new_summary_for_history and len(new_summary_for_history) > 35 else '')}' | tokens={total_tokens_calc} | cost=${total_cost_usd_calc:.4f} | chat={chat_id}")
                 
-                # קריאה ל-log_to_sheets (async)
-                await log_to_sheets(
-                    message_id=message_id,
-                    chat_id=chat_id,
-                    user_msg=user_msg,
-                    reply_text=bot_reply,
-                    reply_summary=new_summary_for_history or "",
-                    main_usage=gpt_a_usage,
-                    summary_usage=gpt_b_usage,
-                    extract_usage=gpt_c_usage,
-                    total_tokens=total_tokens_calc,
-                    cost_usd=total_cost_usd_calc,
-                    cost_ils=total_cost_ils_calc,
-                    gpt_d_usage=gpt_d_usage,
-                    gpt_e_usage=gpt_e_usage
-                )
+                # הסרת הקריאה הכפולה ל-log_to_sheets - זה יקרה ב-handle_background_tasks
+                print(f"[INFO] log_to_sheets יבוצע ב-handle_background_tasks למניעת כפילות")
             except Exception as e:
-                print(f"[ERROR] שגיאה ב-log_to_sheets: {e}")
-                logging.error(f"Error in log_to_sheets: {e}")
+                print(f"[ERROR] שגיאה בחישוב נתוני הלוג: {e}")
+                logging.error(f"Error calculating log data: {e}")
             
             log_event_to_file(log_payload)
             logging.info("✅ סיום טיפול בהודעה")
