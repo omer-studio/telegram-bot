@@ -2,9 +2,18 @@
 sheets_handler.py - ממשק ראשי ל-Google Sheets עם אריכטקטורה חכמה ורזה
 """
 
-# ייבוא הפונקציונליות החדשה מהקבצים הרזים
-from sheets_core import *
-from sheets_advanced import *
+# ייבוא הפונקציונליות החדשה מהקבצים הרזים - יבואים ספציפיים במקום wildcard
+from sheets_core import (
+    debug_log, safe_int, safe_float, check_user_access,
+    ensure_user_state_row, register_user, approve_user,
+    delete_row_by_chat_id, get_user_state, update_user_state, increment_code_try_sync,
+    get_user_summary, update_user_profile_data
+)
+from sheets_advanced import (
+    SheetsQueueManager, sheets_queue_manager, log_to_sheets_sync, 
+    update_user_profile_sync, log_to_sheets_async, update_user_profile_async,
+    increment_code_try_async, clean_cost_value, format_money, calculate_costs_unified
+)
 
 # ייבואים נוספים נדרשים
 import asyncio

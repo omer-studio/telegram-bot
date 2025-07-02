@@ -765,9 +765,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id_from_update = update.message.chat_id
                 if update and hasattr(update, 'message') and hasattr(update.message, 'text'):
                     user_msg_from_update = update.message.text
-            except:
+            except (AttributeError, TypeError) as e:
+                logging.warning(f"Error extracting chat_id from update in outer exception: {e}")
                 pass
-            
+                
             await handle_critical_error(ex, chat_id_from_update, user_msg_from_update, update)
 
     except Exception as ex:
@@ -779,7 +780,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id_from_update = update.message.chat_id
             if update and hasattr(update, 'message') and hasattr(update.message, 'text'):
                 user_msg_from_update = update.message.text
-        except:
+        except (AttributeError, TypeError) as e:
+            logging.warning(f"Error extracting chat_id from update: {e}")
             pass
         
         await handle_critical_error(ex, chat_id_from_update, user_msg_from_update, update)
@@ -896,7 +898,8 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
         existing_profile = get_user_summary(chat_id)
         try:
             existing_profile = json.loads(existing_profile) if existing_profile else {}
-        except:
+        except (json.JSONDecodeError, TypeError) as e:
+            logging.warning(f"Error parsing existing profile JSON: {e}")
             existing_profile = {}
         
         # עדכון פרופיל עם gpt_d
@@ -1020,7 +1023,8 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                         emotional_summary = profile_data.get("summary", "")
                     else:
                         emotional_summary = ""
-                except:
+                except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                    logging.warning(f"Error parsing user summary JSON: {e}")
                     emotional_summary = ""
                 
                 _pu._send_admin_profile_overview_notification(
