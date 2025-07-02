@@ -624,12 +624,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 messages_for_gpt.append({"role": "system", "content": weekday_instruction})
                 print(f"🎯 [SYSTEM_4] WEEKDAY - Content: {weekday_instruction}")
             
+            # הוספת הודעת חגים אם רלוונטי
+            from chat_utils import get_holiday_system_message
+            holiday_instruction = get_holiday_system_message(str(chat_id))
+            if holiday_instruction:
+                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
+                print(f"🎯 [SYSTEM_5] HOLIDAY - Content: {holiday_instruction}")
+            
             print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
             messages_for_gpt.extend(history_messages)
             
-            # הוספת ההודעה החדשה (ללא טיימסטמפ נפרד כי כל ההיסטוריה כוללת טיימסטמפ)
-            messages_for_gpt.append({"role": "user", "content": user_msg})
-            print(f"👤 [USER_MSG] Length: {len(user_msg)} chars | Note: History includes timestamps")
+            # הוספת ההודעה החדשה עם טיימסטמפ באותו פורמט כמו בהיסטוריה
+            from chat_utils import _format_timestamp_for_history
+            import utils
+            current_timestamp = _format_timestamp_for_history(utils.get_israel_time().isoformat())
+            user_msg_with_timestamp = f"{current_timestamp} {user_msg}" if current_timestamp else user_msg
+            messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
+            print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {current_timestamp}")
             print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
             print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
 

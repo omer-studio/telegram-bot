@@ -341,17 +341,19 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
     try:
         weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
 
-        if utils.get_effective_time("night_check"):
+        # בדיקת לילה: 21:00-05:00 - לא שולח בשעות האלה
+        effective_now = utils.get_effective_time("datetime")
+        current_hour = effective_now.hour
+        if current_hour >= 21 or current_hour < 5:
             return ""
 
         smart_skip = False
         if chat_id is not None:
-            effective_now = utils.get_effective_time("datetime")
-            start_of_day = effective_now.replace(hour=5, minute=0, second=0, microsecond=0)
-
+            # בדיקה אם המשתמש הזכיר יום שבוע בהודעה הנוכחית
             if user_msg and any(word in user_msg for word in weekday_words):
                 smart_skip = True
             else:
+                # בדיקה אם כבר הוזכר יום שבוע היום (במשתמש או בבוט)
                 try:
                     with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
                         history_data = json.load(f)
@@ -359,6 +361,9 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
                 except (FileNotFoundError, json.JSONDecodeError):
                     history = []
 
+                # בדיקה מתחילת היום הנוכחי (05:00)
+                start_of_day = effective_now.replace(hour=5, minute=0, second=0, microsecond=0)
+                
                 for entry in reversed(history):
                     ts = entry.get("timestamp")
                     if not ts:
@@ -369,14 +374,20 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
                         continue
                     if entry_dt < start_of_day:
                         break
-                    if any(word in entry.get("user", "") for word in weekday_words):
+                    
+                    # בדיקה גם בהודעת המשתמש וגם בהודעת הבוט
+                    user_content = entry.get("user", "")
+                    bot_content = entry.get("bot", "")
+                    
+                    if any(word in user_content for word in weekday_words) or \
+                       any(word in bot_content for word in weekday_words):
                         smart_skip = True
                         break
 
         if smart_skip:
             return ""
 
-        effective_now = utils.get_effective_time("datetime")
+        # יצירת הנחיות יום השבוע
         weekday = effective_now.weekday()
         israel_weekday = (weekday + 1) % 7 + 1
 
@@ -624,6 +635,7 @@ def cleanup_test_users():
     except Exception as e:
         logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
 
+
     try:
         reminder_file = "data/reminder_state.json"
         if os.path.exists(reminder_file):
@@ -645,19 +657,22 @@ def cleanup_test_users():
 
 def should_send_time_greeting(chat_id: str, user_msg: str | None = None) -> bool:
     try:
+        # תנאי 1: אם זה הודעת ברכה בסיסית - תמיד שולח
         if user_msg:
             basic_greeting_pattern = r'^(היי|שלום|אהלן|הי|שלום לך|אהלן לך).{0,2}$'
             if re.match(basic_greeting_pattern, user_msg.strip(), re.IGNORECASE):
                 print(f"[GREETING_DEBUG] זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={chat_id}")
                 return True
 
+        # תנאי 3: בדיקה אם עברו יותר מ-2 שעות מההודעה האחרונה
         effective_now = utils.get_effective_time("datetime")
 
         try:
             with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
                 history_data = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
-            history_data = {}
+            # אין היסטוריה - לא שולח ברכה (מוסר תנאי 2)
+            return False
 
         chat_id_str = str(chat_id)
         last_timestamp = None
@@ -669,15 +684,14 @@ def should_send_time_greeting(chat_id: str, user_msg: str | None = None) -> bool
                 last_timestamp = None
 
         if last_timestamp is None:
-            return True
-
-        hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
-        if hours_since < 2:
+            # אין טיימסטמפ תקין - לא שולח ברכה (מוסר תנאי 2)
             return False
 
-        current_block = _get_time_of_day(effective_now.hour)
-        previous_block = _get_time_of_day(last_timestamp.hour)
-        return current_block != previous_block
+        hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
+        
+        # שולח ברכה רק אם עברו יותר מ-2 שעות
+        return hours_since >= 2
+        
     except Exception as e:
         logging.error(f"שגיאה ב-should_send_time_greeting: {e}")
         return False 
