@@ -153,7 +153,7 @@ def setup_daily_reports():
             print(f"❌ [DAILY] שגיאה בדוח באתחול: {e}")
             print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
     
-    # תזמון יומי קבוע ל-8:00 בבוקר - מבוטל כי זה מתבצע ב-bot_setup.py
+    # תזמון יומי קבוע ל-8:00 בבוקר
     def scheduled_daily_report():
         print("🔥 [DAILY] שולח דוח יומי מתוזמן...")
         try:
@@ -161,22 +161,20 @@ def setup_daily_reports():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(send_daily_summary())
-            loop.close()
             print("✅ [DAILY] דוח מתוזמן נשלח בהצלחה!")
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח מתוזמן: {e}")
     
-    # התזמון הרשמי נעשה ב-bot_setup.py - כאן רק דוח באתחול
-    print("ℹ️ [DAILY] התזמון הקבוע מתבצע ב-bot_setup.py")
+    # הגדרת תזמון
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(scheduled_daily_report, 'cron', hour=8, minute=0, timezone=pytz.timezone("Europe/Berlin"))
+    scheduler.start()
+    print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
     
-    # הפעל דוח מיידי אם זה import מ-bot_setup או הפעלה עצמאית
-    import sys
-    calling_module = sys._getframe(1).f_globals.get('__name__', '')
-    if __name__ == "__main__" or "daily_summary" in sys.argv[0] or "bot_setup" in calling_module:
-        print("🔥 [DAILY] מפעיל דוח מיידי באתחול...")
-        threading.Thread(target=startup_report, daemon=True).start()
+    # הפעל דוח מיידי
+    threading.Thread(target=startup_report, daemon=True).start()
 
-# הפעל אוטומטית כשטוענים את הקובץ
+# הפעל אוטומטית כשטוענים את הקובץ (רק אם זה לא import)
 if __name__ == "__main__":
     setup_daily_reports()
 
