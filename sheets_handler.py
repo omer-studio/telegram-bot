@@ -1,4 +1,4 @@
-﻿"""
+"""
 sheets_handler.py - ממשק ראשי ל-Google Sheets עם אריכטקטורה חכמה ורזה
 """
 

@@ -174,6 +174,9 @@ def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str,
                 continue
             try:
                 sheet.update_cell(row_index, col_index, str(value))
+                # לוג מיוחד לעדכון הסיכום
+                if field.lower() == "summary":
+                    logging.info(f"[SHEETS_SYNC] עודכן סיכום בגוגל שיטס למשתמש {chat_id}: '{value}'")
             except Exception as e:
                 logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
     except Exception as exc:
@@ -277,11 +280,10 @@ def _send_admin_profile_overview_notification(
         lines: List[str] = [f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>"]
 
         if user_msg:
-            trimmed = user_msg.strip()[:100] + "..." if len(user_msg.strip()) > 100 else user_msg.strip()
-            lines.append(f"<i>{trimmed}</i>")
+            lines.append(f"<i>{user_msg.strip()}</i>")
 
         lines.append("")
-        lines.append(f"<b>GPT-C</b>: {gpt_c_info}")
+        lines.append(f"<b>{gpt_c_info}</b>")
         # הצגת השדות שחולצו על ידי GPT-C
         if gpt_c_changes:
             for ch in gpt_c_changes:
@@ -297,7 +299,7 @@ def _send_admin_profile_overview_notification(
                     lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
         lines.append("")
-        lines.append(f"<b>GPT-D</b>: {gpt_d_info}")
+        lines.append(f"<b>{gpt_d_info}</b>")
         # הצגת שדות רק אם GPT-D באמת הופעל ויש שדות שמוזגו
         if gpt_d_changes:
             for ch in gpt_d_changes:
@@ -313,7 +315,7 @@ def _send_admin_profile_overview_notification(
                     lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
         lines.append("")
-        lines.append(f"<b>GPT-E</b>: {gpt_e_info}")
+        lines.append(f"<b>{gpt_e_info}</b>")
         # הצגת שדות רק אם GPT-E באמת הופעל ויש שדות חדשים
         if gpt_e_changes:
             for ch in gpt_e_changes:
@@ -330,17 +332,14 @@ def _send_admin_profile_overview_notification(
 
         if summary and summary.strip():
             lines.append("")
-            lines.append(f"<b>Summary</b>: {summary[:200]}{'...' if len(summary) > 200 else ''}")
+            lines.append(f"<b>Summary</b>: {summary}")
 
         # הצגת סנכרון רק אם יש שינויים בכלל
         if gpt_c_changes or gpt_d_changes or gpt_e_changes:
             lines.append("")
             lines.append("<b>סנכרון</b>: עודכן בקובץ user_profiles.json ולאחר מכן בגוגל שיטס - הכל מסונכרן")
 
-        # 🔧 הוספת זמן בסוף ההודעה
-        from utils import get_israel_time
-        lines.append("")
-        lines.append(f"⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}")
+        # הטיימסטמפ יתווסף אוטומטית על ידי send_admin_notification_raw
 
         send_admin_notification_raw("\n".join(lines))
     except Exception as exc:
@@ -360,11 +359,15 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
         try:
             from sheets_core import generate_summary_from_profile_data
             auto_summary = generate_summary_from_profile_data(new_profile)
+            logging.debug(f"[SUMMARY_DEBUG] Generated auto summary: '{auto_summary}' for user {chat_id}")
             # ✅ תמיד מעדכנים את הסיכום אם יש שינוי בפרופיל
             if auto_summary:
                 new_profile["summary"] = auto_summary
                 # הוספת הסיכום לעדכונים שנשלחים
                 updates["summary"] = auto_summary
+                logging.debug(f"[SUMMARY_DEBUG] Updated profile summary for user {chat_id}: '{auto_summary}'")
+            else:
+                logging.debug(f"[SUMMARY_DEBUG] Empty auto summary generated for user {chat_id}")
         except Exception as e:
             logging.debug(f"שגיאה ביצירת סיכום אוטומטי: {e}")
 
@@ -378,29 +381,7 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
         # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
         _schedule_sheets_sync_safely(chat_id)
 
-        # ✅ שליחת הודעת אדמין אם יש שינויים
-        if send_admin_notification and not _disable_auto_admin_profile_notification and changes:
-            try:
-                from notifications import send_admin_notification_raw
-                changes_text = []
-                for change in changes[:3]:  # רק 3 השינויים הראשונים
-                    field = change.get("field", "")
-                    old_val = _pretty_val(change.get("old_value", ""))
-                    new_val = _pretty_val(change.get("new_value", ""))
-                    change_type = change.get("change_type", "")
-                    
-                    if change_type == "added":
-                        changes_text.append(f"➕ {field}: [{new_val}]")
-                    elif change_type == "updated":
-                        changes_text.append(f"✏️ {field}: [{old_val}] → [{new_val}]")
-                    elif change_type == "removed":
-                        changes_text.append(f"➖ {field}: [{old_val}] → נמחק")
-                
-                if changes_text:
-                    message = f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code></b>\n\n" + "\n".join(changes_text)
-                    send_admin_notification_raw(message)
-            except Exception as e:
-                logging.error(f"שגיאה בשליחת הודעת אדמין: {e}")
+        # ✅ ההודעה המפורטת נשלחת ממקום אחר - אין צורך בהודעה נוספת כאן
 
         return True
     except Exception as e:

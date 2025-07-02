@@ -161,17 +161,18 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
                 print(f"[SECURITY] מסנן הודעת תשובה פנימית: {bot_content[:50]}...")
             continue
         
-        # הוספת טיימסטמפ להודעת user אם יש
-        if "time" in entry and user_content.strip():
-            user_content = f"[{entry['time']}] {entry['user']}"
+        # הוספת טיימסטמפ לכל הודעה בפורמט [01/07 18:03]
+        formatted_timestamp = _format_timestamp_for_history(entry.get("timestamp", ""))
         
-        # שולח רק הודעות עם תוכן
+        # הוספת הודעות עם טיימסטמפ
         if user_content.strip():
-            messages.append({"role": "user", "content": user_content})
+            user_content_with_time = f"{formatted_timestamp} {user_content}" if formatted_timestamp else user_content
+            messages.append({"role": "user", "content": user_content_with_time})
             user_count += 1
         
         if bot_content.strip():
-            messages.append({"role": "assistant", "content": bot_content})
+            bot_content_with_time = f"{formatted_timestamp} {bot_content}" if formatted_timestamp else bot_content
+            messages.append({"role": "assistant", "content": bot_content_with_time})
             assistant_count += 1
         
         # 🔧 הגבלה על מספר ההודעות הכולל
@@ -186,6 +187,26 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
 # ---------------------------------------------------------------------------
 # 📊 Stats helpers
 # ---------------------------------------------------------------------------
+
+def _format_timestamp_for_history(timestamp_str: str) -> str:
+    """המרת טיימסטמפ לפורמט הנדרש: [01/07 18:03]"""
+    try:
+        if not timestamp_str:
+            return ""
+        
+        # המרת המחרוזת לאובייקט datetime
+        if "T" in timestamp_str:
+            # פורמט ISO
+            dt = datetime.fromisoformat(timestamp_str.replace("Z", ""))
+        else:
+            # פורמט רגיל
+            dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+        
+        # החזרת הפורמט הנדרש
+        return f"[{dt.day:02d}/{dt.month:02d} {dt.hour:02d}:{dt.minute:02d}]"
+    except Exception as e:
+        logging.warning(f"שגיאה בפרמוט טיימסטמפ: {e}")
+        return ""
 
 def _get_time_of_day(hour: int) -> str:
     if 5 <= hour <= 11:
@@ -282,6 +303,15 @@ def get_user_stats(chat_id: str) -> dict:
 # 🕒 Context & greeting helpers
 # ---------------------------------------------------------------------------
 
+def is_active_hours() -> bool:
+    """בודק אם השעה הנוכחית בשעות פעילות (07:00-22:00) לשליחת הודעות."""
+    try:
+        current_hour = utils.get_israel_time().hour
+        return 7 <= current_hour <= 22
+    except Exception as e:
+        logging.error(f"שגיאה בבדיקת שעות פעילות: {e}")
+        return True  # במקרה של שגיאה, נניח שזה שעות פעילות
+
 def create_human_context_for_gpt(chat_id: str) -> str:
     try:
         now = utils.get_israel_time()
@@ -320,17 +350,19 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
     try:
         weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
 
-        if utils.get_effective_time("night_check"):
+        # בדיקת לילה: 21:00-05:00 - לא שולח בשעות האלה
+        effective_now = utils.get_effective_time("datetime")
+        current_hour = effective_now.hour
+        if current_hour >= 21 or current_hour < 5:
             return ""
 
         smart_skip = False
         if chat_id is not None:
-            effective_now = utils.get_effective_time("datetime")
-            start_of_day = effective_now.replace(hour=5, minute=0, second=0, microsecond=0)
-
+            # בדיקה אם המשתמש הזכיר יום שבוע בהודעה הנוכחית
             if user_msg and any(word in user_msg for word in weekday_words):
                 smart_skip = True
             else:
+                # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
                 try:
                     with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
                         history_data = json.load(f)
@@ -338,6 +370,9 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
                 except (FileNotFoundError, json.JSONDecodeError):
                     history = []
 
+                # בדיקה מתחילת היום הנוכחי (05:00)
+                start_of_day = effective_now.replace(hour=5, minute=0, second=0, microsecond=0)
+                
                 for entry in reversed(history):
                     ts = entry.get("timestamp")
                     if not ts:
@@ -348,14 +383,18 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
                         continue
                     if entry_dt < start_of_day:
                         break
-                    if any(word in entry.get("user", "") for word in weekday_words):
+                    
+                    # בדיקה רק בהודעות הבוט (לא המשתמש)
+                    bot_content = entry.get("bot", "")
+                    
+                    if any(word in bot_content for word in weekday_words):
                         smart_skip = True
                         break
 
         if smart_skip:
             return ""
 
-        effective_now = utils.get_effective_time("datetime")
+        # יצירת הנחיות יום השבוע
         weekday = effective_now.weekday()
         israel_weekday = (weekday + 1) % 7 + 1
 
@@ -380,6 +419,10 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
 
 def get_holiday_system_message(chat_id: str, bot_reply: str = "") -> str:
     try:
+        # בדיקת שעות פעילות - חגים נשלחים רק בשעות פעילות
+        if not is_active_hours():
+            return ""
+        
         from sheets_core import get_user_profile_data  # noqa – late import to avoid cycles
         with open("special_events.json", "r", encoding="utf-8") as f:
             events = json.load(f)
@@ -603,6 +646,7 @@ def cleanup_test_users():
     except Exception as e:
         logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
 
+
     try:
         reminder_file = "data/reminder_state.json"
         if os.path.exists(reminder_file):
@@ -624,19 +668,22 @@ def cleanup_test_users():
 
 def should_send_time_greeting(chat_id: str, user_msg: str | None = None) -> bool:
     try:
+        # תנאי 1: אם זה הודעת ברכה בסיסית - תמיד שולח
         if user_msg:
             basic_greeting_pattern = r'^(היי|שלום|אהלן|הי|שלום לך|אהלן לך).{0,2}$'
             if re.match(basic_greeting_pattern, user_msg.strip(), re.IGNORECASE):
                 print(f"[GREETING_DEBUG] זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={chat_id}")
                 return True
 
+        # תנאי 3: בדיקה אם עברו יותר מ-2 שעות מההודעה האחרונה
         effective_now = utils.get_effective_time("datetime")
 
         try:
             with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
                 history_data = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
-            history_data = {}
+            # אין היסטוריה - לא שולח ברכה (מוסר תנאי 2)
+            return False
 
         chat_id_str = str(chat_id)
         last_timestamp = None
@@ -648,15 +695,14 @@ def should_send_time_greeting(chat_id: str, user_msg: str | None = None) -> bool
                 last_timestamp = None
 
         if last_timestamp is None:
-            return True
-
-        hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
-        if hours_since < 2:
+            # אין טיימסטמפ תקין - לא שולח ברכה (מוסר תנאי 2)
             return False
 
-        current_block = _get_time_of_day(effective_now.hour)
-        previous_block = _get_time_of_day(last_timestamp.hour)
-        return current_block != previous_block
+        hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
+        
+        # שולח ברכה רק אם עברו יותר מ-2 שעות
+        return hours_since >= 2
+        
     except Exception as e:
         logging.error(f"שגיאה ב-should_send_time_greeting: {e}")
         return False 
