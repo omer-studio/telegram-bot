@@ -457,8 +457,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
 
             # 🚀 התחלת ניטור concurrent
-            if not await start_monitoring_user(str(chat_id), str(message_id)):
-                await send_system_message(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
+            try:
+                monitoring_result = await start_monitoring_user(str(chat_id), str(message_id))
+                if not monitoring_result:
+                    await send_system_message(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
+                    return
+            except Exception as e:
+                logging.error(f"[MESSAGE_HANDLER] Error starting monitoring: {e}")
+                import traceback
+                logging.error(f"[MESSAGE_HANDLER] Traceback: {traceback.format_exc()}")
+                await send_system_message(update, chat_id, "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות.")
                 return
 
             did, reply = handle_secret_command(chat_id, user_msg)

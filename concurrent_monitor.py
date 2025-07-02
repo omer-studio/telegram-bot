@@ -218,15 +218,20 @@ class ConcurrentMonitor:
     
     async def update_user_stage(self, chat_id: str, stage: str):
         """📍 עדכון שלב עיבוד של משתמש עם לוגים מפורטים"""
-        if chat_id in self.active_sessions:
-            old_stage = self.active_sessions[chat_id].stage
-            self.active_sessions[chat_id].stage = stage
-            
-            # מעבר מ-queued ל-processing
-            if old_stage == "queued" and stage == "processing":
-                self._remove_from_queue(chat_id)
-            
-            logging.debug(f"[ConcurrentMonitor] 📍 User {chat_id}: {old_stage} → {stage}")
+        try:
+            if chat_id in self.active_sessions:
+                old_stage = self.active_sessions[chat_id].stage
+                self.active_sessions[chat_id].stage = stage
+                
+                # מעבר מ-queued ל-processing
+                if old_stage == "queued" and stage == "processing":
+                    self._remove_from_queue(chat_id)
+                
+                logging.debug(f"[ConcurrentMonitor] 📍 User {chat_id}: {old_stage} → {stage}")
+            else:
+                logging.warning(f"[ConcurrentMonitor] User {chat_id} not found in active sessions")
+        except Exception as e:
+            logging.error(f"[ConcurrentMonitor] Error updating user stage for {chat_id}: {e}")
     
     def _remove_from_queue(self, chat_id: str):
         """הסרת משתמש מתור FIFO"""
@@ -432,16 +437,12 @@ class ConcurrentMonitor:
 ⏰ זמן יצירה: {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}
 
 👥 **משתמשים:**
-   • פעילים כעת: {stats['current_active_users']}/{stats['max_concurrent_users']}
-   • ממוצע בשעה האחרונה: {stats['avg_active_users_hour']:.1f}
-   • מקסימום בשעה האחרונה: {stats['max_active_users_hour']}
+   • פעילים כעת: {stats['active_users']}/{stats['max_users']}
+   • סה"כ בקשות: {stats['total_requests']}
+   • נדחו בגלל עומס: {stats['rejected_users']}
 
 ⏱️ **זמני תגובה:**
-   • נוכחי: {stats['avg_response_time_current']:.2f}s
-   • ממוצע בשעה האחרונה: {stats['avg_response_time_hour']:.2f}s
-
-📈 **סטטיסטיקות:**
-   • סה"כ בקשות: {stats['total_requests']}
+   • זמן תגובה ממוצע: {stats['avg_response_time']:.2f}s
    • שיעור שגיאות: {stats['error_rate']:.1%}
 
 🔄 **סשנים פעילים:**
@@ -533,22 +534,53 @@ def get_concurrent_monitor():
     """קבלת instance של ConcurrentMonitor עם lazy initialization"""
     global _concurrent_monitor_instance
     if _concurrent_monitor_instance is None:
-        from config import MAX_CONCURRENT_USERS
-        _concurrent_monitor_instance = ConcurrentMonitor(MAX_CONCURRENT_USERS)
+        try:
+            from config import MAX_CONCURRENT_USERS
+            _concurrent_monitor_instance = ConcurrentMonitor(MAX_CONCURRENT_USERS)
+            logging.info(f"[ConcurrentMonitor] Created new instance with max_users={MAX_CONCURRENT_USERS}")
+        except Exception as e:
+            logging.error(f"[ConcurrentMonitor] Failed to create instance: {e}")
+            # Fallback - create with default value
+            _concurrent_monitor_instance = ConcurrentMonitor(25)
+            logging.warning("[ConcurrentMonitor] Using default max_users=25")
     return _concurrent_monitor_instance
 
 # פונקציות עזר לשימוש בקוד
 async def start_monitoring_user(chat_id: str, message_id: str) -> bool:
     """התחלת ניטור משתמש"""
-    return await get_concurrent_monitor().start_user_session(chat_id, message_id)
+    try:
+        logging.debug(f"[ConcurrentMonitor] Starting monitoring for user {chat_id}")
+        monitor = get_concurrent_monitor()
+        logging.debug(f"[ConcurrentMonitor] Got monitor instance: {type(monitor)}")
+        
+        if not hasattr(monitor, 'start_user_session'):
+            logging.error(f"[ConcurrentMonitor] Monitor instance missing start_user_session method")
+            return False
+            
+        result = await monitor.start_user_session(chat_id, message_id)
+        logging.debug(f"[ConcurrentMonitor] start_user_session returned: {result}")
+        return result
+    except Exception as e:
+        logging.error(f"[ConcurrentMonitor] Error in start_monitoring_user: {e}")
+        import traceback
+        logging.error(f"[ConcurrentMonitor] Traceback: {traceback.format_exc()}")
+        return False
 
 async def update_user_processing_stage(chat_id: str, stage: str):
     """עדכון שלב עיבוד משתמש"""
-    await get_concurrent_monitor().update_user_stage(chat_id, stage)
+    try:
+        monitor = get_concurrent_monitor()
+        await monitor.update_user_stage(chat_id, stage)
+    except Exception as e:
+        logging.error(f"[ConcurrentMonitor] Error updating user stage: {e}")
 
 async def end_monitoring_user(chat_id: str, success: bool = True):
     """סיום ניטור משתמש"""
-    await get_concurrent_monitor().end_user_session(chat_id, success)
+    try:
+        monitor = get_concurrent_monitor()
+        await monitor.end_user_session(chat_id, success)
+    except Exception as e:
+        logging.error(f"[ConcurrentMonitor] Error ending user session: {e}")
 
 def get_performance_stats() -> dict:
     """קבלת סטטיסטיקות ביצועים"""

@@ -203,18 +203,36 @@ async def webhook(request: Request):
     נקודת הכניסה של FastAPI לכל הודעה מהטלגרם (webhook).
     קולט עדכון, יוצר Update, ומעביר ל-handle_message.
     """
+    chat_id = None
+    user_msg = None
+    
     try:
         data = await request.json()
         app = get_bot_app()
         update = Update.de_json(data, app.bot)
         context = DummyContext(app.bot_data)
+        
+        # חילוץ chat_id ו-user_msg לצורך התראות
         if update.message:
+            chat_id = update.message.chat_id
+            user_msg = getattr(update.message, 'text', '[הודעה לא טקסטואלית]')
             await handle_message(update, context)
         else:
             print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
         return {"ok": True}
     except Exception as ex:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"❌ שגיאה ב-webhook: {ex}")
+        print(f"📊 Traceback מלא: {error_details}")
+        
+        # 🚨 התראה מיידית לאדמין עם פרטים מלאים
+        try:
+            from notifications import handle_critical_error
+            await handle_critical_error(ex, chat_id, user_msg, update if 'update' in locals() else None)
+        except Exception as notification_error:
+            print(f"❌ שגיאה בשליחת התראה: {notification_error}")
+        
         # ✅ תמיד מחזיר HTTP 200 לטלגרם!
         return {"ok": False, "error": str(ex)}
 
@@ -225,7 +243,49 @@ def root():
     """
     return {"status": "ok"}
 
-
+@app_fastapi.get("/health")
+async def health_check():
+    """
+    בדיקת בריאות מתקדמת של הבוט
+    """
+    try:
+        from chat_utils import health_check as utils_health_check
+        from concurrent_monitor import get_performance_stats
+        
+        # בדיקות בסיסיות
+        health = utils_health_check()
+        
+        # סטטיסטיקות concurrent
+        perf_stats = get_performance_stats()
+        
+        # בדיקת חיבור לטלגרם
+        try:
+            app = get_bot_app()
+            bot_info = await app.bot.get_me()
+            telegram_status = "ok"
+            bot_username = bot_info.username
+        except Exception as e:
+            telegram_status = f"error: {str(e)}"
+            bot_username = "unknown"
+        
+        return {
+            "status": "ok" if all(health.values()) else "warning",
+            "timestamp": time.time(),
+            "components": {
+                "basic_health": health,
+                "telegram_connection": telegram_status,
+                "bot_username": bot_username,
+                "active_users": perf_stats.get("active_users", 0),
+                "total_requests": perf_stats.get("total_requests", 0),
+                "error_rate": perf_stats.get("error_rate", 0)
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
 
 async def main():
     """
