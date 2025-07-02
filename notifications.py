@@ -942,7 +942,8 @@ def auto_cleanup_old_users():
                                 days_since_reminder = (now - reminder_time).days
                                 if days_since_reminder > 30:
                                     cleanup_candidates.append((chat_id, f"no_response_to_reminder_{days_since_reminder}_days"))
-                            except:
+                            except (ValueError, TypeError) as e:
+                                logging.debug(f"[AUTO_CLEANUP] Error parsing reminder time for {chat_id}: {e}")
                                 pass
                                 
                 except ValueError:

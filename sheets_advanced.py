@@ -129,22 +129,24 @@ def clean_cost_value(cost_val) -> float:
             cleaned = cost_val.replace("$", "").replace("₪", "").replace(",", "").strip()
             return float(cleaned) if cleaned else 0.0
         return float(cost_val)
-    except (ValueError, TypeError):
-        debug_log(f"Invalid cost value: {cost_val}", "CostCalc")
+    except (ValueError, TypeError) as e:
+        debug_log(f"Invalid cost value: {cost_val}, error: {e}", "CostCalc")
         return 0.0
 
 def format_money(value) -> str:
     try:
         num_value = clean_cost_value(value)
         return f"{num_value:.3f}" if num_value != 0 else "0.00"
-    except:
+    except Exception as e:
+        debug_log(f"Error formatting money value {value}: {e}", "CostCalc")
         return "0.00"
 
 def agorot_from_usd(cost_usd: float) -> int:
     try:
         cost_ils = cost_usd * USD_TO_ILS
         return int(cost_ils * 100)
-    except:
+    except (ValueError, TypeError) as e:
+        debug_log(f"Error converting USD to agorot {cost_usd}: {e}", "CostCalc")
         return 0
 
 def calculate_costs_unified(usage_dict: Dict) -> Dict[str, float]:
@@ -211,7 +213,8 @@ def validate_cost_data(cost_data: Dict) -> Dict:
 def calculate_cost_per_message(total_cost_usd: float, message_count: int) -> float:
     try:
         return total_cost_usd / message_count if message_count > 0 else 0.0
-    except:
+    except (ValueError, TypeError, ZeroDivisionError) as e:
+        debug_log(f"Error calculating cost per message {total_cost_usd}/{message_count}: {e}", "CostCalc")
         return 0.0
 
 def get_cost_tier(cost_usd: float) -> str:

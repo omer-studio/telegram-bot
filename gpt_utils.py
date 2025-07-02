@@ -303,7 +303,9 @@ class BillingProtection:
             try:
                 with open(self.usage_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
+                if should_log_debug_prints():
+                    print(f"[WARNING] Error loading billing usage file: {e}")
                 pass
         
         # ברירת מחדל
