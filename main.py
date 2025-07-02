@@ -226,7 +226,15 @@ async def webhook(request: Request):
         print(f"❌ שגיאה ב-webhook: {ex}")
         print(f"📊 Traceback מלא: {error_details}")
         
-        # 🚨 התראה מיידית לאדמין עם פרטים מלאים
+        # � הוספה: רישום בטוח למשתמש לרשימת התאוששות לפני כל טיפול אחר
+        try:
+            from notifications import safe_add_user_to_recovery_list
+            if chat_id:
+                safe_add_user_to_recovery_list(str(chat_id), f"Webhook error: {str(ex)[:50]}")
+        except Exception:
+            pass  # אל תיכשל בגלל זה
+        
+        # �🚨 התראה מיידית לאדמין עם פרטים מלאים
         try:
             from notifications import handle_critical_error
             await handle_critical_error(ex, chat_id, user_msg, update if 'update' in locals() else None)

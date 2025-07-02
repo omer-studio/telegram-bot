@@ -57,6 +57,19 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str):
     except Exception as e:
         logging.error(f"Error adding user to critical error list: {e}")
 
+def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown error"):
+    """
+    🔧 פונקציה בטוחה לרישום משתמש לרשימת התאוששות
+    נקראת בכל מקום שעלולה להיות שגיאה שמונעת מהמשתמש לקבל מענה
+    """
+    try:
+        if chat_id:
+            _add_user_to_critical_error_list(str(chat_id), f"Safe recovery: {error_context}")
+            print(f"🛡️ משתמש {chat_id} נוסף לרשימת התאוששות ({error_context})")
+    except Exception as e:
+        # גם אם הפונקציה הזו נכשלת - לא נעצור את הקוד
+        print(f"⚠️ נכשל ברישום משתמש {chat_id} לרשימת התאוששות: {e}")
+
 async def _send_user_friendly_error_message(update, chat_id: str):
     """שולח הודעת שגיאה ידידותית למשתמש"""
     try:
@@ -437,12 +450,18 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     print(f"🚨 שגיאה קריטית: {error}")
     # DEBUG הודעות הוסרו לטובת ביצועים
     
-    # שליחת הודעה ידידותית למשתמש
+    # 🔧 הוספה: וידוא רישום המשתמש לרשימת התאוששות גם אם שליחת ההודעה נכשלת
     if chat_id:
         try:
+            # רישום למשתמש לרשימת התאוששות לפני ניסיון שליחת הודעה
+            _add_user_to_critical_error_list(str(chat_id), f"Critical error: {str(error)[:100]}")
+            
+            # ניסיון שליחת הודעה ידידותית למשתמש
             await _send_user_friendly_error_message(update, str(chat_id))
         except Exception as e:
+            # גם אם שליחת ההודעה נכשלת - המשתמש כבר ברשימת ההתאוששות
             logging.error(f"Failed to send user-friendly error message: {e}")
+            print(f"⚠️ שליחת הודעה נכשלה, אבל המשתמש {chat_id} נרשם לרשימת התאוששות")
     
     log_error_stat("critical_error")
     
@@ -452,7 +471,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
         admin_error_message += f"\nמשתמש: {chat_id}"
     if user_msg:
         admin_error_message += f"\nהודעה: {user_msg[:200]}"
-    admin_error_message += f"\n⚠️ המשתמש קיבל הודעה ידידותית ויקבל התראה כשהבוט יחזור לעבוד"
+    admin_error_message += f"\n⚠️ המשתמש נרשם לרשימת התאוששות ויקבל התראה כשהבוט יחזור לעבוד"
     
     send_error_notification(
         error_message=admin_error_message,
