@@ -26,8 +26,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
         "model": model,
         "messages": [{"role": "system", "content": build_profile_extraction_enhanced_prompt()}, {"role": "user", "content": user_msg}],
         "temperature": params["temperature"],
-        "metadata": metadata,
-        "store": True
+        "metadata": metadata
     }
     
     # הוספת max_tokens רק אם הוא לא None

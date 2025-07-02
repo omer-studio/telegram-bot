@@ -33,8 +33,7 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
             "model": model,
             "messages": [{"role": "system", "content": build_profile_merge_prompt()}, {"role": "user", "content": prompt}],
             "temperature": params["temperature"],
-            "metadata": metadata,
-            "store": True
+            "metadata": metadata
         }
         
         # הוספת max_tokens רק אם הוא לא None
