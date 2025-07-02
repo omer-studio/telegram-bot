@@ -364,8 +364,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         "model": model,
         "messages": full_messages,
         "temperature": params["temperature"],
-        "metadata": metadata,
-        "store": True
+        "metadata": metadata
     }
     
     # הוספת max_tokens רק אם הוא לא None
