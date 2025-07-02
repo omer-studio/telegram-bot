@@ -267,24 +267,9 @@ async def send_recovery_messages_to_affected_users():
         # 🔧 תיקון: איחוד קבצים זמניים לפני שליחת הודעות
         merge_temporary_critical_files()
         
-        # 🚨 הוספה חירום: וידוא שמשתמש 179392777 ברשימה (המשתמש שלא קיבל הודעת התאוששות)
-        try:
-            emergency_user = "179392777"
-            users_data_check = _load_critical_error_users()
-            if emergency_user not in users_data_check:
-                print(f"🚨 מוסיף משתמש חירום {emergency_user} לרשימת התאוששות...")
-                _add_user_to_critical_error_list(emergency_user, "Emergency fix - user reported no recovery message received", "סיימתי את פרק 2")
-                print(f"✅ משתמש חירום {emergency_user} נוסף לרשימה")
-                send_admin_notification(f"🚨 הוספה חירום: משתמש {emergency_user} נוסף לרשימת התאוששות")
-            else:
-                print(f"ℹ️ משתמש חירום {emergency_user} כבר ברשימה")
-                # בדיקה אם הוא לא התאושש
-                if not users_data_check[emergency_user].get("recovered", False):
-                    print(f"⚠️ משתמש {emergency_user} ברשימה אבל לא התאושש - יקבל הודעה")
-                else:
-                    print(f"ℹ️ משתמש {emergency_user} כבר התאושש")
-        except Exception as emergency_error:
-            print(f"🚨 שגיאה בהוספת משתמש חירום: {emergency_error}")
+        # � תיקון: הוסר קוד חירום זמני שגרם לדוחות חוזרים (user 179392777)
+        # הקוד החירום הוסר כי הוא גרם לדפיקה באותה הודעה בכל דוח פריסה
+        print("ℹ️ קוד החירום הזמני הוסר - הבעיה הקודמת נפתרה")
         
         users_data = _load_critical_error_users()
         
