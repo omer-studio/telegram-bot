@@ -29,6 +29,7 @@ import os
 import json
 import time
 import logging
+from typing import Optional
 
 # זיהוי סביבת CI/CD לפני imports חיצוניים
 IS_CI_ENVIRONMENT = any([
@@ -192,7 +193,7 @@ def should_log_data_extraction_debug():
     return ENABLE_DATA_EXTRACTION_DEBUG
 
 # Helper to mask sensitive strings (defined early to avoid NameError)
-def _mask_sensitive(value: str | None, visible_chars: int = 4) -> str:
+def _mask_sensitive(value: Optional[str], visible_chars: int = 4) -> str:
     if not value:
         return "[empty]"
     value = str(value)

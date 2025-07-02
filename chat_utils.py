@@ -13,7 +13,7 @@ import logging
 import os
 import traceback
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import re
 import asyncio
 import shutil
@@ -109,7 +109,7 @@ def update_chat_history(chat_id, user_msg, bot_summary):
         logging.error(f"שגיאה בעדכון היסטוריה: {e}")
 
 
-def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
+def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list:
     """Return the last `limit` messages from the chat history in a GPT-friendly
     messages array."""
     try:
@@ -346,7 +346,7 @@ def get_time_greeting_instruction() -> str:
 # ---------------- יום-שבוע / ברכת זמן ----------------
 
 
-def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | None = None) -> str:
+def get_weekday_context_instruction(chat_id: Optional[str] = None, user_msg: Optional[str] = None) -> str:
     try:
         weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
 
@@ -666,7 +666,7 @@ def cleanup_test_users():
 # 💬 Time-block greeting logic
 # ---------------------------------------------------------------------------
 
-def should_send_time_greeting(chat_id: str, user_msg: str | None = None) -> bool:
+def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> bool:
     try:
         # תנאי 1: אם זה הודעת ברכה בסיסית - תמיד שולח
         if user_msg:

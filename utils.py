@@ -14,7 +14,7 @@ import logging
 import traceback
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pytz
 from config import BOT_TRACE_LOG_PATH, should_log_debug_prints, CHAT_HISTORY_PATH, config
@@ -68,7 +68,7 @@ def get_effective_time(return_type: str = "datetime"):
 # 📝  Logging helper
 # ---------------------------------------------------------------------------
 
-def log_event_to_file(event_data: Dict[str, Any], filename: str | None = None):
+def log_event_to_file(event_data: Dict[str, Any], filename: Optional[str] = None):
     """Append `event_data` (as JSON) to the given log file adding a timestamp."""
     try:
         if filename is None:
