@@ -81,11 +81,9 @@ async def _send_user_friendly_error_message(update, chat_id: str):
             from message_handler import send_system_message
             await send_system_message(update, chat_id, user_friendly_message)
         else:
-            # אם אין update זמין, ננסה לשלוח ישירות דרך bot API
+            # אם אין update זמין, ננסה לשלוח ישירות דרך bot API (ללא פורמטינג - רק תשובות GPT-A צריכות פורמטינג)
             bot = telegram.Bot(token=BOT_TOKEN)
-            from message_handler import format_text_for_telegram
-            formatted_message = format_text_for_telegram(user_friendly_message)
-            await bot.send_message(chat_id=chat_id, text=formatted_message)
+            await bot.send_message(chat_id=chat_id, text=user_friendly_message)
         
         # הוספת המשתמש לרשימת מי שקיבל הודעת שגיאה
         _add_user_to_critical_error_list(chat_id, user_friendly_message)
@@ -109,9 +107,8 @@ async def send_recovery_messages_to_affected_users():
         for chat_id, user_info in users_data.items():
             if not user_info.get("recovered", False):
                 try:
-                    from message_handler import format_text_for_telegram
-                    formatted_recovery = format_text_for_telegram(recovery_message)
-                    await bot.send_message(chat_id=chat_id, text=formatted_recovery)
+                    # הודעת התאוששות - ללא פורמטינג (רק תשובות GPT-A צריכות פורמטינג)
+                    await bot.send_message(chat_id=chat_id, text=recovery_message)
                     user_info["recovered"] = True
                     user_info["recovery_timestamp"] = get_israel_time().isoformat()
                     recovered_users.append(chat_id)
@@ -785,11 +782,9 @@ async def send_gentle_reminder(chat_id: str) -> bool:
             _mark_reminder_delayed(chat_id)
             return False
         
-        # שליחת התזכורת
+        # שליחת התזכורת (ללא פורמטינג - רק תשובות GPT-A צריכות פורמטינג)
         bot = telegram.Bot(token=BOT_TOKEN)
-        from message_handler import format_text_for_telegram
-        formatted_reminder = format_text_for_telegram(GENTLE_REMINDER_MESSAGE)
-        await bot.send_message(chat_id=chat_id, text=formatted_reminder)
+        await bot.send_message(chat_id=chat_id, text=GENTLE_REMINDER_MESSAGE)
         
         # תיעוד ועדכון מצב
         _log_to_chat_history(chat_id)
