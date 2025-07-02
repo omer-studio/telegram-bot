@@ -684,7 +684,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logging.info(f"📤 [GPAT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
             print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
             
-            bot_reply = await get_main_response(messages_for_gpt, chat_id)
+            gpt_result = get_main_response(messages_for_gpt, chat_id)
+            bot_reply = gpt_result.get("bot_reply") if isinstance(gpt_result, dict) else gpt_result
             
             if not bot_reply:
                 error_msg = error_human_funny_message()

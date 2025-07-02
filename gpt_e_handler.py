@@ -185,8 +185,7 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                 ],
                 "temperature": params["temperature"],
                 "max_tokens": params["max_tokens"],
-                "metadata": metadata,
-                "store": True
+                "metadata": metadata
             }
             
             with measure_llm_latency(model):

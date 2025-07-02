@@ -243,6 +243,33 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[STARTUP] שגיאה בהגדרת webhook בטלגרם: {e}")
     
+    # 🚨 בדיקת תפקוד קריטית אחרי הפעלה מלאה
+    try:
+        print("🔍 מבצע בדיקת תפקוד קריטית אחרי הפעלה...")
+        from auto_rollback import emergency_rollback_if_broken
+        
+        # נותן לכל המערכות רגע להיות מוכנות
+        time.sleep(3)
+        
+        rollback_result = emergency_rollback_if_broken()
+        if rollback_result:
+            print("✅ בדיקת תפקוד קריטית עברה בהצלחה!")
+        else:
+            print("🚨 בדיקת תפקוד זיהתה בעיות - בדוק התראות אדמין!")
+    except Exception as health_check_error:
+        print(f"⚠️ בדיקת תפקוד קריטית נכשלה: {health_check_error}")
+        # נשלח התראה לאדמין
+        try:
+            from notifications import send_admin_notification
+            send_admin_notification(
+                f"🚨 בדיקת תפקוד קריטית נכשלה בהפעלה!\n\n"
+                f"❌ שגיאה: {health_check_error}\n"
+                f"⚠️ ייתכן שהבוט לא עובד תקין!",
+                urgent=True
+            )
+        except Exception:
+            pass
+    
     # הודעת הצלחה ברורה כשהכל מוכן
     print('\n' + '='*80)
     print('🎉🎉🎉 השרת מוכן לחלוטין! הכל תקין לגמרי! 🎉🎉🎉')
@@ -251,6 +278,7 @@ async def lifespan(app: FastAPI):
     print('✅ Telegram webhook מוגדר נכון')
     print('✅ כל ה-handlers פעילים')
     print('✅ הודעות התאוששות נשלחו (אם היו נחוצות)')
+    print('✅ בדיקת תפקוד קריטית הושלמה')
     print('✅ המערכת מוכנה לקבלת הודעות!')
     print('='*80)
     

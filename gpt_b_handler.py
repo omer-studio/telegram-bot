@@ -32,8 +32,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             "model": model,
             "messages": messages,
             "temperature": params["temperature"],
-            "metadata": metadata,
-            "store": True
+            "metadata": metadata
         }
         
         # הוספת max_tokens רק אם הוא לא None
