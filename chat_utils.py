@@ -476,7 +476,7 @@ def clean_old_logs() -> None:
 def health_check() -> dict:
     from config import check_config_sanity
     from notifications import send_error_notification
-    import litellm
+    import lazy_litellm as litellm
 
     health = {
         "config_loaded": False,

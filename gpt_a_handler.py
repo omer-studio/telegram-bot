@@ -8,7 +8,7 @@ gpt_a_handler.py
 import logging
 from datetime import datetime
 import json
-import litellm
+import lazy_litellm as litellm
 import asyncio
 import threading
 import time
