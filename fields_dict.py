@@ -107,11 +107,12 @@ def get_summary_fields():
     """מחזיר רשימה של שדות לסיכום רגשי"""
     summary_fields = [
         "age", "pronoun_preference", "occupation_or_role", "attracted_to", "relationship_type",
-        "self_religious_affiliation", "self_religiosity_level", "family_religiosity", "closet_status",
-        "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", "trauma_history",
-        "goal_in_course", "language_of_strength", "date_first_seen", "coping_strategies",
-        "fears_concerns", "future_vision"
-        # ✅ הוסר last_update - זה שדה טכני שלא צריך להיות בסיכום
+        "parental_status", "self_religious_affiliation", "self_religiosity_level", "family_religiosity", 
+        "closet_status", "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", 
+        "trauma_history", "goal_in_course", "language_of_strength", "coping_strategies",
+        "fears_concerns", "future_vision", "other_insights"
+        # ✅ הוסף: parental_status, other_insights
+        # ✅ הוסר: date_first_seen, last_update - שדות שלא צריכים להיות בסיכום
     ]
     return [field for field in summary_fields if field in FIELDS_DICT]
 
