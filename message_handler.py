@@ -22,7 +22,7 @@ from config import (
     MAX_CODE_TRIES
 )
 from utils import log_error_stat, get_israel_time
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from datetime import datetime
 from utils import handle_secret_command, log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
@@ -308,20 +308,13 @@ async def send_approval_message(update, chat_id):
     קלט: update, chat_id
     פלט: אין (שולחת הודעה)
     """
-    approval_msg = approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' בכפתורים למטה."
+    approval_msg = approval_text() + "\n\nאנא לחץ על 'מאשר' או 'לא מאשר' במקלדת למטה."
     # ❌ לא עושים פורמטינג להודעות מערכת - רק לתשובות GPT-A
     
     try:
-        # יצירת inline keyboard במקום reply keyboard - כך המקלדת תיעלם אוטומטית
-        inline_keyboard = [
-            [InlineKeyboardButton("✅ קראתי את הכל ואני מאשר - כל מה שנכתב בצ'אט כאן הוא באחריותי", callback_data="approve")],
-            [InlineKeyboardButton("❌ לא מאשר", callback_data="decline")]
-        ]
-        reply_markup = InlineKeyboardMarkup(inline_keyboard)
-        
         await update.message.reply_text(
             approval_msg,
-            reply_markup=reply_markup
+            reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
         )
         
         # עדכון היסטוריה ולוגים
@@ -551,22 +544,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # שלב 3: משתמש מאושר
-        # 🔧 תיקון הבעיה: בדיקה אם זה הכפתור החביב
-        hello_button_texts = ["היי מה נשמע? 👋", "היי מה נשמע? הייתי שמח שנדבר קצת..."]
-        if user_msg.strip() in hello_button_texts:
-            # המשתמש לחץ על הכפתור החביב - נמחק את המקלדת ונשלח הודעה פשוטה
-            from telegram import ReplyKeyboardRemove
+        # בדיקה אם זה הכפתור "אהלן" - אם כן, מסירים את המקלדת
+        if user_msg.strip() == "אהלן":
             await update.message.reply_text(
-                "שמח לראות אותך! 😊 מה שלומך?",
+                "שמח לראות אותך! 😊",
                 reply_markup=ReplyKeyboardRemove()
             )
             
             # עדכון היסטוריה
-            update_chat_history(chat_id, user_msg, "שמח לראות אותך! 😊 מה שלומך?")
+            update_chat_history(chat_id, user_msg, "שמח לראות אותך! 😊")
             
             await end_monitoring_user(str(chat_id), True)
             return
         
+        # שליחת תשובה מיד!
         await update_user_processing_stage(str(chat_id), "gpt_a")
         logging.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
@@ -853,18 +844,25 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
         print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (PENDING)")
         
         # משתמש רשום אבל לא אישר תנאים
-        # עכשיו שאנחנו משתמשים ב-inline keyboard, האישור יבוא דרך callback ולא דרך טקסט
-        # אבל אם המשתמש כתב "אני מאשר" או משהו דומה, נאשר אותו
-        user_msg_lower = user_msg.lower().strip()
-        approval_keywords = ['אני מאשר', 'מאשר', 'אישור', 'כן', 'אוקיי', 'ok', 'yes']
-        
-        if any(keyword in user_msg_lower for keyword in approval_keywords):
-            # משתמש כתב משהו שמעיד על אישור
+        if user_msg.strip() == APPROVE_BUTTON_TEXT():
+            # משתמש אישר תנאים
             approve_user(context.bot_data["sheet"], chat_id)
-            await send_system_message(update, chat_id, "✅ אושר! " + full_access_message())
+            
+            await send_system_message(update, chat_id, full_access_message())
+            
+            # 🔧 תיקון הבעיה: שליחת מקלדת "אהלן" שתירד אחרי שימוש
+            hello_keyboard = [["אהלן"]]
+            await update.message.reply_text(
+                "אפשר להתחיל להקליד כל דבר כאן! 😊",
+                reply_markup=ReplyKeyboardMarkup(hello_keyboard, one_time_keyboard=True, resize_keyboard=True)
+            )
+            
+        elif user_msg.strip() == DECLINE_BUTTON_TEXT():
+            # משתמש לא אישר תנאים
+            await send_system_message(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.")
+            await send_approval_message(update, chat_id)
         else:
-            # שליחת הודעת האישור עם הכפתורים
-            await send_system_message(update, chat_id, "יש לאשר את התנאים כדי להמשיך. אנא לחץ על הכפתורים למטה:")
+            # משתמש כתב משהו אחר - שולח שוב את הודעת האישור
             await send_approval_message(update, chat_id)
                 
     except Exception as ex:
@@ -1483,58 +1481,4 @@ async def send_gpta_response(update, chat_id, text, max_retries=3):
     
     return False
 
-async def handle_approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    מטפל בלחיצות על כפתורי האישור/אי-אישור במקלדת inline.
-    """
-    query = update.callback_query
-    await query.answer()  # אישור קבלת הלחיצה
-    
-    chat_id = query.message.chat_id
-    user_choice = query.data  # "approve" או "decline"
-    
-    try:
-        if user_choice == "approve":
-            # משתמש אישר תנאים
-            approve_user(context.bot_data["sheet"], chat_id)
-            
-            # עדכון ההודעה להסיר את הכפתורים
-            await query.edit_message_text(
-                text=query.message.text + "\n\n✅ אישרת את התנאים!",
-                reply_markup=None
-            )
-            
-            # שליחת הודעת הצלחה
-            await query.message.reply_text(full_access_message())
-            
-            # 🔧 תיקון הבעיה: שליחת מקלדת "אהלן" שתיעלם מיד
-            # זה מחליף את המקלדת הישנה במקלדת חביבה שלא נשארת
-            from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
-            hello_keyboard = [["היי מה נשמע? 👋"]]
-            await query.message.reply_text(
-                "אפשר להתחיל להקליד כל דבר כאן! 😊",
-                reply_markup=ReplyKeyboardMarkup(hello_keyboard, one_time_keyboard=True, resize_keyboard=True)
-            )
-            
-        elif user_choice == "decline":
-            # משתמש לא אישר תנאים
-            await query.edit_message_text(
-                text=query.message.text + "\n\n❌ לא אישרת את התנאים",
-                reply_markup=None
-            )
-            
-            await query.message.reply_text("כדי להמשיך, יש לאשר את התנאים.")
-            # אפשר לשלוח שוב את הודעת האישור אם רוצים
-            # await send_approval_message(update, chat_id)
-            
-        # רישום לוגים
-        log_event_to_file({
-            "chat_id": chat_id,
-            "callback_data": user_choice,
-            "timestamp": get_israel_time().isoformat(),
-            "event_type": "approval_callback"
-        })
-        
-    except Exception as e:
-        logging.error(f"[ERROR] שגיאה בטיפול ב-callback: {e}")
-        await query.message.reply_text("אירעה שגיאה, אנא נסה שוב.")
+
