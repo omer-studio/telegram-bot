@@ -634,10 +634,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
                 print(f"🎯 [SYSTEM_5] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
             
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # ⭐ הוספת המידע על המשתמש ממש בסוף - לפני ההודעה החדשה בלבד
+            # ⭐ הוספת המידע על המשתמש לפני ההיסטוריה - ממוקם אסטרטגית
             if current_summary:
                 messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
 
@@ -648,8 +645,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
 • התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
 • זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""})
-                print(f"🎯 [SYSTEM_6] USER SUMMARY (PRE-MESSAGE) - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
+                print(f"🎯 [SYSTEM_6] USER SUMMARY (PRE-HISTORY) - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
                 print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
+            
+            # 📚 הוספת ההיסטוריה בצמידות להודעה החדשה
+            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps) - positioned close to new message...")
+            messages_for_gpt.extend(history_messages)
             
             # הוספת ההודעה החדשה עם טיימסטמפ באותו פורמט כמו בהיסטוריה
             from chat_utils import _format_timestamp_for_history
