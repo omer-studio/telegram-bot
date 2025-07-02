@@ -146,13 +146,14 @@ def setup_daily_reports():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(send_daily_summary())
+            loop.close()
             print("✅ [DAILY] דוח באתחול נשלח בהצלחה!")
             print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח באתחול: {e}")
             print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
     
-    # תזמון יומי קבוע ל-8:00 בבוקר
+    # תזמון יומי קבוע ל-8:00 בבוקר - מבוטל כי זה מתבצע ב-bot_setup.py
     def scheduled_daily_report():
         print("🔥 [DAILY] שולח דוח יומי מתוזמן...")
         try:
@@ -160,18 +161,18 @@ def setup_daily_reports():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(send_daily_summary())
+            loop.close()
             print("✅ [DAILY] דוח מתוזמן נשלח בהצלחה!")
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח מתוזמן: {e}")
     
-    # הגדרת תזמון
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(scheduled_daily_report, 'cron', hour=8, minute=0, timezone=pytz.timezone("Europe/Berlin"))
-    scheduler.start()
-    print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
+    # התזמון הרשמי נעשה ב-bot_setup.py - כאן רק דוח באתחול
+    print("ℹ️ [DAILY] התזמון הקבוע מתבצע ב-bot_setup.py")
     
-    # הפעל דוח מיידי
-    threading.Thread(target=startup_report, daemon=True).start()
+    # הפעל דוח מיידי רק אם הבוט רץ עצמאית (לא כחלק מ-bot_setup)
+    import sys
+    if __name__ == "__main__" or "daily_summary" in sys.argv[0]:
+        threading.Thread(target=startup_report, daemon=True).start()
 
 # הפעל אוטומטית כשטוענים את הקובץ (רק אם זה לא import)
 if __name__ == "__main__":
