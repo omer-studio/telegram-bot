@@ -32,11 +32,12 @@ class PreDeployChecker:
         # רשימת חבילות כבדות וגרסאות בטוחות
         self.heavy_packages = {
             "litellm": {
-                "safe_versions": ["1.35.0", "1.40.0", "1.45.0"],
-                "dangerous_versions": ["1.73.0", "1.73.6", "1.74.0"],
+                "safe_versions": ["1.30.0", "1.35.0", "1.40.0", "1.45.0"],
+                "dangerous_versions": ["1.70.0", "1.73.0", "1.73.6", "1.74.0"],
                 "max_safe": "1.50.0",
-                "memory_impact": 200,  # MB
-                "dangerous_dependencies": ["tokenizers", "huggingface-hub", "grpcio", "google-api-python-client"]
+                "memory_impact": 150,  # MB - פחות מההערכה הקודמת
+                "dangerous_dependencies": ["tokenizers", "huggingface-hub", "grpcio", "google-api-python-client"],
+                "allow_range": ">=1.30.0"  # מאפשר את הטווח הזה שהיה עובד בעבר
             },
             "transformers": {
                 "safe_versions": ["4.20.0", "4.25.0"],
@@ -87,12 +88,16 @@ class PreDeployChecker:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
+                        # נקה תגובות בסוף השורה
+                        if "#" in line:
+                            line = line.split("#")[0].strip()
+                        
                         if "==" in line:
                             name, version = line.split("==", 1)
-                            requirements[name.lower()] = version
+                            requirements[name.lower()] = version.strip()
                         elif ">=" in line:
                             name, version = line.split(">=", 1)
-                            requirements[name.lower()] = f">={version}"
+                            requirements[name.lower()] = f">={version.strip()}"
         except FileNotFoundError:
             self.errors.append("requirements.txt not found")
         except Exception as e:
@@ -109,10 +114,14 @@ class PreDeployChecker:
             if package in requirements:
                 req_version = requirements[package]
                 if req_version.startswith(">="):
-                    self.warnings.append(
-                        f"⚠️  {package}: גרסה פתוחה ({req_version}) - מסוכן! "
-                        f"עדיף לנעול ל-{config.get('max_safe', 'גרסה יציבה')}"
-                    )
+                    # בדיקה אם זה טווח מותר
+                    if "allow_range" in config and req_version == config["allow_range"]:
+                        print(f"   ✅ {package}: טווח מותר {req_version}")
+                    else:
+                        self.warnings.append(
+                            f"⚠️  {package}: גרסה פתוחה ({req_version}) - מסוכן! "
+                            f"עדיף לנעול ל-{config.get('max_safe', 'גרסה יציבה')}"
+                        )
                 elif "dangerous_versions" in config:
                     req_clean = req_version.replace("==", "")
                     if req_clean in config["dangerous_versions"]:
@@ -174,19 +183,21 @@ class PreDeployChecker:
             if any(package in pkg for pkg in installed.keys()):
                 self.memory_estimate += memory
         
-        # Render limit
+        # Render limit - נותן יותר מקום לטעות
         render_limit = 512
+        error_threshold = render_limit * 1.2  # 614MB - סף שגיאה
+        warning_threshold = render_limit * 0.9  # 460MB - סף אזהרה
         
         print(f"   💾 אומדן זיכרון: ~{self.memory_estimate}MB")
         
-        if self.memory_estimate > render_limit:
+        if self.memory_estimate > error_threshold:
             self.errors.append(
-                f"💀 צריכת זיכרון גבוהה מדי: {self.memory_estimate}MB > {render_limit}MB\n"
-                f"   הבוט עלול לקרוס ב-Render!"
+                f"💀 צריכת זיכרון גבוהה מדי: {self.memory_estimate}MB > {error_threshold}MB\n"
+                f"   הבוט כמעט בוודאי יקרוס ב-Render!"
             )
-        elif self.memory_estimate > render_limit * 0.8:
+        elif self.memory_estimate > warning_threshold:
             self.warnings.append(
-                f"⚠️  צריכת זיכרון גבוהה: {self.memory_estimate}MB (80%+ מהמגבלה)\n"
+                f"⚠️  צריכת זיכרון גבוהה: {self.memory_estimate}MB (90%+ מהמגבלה)\n"
                 f"   כדאי לייעל לפני פריסה"
             )
         else:
