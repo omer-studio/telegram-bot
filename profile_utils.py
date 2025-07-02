@@ -200,7 +200,9 @@ def _send_admin_profile_overview_notification(
     *,
     chat_id: str,
     user_msg: str,
-    changes: List[Dict[str, Any]],
+    gpt_c_changes: List[Dict[str, Any]],
+    gpt_d_changes: List[Dict[str, Any]],
+    gpt_e_changes: List[Dict[str, Any]],
     gpt_c_info: str,
     gpt_d_info: str,
     gpt_e_info: str,
@@ -218,8 +220,9 @@ def _send_admin_profile_overview_notification(
 
         lines.append("")
         lines.append(f"<b>GPT-C</b>: {gpt_c_info}")
-        if changes and len(changes) > 0:  # ✅ תיקון: נשלח גם אם יש רק שינויים מ-GPT-C
-            for ch in changes[:2]:
+        # הצגת השדות שחולצו על ידי GPT-C
+        if gpt_c_changes:
+            for ch in gpt_c_changes:
                 field = ch.get("field")
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
@@ -233,8 +236,9 @@ def _send_admin_profile_overview_notification(
 
         lines.append("")
         lines.append(f"<b>GPT-D</b>: {gpt_d_info}")
-        if "מיזוג בוצע" in gpt_d_info:
-            for ch in changes[:2]:
+        # הצגת שדות רק אם GPT-D באמת הופעל ויש שדות שמוזגו
+        if gpt_d_changes:
+            for ch in gpt_d_changes:
                 field = ch.get("field")
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
@@ -248,8 +252,9 @@ def _send_admin_profile_overview_notification(
 
         lines.append("")
         lines.append(f"<b>GPT-E</b>: {gpt_e_info}")
-        if "הופעל" in gpt_e_info:
-            for ch in changes[:2]:
+        # הצגת שדות רק אם GPT-E באמת הופעל ויש שדות חדשים
+        if gpt_e_changes:
+            for ch in gpt_e_changes:
                 field = ch.get("field")
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
@@ -265,9 +270,15 @@ def _send_admin_profile_overview_notification(
             lines.append("")
             lines.append(f"<b>Summary</b>: {summary[:200]}{'...' if len(summary) > 200 else ''}")
 
-        if changes:
+        # הצגת סנכרון רק אם יש שינויים בכלל
+        if gpt_c_changes or gpt_d_changes or gpt_e_changes:
             lines.append("")
             lines.append("<b>סנכרון</b>: עודכן בקובץ user_profiles.json ולאחר מכן בגוגל שיטס - הכל מסונכרן")
+
+        # 🔧 הוספת זמן בסוף ההודעה
+        from utils import get_israel_time
+        lines.append("")
+        lines.append(f"⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}")
 
         send_admin_notification_raw("\n".join(lines))
     except Exception as exc:

@@ -1021,10 +1021,51 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
                     logging.warning(f"Error parsing user summary JSON: {e}")
                     emotional_summary = ""
                 
+                # הפרדת השדות לפי המודלים שיצרו אותם
+                gpt_c_changes = []
+                gpt_d_changes = []
+                gpt_e_changes = []
+                
+                # שדות GPT-C - רק אלו שחולצו מהטקסט
+                if extracted_fields:
+                    for field, new_value in extracted_fields.items():
+                        old_value = existing_profile.get(field, "")
+                        gpt_c_changes.append({
+                            "field": field,
+                            "old_value": old_value,
+                            "new_value": new_value,
+                            "change_type": "added" if not old_value else "updated"
+                        })
+                
+                # שדות GPT-D - רק אם מיזוג בוצע (אם יש ערך קיים שהוחלף)
+                if has_gpt_d_activity and extracted_fields:
+                    for field, new_value in extracted_fields.items():
+                        old_value = existing_profile.get(field, "")
+                        if old_value and old_value != "":  # רק אם היה ערך קיים
+                            gpt_d_changes.append({
+                                "field": field,
+                                "old_value": old_value,
+                                "new_value": new_value,
+                                "change_type": "updated"
+                            })
+                
+                # שדות GPT-E - רק אלו שהוחזרו מ-GPT-E
+                if has_gpt_e_activity:
+                    gpt_e_result_changes = gpt_e_result.get("changes", {})
+                    for field, new_value in gpt_e_result_changes.items():
+                        gpt_e_changes.append({
+                            "field": field,
+                            "old_value": "",  # GPT-E לא מחזיר ערך ישן
+                            "new_value": new_value,
+                            "change_type": "added"
+                        })
+                
                 _pu._send_admin_profile_overview_notification(
                     chat_id=str(chat_id),
                     user_msg=user_msg,
-                    changes=changes_list,
+                    gpt_c_changes=gpt_c_changes,
+                    gpt_d_changes=gpt_d_changes,
+                    gpt_e_changes=gpt_e_changes,
                     gpt_c_info=gpt_c_info_line,
                     gpt_d_info=gpt_d_info_line,
                     gpt_e_info=gpt_e_info_line,
@@ -1041,10 +1082,20 @@ async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
             try:
                 gpt_e_changes = gpt_e_result.get('changes', {})
                 if gpt_e_changes:
+                    # 🔧 תיקון: השבתת הודעות אדמין אוטומטיות גם לעדכון GPT-E
+                    import utils as _u
+                    _u._disable_auto_admin_profile_notification = True
                     await update_user_profile(chat_id, gpt_e_changes)
+                    _u._disable_auto_admin_profile_notification = False
                     logging.info(f"✅ [GPT-E] עדכון פרופיל הושלם עבור משתמש {chat_id}: {list(gpt_e_changes.keys())}")
             except Exception as update_error:
                 logging.error(f"❌ [GPT-E] שגיאה בעדכון פרופיל: {update_error}")
+                # 🔧 וידוא שהמשתנה חוזר למצב הרגיל גם במקרה של שגיאה
+                try:
+                    import utils as _u
+                    _u._disable_auto_admin_profile_notification = False
+                except:
+                    pass
         
         log_payload["gpt_c_data"] = gpt_c_usage
         log_payload["gpt_d_data"] = gpt_d_usage
