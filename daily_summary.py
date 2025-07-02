@@ -74,18 +74,6 @@ def _get_summary_for_date(target_date: datetime.date, tz: pytz.timezone):
         "call_types_str": call_types_str,
     }
 
-async def send_test_daily_summary():
-    """
-    שולח דוח בדיקה כדי לוודא שהמתזמן עובד
-    """
-    bot = Bot(token=ADMIN_BOT_TELEGRAM_TOKEN)
-    try:
-        now = datetime.now(pytz.timezone("Europe/Berlin"))
-        test_message = f"🧪 **דוח בדיקה יומי**\n📅 זמן: {now.strftime('%d/%m/%Y %H:%M')}\n✅ המתזמן עובד כשורה!"
-        await bot.send_message(chat_id=ADMIN_NOTIFICATION_CHAT_ID, text=test_message)
-        print(f"✅ דוח בדיקה נשלח בהצלחה ב-{now.strftime('%H:%M')}")
-    except Exception as e:
-        print(f"❌ שגיאה בשליחת דוח בדיקה: {e}")
 
 async def send_daily_summary(days_back=1):
     """
@@ -101,7 +89,7 @@ async def send_daily_summary(days_back=1):
         yesterday_summary_data = _get_summary_for_date(yesterday_date, tz)
         
         if not yesterday_summary_data:
-            summary = f"📅 סיכום אינטראקציות ל-{yesterday_date.strftime('%d/%m/%Y')}\n\n🔍 לא נמצאו אינטראקציות בתאריך זה.\n💡 ייתכן שקובץ הלוג עדיין לא נוצר או שלא היו אינטראקציות."
+            summary = f"📅 סיכום אינטראקציות ל-{yesterday_date.strftime('%d/%m/%Y')}\n\nלא נמצאו אינטראקציות בתאריך זה."
         else:
             summary = (
                 f"📊 **דוח אינטראקציות יומי**\n"
