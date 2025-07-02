@@ -612,7 +612,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
             
             if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}\n\nחשוב מאוד: השתמש רק במידע שהמשתמש סיפר לך בפועל. אל תמציא מידע נוסף או תערבב עם דוגמאות מהפרומפט. תראה לו שאתה מכיר אותו - אבל רק על בסיס מה שהוא באמת סיפר."})
+                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
+
+{current_summary}
+
+⚠️ **הנחיות חשובות לשימוש במידע:**
+• השתמש רק במידע שהמשתמש באמת סיפר לך - אל תמציא או תוסיף דברים
+• תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
+• התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
+• זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""})
                 print(f"🎯 [SYSTEM_2] USER SUMMARY - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
                 print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
             
@@ -630,6 +638,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if holiday_instruction:
                 messages_for_gpt.append({"role": "system", "content": holiday_instruction})
                 print(f"🎯 [SYSTEM_5] HOLIDAY - Content: {holiday_instruction}")
+            
+            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
+            from gpt_a_handler import create_missing_fields_system_message
+            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
+            if missing_fields_instruction:
+                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
+                print(f"🎯 [SYSTEM_6] MISSING_FIELDS - Content: {missing_fields_instruction[:100]}...")
             
             print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
             messages_for_gpt.extend(history_messages)
