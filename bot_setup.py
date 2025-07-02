@@ -45,7 +45,7 @@ import sys
 import time
 import requests
 import logging
-from telegram.ext import ApplicationBuilder, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
 from config import TELEGRAM_BOT_TOKEN, config
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from notifications import send_startup_notification
@@ -453,15 +453,18 @@ def setup_gentle_reminders():
 
 @time_operation("הוספת handlers להודעות")
 def setup_message_handlers():
-    """מוסיף handlers לטיפול בהודעות טקסט (הודעות קוליות זמנית מבוטלות)"""
+    """מוסיף handlers לטיפול בהודעות טקסט ו-callback queries"""
     start_time = time.time()
-    print(f"⏱️  מוסיף handler להודעות טקסט...")
+    print(f"⏱️  מוסיף handlers להודעות טקסט ו-callback queries...")
+    
+    from message_handler import handle_approval_callback
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(handle_approval_callback))
     
     elapsed_time = time.time() - start_time
-    execution_times["הוספת message handler"] = elapsed_time
-    print(f"✅ Message handler נוסף תוך {elapsed_time:.3f} שניות")
+    execution_times["הוספת handlers"] = elapsed_time
+    print(f"✅ Message handler ו-Callback handler נוספו תוך {elapsed_time:.3f} שניות")
 
 @time_operation("שליחת התראת הפעלה")
 def send_startup_notification_timed():
