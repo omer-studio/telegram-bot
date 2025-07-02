@@ -129,6 +129,68 @@ async def _sync_local_to_sheets_background(chat_id: str):
         logging.error(f"שגיאה בסנכרון ל-Google Sheets: {exc}")
 
 
+def _sync_local_to_sheets_sync(chat_id: str):
+    """Synchronous wrapper for _sync_local_to_sheets_background."""
+    try:
+        local_profile = get_user_profile_fast(chat_id)
+        if not local_profile:
+            logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
+            return
+
+        from sheets_core import setup_google_sheets
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
+        
+        # Use synchronous methods instead of async
+        _sync_to_sheet_by_headers_sync(sheet_users, chat_id, local_profile)
+        _sync_to_sheet_by_headers_sync(sheet_states, chat_id, local_profile)
+        logging.info(f"✅ Google Sheets סונכרן עבור משתמש {chat_id}")
+    except Exception as exc:
+        logging.error(f"שגיאה בסנכרון ל-Google Sheets: {exc}")
+
+
+def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str, Any]):
+    """Synchronous version of _sync_to_sheet_by_headers."""
+    try:
+        all_values = sheet.get_all_values()
+        if not all_values:
+            logging.warning("גיליון ריק או ללא כותרות")
+            return
+
+        headers = all_values[0]
+        chat_id_col = next((i + 1 for i, h in enumerate(headers) if h.lower() == "chat_id"), None)
+        if not chat_id_col:
+            logging.warning("עמודת chat_id לא נמצאה בגיליון")
+            return
+
+        from sheets_core import find_chat_id_in_sheet
+        row_index = find_chat_id_in_sheet(sheet, chat_id, col=chat_id_col) or len(all_values) + 1
+        if row_index == len(all_values) + 1:
+            sheet.update_cell(row_index, chat_id_col, chat_id)
+
+        field_to_col = {h.lower(): i + 1 for i, h in enumerate(headers)}
+        for field, value in local_profile.items():
+            col_index = field_to_col.get(field.lower())
+            if not col_index:
+                continue
+            try:
+                sheet.update_cell(row_index, col_index, str(value))
+            except Exception as e:
+                logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
+    except Exception as exc:
+        logging.error(f"שגיאה בסנכרון לפי כותרות: {exc}")
+
+
+def _schedule_sheets_sync_safely(chat_id: str):
+    """Safe wrapper to schedule sheets sync without coroutine issues."""
+    try:
+        # נסה להשתמש בפונקציה סינכרונית
+        _sync_local_to_sheets_sync(chat_id)
+    except Exception as exc:
+        logging.debug(f"שגיאה בסנכרון לשיטס עבור משתמש {chat_id}: {exc}")
+        # אם יש בעיה, לפחות נציין זאת ללוג
+        print(f"⚠️ לא ניתן לסנכרן משתמש {chat_id} לשיטס - ימשיך לעבוד מקומית")
+
+
 # ---------------------------------------------------------------------------
 # ✏️  High-level profile update helpers
 # ---------------------------------------------------------------------------
@@ -313,17 +375,8 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
         if changes:
             _log_profile_changes_to_chat_history(chat_id, changes)
 
-        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
-        try:
-            import asyncio
-            asyncio.run(_sync_local_to_sheets_background(chat_id))
-        except RuntimeError:
-            # אם כבר יש event loop פעיל, נשתמש ב-create_task
-            try:
-                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
-            except RuntimeError:
-                # אם גם זה לא עובד, נדלג על הסנכרון
-                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
+        # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
+        _schedule_sheets_sync_safely(chat_id)
 
         # ✅ שליחת הודעת אדמין אם יש שינויים
         if send_admin_notification and not _disable_auto_admin_profile_notification and changes:
@@ -490,16 +543,12 @@ def force_sync_to_sheets(chat_id: str) -> bool:
         if not local_profile:
             logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
             return False
-        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
+        # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
         try:
-            import asyncio
-            asyncio.run(_sync_local_to_sheets_background(chat_id))
-        except RuntimeError:
-            try:
-                asyncio.create_task(_sync_local_to_sheets_background(chat_id))
-            except RuntimeError:
-                logging.debug(f"לא ניתן לסנכרן ל-Sheets עבור משתמש {chat_id} - אין event loop")
-                return False
+            _sync_local_to_sheets_sync(chat_id)
+        except Exception as exc:
+            logging.error(f"שגיאה בסנכרון כפוי: {exc}")
+            return False
         logging.info(f"✅ סנכרון כפוי ל-Google Sheets עבור משתמש {chat_id}")
         return True
     except Exception as exc:

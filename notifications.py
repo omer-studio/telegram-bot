@@ -589,16 +589,8 @@ def send_admin_alert(message, alert_level="info"):
         
         alert_text = f"{icon} **התראת מערכת** ({timestamp})\n\n{message}"
         
-        # 🔧 תיקון: שימוש ב-asyncio.run במקום create_task בפונקציה סינכרונית
-        try:
-            asyncio.run(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
-        except RuntimeError:
-            # אם כבר יש event loop פעיל, נשתמש ב-create_task
-            try:
-                asyncio.create_task(_send_telegram_message_admin(BOT_TOKEN, ADMIN_CHAT_ID, alert_text))
-            except RuntimeError:
-                # אם גם זה לא עובד, נדלג על השליחה
-                logging.debug(f"לא ניתן לשלוח התראה לאדמין - אין event loop")
+        # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
+        _send_telegram_message_admin_sync(BOT_TOKEN, ADMIN_CHAT_ID, alert_text)
         
         # גם ללוג
         logging.warning(f"[🚨 אדמין] {message}")
@@ -617,6 +609,19 @@ async def _send_telegram_message_admin(bot_token, chat_id, text):
             text=text,
             parse_mode='Markdown'
         )
+    except Exception as e:
+        logging.error(f"[טלגרם] שגיאה בשליחה: {e}")
+
+def _send_telegram_message_admin_sync(bot_token, chat_id, text):
+    """שולח הודעה בטלגרם (סינכרונית) - תחליף בטוח ל-async"""
+    try:
+        import requests
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        requests.post(url, data={
+            "chat_id": chat_id, 
+            "text": text,
+            "parse_mode": "Markdown"
+        }, timeout=5)
     except Exception as e:
         logging.error(f"[טלגרם] שגיאה בשליחה: {e}")
 
