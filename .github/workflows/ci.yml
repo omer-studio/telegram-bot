@@ -91,19 +91,25 @@ jobs:
           fi
           
           # שליחת POST request ל-Render Deploy Hook
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"ref": "main"}' \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "🔄 שולח Deploy Hook ל-Render..."
           
-          # בדיקת התגובה
-          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 204 ]; then
+          # ביצוע הקריאה עם טיפול בשגיאות
+          if curl -s -f -X POST \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: GitHub-Actions" \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            -d '{"ref": "main"}' \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"; then
             echo "✅ Deploy Hook נשלח בהצלחה ל-Render!"
             echo "🎉 הdeployment החל - תוכל לעקוב אחר ההתקדמות ב-Render Dashboard"
           else
-            echo "❌ שגיאה בשליחת Deploy Hook. HTTP Status: $HTTP_STATUS"
-            echo "🔍 בדוק שה-Deploy Hook URL נכון ותקף"
+            echo "❌ שגיאה בשליחת Deploy Hook"
+            echo "🔍 בדיקות אפשריות:"
+            echo "  - ודא שה-RENDER_DEPLOY_HOOK_URL נכון ב-GitHub Secrets"
+            echo "  - בדוק שה-Deploy Hook עדיין פעיל ב-Render Dashboard"
+            echo "  - ודא שאין בעיות רשת זמניות"
             exit 1
           fi
           
