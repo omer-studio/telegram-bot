@@ -60,7 +60,60 @@ import requests
 from gpt_c_logger import clear_gpt_c_html_log
 from config import DATA_DIR, PRODUCTION_PORT
 
-# 🔧 תיקון: מניעת setup מרובה
+# � בדיקת post-deploy אוטומטית - הפעלת מערכת rollback
+def run_post_deploy_check():
+    """מריץ בדיקת post-deploy אם זה deploy חדש בסביבת ייצור"""
+    try:
+        # רק בסביבת ייצור (Render/Railway)
+        if os.getenv("RENDER") or os.getenv("RAILWAY_STATIC_URL"):
+            # בדיקה אם זה deploy חדש
+            is_new_deploy = (
+                os.getenv("RENDER_GIT_COMMIT") or 
+                (os.getenv("PORT") and not os.path.exists("data/deploy_verified.flag"))
+            )
+            
+            if is_new_deploy:
+                print("🚨 זוהה deploy חדש - מריץ בדיקת post-deploy...")
+                
+                # הרצת בדיקת post-deploy עם timeout
+                import subprocess
+                result = subprocess.run(
+                    [sys.executable, "auto_rollback.py"], 
+                    capture_output=True, 
+                    text=True,
+                    timeout=60
+                )
+                
+                if result.returncode == 0:
+                    print("✅ בדיקת post-deploy עברה - הבוט אושר להפעלה!")
+                    # יצירת flag שהverification עבר
+                    os.makedirs("data", exist_ok=True)
+                    with open("data/deploy_verified.flag", "w", encoding="utf-8") as f:
+                        f.write(f"verified_at_{os.getenv('RENDER_GIT_COMMIT', 'unknown')}")
+                elif result.returncode == 1:
+                    print("🔄 Rollback בוצע - יציאה כדי לאפשר restart")
+                    sys.exit(0)  # יציאה נקייה כדי לאפשר restart
+                else:
+                    print("💥 בדיקת post-deploy נכשלה קריטית!")
+                    print(f"STDOUT: {result.stdout}")
+                    print(f"STDERR: {result.stderr}")
+                    sys.exit(1)
+            else:
+                print("ℹ️ Deploy קיים מאומת - ממשיך להפעלת הבוט")
+        else:
+            print("ℹ️ סביבת פיתוח - דולג על בדיקת post-deploy")
+            
+    except Exception as e:
+        print(f"⚠️ שגיאה בבדיקת post-deploy: {e}")
+        # בסביבת ייצור - אל תמשיך אם הבדיקה נכשלה
+        if os.getenv("RENDER") or os.getenv("RAILWAY_STATIC_URL"):
+            print("🚨 נכשל בבדיקת post-deploy בסביבת ייצור - יציאה")
+            sys.exit(1)
+
+# הפעלת הבדיקה מיד כשהקובץ נטען
+run_post_deploy_check()
+
+# �� תיקון: מניעת setup מרובה
 _bot_setup_completed = False
 _app_instance = None
 
@@ -245,7 +298,7 @@ async def webhook(request: Request):
         except Exception:
             pass  # אל תיכשל בגלל זה
         
-        # � התראה מיידית לאדמין עם פרטים מלאים
+        # 🚨 התראה מיידית לאדמין עם פרטים מלאים
         try:
             from notifications import handle_critical_error
             await handle_critical_error(ex, chat_id, user_msg, update if 'update' in locals() else None)
@@ -314,6 +367,8 @@ async def main():
     await app.initialize()
     await app.start()
     print("✅ הבוט מוכן ורק מחכה להודעות חדשות!")
+
+
 
 if __name__ == "__main__":
     import uvicorn

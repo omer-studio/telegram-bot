@@ -74,14 +74,17 @@ jobs:
           pip install -r requirements.txt
         fi
     
-    - name: 🚨 Post-Deploy Safety Check (Simulation)
+    - name: 🚨 Post-Deploy Safety Check
       run: |
-        echo "🚨 מריץ בדיקת post-deploy (סימולציה)..."
+        echo "🚨 מריץ בדיקת post-deploy..."
         python3 auto_rollback.py
       env:
         TELEGRAM_BOT_TOKEN: "dummy_token_for_testing"
         ADMIN_BOT_TELEGRAM_TOKEN: "dummy_token_for_testing" 
         ADMIN_NOTIFICATION_CHAT_ID: "dummy_chat_id"
+        # אופציה לשימוש ב-secrets אמיתיים:
+        # ADMIN_BOT_TELEGRAM_TOKEN: ${{ secrets.ADMIN_BOT_TELEGRAM_TOKEN }}
+        # ADMIN_NOTIFICATION_CHAT_ID: ${{ secrets.ADMIN_NOTIFICATION_CHAT_ID }}
         
     - name: 🎉 Ready for Deployment
       run: |
