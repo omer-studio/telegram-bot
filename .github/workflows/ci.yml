@@ -93,23 +93,29 @@ jobs:
           # שליחת POST request ל-Render Deploy Hook
           echo "🔄 שולח Deploy Hook ל-Render..."
           
-          # ביצוע הקריאה עם טיפול בשגיאות
-          if curl -s -f -X POST \
-            -H "Content-Type: application/json" \
-            -H "User-Agent: GitHub-Actions" \
+          # ביצוע הקריאה עם טיפול בשגיאות - לפי התיעוד הרשמי של Render
+          DEPLOY_URL="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "🔗 Deploy Hook URL (מוסתר): ${DEPLOY_URL:0:50}..."
+          
+          # שליחת הקריאה עם verbose logging לדיבאג
+          if curl -v \
             --max-time 30 \
             --retry 3 \
             --retry-delay 2 \
-            -d '{"ref": "main"}' \
+            --fail-with-body \
             "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"; then
+            echo ""
             echo "✅ Deploy Hook נשלח בהצלחה ל-Render!"
             echo "🎉 הdeployment החל - תוכל לעקוב אחר ההתקדמות ב-Render Dashboard"
           else
-            echo "❌ שגיאה בשליחת Deploy Hook"
+            CURL_EXIT_CODE=$?
+            echo ""
+            echo "❌ שגיאה בשליחת Deploy Hook (Exit Code: $CURL_EXIT_CODE)"
             echo "🔍 בדיקות אפשריות:"
             echo "  - ודא שה-RENDER_DEPLOY_HOOK_URL נכון ב-GitHub Secrets"
             echo "  - בדוק שה-Deploy Hook עדיין פעיל ב-Render Dashboard"
             echo "  - ודא שאין בעיות רשת זמניות"
+            echo "  - בדוק אם יש הודעת שגיאה בפלט הverbose למעלה"
             exit 1
           fi
           
