@@ -43,10 +43,25 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
 
         usage = normalize_usage_dict(response.usage, response.model)
         
-        # ניסיון לפרס JSON
+        # ניסיון לפרס JSON עם לוגים מפורטים
         try:
-            extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
-        except json.JSONDecodeError:
+            if content and content.strip():
+                content_clean = content.strip()
+                if content_clean.startswith("{") and content_clean.endswith("}"):
+                    extracted_fields = json.loads(content_clean)
+                    if not isinstance(extracted_fields, dict):
+                        logging.warning(f"[GPT_C] JSON parsed but not a dict: {type(extracted_fields)}")
+                        extracted_fields = {}
+                else:
+                    logging.warning(f"[GPT_C] Content doesn't look like JSON: {content_clean[:100]}...")
+                    extracted_fields = {}
+            else:
+                extracted_fields = {}
+        except json.JSONDecodeError as e:
+            logging.error(f"[GPT_C] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...")
+            extracted_fields = {}
+        except Exception as e:
+            logging.error(f"[GPT_C] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...")
             extracted_fields = {}
         
         # הדפסת מידע חשוב על חילוץ נתונים (תמיד יופיע!)
@@ -90,10 +105,25 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
 
                 usage = normalize_usage_dict(response.usage, response.model)
                 
-                # ניסיון לפרס JSON
+                # ניסיון לפרס JSON עם לוגים מפורטים (fallback)
                 try:
-                    extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
-                except json.JSONDecodeError:
+                    if content and content.strip():
+                        content_clean = content.strip()
+                        if content_clean.startswith("{") and content_clean.endswith("}"):
+                            extracted_fields = json.loads(content_clean)
+                            if not isinstance(extracted_fields, dict):
+                                logging.warning(f"[GPT_C FALLBACK] JSON parsed but not a dict: {type(extracted_fields)}")
+                                extracted_fields = {}
+                        else:
+                            logging.warning(f"[GPT_C FALLBACK] Content doesn't look like JSON: {content_clean[:100]}...")
+                            extracted_fields = {}
+                    else:
+                        extracted_fields = {}
+                except json.JSONDecodeError as e:
+                    logging.error(f"[GPT_C FALLBACK] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...")
+                    extracted_fields = {}
+                except Exception as e:
+                    logging.error(f"[GPT_C FALLBACK] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...")
                     extracted_fields = {}
                 
                 logging.info(f"[gpt_c] Fallback successful: {fallback_model}")

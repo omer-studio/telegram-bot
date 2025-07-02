@@ -103,22 +103,32 @@ class ConcurrentMonitor:
         self.circuit_breaker_active = False
         self.last_circuit_check = time.time()
         
-        # לא יוצרים tasks כאן - הם ייווצרו כשהמערכת תתחיל לעבוד
+        # Task management - proper tracking to prevent memory leaks
         self._background_tasks_started = False
+        self._active_tasks: List[asyncio.Task] = []  # Track running tasks
+        self._task_lock = asyncio.Lock() if hasattr(asyncio, 'Lock') else None
         
     async def _ensure_background_tasks_started(self):
         """מתחיל את background tasks אם הם לא התחילו עדיין"""
         if not self._background_tasks_started:
             try:
+                # Clean up any dead tasks before starting new ones
+                await self._cleanup_dead_tasks()
+                
                 # 🔧 תיקון זליגת זיכרון: רק cleanup חיוני, לא כל ה-background tasks
                 # השארתי רק ניקוי סשנים תקועים - זה קריטי למניעת תקיעות
                 if not os.getenv("RENDER"):  # רק בפיתוח מקומי
                     loop = asyncio.get_running_loop()
                     if loop and not loop.is_closed():
-                        # יצירת task עם error handling
-                        cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
-                        cleanup_task.add_done_callback(self._handle_cleanup_error)
-                        logging.info("[ConcurrentMonitor] Started essential cleanup only")
+                        # יצירת task עם error handling - only if not already running
+                        if not any(not task.done() and "cleanup_stale_sessions" in str(task.get_coro()) 
+                                  for task in self._active_tasks):
+                            cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
+                            cleanup_task.add_done_callback(self._handle_cleanup_error)
+                            self._active_tasks.append(cleanup_task)
+                            logging.info("[ConcurrentMonitor] Started essential cleanup only")
+                        else:
+                            logging.debug("[ConcurrentMonitor] Cleanup task already running")
                 else:
                     # בסביבת production - מדלגים על כל background tasks
                     logging.info("[ConcurrentMonitor] Skipping background tasks in production")
@@ -132,6 +142,15 @@ class ConcurrentMonitor:
                 # לא נכשל אם background tasks לא עובדים
                 self._background_tasks_started = True
         
+    async def _cleanup_dead_tasks(self):
+        """ניקוי tasks שהסתיימו כדי למנוע memory leaks"""
+        try:
+            if hasattr(self, '_active_tasks'):
+                # Remove completed/cancelled tasks
+                self._active_tasks = [task for task in self._active_tasks if not task.done()]
+        except Exception as e:
+            logging.error(f"[ConcurrentMonitor] Error cleaning dead tasks: {e}")
+    
     def _handle_cleanup_error(self, task):
         """טיפול בשגיאות ב-cleanup task"""
         try:
@@ -139,6 +158,13 @@ class ConcurrentMonitor:
                 logging.error(f"[ConcurrentMonitor] Cleanup task failed: {task.exception()}")
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Error handling cleanup task: {e}")
+        finally:
+            # Remove task from active list when done
+            try:
+                if hasattr(self, '_active_tasks') and task in self._active_tasks:
+                    self._active_tasks.remove(task)
+            except Exception as e:
+                logging.debug(f"[ConcurrentMonitor] Error removing task from active list: {e}")
         
     async def start_user_session(self, chat_id: str, message_id: str) -> bool:
         """
