@@ -357,11 +357,15 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
         try:
             from sheets_core import generate_summary_from_profile_data
             auto_summary = generate_summary_from_profile_data(new_profile)
+            logging.debug(f"[SUMMARY_DEBUG] Generated auto summary: '{auto_summary}' for user {chat_id}")
             # ✅ תמיד מעדכנים את הסיכום אם יש שינוי בפרופיל
             if auto_summary:
                 new_profile["summary"] = auto_summary
                 # הוספת הסיכום לעדכונים שנשלחים
                 updates["summary"] = auto_summary
+                logging.debug(f"[SUMMARY_DEBUG] Updated profile summary for user {chat_id}: '{auto_summary}'")
+            else:
+                logging.debug(f"[SUMMARY_DEBUG] Empty auto summary generated for user {chat_id}")
         except Exception as e:
             logging.debug(f"שגיאה ביצירת סיכום אוטומטי: {e}")
 
