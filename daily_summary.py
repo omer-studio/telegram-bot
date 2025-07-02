@@ -169,12 +169,14 @@ def setup_daily_reports():
     # התזמון הרשמי נעשה ב-bot_setup.py - כאן רק דוח באתחול
     print("ℹ️ [DAILY] התזמון הקבוע מתבצע ב-bot_setup.py")
     
-    # הפעל דוח מיידי רק אם הבוט רץ עצמאית (לא כחלק מ-bot_setup)
+    # הפעל דוח מיידי אם זה import מ-bot_setup או הפעלה עצמאית
     import sys
-    if __name__ == "__main__" or "daily_summary" in sys.argv[0]:
+    calling_module = sys._getframe(1).f_globals.get('__name__', '')
+    if __name__ == "__main__" or "daily_summary" in sys.argv[0] or "bot_setup" in calling_module:
+        print("🔥 [DAILY] מפעיל דוח מיידי באתחול...")
         threading.Thread(target=startup_report, daemon=True).start()
 
-# הפעל אוטומטית כשטוענים את הקובץ (רק אם זה לא import)
+# הפעל אוטומטית כשטוענים את הקובץ
 if __name__ == "__main__":
     setup_daily_reports()
 
