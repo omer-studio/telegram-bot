@@ -1,0 +1,58 @@
+name: 🛡️ Pre-Deploy Safety Checks
+
+# מתי לרוץ:
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # הפעלה ידנית
+
+jobs:
+  pre-deploy-checks:
+    name: "בדיקות מוקדמות לפני פריסה"
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python 
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🛡️ Run pre-deploy checks
+      run: |
+        python pre_deploy_checks.py
+        
+    - name: 📊 Memory estimation report
+      if: always()  # רוץ גם אם הבדיקה נכשלה
+      run: |
+        echo "## 📊 Memory Usage Report" >> $GITHUB_STEP_SUMMARY
+        echo "| Package | Memory Impact |" >> $GITHUB_STEP_SUMMARY
+        echo "|---------|---------------|" >> $GITHUB_STEP_SUMMARY
+        python -c "
+        import json, subprocess, sys
+        result = subprocess.run([sys.executable, '-m', 'pip', 'list', '--format=json'], capture_output=True, text=True)
+        packages = json.loads(result.stdout)
+        heavy = {'litellm': 200, 'torch': 500, 'tensorflow': 600, 'transformers': 300}
+        total = 80  # base
+        for pkg in packages:
+            name = pkg['name'].lower()
+            if name in heavy:
+                memory = heavy[name]
+                total += memory
+                print(f'| {pkg[\"name\"]} {pkg[\"version\"]} | {memory}MB |')
+        print(f'| **Total Estimated** | **{total}MB** |')
+        " >> $GITHUB_STEP_SUMMARY
+        
+    - name: 🚨 Fail if critical issues found
+      run: |
+        # הסקריפט כבר יסיים עם exit code מתאים
+        echo "✅ בדיקות הושלמו"

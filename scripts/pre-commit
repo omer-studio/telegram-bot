@@ -1,0 +1,98 @@
+#!/bin/bash
+# Pre-commit hook: בדיקות מוקדמות לפני commit
+# ========================================
+# 
+# התקנה:
+# cp scripts/pre-commit .git/hooks/pre-commit
+# chmod +x .git/hooks/pre-commit
+#
+# דילוג על הבדיקה:
+# git commit --no-verify
+
+set -e  # יוצא אם יש שגיאה
+
+echo "🛡️ מריץ בדיקות מוקדמות לפני commit..."
+
+# בדיקה שחבילות Python זמינות
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Python3 לא מותקן!"
+    exit 1
+fi
+
+# בדיקה מהירה של requirements.txt
+echo "📋 בודק requirements.txt..."
+if [ ! -f "requirements.txt" ]; then
+    echo "❌ requirements.txt לא נמצא!"
+    exit 1
+fi
+
+# בדיקה ש-LiteLLM נעול לגרסה ספציפית
+if grep -q "litellm>=" requirements.txt; then
+    echo "❌ LiteLLM לא נעול לגרסה ספציפית!"
+    echo "   שנה litellm>= ל-litellm== בrequirements.txt"
+    echo "   דוגמה: litellm==1.35.0"
+    exit 1
+fi
+
+if grep -q "litellm==" requirements.txt; then
+    VERSION=$(grep "litellm==" requirements.txt | cut -d'=' -f3)
+    echo "✅ LiteLLM נעול לגרסה $VERSION"
+else
+    echo "⚠️  LiteLLM לא נמצא ב-requirements.txt"
+fi
+
+# בדיקה שקבצים קריטיים קיימים
+CRITICAL_FILES=("main.py" "config.py" "lazy_litellm.py")
+for file in "${CRITICAL_FILES[@]}"; do
+    if [ ! -f "$file" ]; then
+        echo "❌ קובץ קריטי חסר: $file"
+        exit 1
+    fi
+done
+
+echo "✅ קבצים קריטיים קיימים"
+
+# בדיקה שאין imports ישירים של litellm
+echo "🔍 בודק imports של LiteLLM..."
+DIRECT_IMPORTS=$(grep -r "import litellm" --include="*.py" . | grep -v "lazy_litellm" | grep -v "pre_deploy_checks" | grep -v "__pycache__" || true)
+
+if [ ! -z "$DIRECT_IMPORTS" ]; then
+    echo "⚠️  נמצאו imports ישירים של LiteLLM:"
+    echo "$DIRECT_IMPORTS"
+    echo "   כדאי להשתמש ב-lazy_litellm במקום"
+fi
+
+# ריצת בדיקת תקינות מהירה
+echo "🚀 מריץ בדיקת תקינות מהירה..."
+if python3 -c "
+import sys
+import os
+sys.path.insert(0, '.')
+
+try:
+    # בדיקת syntax בסיסית
+    import config
+    import main
+    print('✅ Syntax check passed')
+    
+    # בדיקה שלא חסרים משתני config קריטיים
+    required = ['TELEGRAM_BOT_TOKEN', 'DATA_DIR', 'PRODUCTION_PORT']
+    missing = [var for var in required if not hasattr(config, var)]
+    if missing:
+        print(f'❌ Missing config variables: {missing}')
+        sys.exit(1)
+    
+    print('✅ Config check passed')
+    
+except Exception as e:
+    print(f'❌ Quick health check failed: {e}')
+    sys.exit(1)
+"; then
+    echo "✅ בדיקת תקינות מהירה עברה!"
+else
+    echo "❌ בדיקת תקינות נכשלה!"
+    echo "הרץ: python3 health_check.py לפרטים"
+    exit 1
+fi
+
+echo "🎉 כל הבדיקות עברו! commit מאושר."

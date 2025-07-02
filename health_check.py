@@ -230,6 +230,150 @@ def test_message_handler():
         traceback.print_exc()
         return False
 
+def test_memory_and_dependencies():
+    """בדיקת צריכת זיכרון ו-dependencies כבדים"""
+    print("\n🔍 בדיקת זיכרון ו-Dependencies...")
+    
+    if IS_CI_ENVIRONMENT:
+        # בסביבת CI - רק בדיקת requirements.txt
+        if os.path.exists("requirements.txt"):
+            try:
+                with open("requirements.txt", "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                # בדיקה ש-LiteLLM נעול לגרסה בטוחה
+                if "litellm==" in content:
+                    log_check("LiteLLM version locked", True, "CI environment - requirements check")
+                elif "litellm>=" in content:
+                    log_check("LiteLLM version locked", False, "Version not locked - dangerous!")
+                    return False
+                else:
+                    log_check("LiteLLM in requirements", False, "LiteLLM not found")
+                    return False
+                    
+                return True
+            except Exception as e:
+                log_check("Requirements file", False, f"Error reading: {e}")
+                return False
+        else:
+            log_check("Requirements file", False, "File not found")
+            return False
+    
+    try:
+        # בדיקה מלאה - רק בסביבת ייצור/פיתוח
+        import subprocess
+        import json
+        
+        # קבלת רשימת חבילות מותקנות
+        result = subprocess.run([sys.executable, "-m", "pip", "list", "--format=json"], 
+                              capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            log_check("Package list", False, "Failed to get installed packages")
+            return False
+        
+        packages = json.loads(result.stdout)
+        installed = {pkg["name"].lower(): pkg["version"] for pkg in packages}
+        
+        # בדיקת חבילות כבדות
+        heavy_packages = {
+            "litellm": 200,
+            "torch": 500,
+            "tensorflow": 600,
+            "transformers": 300
+        }
+        
+        dangerous_packages = [
+            "tokenizers", "huggingface-hub", "grpcio", "google-api-python-client"
+        ]
+        
+        memory_estimate = 80  # Base memory
+        issues_found = []
+        
+        # בדיקת חבילות כבדות
+        for package, memory_impact in heavy_packages.items():
+            if package in installed:
+                memory_estimate += memory_impact
+                version = installed[package]
+                
+                # בדיקות ספציפיות ל-LiteLLM
+                if package == "litellm":
+                    version_parts = version.split(".")
+                    if len(version_parts) >= 2:
+                        major_minor = f"{version_parts[0]}.{version_parts[1]}"
+                        if float(major_minor) >= 1.70:  # גרסאות מסוכנות
+                            issues_found.append(f"LiteLLM {version} - גרסה מסוכנת!")
+                            log_check(f"LiteLLM version safe", False, f"v{version} is dangerous")
+                        else:
+                            log_check(f"LiteLLM version safe", True, f"v{version} is safe")
+        
+        # בדיקת dependencies לא רצויים
+        unwanted_found = []
+        for package in dangerous_packages:
+            if package in installed:
+                unwanted_found.append(f"{package} {installed[package]}")
+                memory_estimate += 50  # הערכה
+        
+        if unwanted_found:
+            issues_found.append(f"Dependencies מסוכנים: {', '.join(unwanted_found)}")
+            log_check("No dangerous dependencies", False, f"Found: {', '.join(unwanted_found)}")
+        else:
+            log_check("No dangerous dependencies", True)
+        
+        # בדיקת זיכרון כולל
+        render_limit = 512
+        log_check(f"Memory estimate", True, f"{memory_estimate}MB")
+        
+        if memory_estimate > render_limit:
+            issues_found.append(f"זיכרון גבוה מדי: {memory_estimate}MB > {render_limit}MB")
+            log_check("Memory within limits", False, f"{memory_estimate}MB exceeds {render_limit}MB limit")
+        elif memory_estimate > render_limit * 0.8:
+            log_check("Memory within limits", True, f"{memory_estimate}MB (warning: >80% of limit)")
+        else:
+            log_check("Memory within limits", True, f"{memory_estimate}MB (safe)")
+        
+        # בדיקת Lazy Loading
+        if os.path.exists("lazy_litellm.py"):
+            log_check("Lazy Loading implemented", True)
+        else:
+            issues_found.append("Lazy Loading לא מיושם")
+            log_check("Lazy Loading implemented", False, "lazy_litellm.py not found")
+        
+        return len(issues_found) == 0
+        
+    except subprocess.TimeoutExpired:
+        log_check("Memory check", False, "Timeout getting package list")
+        return False
+    except Exception as e:
+        log_check("Memory and Dependencies", False, f"Error: {e}")
+        traceback.print_exc()
+        return False
+
+def basic_health_check():
+    """בדיקת תקינות בסיסית - לשימוש מ-main.py"""
+    try:
+        # בדיקות בסיסיות ללא dependencies כבדים
+        import config
+        import os
+        
+        # בדיקה שקבצים עיקריים קיימים
+        required_files = ['config.py', 'main.py', 'message_handler.py']
+        for filename in required_files:
+            if not os.path.exists(filename):
+                return False
+        
+        # בדיקה שמשתני config קיימים
+        required_vars = ['TELEGRAM_BOT_TOKEN', 'DATA_DIR']
+        for var in required_vars:
+            if not hasattr(config, var):
+                return False
+        
+        return True
+        
+    except Exception as e:
+        print(f"Basic health check failed: {e}")
+        return False
+
 async def main():
     """ריצת כל הבדיקות"""
     print("🚨 בדיקת תקינות קריטית לפני Deploy")
@@ -242,6 +386,7 @@ async def main():
         ("ConcurrentMonitor", test_concurrent_monitor),
         ("Message Handler", test_message_handler),
         ("Async Functions", test_async_functions),
+        ("Memory and Dependencies", test_memory_and_dependencies),
     ]
     
     all_passed = True
