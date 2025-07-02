@@ -1,5 +1,5 @@
 import logging
-import litellm
+import lazy_litellm as litellm
 import time
 import os
 import json

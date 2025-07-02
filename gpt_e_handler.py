@@ -13,7 +13,7 @@ gpt_e_handler.py
 import logging
 import asyncio
 import json
-import litellm
+import lazy_litellm as litellm
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import pytz

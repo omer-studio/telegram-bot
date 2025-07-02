@@ -8,7 +8,7 @@ gpt_d_handler.py
 import logging
 from datetime import datetime
 import json
-import litellm
+import lazy_litellm as litellm
 from prompts import build_profile_merge_prompt
 from config import GPT_MODELS, GPT_PARAMS, should_log_data_extraction_debug, should_log_gpt_cost_debug
 from gpt_utils import normalize_usage_dict, calculate_gpt_cost, extract_json_from_text

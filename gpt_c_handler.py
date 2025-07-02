@@ -7,7 +7,7 @@ gpt_c_handler.py
 import logging
 from datetime import datetime
 import json
-import litellm
+import lazy_litellm as litellm
 import re
 from prompts import build_profile_extraction_enhanced_prompt
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_extraction_debug, should_log_gpt_cost_debug
