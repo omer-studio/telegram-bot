@@ -7,7 +7,7 @@ from sheets_core import (
     debug_log, safe_int, safe_float, check_user_access,
     ensure_user_state_row, register_user, approve_user,
     delete_row_by_chat_id, get_user_state, update_user_state, increment_code_try_sync,
-    get_user_summary, update_user_profile_data
+    get_user_summary, update_user_profile_data, find_chat_id_in_sheet, increment_gpt_c_run_count
 )
 from sheets_advanced import (
     SheetsQueueManager, sheets_queue_manager, log_to_sheets_sync, 
