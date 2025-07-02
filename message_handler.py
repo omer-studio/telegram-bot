@@ -1245,6 +1245,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
                 gpt_d_usage=gpt_d_usage,
                 gpt_e_usage=gpt_e_usage
             )
+            
+            # כתיבה ללוג קובץ לדוח היומי
+            from sheets_advanced import log_gpt_usage_to_file
+            log_gpt_usage_to_file(message_id, chat_id, gpt_a_usage, gpt_b_usage, gpt_c_usage, gpt_d_usage, gpt_e_usage, total_cost_ils_calc)
         except Exception as e:
             print(f"[ERROR] שגיאה ב-log_to_sheets: {e}")
             logging.error(f"Error in log_to_sheets: {e}")
