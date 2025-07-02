@@ -333,7 +333,7 @@ def _send_admin_profile_overview_notification(
 
         if summary and summary.strip():
             lines.append("")
-            lines.append(f"<b>Summary</b>: {summary[:200]}{'...' if len(summary) > 200 else ''}")
+            lines.append(f"<b>Summary</b>: {summary}")
 
         # הצגת סנכרון רק אם יש שינויים בכלל
         if gpt_c_changes or gpt_d_changes or gpt_e_changes:
