@@ -222,18 +222,45 @@ def find_chat_id_in_sheet(sheet, chat_id: str, col: int = 1) -> Optional[int]:
         debug_log(f"Error finding chat_id {chat_id} in sheet: {e}")
         return None
 
-# ניקוי cache מיותר כל דקה
-def _cache_cleanup_thread():
+# ניקוי cache מיותר כל דקה - async version
+import asyncio
+
+async def _cache_cleanup_async():
+    """ניקוי cache אסינכרוני כדי לא לחסום את event loop"""
     while True:
-        time.sleep(60)  # דקה
         try:
+            await asyncio.sleep(60)  # דקה - non-blocking
             _cleanup_expired_cache()
+        except asyncio.CancelledError:
+            debug_log("Cache cleanup task cancelled")
+            break
         except Exception as e:
             debug_log(f"Error in cache cleanup: {e}")
 
-# הפעלת thread לניקוי cache
-cleanup_thread = threading.Thread(target=_cache_cleanup_thread, daemon=True)
-cleanup_thread.start()
+# יצירת task לניקוי cache (lazy initialization)
+_cleanup_task = None
+
+def _ensure_cleanup_task_started():
+    """מתחיל את ה-cleanup task אם הוא לא רץ כבר"""
+    global _cleanup_task
+    try:
+        if _cleanup_task is None or _cleanup_task.done():
+            loop = asyncio.get_running_loop()
+            if loop and not loop.is_closed():
+                _cleanup_task = asyncio.create_task(_cache_cleanup_async())
+                debug_log("Started async cache cleanup task")
+    except RuntimeError:
+        # אין event loop פעיל - נדחה את ההתחלה
+        debug_log("No event loop available for cache cleanup task")
+    except Exception as e:
+        debug_log(f"Error starting cache cleanup task: {e}")
+
+# מתחיל את ה-cleanup task בפעם הראשונה שהמודול נטען (אם יש event loop)
+try:
+    _ensure_cleanup_task_started()
+except Exception:
+    # אם זה נכשל, ננסה שוב מאוחר יותר
+    pass
 
 def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
     """
@@ -241,6 +268,9 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
     מחזיר: {"status": "approved"/"pending"/"not_found", "code": "קוד או None"}
     """
     try:
+        # מוודא שה-cleanup task רץ
+        _ensure_cleanup_task_started()
+        
         chat_id = validate_chat_id(chat_id)
         
         # בדיקת critical cache קודם (הרשאות נשמרות יותר זמן)
@@ -624,12 +654,25 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
                 else:
                     state[field_name] = ""
         
-        # טיפול מיוחד ב-profile_data (JSON)
+        # טיפול מיוחד ב-profile_data (JSON) עם לוגים מפורטים
         if state["profile_data"]:
             try:
-                state["profile_data"] = json.loads(state["profile_data"])
-            except json.JSONDecodeError:
-                debug_log(f"Invalid JSON in profile_data for user {chat_id}")
+                profile_data_str = state["profile_data"].strip()
+                if profile_data_str.startswith("{") and profile_data_str.endswith("}"):
+                    parsed_data = json.loads(profile_data_str)
+                    if isinstance(parsed_data, dict):
+                        state["profile_data"] = parsed_data
+                    else:
+                        debug_log(f"Profile data parsed but not a dict for user {chat_id}: {type(parsed_data)}")
+                        state["profile_data"] = {}
+                else:
+                    debug_log(f"Profile data doesn't look like JSON for user {chat_id}: {profile_data_str[:100]}...")
+                    state["profile_data"] = {}
+            except json.JSONDecodeError as e:
+                debug_log(f"JSON decode error in profile_data for user {chat_id}: {e} | Data: {state['profile_data'][:200]}...")
+                state["profile_data"] = {}
+            except Exception as e:
+                debug_log(f"Unexpected error parsing profile_data for user {chat_id}: {e} | Data: {state['profile_data'][:200]}...")
                 state["profile_data"] = {}
         else:
             state["profile_data"] = {}
