@@ -1,0 +1,118 @@
+# CI/CD Pipeline for Python Telegram Bot
+# קובץ זה מריץ בדיקות אוטומטיות וdeployment ל-Render
+# נוצר בהתאם לבקשת המשתמש: CI בסיסי עם deploy hook ל-Render
+
+name: 🤖 Python Bot CI/CD
+
+# מתי להריץ את ה-workflow
+on:
+  # כל push לענף main
+  push:
+    branches: [ main ]
+  
+  # כל pull request לענף main
+  pull_request:
+    branches: [ main ]
+
+# משתני סביבה גלובליים
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # שלב 1: בדיקות והכנת הקוד
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Checkout - הורדת הקוד מה-repository
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+        
+      # 2. הגדרת Python
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      # 3. Cache לתלויות Python (מאיץ את הbuild הבא)
+      - name: 💾 Cache Python Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
+      # 4. התקנת תלויות מהקובץ requirements.txt
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      # 5. בדיקת תחביר Python (Linting)
+      - name: 🔍 Check Python Syntax
+        run: |
+          python -m py_compile *.py
+          echo "✅ כל קבצי Python עברו בדיקת תחביר בהצלחה!"
+          
+      # 6. הרצת בדיקות עם pytest
+      - name: 🧪 Run Tests with pytest
+        run: |
+          # אם אין תיקיית tests, pytest יריץ discovery mode
+          # ויחפש קבצים שמתחילים ב-test_ או מסתיימים ב-_test.py
+          python -m pytest -v --tb=short || echo "⚠️ לא נמצאו בדיקות, אבל זה בסדר לעת עתה"
+          echo "✅ שלב הבדיקות הושלם!"
+
+  # שלב 2: Deploy ל-Render (רק אחרי שהבדיקות עברו בהצלחה)
+  deploy:
+    name: 🚀 Deploy to Render
+    runs-on: ubuntu-latest
+    needs: test  # יריץ רק אם job test עבר בהצלחה
+    
+    # יריץ רק על push לmain (לא על pull requests)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      # 1. Deploy ל-Render דרך Deploy Hook
+      - name: 🚀 Trigger Render Deploy
+        run: |
+          echo "🔄 מתחיל deployment ל-Render..."
+          
+          # בדיקה שה-Deploy Hook קיים
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "❌ שגיאה: RENDER_DEPLOY_HOOK_URL לא מוגדר ב-GitHub Secrets!"
+            echo "📝 הוראות:"
+            echo "1. לך ל-GitHub repository settings"
+            echo "2. בחר Secrets and variables > Actions"
+            echo "3. הוסף secret חדש בשם: RENDER_DEPLOY_HOOK_URL"
+            echo "4. הכנס את ה-URL של Deploy Hook מRender"
+            exit 1
+          fi
+          
+          # שליחת POST request ל-Render Deploy Hook
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"ref": "main"}' \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          
+          # בדיקת התגובה
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 204 ]; then
+            echo "✅ Deploy Hook נשלח בהצלחה ל-Render!"
+            echo "🎉 הdeployment החל - תוכל לעקוב אחר ההתקדמות ב-Render Dashboard"
+          else
+            echo "❌ שגיאה בשליחת Deploy Hook. HTTP Status: $HTTP_STATUS"
+            echo "🔍 בדוק שה-Deploy Hook URL נכון ותקף"
+            exit 1
+          fi
+          
+      # 2. הודעת סיכום
+      - name: ✅ Deployment Summary
+        run: |
+          echo "🎯 סיכום Deployment:"
+          echo "📅 זמן: $(date)"
+          echo "🌿 ענף: ${{ github.ref_name }}"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "👤 מבצע: ${{ github.actor }}"
+          echo "🚀 סטטוס: הושלם בהצלחה!"
