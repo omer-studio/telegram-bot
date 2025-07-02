@@ -52,6 +52,7 @@ from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
 from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
 from bot_setup import setup_bot
 from message_handler import handle_message
 import os
@@ -102,44 +103,12 @@ class DummyContext:
         self.bot_data = bot_data
         self.bot = get_bot_app().bot  # הוספת גישה לבוט
 
-app_fastapi = FastAPI()
-
-# הוספת app_fastapi כדי שיהיה זמין ל-uvicorn
-__all__ = ['app_fastapi']
-
-@app_fastapi.post("/webhook")
-async def webhook(request: Request):
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    נקודת הכניסה של FastAPI לכל הודעה מהטלגרם (webhook).
-    קולט עדכון, יוצר Update, ומעביר ל-handle_message.
+    פונקציית אתחול ויציאה של FastAPI — בודקת תקינות, שולחת התראה אם יש בעיה, ומגדירה webhook בטלגרם.
     """
-    try:
-        data = await request.json()
-        app = get_bot_app()
-        update = Update.de_json(data, app.bot)
-        context = DummyContext(app.bot_data)
-        if update.message:
-            await handle_message(update, context)
-        else:
-            print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
-        return {"ok": True}
-    except Exception as ex:
-        print(f"❌ שגיאה ב-webhook: {ex}")
-        # ✅ תמיד מחזיר HTTP 200 לטלגרם!
-        return {"ok": False, "error": str(ex)}
-
-@app_fastapi.get("/")
-def root():
-    """
-    בדיקת חיים (health check) לשרת FastAPI.
-    """
-    return {"status": "ok"}
-
-@app_fastapi.on_event("startup")
-async def on_startup():
-    """
-    פונקציית אתחול שרת — בודקת תקינות, שולחת התראה אם יש בעיה, ומגדירה webhook בטלגרם אם צריך.
-    """
+    # Startup logic
     from utils import health_check
     from notifications import send_error_notification, send_recovery_messages_to_affected_users
     
@@ -215,6 +184,46 @@ async def on_startup():
     print('✅ הודעות התאוששות נשלחו (אם היו נחוצות)')
     print('✅ המערכת מוכנה לקבלת הודעות!')
     print('='*80)
+    
+    yield  # כאן האפליקציה רצה
+    
+    # Shutdown logic (אם נדרש בעתיד)
+    print("🔄 FastAPI נכבה...")
+
+app_fastapi = FastAPI(lifespan=lifespan)
+
+# הוספת app_fastapi כדי שיהיה זמין ל-uvicorn
+__all__ = ['app_fastapi']
+
+@app_fastapi.post("/webhook")
+async def webhook(request: Request):
+    """
+    נקודת הכניסה של FastAPI לכל הודעה מהטלגרם (webhook).
+    קולט עדכון, יוצר Update, ומעביר ל-handle_message.
+    """
+    try:
+        data = await request.json()
+        app = get_bot_app()
+        update = Update.de_json(data, app.bot)
+        context = DummyContext(app.bot_data)
+        if update.message:
+            await handle_message(update, context)
+        else:
+            print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
+        return {"ok": True}
+    except Exception as ex:
+        print(f"❌ שגיאה ב-webhook: {ex}")
+        # ✅ תמיד מחזיר HTTP 200 לטלגרם!
+        return {"ok": False, "error": str(ex)}
+
+@app_fastapi.get("/")
+def root():
+    """
+    בדיקת חיים (health check) לשרת FastAPI.
+    """
+    return {"status": "ok"}
+
+
 
 async def main():
     """
@@ -234,10 +243,17 @@ if __name__ == "__main__":
         def do_GET(self):
             if self.path.startswith("/data/gpt_c_results.html") or self.path == "/":
                 # Serve the HTML file
+                html_file_path = os.path.join(DATA_DIR, "gpt_c_results.html")
+                
+                # אם הקובץ לא קיים, צור אותו מראש
+                if not os.path.exists(html_file_path):
+                    from gpt_c_logger import clear_gpt_c_html_log
+                    clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
+                
                 self.send_response(200)
                 self.send_header("Content-type", "text/html; charset=utf-8")
                 self.end_headers()
-                with open(os.path.join(DATA_DIR, "gpt_c_results.html"), "rb") as f:
+                with open(html_file_path, "rb") as f:
                     self.wfile.write(f.read())
             else:
                 super().do_GET()
