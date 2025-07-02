@@ -303,6 +303,15 @@ def get_user_stats(chat_id: str) -> dict:
 # 🕒 Context & greeting helpers
 # ---------------------------------------------------------------------------
 
+def is_active_hours() -> bool:
+    """בודק אם השעה הנוכחית בשעות פעילות (07:00-22:00) לשליחת הודעות."""
+    try:
+        current_hour = utils.get_israel_time().hour
+        return 7 <= current_hour <= 22
+    except Exception as e:
+        logging.error(f"שגיאה בבדיקת שעות פעילות: {e}")
+        return True  # במקרה של שגיאה, נניח שזה שעות פעילות
+
 def create_human_context_for_gpt(chat_id: str) -> str:
     try:
         now = utils.get_israel_time()
@@ -353,7 +362,7 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
             if user_msg and any(word in user_msg for word in weekday_words):
                 smart_skip = True
             else:
-                # בדיקה אם כבר הוזכר יום שבוע היום (במשתמש או בבוט)
+                # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
                 try:
                     with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
                         history_data = json.load(f)
@@ -375,12 +384,10 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
                     if entry_dt < start_of_day:
                         break
                     
-                    # בדיקה גם בהודעת המשתמש וגם בהודעת הבוט
-                    user_content = entry.get("user", "")
+                    # בדיקה רק בהודעות הבוט (לא המשתמש)
                     bot_content = entry.get("bot", "")
                     
-                    if any(word in user_content for word in weekday_words) or \
-                       any(word in bot_content for word in weekday_words):
+                    if any(word in bot_content for word in weekday_words):
                         smart_skip = True
                         break
 
@@ -412,9 +419,8 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
 
 def get_holiday_system_message(chat_id: str, bot_reply: str = "") -> str:
     try:
-        # בדיקת שעות פעילות - חגים נשלחים רק בין 07:00-22:00
-        current_hour = utils.get_israel_time().hour
-        if not (7 <= current_hour <= 22):
+        # בדיקת שעות פעילות - חגים נשלחים רק בשעות פעילות
+        if not is_active_hours():
             return ""
         
         from sheets_core import get_user_profile_data  # noqa – late import to avoid cycles
