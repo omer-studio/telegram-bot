@@ -33,7 +33,7 @@ from sheets_handler import increment_code_try, get_user_summary, update_user_pro
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
-from gpt_d_handler import smart_update_profile_with_gpt_d
+from gpt_d_handler import smart_update_profile_with_gpt_d, smart_update_profile_with_gpt_d_async
 from gpt_utils import normalize_usage_dict
 from fields_dict import FIELDS_DICT
 from gpt_e_handler import execute_gpt_e_if_needed
@@ -752,19 +752,25 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
         # רשימת משימות לביצוע במקביל
         tasks = []
         
-        # GPT-C - עדכון פרופיל משתמש
+        # GPT-C - עדכון פרופיל משתמש (sync function, run separately)
+        gpt_c_task = None
         if should_run_gpt_c(user_msg):
-            tasks.append(extract_user_info(chat_id, user_msg))
+            gpt_c_task = asyncio.create_task(asyncio.to_thread(extract_user_info, user_msg, chat_id))
             
         # GPT-D - עדכון חכם של פרופיל
-        tasks.append(smart_update_profile_with_gpt_d(chat_id, user_msg, bot_reply))
+        tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply))
         
         # GPT-E - אימוג'ים ותכונות מתקדמות
         tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
         
         # הפעלה במקביל של כל התהליכים
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        all_tasks = []
+        if gpt_c_task:
+            all_tasks.append(gpt_c_task)
+        all_tasks.extend(tasks)
+        
+        if all_tasks:
+            await asyncio.gather(*all_tasks, return_exceptions=True)
             
     except Exception as e:
         logging.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}")
@@ -811,100 +817,6 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         
         # הפניה להליך רישום
         await handle_new_user_background(update, context, chat_id, user_msg)
-        summary_response, new_summary_for_history = summary_result if summary_result else (None, None)
-        gpt_c_usage, gpt_d_usage, gpt_e_result = profile_result if profile_result else ({}, {}, None)
-        
-        # עדכון היסטוריה (אחרי שיש לנו את הסיכום)
-        update_last_bot_message(chat_id, new_summary_for_history or bot_reply)
-
-        # שמירת לוגים ונתונים נוספים
-        # נירמול ה-usage לפני השמירה ב-log
-        clean_gpt_response = {k: v for k, v in gpt_response.items() if k != "bot_reply"}
-        if "usage" in clean_gpt_response:
-            clean_gpt_response["usage"] = normalize_usage_dict(clean_gpt_response["usage"], gpt_response.get("model", ""))
-        
-        log_payload.update({
-            "gpt_a_response": bot_reply,
-            "gpt_a_usage": clean_gpt_response,
-            "timestamp_end": get_israel_time().isoformat()
-        })
-        
-        # רישום לגיליון Google Sheets
-        try:
-            from config import GPT_MODELS
-            
-            # חילוץ נתונים מ-gpt_response
-            gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", GPT_MODELS["gpt_a"]))
-            
-            # חילוץ נתונים מ-summary_response (עם בדיקת None)
-            gpt_b_usage = summary_response.get("usage", {}) if summary_response else {}
-            if not gpt_b_usage and summary_response:
-                gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", GPT_MODELS["gpt_b"]))
-            
-            # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
-            gpt_c_usage = log_payload.get("gpt_c_data", {})
-            
-            # חילוץ נתונים מ-gpt_e_result (עם בדיקת None)
-            gpt_e_usage = {}
-            if gpt_e_result and gpt_e_result.get("cost_data"):
-                gpt_e_usage = gpt_e_result["cost_data"]
-            
-            # חישוב סכומים
-            total_tokens_calc = (
-                gpt_a_usage.get("total_tokens", 0) + 
-                gpt_b_usage.get("total_tokens", 0) + 
-                gpt_c_usage.get("total_tokens", 0) +
-                (gpt_d_usage.get("total_tokens", 0) if gpt_d_usage else 0) +
-                (gpt_e_usage.get("total_tokens", 0) if gpt_e_usage else 0)
-            )
-            
-            total_cost_usd_calc = (
-                gpt_a_usage.get("cost_total", 0) + 
-                gpt_b_usage.get("cost_total", 0) + 
-                gpt_c_usage.get("cost_total", 0) +
-                (gpt_d_usage.get("cost_total", 0) if gpt_d_usage else 0) +
-                (gpt_e_usage.get("cost_total", 0) if gpt_e_usage else 0)
-            )
-            
-            total_cost_ils_calc = (
-                gpt_a_usage.get("cost_total_ils", 0) + 
-                gpt_b_usage.get("cost_total_ils", 0) + 
-                gpt_c_usage.get("cost_total_ils", 0) +
-                (gpt_d_usage.get("cost_total_ils", 0) if gpt_d_usage else 0) +
-                (gpt_e_usage.get("cost_total_ils", 0) if gpt_e_usage else 0)
-            )
-            
-            # דיבאג רזה ומלא מידע
-            print(f"[DEBUG] msg={message_id} | user='{user_msg[:35]}{'...' if len(user_msg) > 35 else ''}' | bot='{bot_reply[:35]}{'...' if len(bot_reply) > 35 else ''}' | summary='{(new_summary_for_history[:35] if new_summary_for_history else '') + ('...' if new_summary_for_history and len(new_summary_for_history) > 35 else '')}' | tokens={total_tokens_calc} | cost=${total_cost_usd_calc:.4f} | chat={chat_id}")
-            
-            # קריאה ל-log_to_sheets (async)
-            await log_to_sheets(
-                message_id=message_id,
-                chat_id=chat_id,
-                user_msg=user_msg,
-                reply_text=bot_reply,
-                reply_summary=new_summary_for_history or "",
-                main_usage=gpt_a_usage,
-                summary_usage=gpt_b_usage,
-                extract_usage=gpt_c_usage,
-                total_tokens=total_tokens_calc,
-                cost_usd=total_cost_usd_calc,
-                cost_ils=total_cost_ils_calc,
-                gpt_d_usage=gpt_d_usage,
-                gpt_e_usage=gpt_e_usage
-            )
-            
-            # כתיבה ללוג קובץ לדוח היומי
-            from sheets_advanced import log_gpt_usage_to_file
-            log_gpt_usage_to_file(message_id, chat_id, gpt_a_usage, gpt_b_usage, gpt_c_usage, gpt_d_usage, gpt_e_usage, total_cost_ils_calc)
-        except Exception as e:
-            print(f"[ERROR] שגיאה ב-log_to_sheets: {e}")
-            logging.error(f"Error in log_to_sheets: {e}")
-        
-        log_event_to_file(log_payload)
-        logging.info("✅ סיום טיפול בהודעה")
-        print("✅ סיום טיפול בהודעה")
-        print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
