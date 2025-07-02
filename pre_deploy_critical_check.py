@@ -137,14 +137,15 @@ def check_critical_configuration():
 
 def check_gpt_a_basic_functionality():
     """
-    בודק שGPT-A עובד בסיסית (בלי לשלוח בקשות אמיתיות)
+    🚨 בודק שGPT-A עובד **באמת** - הכי חשוב!
     
     Returns:
         tuple: (success: bool, errors: list)
     """
     errors = []
     
-    print("🔍 בודק תפקוד בסיסי של GPT-A...")
+    print("🔍 בודק תפקוד **אמיתי** של GPT-A...")
+    print("🚨 זו הבדיקה הכי חשובה - אם GPT-A לא עובד, אסור לפרוס!")
     
     try:
         # ייבוא lazy_litellm
@@ -156,22 +157,73 @@ def check_gpt_a_basic_functionality():
             print("✅ litellm.completion - קיים")
         else:
             errors.append("❌ litellm.completion לא קיים")
+            return False, errors
         
         # ייבוא gpt_a_handler
         from gpt_a_handler import get_main_response_sync
         print("✅ gpt_a_handler.get_main_response_sync - יובא בהצלחה")
         
-        # בדיקה שפרמטרים בסיסיים עובדים (בלי לקרוא לGPT)
-        test_messages = [
-            {"role": "system", "content": "test"},
-            {"role": "user", "content": "test"}
-        ]
+        # 🚨 בדיקה אמיתית של GPT-A - הכי חשוב!
+        print("🧪 מבצע קריאה אמיתית ל-GPT-A...")
+        print("⏱️ יש timeout של 30 שניות למקרה שGPT-A לא מגיב...")
         
-        # זה לא באמת יקרא לGPT כי אין טוקן אמיתי בבדיקה, אבל יבדוק את הפורמט
-        print("✅ פורמט הודעות GPT - תקין")
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("GPT-A timeout - לא הגיב תוך 30 שניות")
+        
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(30)  # 30 שניות timeout
+        
+        try:
+            test_messages = [
+                {"role": "system", "content": "אתה בוט עוזר. תענה רק 'בדיקה עברה' בלי שום דבר נוסף."},
+                {"role": "user", "content": "היי"}
+            ]
+            
+            # קריאה אמיתית ל-GPT-A!
+            result = get_main_response_sync(
+                test_messages, 
+                "pre_deploy_test", 
+                "pre_deploy_test", 
+                False, 
+                "health_check", 
+                "pre_deploy_test"
+            )
+            
+            if not result:
+                errors.append("❌ GPT-A לא מחזיר תוצאה כלל!")
+                return False, errors
+            
+            if not result.get("bot_reply"):
+                errors.append("❌ GPT-A לא מחזיר bot_reply!")
+                return False, errors
+            
+            bot_reply = result.get("bot_reply", "").strip()
+            
+            if len(bot_reply) < 3:
+                errors.append(f"❌ GPT-A מחזיר תשובה קצרה מדי: '{bot_reply}'")
+                return False, errors
+            
+            if "error" in bot_reply.lower() or "שגיאה" in bot_reply.lower():
+                errors.append(f"❌ GPT-A מחזיר תשובת שגיאה: '{bot_reply}'")
+                return False, errors
+            
+            print(f"✅ GPT-A עובד אמיתית! תשובה: '{bot_reply[:50]}...'")
+            print("🎉 הבדיקה הכי חשובה עברה!")
+            print("✅ המשתמשים יוכלו לקבל תשובות מהבוט!")
+            
+        except TimeoutError as timeout_error:
+            errors.append(f"❌ GPT-A timeout - לא הגיב תוך 30 שניות: {timeout_error}")
+            return False, errors
+        except Exception as gpt_test_error:
+            errors.append(f"❌ קריאה אמיתית ל-GPT-A נכשלה: {gpt_test_error}")
+            return False, errors
+        finally:
+            signal.alarm(0)  # ביטול timeout
         
     except Exception as e:
-        errors.append(f"❌ שגיאה בבדיקת GPT-A: {e}")
+        errors.append(f"❌ שגיאה כללית בבדיקת GPT-A: {e}")
     
     return len(errors) == 0, errors
 
@@ -288,16 +340,19 @@ def main():
     print("🚨" + "=" * 50)
     print("🚨 בדיקה קריטית לפני DEPLOY")
     print("🚨" + "=" * 50)
+    print("🚨 הבדיקה הכי חשובה: GPT-A צריך לעבוד!")
+    print("🚨 אם GPT-A נכשל - המשתמשים לא יקבלו תשובות!")
+    print("🚨" + "=" * 50)
     print()
     
     all_passed = True
     all_errors = []
     
-    # רשימת כל הבדיקות
+    # רשימת כל הבדיקות - GPT-A ראשון כי הוא הכי חשוב!
     checks = [
+        ("🚨 GPT-A אמיתי (הכי חשוב!)", check_gpt_a_basic_functionality),
         ("Syntax ויבוא קבצים", check_syntax_and_imports),
         ("הגדרות קריטיות", check_critical_configuration),
-        ("תפקוד GPT-A בסיסי", check_gpt_a_basic_functionality),
         ("מערכת התראות", check_notifications_system),
         ("תיקון פרמטר 'store'", check_store_parameter_fix),
         ("תיקון הודעות כפולות", check_single_error_message_fix),
@@ -313,10 +368,21 @@ def main():
             
             if success:
                 print(f"✅ {check_name} - עבר בהצלחה!")
+                
+                # התראה מיוחדת כשGPT-A עובר
+                if "GPT-A" in check_name:
+                    print("🎉🎉🎉 GPT-A עובד! זה הכי חשוב! 🎉🎉🎉")
             else:
                 print(f"❌ {check_name} - נכשל!")
                 all_passed = False
                 all_errors.extend(errors)
+                
+                # התראה חמורה אם GPT-A נכשל
+                if "GPT-A" in check_name:
+                    print("🚨" * 20)
+                    print("🚨 GPT-A לא עובד - זה קריטי ביותר!")
+                    print("🚨 אסור לפרוס עד שGPT-A יעבוד!")
+                    print("🚨" * 20)
                 
                 # הצגת השגיאות
                 for error in errors:
@@ -332,14 +398,29 @@ def main():
     if all_passed:
         print("🎉 כל הבדיקות עברו בהצלחה!")
         print("✅ בטוח לבצע DEPLOY!")
+        print("✅ GPT-A עובד - זה הכי חשוב!")
         print("🚀 המשיכו לפריסה...")
     else:
-        print("🚨 יש בעיות קריטיות!")
-        print("❌ אסור לבצע DEPLOY!")
+        # בדיקה מיוחדת אם GPT-A נכשל
+        gpt_a_failed = any("GPT-A" in error for error in all_errors)
+        
+        if gpt_a_failed:
+            print("🚨" * 25)
+            print("🚨 GPT-A לא עובד - זה הכי חמור!")
+            print("🚨 המשתמשים לא יקבלו תשובות!")
+            print("🚨 אסור לפרוס בשום מצב!")
+            print("🚨" * 25)
+        else:
+            print("🚨 יש בעיות קריטיות!")
+            print("❌ אסור לבצע DEPLOY!")
+        
         print("🛠️ תקנו את הבעיות לפני פריסה:")
         print()
         for i, error in enumerate(all_errors, 1):
-            print(f"{i}. {error}")
+            if "GPT-A" in error:
+                print(f"🚨 {i}. {error}")  # מסמן GPT-A באדום
+            else:
+                print(f"{i}. {error}")
         print()
         print("🔄 הריצו שוב את הבדיקה אחרי התיקונים")
     
