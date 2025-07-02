@@ -571,12 +571,92 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
         try:
+            # --- יצירת רשומה בהיסטוריה מראש ---
+            # מונע מצב הודעה כפולה לפני שמירת תשובת GPT,
+            # וכך נמנע שליחת ברכת "בוקר/לילה טוב" כפולה (Race-condition).
+            history_entry_created = False
+            try:
+                update_chat_history(chat_id, user_msg, "")
+                history_entry_created = True
+            except Exception as hist_err:
+                logging.warning(f"[HISTORY] לא הצלחתי ליצור רשומת היסטוריה מוקדמת: {hist_err}")
+
+            # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
+            current_summary = get_user_summary(chat_id) or ""
+            history_messages = get_chat_history_messages(chat_id, limit=15)  # 🔧 הגבלה ל-15 הודעות לחסוך בטוקנים
+            
+            # יצירת טיימסטמפ והנחיות יום השבוע
+            from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
+            from utils import should_send_time_greeting
+            
+            # ברכה מותאמת זמן נשלחת לפי תנאים (שיחה ראשונה, הודעת ברכה, החלפת בלוק זמן)
+            greeting_instruction = ""
+            weekday_instruction = ""
+            
+            try:
+                if should_send_time_greeting(chat_id, user_msg):
+                    # שליחת הנחיות ברכת זמן ויום שבוע
+                    weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
+                    greeting_instruction = get_time_greeting_instruction()
+                    print(f"[GREETING_DEBUG] שולח ברכה + יום שבוע עבור chat_id={chat_id}")
+                else:
+                    print(f"[GREETING_DEBUG] לא שולח ברכה עבור chat_id={chat_id} - המשך שיחה רגיל")
+            except Exception as greet_err:
+                logging.warning(f"[GREETING] שגיאה בהערכת greeting: {greet_err}")
+            
+            # בניית ההודעות ל-gpt_a
+            messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
+            
+            # 🔍 [DEBUG] הודעת ראשי SYSTEM_PROMPT
+            print(f"\n🔍 [MESSAGE_BUILD_DEBUG] === BUILDING MESSAGES FOR GPT ===")
+            print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
+            
+            # הוספת ברכת זמן אם יש
+            if greeting_instruction:
+                messages_for_gpt.append({"role": "system", "content": greeting_instruction})
+                print(f"🎯 [SYSTEM_2] TIME GREETING - Content: {greeting_instruction}")
+            
+            if weekday_instruction:
+                messages_for_gpt.append({"role": "system", "content": weekday_instruction})
+                print(f"🎯 [SYSTEM_3] WEEKDAY - Content: {weekday_instruction}")
+            
+            # הוספת הודעת חגים אם רלוונטי
+            from chat_utils import get_holiday_system_message
+            holiday_instruction = get_holiday_system_message(str(chat_id))
+            if holiday_instruction:
+                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
+                print(f"🎯 [SYSTEM_4] HOLIDAY - Content: {holiday_instruction}")
+            
+            # הוספת שדות חסרים אם יש
+            from gpt_a_handler import create_missing_fields_system_message
+            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
+            if missing_fields_instruction:
+                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
+                print(f"🎯 [SYSTEM_5] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
+            
+            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
+            messages_for_gpt.extend(history_messages)
+            
+            # ⭐ הוספת המידע על המשתמש ממש בסוף - לפני ההודעה החדשה בלבד
+            if current_summary:
+                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
+
+{current_summary}
+
+⚠️ **הנחיות חשובות לשימוש במידע:**
+• השתמש רק במידע שהמשתמש באמת סיפר לך - אל תמציא או תוסיף דברים
+• תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
+• התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
+• זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""})
+                print(f"🎯 [SYSTEM_6] USER SUMMARY (PRE-MESSAGE) - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
+                print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
+            
             # הוספת ההודעה החדשה עם טיימסטמפ באותו פורמט כמו בהיסטוריה
             from chat_utils import _format_timestamp_for_history
             import utils
             current_timestamp = _format_timestamp_for_history(utils.get_israel_time().isoformat())
             user_msg_with_timestamp = f"{current_timestamp} {user_msg}" if current_timestamp else user_msg
-            messages_for_gpt = [{"role": "user", "content": user_msg_with_timestamp}]
+            messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
             print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {current_timestamp}")
             print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
             print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
