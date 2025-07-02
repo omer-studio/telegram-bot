@@ -146,6 +146,7 @@ def setup_daily_reports():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(send_daily_summary())
+            loop.close()
             print("✅ [DAILY] דוח באתחול נשלח בהצלחה!")
             print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
         except Exception as e:
@@ -164,11 +165,8 @@ def setup_daily_reports():
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח מתוזמן: {e}")
     
-    # הגדרת תזמון
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(scheduled_daily_report, 'cron', hour=8, minute=0, timezone=pytz.timezone("Europe/Berlin"))
-    scheduler.start()
-    print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
+    # הגדרת תזמון מבוצעת ב-bot_setup.py במסגרת המתזמן המרכזי
+    print("ℹ️ [DAILY] תזמון יומי מנוהל ב-bot_setup.py")
     
     # הפעל דוח מיידי
     threading.Thread(target=startup_report, daemon=True).start()

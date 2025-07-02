@@ -408,7 +408,15 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
 
     # הוספת תזמון סיכום יומי
     def add_daily_summary_job():
-        scheduler.add_job(lambda: send_daily_summary(days_back=1), 'cron', hour=8, minute=0)  #לא למחוק!! דוח כספים יומי על אתמול לא למחוק לעולם לא משנה מה
+        def run_daily_summary():
+            """Wrapper פונקציה שמריצה את הפונקציה async בצורה נכונה"""
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(send_daily_summary(days_back=1))
+            loop.close()
+        
+        scheduler.add_job(run_daily_summary, 'cron', hour=8, minute=0)  #לא למחוק!! דוח כספים יומי על אתמול לא למחוק לעולם לא משנה מה
         return "תזמון סיכום יומי נוסף"
     
     time_scheduler_step("הוספת תזמון סיכום יומי", add_daily_summary_job)
