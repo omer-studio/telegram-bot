@@ -54,7 +54,7 @@ from utils import log_event_to_file, update_chat_history, get_chat_history_messa
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from apscheduler.schedulers.background import BackgroundScheduler
-from daily_summary import send_daily_summary
+from daily_summary import send_daily_summary, send_test_daily_summary
 import pytz
 from message_handler import handle_message
 from notifications import gentle_reminder_background_task
@@ -420,6 +420,23 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
         return "תזמון סיכום יומי נוסף"
     
     time_scheduler_step("הוספת תזמון סיכום יומי", add_daily_summary_job)
+
+    # 🧪 הוספת תזמון דוח בדיקה זמני (כל 5 דקות למשך השעה הקרובה)
+    # ⚠️ להסיר אחרי הבדיקה! זה רק לבדוק שהמתזמן עובד
+    def add_test_summary_job():
+        def run_test_summary():
+            """Wrapper פונקציה שמריצה דוח בדיקה"""
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(send_test_daily_summary())
+            loop.close()
+        
+        # תזמון כל 5 דקות למשך השעה הקרובה (12 פעמים)
+        scheduler.add_job(run_test_summary, 'interval', minutes=5, max_instances=12)
+        return "תזמון דוח בדיקה זמני נוסף (כל 5 דקות)"
+    
+    time_scheduler_step("הוספת תזמון דוח בדיקה זמני", add_test_summary_job)
 
     # הפעלת המתזמן
     def start_scheduler():
