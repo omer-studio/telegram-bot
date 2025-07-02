@@ -207,17 +207,6 @@ async def _send_user_friendly_error_message(update, chat_id: str, original_messa
         )
         
         if update and hasattr(update, 'message') and hasattr(update.message, 'reply_text'):
-            # 🐛 DEBUG: שליחה בלי פורמטינג!
-            print("=" * 80)
-            print("🚨 WARNING: SENDING MESSAGE WITHOUT FORMATTING!")
-            print("=" * 80)
-            print(f"📝 MESSAGE: {repr(user_friendly_message)}")
-            print(f"📊 LENGTH: {len(user_friendly_message)} chars")
-            print(f"📊 NEWLINES: {user_friendly_message.count(chr(10))}")
-            print(f"📊 DOTS: {user_friendly_message.count('.')}")
-            print(f"📊 QUESTIONS: {user_friendly_message.count('?')}")
-            print(f"📊 EXCLAMATIONS: {user_friendly_message.count('!')}")
-            print("=" * 80)
             from message_handler import send_system_message
             await send_system_message(update, chat_id, user_friendly_message)
         else:
