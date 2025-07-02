@@ -165,11 +165,8 @@ def setup_daily_reports():
         except Exception as e:
             print(f"❌ [DAILY] שגיאה בדוח מתוזמן: {e}")
     
-    # הגדרת תזמון
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(scheduled_daily_report, 'cron', hour=8, minute=0, timezone=pytz.timezone("Europe/Berlin"))
-    scheduler.start()
-    print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
+    # הגדרת תזמון מבוצעת ב-bot_setup.py במסגרת המתזמן המרכזי
+    print("ℹ️ [DAILY] תזמון יומי מנוהל ב-bot_setup.py")
     
     # הפעל דוח מיידי
     threading.Thread(target=startup_report, daemon=True).start()
