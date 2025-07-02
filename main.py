@@ -88,13 +88,15 @@ def get_bot_app():
         print("ℹ️  זוהה deploy חדש ברנדר - ממתין להשלמת deployment...")
         time.sleep(5)  # ממתין קצת שהdeployment יסתיים
     
-    if not _bot_setup_completed:
+    # 🔧 תיקון: תמיד עושה setup אם אין instance תקין, לא תלוי בflag
+    if _app_instance is None:
         print("🚀 מבצע setup ראשוני של הבוט...")
         _app_instance = setup_bot()
         _bot_setup_completed = True
         print("✅ Setup הבוט הושלם!")
-    else:
-        print("ℹ️  הבוט כבר הוגדר, מדלג על setup")
+    elif not _bot_setup_completed:
+        print("ℹ️  יש instance אבל הsetup לא הושלם, מסמן כהושלם")
+        _bot_setup_completed = True
     
     return _app_instance
 
@@ -247,7 +249,6 @@ if __name__ == "__main__":
                 
                 # אם הקובץ לא קיים, צור אותו מראש
                 if not os.path.exists(html_file_path):
-                    from gpt_c_logger import clear_gpt_c_html_log
                     clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
                 
                 self.send_response(200)
