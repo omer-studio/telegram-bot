@@ -280,8 +280,7 @@ def _send_admin_profile_overview_notification(
         lines: List[str] = [f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>"]
 
         if user_msg:
-            trimmed = user_msg.strip()[:100] + "..." if len(user_msg.strip()) > 100 else user_msg.strip()
-            lines.append(f"<i>{trimmed}</i>")
+            lines.append(f"<i>{user_msg.strip()}</i>")
 
         lines.append("")
         lines.append(f"<b>{gpt_c_info}</b>")
