@@ -412,6 +412,11 @@ def get_weekday_context_instruction(chat_id: str | None = None, user_msg: str | 
 
 def get_holiday_system_message(chat_id: str, bot_reply: str = "") -> str:
     try:
+        # בדיקת שעות פעילות - חגים נשלחים רק בין 07:00-22:00
+        current_hour = utils.get_israel_time().hour
+        if not (7 <= current_hour <= 22):
+            return ""
+        
         from sheets_core import get_user_profile_data  # noqa – late import to avoid cycles
         with open("special_events.json", "r", encoding="utf-8") as f:
             events = json.load(f)
