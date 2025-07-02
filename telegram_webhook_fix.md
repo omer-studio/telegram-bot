@@ -54,7 +54,7 @@ uvicorn.run(
 כ-8 בדצמבר 2024
 
 ## פרטי התיקון
-- הוסר שורת הבדיקה `if not request_data` שרמה לשגיאה כאשר בא JSON ריק
+- הוסר שורת הבדיקה `if not request_data` שגרמה לשגיאה כאשר בא JSON ריק
 - עכשיו הקוד מטפל גם ב-`{}` ובגוף ריק `None` בצורה תקינה
 
 ## תיקון נוסף: הודעות חוזרות בדוחות פריסה (9 בדצמבר 2024)
@@ -72,3 +72,24 @@ uvicorn.run(
 
 ### קבצים שהשתנו
 - `notifications.py` - הוסר הקוד החירום בשורות 269-284
+
+## תיקון נוסף: שגיאת log_to_sheets_async (9 בדצמבר 2024)
+
+### הבעיה
+שגיאה בטיפולים ברקע: `log_to_sheets_async() takes from 0 to 1 positional arguments but 4 were given`
+
+### הסיבה
+הפונקציה `log_to_sheets_async` מצפה לקבל פרמטרים בשם (keyword arguments) אבל נקראה עם 4 פרמטרים ללא שם.
+
+### התיקון
+- תוקנה הקריאה ל-`log_to_sheets` ב-`message_handler.py` שורה 715
+- הפרמטרים עודכנו להיות keyword arguments עם השמות הנכונים:
+  - `message_id`
+  - `chat_id` 
+  - `user_msg`
+  - `reply_text`
+  - `main_usage` (מהתשובה של GPT)
+  - פרמטרים נוספים עם ערכים ברירת מחדל
+
+### קבצים שהשתנו
+- `message_handler.py` - תוקנה הקריאה לפונקציית הלוגים בשורה 715
