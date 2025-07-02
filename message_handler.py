@@ -171,14 +171,17 @@ def format_text_for_telegram(text):
     # רצף של יותר מ־2 מעברי שורה → מצמצמים ל־2 בלבד
     text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # שורות שמכילות רק אימוג'ים → מחוברות לשורה שמעליה
+    # שורות שמכילות רק אימוג'ים או סימני שאלה בודדים → מחוברות לשורה שמעליה
     lines = text.split('\n')
     cleaned = []
     for i, line in enumerate(lines):
-        if emoji_pattern.fullmatch(line.strip()) and i > 0:
-            cleaned[-1] += ' ' + line.strip()
+        line_stripped = line.strip()
+        # אם זו שורה עם אימוג'י בלבד, או סימן שאלה בודד - מחבר לשורה קודמת
+        if ((emoji_pattern.fullmatch(line_stripped) or line_stripped == '?') and i > 0 and cleaned):
+            # מוסיף לשורה הקודמת במקום ליצור שורה נפרדת
+            cleaned[-1] += ' ' + line_stripped if line_stripped != '?' else '?'
         else:
-            cleaned.append(line.strip())
+            cleaned.append(line_stripped)
     text = '\n'.join(cleaned)
 
     # 🛠️ שלב 10 – DEBUG INFO
