@@ -241,7 +241,7 @@ async def webhook(request: Request):
         try:
             from notifications import safe_add_user_to_recovery_list
             if chat_id:
-                safe_add_user_to_recovery_list(str(chat_id), f"Webhook error: {str(ex)[:50]}")
+                safe_add_user_to_recovery_list(str(chat_id), f"Webhook error: {str(ex)[:50]}", user_msg or "")
         except Exception:
             pass  # אל תיכשל בגלל זה
         

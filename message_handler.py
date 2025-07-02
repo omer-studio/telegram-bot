@@ -487,7 +487,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 from notifications import safe_add_user_to_recovery_list
                 if 'chat_id' in locals():
-                    safe_add_user_to_recovery_list(str(chat_id), f"Message extraction error: {str(ex)[:50]}")
+                    # הערה: כאן אין הודעה מקורית כי השגיאה היא בextraction של ההודעה עצמה
+                    safe_add_user_to_recovery_list(str(chat_id), f"Message extraction error: {str(ex)[:50]}", "")
             except Exception:
                 pass
             

@@ -115,15 +115,23 @@ def _save_critical_error_users(users_data):
         except Exception as emergency_error:
             print(f"🚨 גם שמירת חירום נכשלה: {emergency_error}")
 
-def _add_user_to_critical_error_list(chat_id: str, error_message: str):
+def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_user_message: str = None):
     """מוסיף משתמש לרשימת מי שקיבל הודעת שגיאה קריטית"""
     try:
         users_data = _load_critical_error_users()
-        users_data[str(chat_id)] = {
+        user_data = {
             "timestamp": get_israel_time().isoformat(),
             "error_message": error_message,
             "recovered": False
         }
+        
+        # 🔧 הוספה: שמירת ההודעה המקורית של המשתמש אם קיימת
+        if original_user_message and len(original_user_message.strip()) > 0:
+            user_data["original_message"] = original_user_message.strip()
+            user_data["message_processed"] = False  # וידוא שהמענה יישלח פעם אחת בלבד
+            print(f"💾 נשמרה הודעה מקורית למשתמש {chat_id}: '{original_user_message[:50]}...'")
+        
+        users_data[str(chat_id)] = user_data
         _save_critical_error_users(users_data)
         logging.info(f"Added user {chat_id} to critical error list")
         print(f"✅ משתמש {chat_id} נוסף לרשימת המשתמשים הקריטיים")
@@ -133,16 +141,19 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str):
         
         # 🔧 תיקון: ניסיון לשמור לפחות ברשימה זמנית
         try:
+            temp_data = {
+                "timestamp": get_israel_time().isoformat(),
+                "error_message": error_message,
+                "recovered": False
+            }
+            if original_user_message:
+                temp_data["original_message"] = original_user_message.strip()
+                temp_data["message_processed"] = False
+                
             temp_file = f"data/temp_critical_user_{chat_id}_{int(time.time())}.json"
             os.makedirs("data", exist_ok=True)
             with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    str(chat_id): {
-                        "timestamp": get_israel_time().isoformat(),
-                        "error_message": error_message,
-                        "recovered": False
-                    }
-                }, f, ensure_ascii=False, indent=2)
+                json.dump({str(chat_id): temp_data}, f, ensure_ascii=False, indent=2)
             print(f"⚠️ נשמר משתמש {chat_id} בקובץ זמני: {temp_file}")
         except Exception as temp_error:
             print(f"🚨 גם שמירה זמנית נכשלה: {temp_error}")
@@ -152,31 +163,38 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str):
                     f"🚨 CRITICAL: נכשל ברישום משתמש {chat_id} לרשימת התאוששות!\n"
                     f"שגיאה: {e}\n"
                     f"הודעת שגיאה: {error_message[:100]}\n"
+                    f"הודעה מקורית: {(original_user_message or 'אין')[:100]}\n"
                     f"⚠️ המשתמש עלול לא לקבל הודעת התאוששות!",
                     urgent=True
                 )
             except Exception:
                 pass
 
-def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown error"):
+def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown error", original_message: str = ""):
     """
     🔧 פונקציה בטוחה לרישום משתמש לרשימת התאוששות
     נקראת בכל מקום שעלולה להיות שגיאה שמונעת מהמשתמש לקבל מענה
     """
     try:
         if chat_id:
-            _add_user_to_critical_error_list(str(chat_id), f"Safe recovery: {error_context}")
+            # העברת ההודעה המקורית רק אם היא לא ריקה
+            msg_to_save = original_message.strip() if original_message and original_message.strip() else None
+            _add_user_to_critical_error_list(str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
             print(f"🛡️ משתמש {chat_id} נוסף לרשימת התאוששות ({error_context})")
+            if msg_to_save:
+                print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
     except Exception as e:
         # גם אם הפונקציה הזו נכשלת - לא נעצור את הקוד
         print(f"⚠️ נכשל ברישום משתמש {chat_id} לרשימת התאוששות: {e}")
 
-async def _send_user_friendly_error_message(update, chat_id: str):
+async def _send_user_friendly_error_message(update, chat_id: str, original_message: str = None):
     """שולח הודעת שגיאה ידידותית למשתמש"""
     # 🔧 תיקון קריטי: רישום המשתמש לרשימה לפני ניסיון שליחת הודעה!
     try:
-        _add_user_to_critical_error_list(chat_id, "User-friendly error message attempt")
+        _add_user_to_critical_error_list(chat_id, "User-friendly error message attempt", original_message)
         print(f"✅ משתמש {chat_id} נרשם בבטחה לרשימת התאוששות")
+        if original_message:
+            print(f"💾 נשמרה הודעה מקורית: '{original_message[:50]}...'")
     except Exception as registration_error:
         print(f"🚨 CRITICAL: נכשל ברישום משתמש {chat_id} לרשימת התאוששות: {registration_error}")
         # גם אם נכשל ברישום - ננסה לפחות לשלוח הודעה
@@ -216,7 +234,7 @@ async def _send_user_friendly_error_message(update, chat_id: str):
         print(f"⚠️ שליחת הודעה נכשלה למשתמש {chat_id}, אבל המשתמש כבר נרשם לרשימת התאוששות")
         # 🔧 תיקון: ניסיון נוסף לרישום המשתמש אם השליחה נכשלה
         try:
-            _add_user_to_critical_error_list(chat_id, f"Message sending failed: {str(e)[:100]}")
+            _add_user_to_critical_error_list(chat_id, f"Message sending failed: {str(e)[:100]}", original_message)
         except Exception:
             pass  # לא נעצור את התהליך בגלל זה
         return False
@@ -233,7 +251,7 @@ async def send_recovery_messages_to_affected_users():
             users_data_check = _load_critical_error_users()
             if emergency_user not in users_data_check:
                 print(f"🚨 מוסיף משתמש חירום {emergency_user} לרשימת התאוששות...")
-                _add_user_to_critical_error_list(emergency_user, "Emergency fix - user reported no recovery message received")
+                _add_user_to_critical_error_list(emergency_user, "Emergency fix - user reported no recovery message received", "סיימתי את פרק 2")
                 print(f"✅ משתמש חירום {emergency_user} נוסף לרשימה")
                 send_admin_notification(f"🚨 הוספה חירום: משתמש {emergency_user} נוסף לרשימת התאוששות")
             else:
@@ -253,12 +271,46 @@ async def send_recovery_messages_to_affected_users():
         bot = telegram.Bot(token=BOT_TOKEN)
         recovered_users = []
         failed_users = []
+        processed_lost_messages = []
         
         for chat_id, user_info in users_data.items():
             if not user_info.get("recovered", False):
                 try:
                     # הודעת התאוששות - ללא פורמטינג (רק תשובות GPT-A צריכות פורמטינג)
                     await bot.send_message(chat_id=chat_id, text=recovery_message)
+                    
+                    # 💎 טיפול בהודעות אבודות - הקסם החדש!
+                    original_message = user_info.get("original_message")
+                    message_processed = user_info.get("message_processed", False)
+                    
+                    if original_message and not message_processed:
+                        print(f"💬 נמצאה הודעה אבודה למשתמש {chat_id}: '{original_message[:50]}...'")
+                        
+                        # מעט השהיה בין הודעות
+                        await asyncio.sleep(1)
+                        
+                        # 🧠 עיבוד ההודעה האבודה
+                        try:
+                            lost_message_response = await process_lost_message(original_message, chat_id)
+                            if lost_message_response:
+                                await bot.send_message(chat_id=chat_id, text=lost_message_response)
+                                user_info["message_processed"] = True
+                                processed_lost_messages.append({
+                                    "chat_id": chat_id, 
+                                    "message": original_message[:100],
+                                    "response_sent": True
+                                })
+                                print(f"✅ נענה על הודעה אבודה למשתמש {chat_id}")
+                            else:
+                                print(f"⚠️ לא הצליח לעבד הודעה אבודה למשתמש {chat_id}")
+                        except Exception as lost_msg_error:
+                            print(f"❌ שגיאה בעיבוד הודעה אבודה למשתמש {chat_id}: {lost_msg_error}")
+                            processed_lost_messages.append({
+                                "chat_id": chat_id, 
+                                "message": original_message[:100],
+                                "error": str(lost_msg_error)
+                            })
+                    
                     user_info["recovered"] = True
                     user_info["recovery_timestamp"] = get_israel_time().isoformat()
                     recovered_users.append(chat_id)
@@ -277,11 +329,21 @@ async def send_recovery_messages_to_affected_users():
         _save_critical_error_users(users_data)
         
         # התראה מפורטת לאדמין על מספר ההתאוששויות
-        if recovered_users or failed_users:
+        if recovered_users or failed_users or processed_lost_messages:
             admin_message = f"📊 דוח הודעות התאוששות:\n"
             admin_message += f"✅ נשלחו בהצלחה: {len(recovered_users)} משתמשים\n"
+            admin_message += f"💬 הודעות אבודות שטופלו: {len(processed_lost_messages)}\n"
+            
+            if processed_lost_messages:
+                admin_message += "\n🔍 פרטי הודעות אבודות:\n"
+                for lost_msg in processed_lost_messages[:3]:  # מציג רק 3 ראשונות
+                    status = "✅" if lost_msg.get("response_sent") else "❌"
+                    admin_message += f"{status} {lost_msg['chat_id']}: {lost_msg['message'][:50]}...\n"
+                if len(processed_lost_messages) > 3:
+                    admin_message += f"... ועוד {len(processed_lost_messages) - 3} הודעות\n"
+            
             if failed_users:
-                admin_message += f"❌ נכשלו: {len(failed_users)} משתמשים\n"
+                admin_message += f"\n❌ נכשלו: {len(failed_users)} משתמשים\n"
                 admin_message += "פרטי הכשלונות:\n"
                 for failure in failed_users[:5]:  # מציג רק 5 ראשונים
                     admin_message += f"- {failure['chat_id']}: {failure['error'][:50]}\n"
@@ -306,6 +368,53 @@ async def send_recovery_messages_to_affected_users():
         except Exception:
             pass
         return 0
+
+async def process_lost_message(original_message: str, chat_id: str) -> str:
+    """
+    🧠 מעבד הודעה אבודה ומחזיר תשובה מתאימה
+    בעיקר להודעות פשוטות כמו 'סיימתי את פרק X'
+    """
+    try:
+        print(f"🧠 מעבד הודעה אבודה: '{original_message}' למשתמש {chat_id}")
+        
+        # זיהוי דפוסים נפוצים בהודעות
+        message_lower = original_message.lower().strip()
+        
+        # זיהוי הודעות של סיום פרקים
+        if any(word in message_lower for word in ["סיימתי", "גמרתי", "הושלם"]) and "פרק" in message_lower:
+            # חילוץ מספר הפרק אם קיים
+            import re
+            chapter_match = re.search(r'פרק\s*(\d+)', message_lower)
+            if chapter_match:
+                chapter_num = chapter_match.group(1)
+                response = f"🎉 איזה כיף שסיימת את פרק {chapter_num}! אני גאה בך! 💪\n\nמוכן לקחת הפסקה או לעבור לפרק הבא? אני כאן לעזור לך! ✨"
+            else:
+                response = "🎉 איזה כיף שסיימת את הפרק! אני גאה בך! 💪\n\nמוכן לקחת הפסקה או לעבור לפרק הבא? אני כאן לעזור לך! ✨"
+            
+            print(f"✅ זוהתה הודעת סיום פרק, נוצרה תשובה מתאימה")
+            return response
+        
+        # זיהוי הודעות שאלה פשוטות
+        elif any(word in message_lower for word in ["איך", "מה", "למה", "איפה", "מתי"]):
+            response = "🤔 רואה שיש לך שאלה! מצטער שלא הספקתי לענות קודם בגלל הבעיה הטכנית.\n\nאם אתה רוצה, תוכל לשאול אותה שוב ואענה לך מיד! 😊"
+            print(f"✅ זוהתה הודעת שאלה, נוצרה תשובה מתאימה")
+            return response
+        
+        # זיהוי הודעות רגשיות/תמיכה
+        elif any(word in message_lower for word in ["קשה", "עזרה", "בעיה", "תקוע", "לא מבין"]):
+            response = "🤗 רואה שהיית צריך עזרה! מצטער שלא הייתי זמין בגלל הבעיה הטכנית.\n\nאם אתה עדיין צריך עזרה או תמיכה, אני כאן בשבילך! פשוט כתב לי מה קורה. 💙"
+            print(f"✅ זוהתה הודעת תמיכה, נוצרה תשובה מתאימה")
+            return response
+        
+        # תשובה כללית לכל הודעה אחרת
+        else:
+            response = f"💭 ראיתי שכתבת: '{original_message[:50]}...'\n\nמצטער שלא הספקתי לענות בגלל הבעיה הטכנית! אם זה עדיין רלוונטי, תוכל לכתב לי שוב ואענה מיד! 😊"
+            print(f"✅ נוצרה תשובה כללית")
+            return response
+            
+    except Exception as e:
+        print(f"❌ שגיאה בעיבוד הודעה אבודה: {e}")
+        return "💭 מצטער שלא הספקתי לענות על ההודעה שלך קודם בגלל הבעיה הטכנית! אם זה עדיין רלוונטי, תוכל לכתב לי שוב ואענה מיד! 😊"
 
 def merge_temporary_critical_files():
     """מאחד קבצים זמניים של משתמשים קריטיים לקובץ הראשי"""
@@ -669,11 +778,11 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     # 🔧 הוספה: וידוא רישום המשתמש לרשימת התאוששות גם אם שליחת ההודעה נכשלת
     if chat_id:
         try:
-            # רישום למשתמש לרשימת התאוששות לפני ניסיון שליחת הודעה
-            _add_user_to_critical_error_list(str(chat_id), f"Critical error: {str(error)[:100]}")
+            # רישום למשתמש לרשימת התאוששות לפני ניסיון שליחת הודעה - עם ההודעה המקורית!
+            _add_user_to_critical_error_list(str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
             
-            # ניסיון שליחת הודעה ידידותית למשתמש
-            await _send_user_friendly_error_message(update, str(chat_id))
+            # ניסיון שליחת הודעה ידידותית למשתמש - עם ההודעה המקורית
+            await _send_user_friendly_error_message(update, str(chat_id), user_msg)
         except Exception as e:
             # גם אם שליחת ההודעה נכשלת - המשתמש כבר ברשימת ההתאוששות
             logging.error(f"Failed to send user-friendly error message: {e}")
@@ -688,6 +797,8 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     if user_msg:
         admin_error_message += f"\nהודעה: {user_msg[:200]}"
     admin_error_message += f"\n⚠️ המשתמש נרשם לרשימת התאוששות ויקבל התראה כשהבוט יחזור לעבוד"
+    if user_msg:
+        admin_error_message += f"\n💾 ההודעה המקורית נשמרה ותטופל כשהמערכת תחזור לעבוד"
     
     send_error_notification(
         error_message=admin_error_message,
