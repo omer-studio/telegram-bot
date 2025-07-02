@@ -612,7 +612,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         "text": text
     }
     try:
-        requests.post(url, data=data)
+        requests.post(url, data=data, timeout=10)
     except Exception as e:
         print(f"שגיאה בשליחת הודעת פריסה: {e}")
 
@@ -751,7 +751,7 @@ def log_error_to_file(error_data, send_telegram=True):
                 "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
                 "text": msg
             }
-            requests.post(url, data=data)
+            requests.post(url, data=data, timeout=10)
     except Exception as e:
         print(f"💥 שגיאה ברישום שגיאה לקובץ: {e}")
 

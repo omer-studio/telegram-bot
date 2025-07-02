@@ -47,7 +47,7 @@ class RollbackManager:
             }
             
             os.makedirs("data", exist_ok=True)
-            with open(self.last_known_good_commit_file, 'w') as f:
+            with open(self.last_known_good_commit_file, 'w', encoding='utf-8') as f:
                 json.dump(good_commit_data, f, indent=2)
                 
             print(f"✅ Saved successful deploy: {commit_hash[:7]}")
@@ -61,7 +61,7 @@ class RollbackManager:
         """מחזיר את ה-commit האחרון שידוע כתקין"""
         try:
             if os.path.exists(self.last_known_good_commit_file):
-                with open(self.last_known_good_commit_file, 'r') as f:
+                with open(self.last_known_good_commit_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     return data.get("commit")
             return None
@@ -198,10 +198,10 @@ class RollbackManager:
             print("🔄 מבצע Render rollback...")
             
             # שלב 1: reset לcommit הקודם
-            subprocess.run(["git", "reset", "--hard", commit_hash], check=True)
+            subprocess.run(["git", "reset", "--hard", commit_hash], check=True, timeout=30)
             
             # שלב 2: יצירת commit חדש עם המצב הקודם
-            subprocess.run(["git", "commit", "--allow-empty", "-m", f"EMERGENCY ROLLBACK to {commit_hash[:7]}"], check=True)
+            subprocess.run(["git", "commit", "--allow-empty", "-m", f"EMERGENCY ROLLBACK to {commit_hash[:7]}"], check=True, timeout=30)
             
             print("✅ Render rollback הושלם (ממתין לפריסה אוטומטית)")
             return True
@@ -216,7 +216,7 @@ class RollbackManager:
     def _git_rollback(self, commit_hash: str) -> bool:
         """rollback בסביבה מקומית"""
         try:
-            subprocess.run(["git", "checkout", commit_hash], check=True)
+            subprocess.run(["git", "checkout", commit_hash], check=True, timeout=30)
             print("✅ Git rollback הושלם")
             return True
         except subprocess.CalledProcessError as e:
@@ -249,7 +249,7 @@ class RollbackManager:
             
             history = []
             if os.path.exists(self.rollback_history_file):
-                with open(self.rollback_history_file, 'r') as f:
+                with open(self.rollback_history_file, 'r', encoding='utf-8') as f:
                     history = json.load(f)
             
             history.append(record)
@@ -258,7 +258,7 @@ class RollbackManager:
             if len(history) > 50:
                 history = history[-50:]
             
-            with open(self.rollback_history_file, 'w') as f:
+            with open(self.rollback_history_file, 'w', encoding='utf-8') as f:
                 json.dump(history, f, indent=2)
                 
         except Exception as e:

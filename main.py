@@ -88,7 +88,7 @@ def run_post_deploy_check():
                     print("✅ בדיקת post-deploy עברה - הבוט אושר להפעלה!")
                     # יצירת flag שהverification עבר
                     os.makedirs("data", exist_ok=True)
-                    with open("data/deploy_verified.flag", "w") as f:
+                    with open("data/deploy_verified.flag", "w", encoding="utf-8") as f:
                         f.write(f"verified_at_{os.getenv('RENDER_GIT_COMMIT', 'unknown')}")
                 elif result.returncode == 1:
                     print("🔄 Rollback בוצע - יציאה כדי לאפשר restart")
@@ -113,7 +113,7 @@ def run_post_deploy_check():
 # הפעלת הבדיקה מיד כשהקובץ נטען
 run_post_deploy_check()
 
-# �🔧 תיקון: מניעת setup מרובה
+# �� תיקון: מניעת setup מרובה
 _bot_setup_completed = False
 _app_instance = None
 
