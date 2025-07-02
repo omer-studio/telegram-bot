@@ -589,18 +589,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
             from utils import should_send_time_greeting
             
-            # ברכה מותאמת זמן נשלחת רק בתחילת השיחה (אין היסטוריה קודמת)
+            # ברכה מותאמת זמן נשלחת לפי תנאים (שיחה ראשונה, הודעת ברכה, החלפת בלוק זמן)
             greeting_instruction = ""
-            timestamp = ""
             weekday_instruction = ""
             
             try:
                 if should_send_time_greeting(chat_id, user_msg):
-                    # רק אם צריך לשלוח ברכה - מוסיף גם טיימסטמפ ויום שבוע
-                    timestamp = create_human_context_for_gpt(chat_id)
+                    # שליחת הנחיות ברכת זמן ויום שבוע
                     weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
                     greeting_instruction = get_time_greeting_instruction()
-                    print(f"[GREETING_DEBUG] שולח ברכה + טיימסטמפ + יום שבוע עבור chat_id={chat_id}")
+                    print(f"[GREETING_DEBUG] שולח ברכה + יום שבוע עבור chat_id={chat_id}")
                 else:
                     print(f"[GREETING_DEBUG] לא שולח ברכה עבור chat_id={chat_id} - המשך שיחה רגיל")
             except Exception as greet_err:
@@ -613,556 +611,188 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"\n🔍 [MESSAGE_BUILD_DEBUG] === BUILDING MESSAGES FOR GPT ===")
             print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
             
-            if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"מידע חשוב על היוזר (לשימושך והתייחסותך בעת מתן תשובה): {current_summary}\n\nחשוב מאוד: השתמש רק במידע שהמשתמש סיפר לך בפועל. אל תמציא מידע נוסף או תערבב עם דוגמאות מהפרומפט. תראה לו שאתה מכיר אותו - אבל רק על בסיס מה שהוא באמת סיפר."})
-                print(f"🎯 [SYSTEM_2] USER SUMMARY - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
-                print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
-            
-            # הוספת טיימסטמפ והנחיות זמן
-            if timestamp:
-                messages_for_gpt.append({"role": "system", "content": timestamp})
-                print(f"🎯 [SYSTEM_3] TIMESTAMP - Content: {timestamp}")
+            # הוספת ברכת זמן אם יש
             if greeting_instruction:
                 messages_for_gpt.append({"role": "system", "content": greeting_instruction})
-                print(f"🎯 [SYSTEM_4] GREETING - Content: {greeting_instruction}")
+                print(f"🎯 [SYSTEM_2] TIME GREETING - Content: {greeting_instruction}")
+            
             if weekday_instruction:
                 messages_for_gpt.append({"role": "system", "content": weekday_instruction})
-                print(f"🎯 [SYSTEM_5] WEEKDAY - Content: {weekday_instruction}")
+                print(f"🎯 [SYSTEM_3] WEEKDAY - Content: {weekday_instruction}")
             
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages...")
+            # הוספת הודעת חגים אם רלוונטי
+            from chat_utils import get_holiday_system_message
+            holiday_instruction = get_holiday_system_message(str(chat_id))
+            if holiday_instruction:
+                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
+                print(f"🎯 [SYSTEM_4] HOLIDAY - Content: {holiday_instruction}")
+            
+            # הוספת שדות חסרים אם יש
+            from gpt_a_handler import create_missing_fields_system_message
+            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
+            if missing_fields_instruction:
+                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
+                print(f"🎯 [SYSTEM_5] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
+            
+            # ⭐ הוספת המידע על המשתמש לפני ההיסטוריה - ממוקם אסטרטגית
+            if current_summary:
+                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
+
+{current_summary}
+
+⚠️ **הנחיות חשובות לשימוש במידע:**
+• השתמש רק במידע שהמשתמש באמת סיפר לך - אל תמציא או תוסיף דברים
+• תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
+• התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
+• זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""})
+                print(f"🎯 [SYSTEM_6] USER SUMMARY (PRE-HISTORY) - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
+                print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
+            
+            # 📚 הוספת ההיסטוריה בצמידות להודעה החדשה
+            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps) - positioned close to new message...")
             messages_for_gpt.extend(history_messages)
             
-            # הוספת ההודעה החדשה עם טיימסטמפ
-            user_msg_with_timestamp = f"{timestamp} {user_msg}" if timestamp else user_msg
+            # הוספת ההודעה החדשה עם טיימסטמפ באותו פורמט כמו בהיסטוריה
+            from chat_utils import _format_timestamp_for_history
+            import utils
+            current_timestamp = _format_timestamp_for_history(utils.get_israel_time().isoformat())
+            user_msg_with_timestamp = f"{current_timestamp} {user_msg}" if current_timestamp else user_msg
             messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
-            print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {bool(timestamp)}")
+            print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {current_timestamp}")
             print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
             print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
 
-            # שלב 2: קריאה ל-gpt_a למענה ראשי עם מנגנון הודעות זמניות
-            print(f"[DEBUG] 🔥 Calling get_main_response_with_timeout...")
-            from gpt_a_handler import get_main_response_with_timeout
-            gpt_response = await get_main_response_with_timeout(
-                full_messages=messages_for_gpt,
-                chat_id=chat_id,
-                message_id=message_id,
-                update=update
-            )
-            print(f"[DEBUG] get_main_response_with_timeout returned: {gpt_response}")
-            bot_reply = gpt_response["bot_reply"]
+            # שלב 2: שליחת תשובה מ-gpt_a
+            logging.info(f"📤 [GPAT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
+            print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
             
-            # הדפסת מידע על בחירת המודל
-            used_extra_emotion = gpt_response.get("used_extra_emotion", gpt_response.get("used_premium"))
-            if used_extra_emotion:
-                print(f"🎯 [MODEL_INFO] השתמש במודל Extra-Emotion: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
-            else:
-                print(f"🚀 [MODEL_INFO] השתמש במודל ברירת-מחדל: {gpt_response.get('model')} | סיבה: {gpt_response.get('filter_reason')} | סוג: {gpt_response.get('match_type', 'N/A')}")
+            bot_reply = await get_main_response(messages_for_gpt, chat_id)
+            
+            if not bot_reply:
+                error_msg = error_human_funny_message()
+                await send_system_message(update, chat_id, error_msg)
+                await end_monitoring_user(str(chat_id), False)
+                return
 
-            # שלב 3: שליחת התשובה למשתמש (אלא אם כבר נשלחה דרך עריכת הודעה זמנית)
-            await update_user_processing_stage(str(chat_id), "sending_response")
-            if not gpt_response.get("message_already_sent", False):
-                await send_gpta_response(update, chat_id, bot_reply)
-
-            # 🚀 שלב 4: הפעלת כל המשימות ברקע מיד אחרי שליחת התשובה - בלי לחכות!
-            await update_user_processing_stage(str(chat_id), "background_tasks")
-            
-            # הפעלת כל המשימות ברקע במקביל אמיתי
-            background_tasks = [
-                # משימת רקע 1: סיכום ועדכון פרופיל
-                asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, bot_reply)),
-                
-                # משימת רקע 2: בדיקת חגים - הוסרה זמנית עד לתיקון
-                asyncio.create_task(_handle_holiday_check(update, chat_id, bot_reply)),
-                
-                # משימת רקע 3: עדכון היסטוריה - הוסרה זמנית עד לתיקון
-                # asyncio.create_task(_handle_history_update(chat_id, user_msg, history_entry_created))
-            ]
-            
-            # המתנה לכל המשימות לסיום במקביל
-            results = await asyncio.gather(*background_tasks, return_exceptions=True)
-            
-            # חילוץ התוצאות - יש שני tasks
-            background_result = results[0] if not isinstance(results[0], Exception) else None
-            holiday_result = results[1] if not isinstance(results[1], Exception) else None
-            
-            # עדכון היסטוריה (אחרי שיש לנו את הסיכום)
-            if background_result:
-                summary_response, new_summary_for_history, gpt_c_usage, gpt_d_usage, gpt_e_result = background_result
-                update_last_bot_message(chat_id, new_summary_for_history or bot_reply)
-            else:
-                summary_response, new_summary_for_history, gpt_c_usage, gpt_d_usage, gpt_e_result = None, None, {}, {}, None
+            # שלב 3: עדכון היסטוריה עם התשובה הסופית
+            if history_entry_created:
+                # רשומה כבר קיימת, מעדכן אותה עם התשובה
                 update_last_bot_message(chat_id, bot_reply)
+            else:
+                # יוצר רשומה חדשה
+                update_chat_history(chat_id, user_msg, bot_reply)
 
-            # שמירת לוגים ונתונים נוספים
-            # נירמול ה-usage לפני השמירה ב-log
-            clean_gpt_response = {k: v for k, v in gpt_response.items() if k != "bot_reply"}
-            if "usage" in clean_gpt_response:
-                clean_gpt_response["usage"] = normalize_usage_dict(clean_gpt_response["usage"], gpt_response.get("model", ""))
-            
-            log_payload.update({
-                "gpt_a_response": bot_reply,
-                "gpt_a_usage": clean_gpt_response,
-                "timestamp_end": get_israel_time().isoformat()
-            })
-            
-            # רישום לגיליון Google Sheets
+            # שלב 4: שליחת התשובה למשתמש עם פורמטינג מתקדם
+            await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
+
+            # שלב 5: רישום והפעלת כל התהליכים ברקע במקביל
             try:
-                from config import GPT_MODELS
+                # חישוב זמן מענה
+                response_time = time.time() - user_request_start_time
+                log_payload["response_time"] = response_time
+                log_payload["timestamp_end"] = get_israel_time().isoformat()
+                log_payload["bot_reply"] = bot_reply
                 
-                # חילוץ נתונים מ-gpt_response
-                gpt_a_usage = normalize_usage_dict(gpt_response.get("usage", {}), gpt_response.get("model", GPT_MODELS["gpt_a"]))
+                # רישום לשיטס - מהיר וללא המתנה
+                asyncio.create_task(log_to_sheets(chat_id, user_msg, bot_reply, response_time))
                 
-                # חילוץ נתונים מ-summary_response (עם בדיקת None)
-                gpt_b_usage = summary_response.get("usage", {}) if summary_response else {}
-                if not gpt_b_usage and summary_response:
-                    gpt_b_usage = normalize_usage_dict(summary_response.get("usage", {}), summary_response.get("usage", {}).get("model", GPT_MODELS["gpt_b"]))
+                # הפעלת כל הטיפולים ברקע - GPT-C, GPT-D, GPT-E
+                asyncio.create_task(run_background_processors(chat_id, user_msg, bot_reply))
                 
-                # חילוץ נתונים מ-gpt_c_response (עם בדיקת None)
-                gpt_c_usage = log_payload.get("gpt_c_data", {})
+                # עדכון מידע עבור ניטור ביצועים
+                await update_user_processing_stage(str(chat_id), "completed")
                 
-                # חילוץ נתונים מ-gpt_e_result (עם בדיקת None)
-                gpt_e_usage = {}
-                if gpt_e_result and gpt_e_result.get("cost_data"):
-                    gpt_e_usage = gpt_e_result["cost_data"]
+                logging.info(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
+                print(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
                 
-                # חישוב סכומים
-                total_tokens_calc = (
-                    gpt_a_usage.get("total_tokens", 0) + 
-                    gpt_b_usage.get("total_tokens", 0) + 
-                    gpt_c_usage.get("total_tokens", 0) +
-                    (gpt_d_usage.get("total_tokens", 0) if gpt_d_usage else 0) +
-                    (gpt_e_usage.get("total_tokens", 0) if gpt_e_usage else 0)
-                )
+            except Exception as ex:
+                logging.error(f"❌ שגיאה בטיפולים ברקע: {ex}")
+                # אל תעצרי את הזרם - המשתמש כבר קיבל תשובה
                 
-                total_cost_usd_calc = (
-                    gpt_a_usage.get("cost_total", 0) + 
-                    gpt_b_usage.get("cost_total", 0) + 
-                    gpt_c_usage.get("cost_total", 0) +
-                    (gpt_d_usage.get("cost_total", 0) if gpt_d_usage else 0) +
-                    (gpt_e_usage.get("cost_total", 0) if gpt_e_usage else 0)
-                )
-                
-                total_cost_ils_calc = (
-                    gpt_a_usage.get("cost_total_ils", 0) + 
-                    gpt_b_usage.get("cost_total_ils", 0) + 
-                    gpt_c_usage.get("cost_total_ils", 0) +
-                    (gpt_d_usage.get("cost_total_ils", 0) if gpt_d_usage else 0) +
-                    (gpt_e_usage.get("cost_total_ils", 0) if gpt_e_usage else 0)
-                )
-                
-                # דיבאג רזה ומלא מידע
-                print(f"[DEBUG] msg={message_id} | user='{user_msg[:35]}{'...' if len(user_msg) > 35 else ''}' | bot='{bot_reply[:35]}{'...' if len(bot_reply) > 35 else ''}' | summary='{(new_summary_for_history[:35] if new_summary_for_history else '') + ('...' if new_summary_for_history and len(new_summary_for_history) > 35 else '')}' | tokens={total_tokens_calc} | cost=${total_cost_usd_calc:.4f} | chat={chat_id}")
-                
-                # הסרת הקריאה הכפולה ל-log_to_sheets - זה יקרה ב-handle_background_tasks
-                print(f"[INFO] log_to_sheets יבוצע ב-handle_background_tasks למניעת כפילות")
-            except Exception as e:
-                print(f"[ERROR] שגיאה בחישוב נתוני הלוג: {e}")
-                logging.error(f"Error calculating log data: {e}")
-            
-            log_event_to_file(log_payload)
-            logging.info("✅ סיום טיפול בהודעה")
-            print("✅ סיום טיפול בהודעה")
-            print("📱 מחכה להודעה חדשה ממשתמש בטלגרם...")
-
         except Exception as ex:
-            # ניסיון לחלץ chat_id מה-update אם הוא לא זמין ב-locals
-            chat_id_from_update = None
-            user_msg_from_update = None
-            try:
-                if update and hasattr(update, 'message') and hasattr(update.message, 'chat_id'):
-                    chat_id_from_update = update.message.chat_id
-                if update and hasattr(update, 'message') and hasattr(update.message, 'text'):
-                    user_msg_from_update = update.message.text
-            except (AttributeError, TypeError) as e:
-                logging.warning(f"Error extracting chat_id from update in outer exception: {e}")
-                pass
-                
-            await handle_critical_error(ex, chat_id_from_update, user_msg_from_update, update)
+            logging.error(f"❌ שגיאה בטיפול בהודעה: {ex}")
+            print(f"❌ שגיאה בטיפול בהודעה: {ex}")
+            await handle_critical_error(ex, chat_id, user_msg, update)
+            await end_monitoring_user(str(chat_id), False)
+            return
+
+        # סיום ניטור
+        await end_monitoring_user(str(chat_id), True)
 
     except Exception as ex:
-        # ניסיון לחלץ chat_id מה-update אם הוא לא זמין ב-locals
-        chat_id_from_update = None
-        user_msg_from_update = None
-        try:
-            if update and hasattr(update, 'message') and hasattr(update.message, 'chat_id'):
-                chat_id_from_update = update.message.chat_id
-            if update and hasattr(update, 'message') and hasattr(update.message, 'text'):
-                user_msg_from_update = update.message.text
-        except (AttributeError, TypeError) as e:
-            logging.warning(f"Error extracting chat_id from update: {e}")
-            pass
-        
-        await handle_critical_error(ex, chat_id_from_update, user_msg_from_update, update)
+        logging.error(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}")
+        print(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}")
+        await handle_critical_error(ex, None, None, update)
+        if 'chat_id' in locals():
+            await end_monitoring_user(str(chat_id), False)
 
-    log_event_to_file({
-        "event": "user_message_processed", 
-        "timestamp": get_israel_time().isoformat()
-    })
-    logging.info("✅ סיום טיפול בהודעה")
-    print("✅ סיום טיפול בהודעה")
+async def run_background_processors(chat_id, user_msg, bot_reply):
+    """
+    מפעיל את כל המעבדים ברקע במקביל - GPT-C, GPT-D, GPT-E
+    """
+    try:
+        # רשימת משימות לביצוע במקביל
+        tasks = []
+        
+        # GPT-C - עדכון פרופיל משתמש
+        if should_run_gpt_c(user_msg):
+            tasks.append(extract_user_info(chat_id, user_msg))
+            
+        # GPT-D - עדכון חכם של פרופיל
+        tasks.append(smart_update_profile_with_gpt_d(chat_id, user_msg, bot_reply))
+        
+        # GPT-E - אימוג'ים ותכונות מתקדמות
+        tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
+        
+        # הפעלה במקביל של כל התהליכים
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            
+    except Exception as e:
+        logging.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}")
 
 async def handle_new_user_background(update, context, chat_id, user_msg):
-    """מטפל במשתמש חדש ברקע"""
+    """
+    טיפול במשתמש חדש לגמרי ברקע
+    """
     try:
-        # הוספת לוג להודעה נכנסת
-        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (NEW USER)")
+        logging.info("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
+        print("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
         
-        is_first_time = ensure_user_state_row(
-            context.bot_data["sheet"],           
-            context.bot_data["sheet_states"],    
-            chat_id
-        )
-        if is_first_time:
+        # רישום ראשוני
+        register_result = register_user(chat_id, update.message.from_user)
+        
+        if register_result.get("success"):
+            # שליחת הודעות ברכה
             welcome_messages = get_welcome_messages()
-            for message in welcome_messages:
-                await send_system_message(update, chat_id, message)
-    except Exception as ex:
-        await handle_critical_error(ex, chat_id, user_msg, update)
+            for msg in welcome_messages:
+                await send_system_message(update, chat_id, msg)
+                await asyncio.sleep(0.5)  # הפסקה קטנה בין הודעות
+            
+            # שליחת בקשת אישור תנאים
+            await send_approval_message(update, chat_id)
+            
+        else:
+            error_msg = "מצטער, הייתה בעיה ברישום. אנא נסה שוב."
+            await send_system_message(update, chat_id, error_msg)
+            
+    except Exception as e:
+        logging.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}")
+        await send_system_message(update, chat_id, "הייתה בעיה ברישום. אנא נסה שוב מאוחר יותר.")
 
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
-    """מטפל במשתמש לא רשום ברקע"""
+    """
+    טיפול במשתמש לא רשום ברקע
+    """
     try:
-        # הוספת לוג להודעה נכנסת
-        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (UNREGISTERED)")
+        logging.info("[Permissions] משתמש לא רשום - מנחה לרישום")
+        print("[Permissions] משתמש לא רשום - מנחה לרישום")
         
-        # משתמש לא קיים - צריך לרשום קוד
-        if register_user(context.bot_data["sheet"], chat_id, user_msg):
-            # קוד תקין - הצלחה!
-            await send_system_message(update, chat_id, code_approved_message())
-            await send_approval_message(update, chat_id)
-        else:
-            # קוד לא תקין - הגדלת מספר הניסיון ושליחת הודעת שגיאה
-            from sheets_core import increment_code_try_sync
-            current_try = increment_code_try_sync(context.bot_data["sheet_states"], chat_id)
-            if current_try <= 0:
-                current_try = 1
-                
-            if current_try <= 3:
-                await send_system_message(update, chat_id, get_retry_message_by_attempt(current_try))
-            else:
-                await send_system_message(update, chat_id, not_approved_message())
-                
-    except Exception as ex:
-        await handle_critical_error(ex, chat_id, user_msg, update)
-
-async def handle_pending_user_background(update, context, chat_id, user_msg):
-    """מטפל במשתמש שמחכה לאישור תנאים"""
-    try:
-        # הוספת לוג להודעה נכנסת
-        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (PENDING)")
+        unregistered_msg = "נראה שאתה משתמש חדש! 😊\nאני דניאל, המטפל הדיגיטלי שלך.\nבואו נתחיל בתהליך הכרות קצר."
+        await send_system_message(update, chat_id, unregistered_msg)
         
-        # משתמש רשום אבל לא אישר תנאים
-        if user_msg.strip() == APPROVE_BUTTON_TEXT():
-            # משתמש אישר תנאים
-            approve_user(context.bot_data["sheet"], chat_id)
-            
-            await send_system_message(update, chat_id, full_access_message())
-            
-            # 🔧 תיקון הבעיה: שליחת מקלדת "אהלן" שתירד אחרי שימוש
-            hello_keyboard = [["אהלן"]]
-            await update.message.reply_text(
-                "אפשר להתחיל להקליד כל דבר כאן! 😊",
-                reply_markup=ReplyKeyboardMarkup(hello_keyboard, one_time_keyboard=True, resize_keyboard=True)
-            )
-            
-        elif user_msg.strip() == DECLINE_BUTTON_TEXT():
-            # משתמש לא אישר תנאים
-            await send_system_message(update, chat_id, "כדי להמשיך, יש לאשר את התנאים.")
-            await send_approval_message(update, chat_id)
-        else:
-            # משתמש כתב משהו אחר - שולח שוב את הודעת האישור
-            await send_approval_message(update, chat_id)
-                
-    except Exception as ex:
-        await handle_critical_error(ex, chat_id, user_msg, update)
-
-async def _handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id):
-    """מטפל בסיכום ההודעה עם gpt_b."""
-    if len(bot_reply) <= 150:  # הודעה קצרה - לא צריך סיכום
-        if should_log_debug_prints():
-            print(f"[MSG_SUMMARY] הודעה קצרה ({len(bot_reply)} תווים), ללא סיכום")
-        return None, None
-    
-    try:
-        if should_log_debug_prints():
-            print(f"[MSG_SUMMARY] הודעה ארוכה ({len(bot_reply)} תווים), מבקש סיכום")
-        summary_response = await asyncio.to_thread(
-            get_summary, user_msg=user_msg, bot_reply=bot_reply, 
-            chat_id=chat_id, message_id=message_id
-        )
-        return summary_response, summary_response.get("summary")
-    except Exception as e:
-        logging.error(f"Error in gpt_b (summary): {e}")
-        return None, None
-
-async def _handle_profile_updates(chat_id, user_msg, message_id, log_payload):
-    """מטפל בעדכון הפרופיל עם gpt_c/d ו-gpt_e."""
-    gpt_c_usage, gpt_d_usage, gpt_e_result = {}, {}, None
-    
-    try:
-        if not should_run_gpt_c(user_msg):
-            print(f"[DEBUG] לא צריך gpt_c - ההודעה לא מכילה מידע חדש")
-            return gpt_c_usage, gpt_d_usage, gpt_e_result
-        
-        # הפעלת gpt_c
-        gpt_c_run_count = increment_gpt_c_run_count(chat_id)
-        print(f"[DEBUG] gpt_c_run_count: {gpt_c_run_count}")
-        
-        # קבלת פרופיל קיים
-        existing_profile = get_user_summary(chat_id)
-        try:
-            existing_profile = json.loads(existing_profile) if existing_profile else {}
-        except (json.JSONDecodeError, TypeError) as e:
-            logging.warning(f"Error parsing existing profile JSON: {e}")
-            existing_profile = {}
-        
-        # עדכון פרופיל עם gpt_d
-        updated_profile, combined_usage = smart_update_profile_with_gpt_d(
-            existing_profile=existing_profile,
-            user_message=user_msg,
-            interaction_id=message_id
-        )
-        
-        # הפרדת נתוני gpt_c ו-gpt_d
-        for key, value in combined_usage.items():
-            if key.startswith("gpt_d_") or key in ["field_conflict_resolution"]:
-                gpt_d_usage[key] = value
-            else:
-                gpt_c_usage[key] = value
-        
-        # 1. עדכון פרופיל מהיר בקובץ המקומי  ➜ Google Sheets יסתנכרן ברקע
-        # השבתת התראות אוטומטיות זמנית כדי שלא תישלח הודעה כפולה
-        import utils as _u
-        _u._disable_auto_admin_profile_notification = True
-        await update_user_profile(chat_id, updated_profile)
-        _u._disable_auto_admin_profile_notification = False
-
-        # חישוב שינויים להשוואה עבור התראות אדמין
-        changes_list = _pu._detect_profile_changes(existing_profile, updated_profile)
-
-        # הכנת מידע GPT להתראה
-        gpt_c_info_line = f"GPT-C: עודכנו {len(changes_list)} שדות"
-        
-        # GPT-D: רק אם יש ערך קיים בשדה שהוחלף
-        gpt_d_should_run = False
-        extracted_fields = {}
-        
-        # חילוץ השדות שחולצו מ-GPT-C
-        for key, value in combined_usage.items():
-            if key == "extracted_fields":
-                extracted_fields = value
-                break
-            elif isinstance(value, dict) and "extracted_fields" in value:
-                extracted_fields = value["extracted_fields"]
-                break
-        
-        # אם לא מצאנו ב-combined_usage, ננסה לחלץ ישירות מ-GPT-C
-        if not extracted_fields:
-            from gpt_c_handler import extract_user_info
-            gpt_c_result = extract_user_info(user_msg)
-            if isinstance(gpt_c_result, dict):
-                extracted_fields = gpt_c_result.get("extracted_fields", {})
-        
-        # ✅ תיקון: עדכון הפרופיל עם השדות שחולצו מ-GPT-C אם לא עודכנו עדיין
-        if extracted_fields and not any(ch.get("field") in extracted_fields for ch in changes_list):
-            # אם השדות שחולצו לא נכללו בעדכון, נוסיף אותם
-            for field, value in extracted_fields.items():
-                changes_list.append({
-                    "field": field,
-                    "old_value": existing_profile.get(field, ""),
-                    "new_value": value,
-                    "change_type": "added" if not existing_profile.get(field) else "updated"
-                })
-        
-        if extracted_fields:
-            for field, new_value in extracted_fields.items():
-                if field in existing_profile and existing_profile[field] and existing_profile[field] != "":
-                    gpt_d_should_run = True
-                    break
-        
-        gpt_d_info_line = "GPT-D: מיזוג בוצע" if gpt_d_usage and gpt_d_should_run else "GPT-D: לא הופעל (אין ערך קיים למיזוג)"
-
-        # gpt_e: ניתוח מתקדם - מעביר לכאן כדי שהאדמין יקבל הודעה גם על GPT-E
-        try:
-            user_state = get_user_state(chat_id)
-            # 🔧 תיקון: קריאה async לפונקציה execute_gpt_e_if_needed
-            gpt_e_result = await execute_gpt_e_if_needed(
-                chat_id=chat_id,
-                gpt_c_run_count=gpt_c_run_count,
-                last_gpt_e_timestamp=user_state.get("last_gpt_e_timestamp")
-            )
-            
-            if gpt_e_result:
-                log_payload["gpt_e_data"] = {
-                    "success": gpt_e_result.get("success", False),
-                    "changes_count": len(gpt_e_result.get("changes", {})),
-                    "tokens_used": gpt_e_result.get("tokens_used", 0),
-                    "cost_data": gpt_e_result.get("cost_data", {})
-                }
-                
-                # 🔧 הוספת שינויים של GPT-E ל-changes_list
-                gpt_e_changes = gpt_e_result.get("changes", {})
-                if gpt_e_changes:
-                    for field, new_value in gpt_e_changes.items():
-                        changes_list.append({
-                            "field": field,
-                            "old_value": "",  # GPT-E לא מחזיר ערך ישן
-                            "new_value": new_value,
-                            "change_type": "added"  # GPT-E בדרך כלל מוסיף שדות חדשים
-                        })
-        except Exception as e:
-            logging.error(f"Error in gpt_e: {e}")
-            gpt_e_result = None
-
-        if gpt_e_result:
-            gpt_e_info_line = f"GPT-E: הופעל ({len(gpt_e_result.get('changes', {}))} שדות)"
-        else:
-            gpt_e_info_line = (
-                f"GPT-E: לא הופעל (מופעל כל 25 ריצות GPT-C, כרגע בספירה {gpt_c_run_count})"
-            )
-
-        # שליחת הודעת אדמין מאוחדת - אם יש פעילות של GPT-C/D/E
-        has_gpt_c_activity = bool(extracted_fields)  # GPT-C החזיר שדות
-        has_gpt_d_activity = bool(gpt_d_usage and gpt_d_should_run)  # GPT-D הופעל
-        has_gpt_e_activity = bool(gpt_e_result and gpt_e_result.get('changes'))  # GPT-E החזיר שינויים
-        
-        # ✅ תיקון: נשלח הודעה גם אם יש רק פעילות GPT-C (חילוץ שדות)
-        if has_gpt_c_activity or has_gpt_d_activity or has_gpt_e_activity:  # ✅ נשלח אם יש פעילות כלשהי
-            try:
-                # קבלת הסיכום של תעודת הזהות הרגשית
-                user_summary = get_user_summary(chat_id)
-                try:
-                    if user_summary:
-                        profile_data = json.loads(user_summary) if isinstance(user_summary, str) else user_summary
-                        emotional_summary = profile_data.get("summary", "")
-                    else:
-                        emotional_summary = ""
-                except (json.JSONDecodeError, TypeError, AttributeError) as e:
-                    logging.warning(f"Error parsing user summary JSON: {e}")
-                    emotional_summary = ""
-                
-                # הפרדת השדות לפי המודלים שיצרו אותם
-                gpt_c_changes = []
-                gpt_d_changes = []
-                gpt_e_changes = []
-                
-                # שדות GPT-C - רק אלו שחולצו מהטקסט
-                if extracted_fields:
-                    for field, new_value in extracted_fields.items():
-                        old_value = existing_profile.get(field, "")
-                        gpt_c_changes.append({
-                            "field": field,
-                            "old_value": old_value,
-                            "new_value": new_value,
-                            "change_type": "added" if not old_value else "updated"
-                        })
-                
-                # שדות GPT-D - רק אם מיזוג בוצע (אם יש ערך קיים שהוחלף)
-                if has_gpt_d_activity and extracted_fields:
-                    for field, new_value in extracted_fields.items():
-                        old_value = existing_profile.get(field, "")
-                        if old_value and old_value != "":  # רק אם היה ערך קיים
-                            gpt_d_changes.append({
-                                "field": field,
-                                "old_value": old_value,
-                                "new_value": new_value,
-                                "change_type": "updated"
-                            })
-                
-                # שדות GPT-E - רק אלו שהוחזרו מ-GPT-E
-                if has_gpt_e_activity:
-                    gpt_e_result_changes = gpt_e_result.get("changes", {})
-                    for field, new_value in gpt_e_result_changes.items():
-                        gpt_e_changes.append({
-                            "field": field,
-                            "old_value": "",  # GPT-E לא מחזיר ערך ישן
-                            "new_value": new_value,
-                            "change_type": "added"
-                        })
-                
-                _pu._send_admin_profile_overview_notification(
-                    chat_id=str(chat_id),
-                    user_msg=user_msg,
-                    gpt_c_changes=gpt_c_changes,
-                    gpt_d_changes=gpt_d_changes,
-                    gpt_e_changes=gpt_e_changes,
-                    gpt_c_info=gpt_c_info_line,
-                    gpt_d_info=gpt_d_info_line,
-                    gpt_e_info=gpt_e_info_line,
-                    summary=emotional_summary
-                )
-            except Exception as _e_notify:
-                logging.error(f"Failed to send overview admin notification: {_e_notify}")
-        else:
-            # 🟢 לוג קצר כשאין פעילות
-            logging.info(f"✅ [ADMIN] אין פעילות GPT-C/D/E למשתמש {chat_id} - לא נשלחה הודעה")
-        
-        # 🔧 עדכון בפועל של הפרופיל אם יש שינויים של GPT-E
-        if gpt_e_result and gpt_e_result.get('changes'):
-            try:
-                gpt_e_changes = gpt_e_result.get('changes', {})
-                if gpt_e_changes:
-                    # 🔧 תיקון: השבתת הודעות אדמין אוטומטיות גם לעדכון GPT-E
-                    import utils as _u
-                    _u._disable_auto_admin_profile_notification = True
-                    await update_user_profile(chat_id, gpt_e_changes)
-                    _u._disable_auto_admin_profile_notification = False
-                    logging.info(f"✅ [GPT-E] עדכון פרופיל הושלם עבור משתמש {chat_id}: {list(gpt_e_changes.keys())}")
-            except Exception as update_error:
-                logging.error(f"❌ [GPT-E] שגיאה בעדכון פרופיל: {update_error}")
-                # 🔧 וידוא שהמשתנה חוזר למצב הרגיל גם במקרה של שגיאה
-                try:
-                    import utils as _u
-                    _u._disable_auto_admin_profile_notification = False
-                except:
-                    pass
-        
-        log_payload["gpt_c_data"] = gpt_c_usage
-        log_payload["gpt_d_data"] = gpt_d_usage
-        
-        # 🔧 הסרה: GPT-E כבר רץ למעלה, לא צריך לרוץ שוב
-        # gpt_e: ניתוח מתקדם
-        # try:
-        #     user_state = get_user_state(chat_id)
-        #     gpt_e_result = await execute_gpt_e_if_needed(
-        #         chat_id=chat_id,
-        #         gpt_c_run_count=gpt_c_run_count,
-        #         last_gpt_e_timestamp=user_state.get("last_gpt_e_timestamp")
-        #     )
-        #     
-        #     if gpt_e_result:
-        #         log_payload["gpt_e_data"] = {
-        #             "success": gpt_e_result.get("success", False),
-        #             "changes_count": len(gpt_e_result.get("changes", {})),
-        #             "tokens_used": gpt_e_result.get("tokens_used", 0),
-        #             "cost_data": gpt_e_result.get("cost_data", {})
-        #         }
-        # except Exception as e:
-        #     logging.error(f"Error in gpt_e: {e}")
-            
-    except Exception as e:
-        logging.error(f"Error in profile update: {e}")
-    
-    return gpt_c_usage, gpt_d_usage, gpt_e_result
-
-async def handle_background_tasks(update, context, chat_id, user_msg, message_id, log_payload, gpt_response, last_bot_message):
-    """מטפל בכל המשימות ברקע - גרסה מקבילה ומהירה."""
-    try:
-        bot_reply = gpt_response["bot_reply"]
-        
-        # 🚀 הפעלת כל המשימות במקביל אמיתי - בלי לחכות!
-        tasks = [
-            asyncio.create_task(_handle_gpt_b_summary(user_msg, bot_reply, chat_id, message_id)),
-            asyncio.create_task(_handle_profile_updates(chat_id, user_msg, message_id, log_payload))
-        ]
-        
-        # המתנה לכל המשימות לסיום במקביל
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # חילוץ התוצאות
-        summary_result = results[0] if not isinstance(results[0], Exception) else (None, None)
-        profile_result = results[1] if not isinstance(results[1], Exception) else ({}, {}, None)
-        
+        # הפניה להליך רישום
+        await handle_new_user_background(update, context, chat_id, user_msg)
         summary_response, new_summary_for_history = summary_result if summary_result else (None, None)
         gpt_c_usage, gpt_d_usage, gpt_e_result = profile_result if profile_result else ({}, {}, None)
         
@@ -1261,287 +891,50 @@ async def handle_background_tasks(update, context, chat_id, user_msg, message_id
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
 
-async def send_system_message(update, chat_id, text, max_retries=3):
+async def handle_pending_user_background(update, context, chat_id, user_msg):
     """
-    שולחת הודעה מערכת כמו שהיא, ללא שום פורמטינג אוטומטי.
-    משמש להודעות פתיחה, הודעות שגיאה, הודעות מערכת וכו'.
+    טיפול במשתמש שעדיין לא אישר תנאים ברקע
     """
-    
-    # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
-    if text and ("[עדכון פרופיל]" in text or "[PROFILE_CHANGE]" in text or 
-                 (text.startswith("[") and "]" in text and any(keyword in text for keyword in ["עדכון", "debug", "admin", "system"]))):
-        logging.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={chat_id} | text={text[:100]}")
-        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={chat_id}")
-        print(f"🚨 הודעה חסומה: {text[:200]}...")
-        
-        # שליחת התראה לאדמין על הניסיון
-        try:
-            from notifications import send_error_notification
-            send_error_notification(
-                error_message=f"🚨 CRITICAL: ניסיון לשלוח הודעה פנימית למשתמש! chat_id={chat_id}", 
-                chat_id=chat_id, 
-                user_msg=f"הודעה חסומה: {text[:200]}..."
-            )
-        except Exception as notify_err:
-            logging.error(f"Failed to send critical security notification: {notify_err}")
-        
-        return False
-
-    # 🐛 DEBUG: מידע על השליחה
-    print("=" * 80)
-    print("📤 SEND_SYSTEM_MESSAGE DEBUG")
-    print("=" * 80)
-    print(f"📊 CHAT_ID: {chat_id}")
-    print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
-    print(f"   {repr(text)}")
-    print(f"📊 NEWLINES: {text.count(chr(10))}")
-    print(f"📊 DOTS: {text.count('.')}")
-    print("=" * 80)
-    
-    # 🚫 אין פורמטינג - הטקסט נשלח כמו שהוא
-    formatted_text = text
-    print(f"🚫 [SYSTEM] שליחת הודעה מערכת ללא פורמטינג")
-    
-    if should_log_message_debug():
-        print(f"[SEND_SYSTEM_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
-    
     try:
-        bot_id = None
-        if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
-            bot_id = getattr(update.message.bot, 'id', None)
-        elif hasattr(update, 'bot'):
-            bot_id = getattr(update.bot, 'id', None)
-        
-        if should_log_debug_prints():
-            print(f"[DEBUG] SENDING SYSTEM MESSAGE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
-    except Exception as e:
-        if should_log_debug_prints():
-            print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
-    
-    import sys; sys.stdout.flush()
-    
-    for attempt in range(max_retries):
-        try:
-            sent_message = await asyncio.wait_for(
-                update.message.reply_text(formatted_text, parse_mode="HTML"),
-                timeout=10.0
-            )
-            
-            if should_log_message_debug():
-                print(f"[TELEGRAM_SYSTEM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
-            
-            logging.info(f"[TELEGRAM_SYSTEM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
-            
-            # עדכון היסטוריה ולוגים
-            update_chat_history(chat_id, "[הודעה מערכת]", formatted_text)
-            log_event_to_file({
-                "chat_id": chat_id,
-                "system_message": formatted_text,
-                "timestamp": get_israel_time().isoformat()
-            })
-            if should_log_message_debug():
-                print(f"[SYSTEM_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
-            
-            return True
-            
-        except asyncio.TimeoutError:
-            logging.warning(f"Timeout on attempt {attempt + 1}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2)
-                continue
-        except Exception as e:
-            error_msg = str(e).lower()
-            
-            # אם השגיאה קשורה לפורמט HTML, ננסה בלי parse_mode
-            if "parse entities" in error_msg or "unsupported start tag" in error_msg or "br" in error_msg:
-                try:
-                    plain_text = re.sub(r'<[^>]+>', '', formatted_text)
-                    sent_message = await asyncio.wait_for(
-                        update.message.reply_text(plain_text),
-                        timeout=10.0
-                    )
-                    logging.warning(f"⚠️ [SYSTEM_HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
-                    
-                    # עדכון היסטוריה ולוגים גם עבור fallback
-                    update_chat_history(chat_id, "[הודעה מערכת]", plain_text)
-                    log_event_to_file({
-                        "chat_id": chat_id,
-                        "system_message": plain_text,
-                        "timestamp": get_israel_time().isoformat(),
-                        "fallback_used": True
-                    })
-                    
-                    return True
-                except Exception as plain_error:
-                    logging.error(f"❌ [SYSTEM_PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
-            
-            if attempt < max_retries - 1:
-                await asyncio.sleep(1)
-                logging.warning(f"⚠️ [SYSTEM_RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
+        if user_msg.strip() == APPROVE_BUTTON_TEXT:
+            # אישור תנאים
+            approval_result = approve_user(chat_id)
+            if approval_result.get("success"):
+                await send_system_message(update, chat_id, code_approved_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
             else:
-                logging.error(f"❌ [SYSTEM_FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
+                await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
                 
-                # רישום שגיאה סופית
-                log_event_to_file({
-                    "chat_id": chat_id,
-                    "system_message": formatted_text,
-                    "timestamp": get_israel_time().isoformat(),
-                    "error": str(e),
-                    "final_failure": True
-                })
-                try:
-                    from notifications import send_error_notification
-                    send_error_notification(error_message=f"[send_system_message] שליחת הודעה מערכת נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
-                except Exception as notify_err:
-                    if should_log_message_debug():
-                        print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
-                    logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
-                
-                return False
-    
-    return False
+        elif user_msg.strip() == DECLINE_BUTTON_TEXT:
+            # דחיית תנאים
+            decline_msg = not_approved_message()
+            await send_system_message(update, chat_id, decline_msg, reply_markup=ReplyKeyboardRemove())
+            
+        else:
+            # הודעה על הצורך באישור תנאים
+            pending_msg = "אנא אשר את תנאי השימוש על ידי לחיצה על הכפתור 'מאשר' למטה."
+            await send_approval_message(update, chat_id)
+            
+    except Exception as e:
+        logging.error(f"[Permissions] שגיאה בטיפול במשתמש ממתין לאישור: {e}")
 
-async def send_gpta_response(update, chat_id, text, max_retries=3):
+async def send_system_message(update, chat_id, text, reply_markup=None):
     """
-    מפעילה את הפורמטינג על תשובות GPT-A ואז שולחת אותן.
-    משמש רק לתשובות מהמודל הראשי (GPT-A).
+    שולחת הודעת מערכת למשתמש ללא פורמטינג מתקדם
     """
-    
-    # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
-    if text and ("[עדכון פרופיל]" in text or "[PROFILE_CHANGE]" in text or 
-                 (text.startswith("[") and "]" in text and any(keyword in text for keyword in ["עדכון", "debug", "admin", "system"]))):
-        logging.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={chat_id} | text={text[:100]}")
-        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={chat_id}")
-        print(f"🚨 הודעה חסומה: {text[:200]}...")
-        
-        # שליחת התראה לאדמין על הניסיון
-        try:
-            from notifications import send_error_notification
-            send_error_notification(
-                error_message=f"🚨 CRITICAL: ניסיון לשלוח הודעה פנימית למשתמש! chat_id={chat_id}", 
-                chat_id=chat_id, 
-                user_msg=f"הודעה חסומה: {text[:200]}..."
-            )
-        except Exception as notify_err:
-            logging.error(f"Failed to send critical security notification: {notify_err}")
-        
-        return False
-
-    # 🐛 DEBUG: מידע על השליחה
-    print("=" * 80)
-    print("📤 SEND_GPTA_RESPONSE DEBUG")
-    print("=" * 80)
-    print(f"📊 CHAT_ID: {chat_id}")
-    print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
-    print(f"   {repr(text)}")
-    print(f"📊 NEWLINES: {text.count(chr(10))}")
-    print(f"📊 DOTS: {text.count('.')}")
-    print(f"📊 QUESTIONS: {text.count('?')}")
-    print(f"📊 EXCLAMATIONS: {text.count('!')}")
-    print("=" * 80)
-    
-    # 🔧 פורמטינג עבור תשובות GPT-A
-    print(f"🔧 [GPTA_FORMATTING] מתחיל פורמטינג לתשובת GPTA: {len(text)} chars")
-    formatted_text = format_text_for_telegram(text)
-    print(f"🔧 [GPTA_FORMATTING] פורמטינג הושלם | אורך: {len(formatted_text)} chars")
-    
-    if should_log_message_debug():
-        print(f"[SEND_GPTA_RESPONSE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
-    
     try:
-        bot_id = None
-        if hasattr(update, 'message') and hasattr(update.message, 'bot') and update.message.bot:
-            bot_id = getattr(update.message.bot, 'id', None)
-        elif hasattr(update, 'bot'):
-            bot_id = getattr(update.bot, 'id', None)
+        if reply_markup:
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+        else:
+            await update.message.reply_text(text, parse_mode="HTML")
+            
+        # עדכון היסטוריה ולוגים
+        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", text)
+        log_event_to_file({
+            "chat_id": chat_id,
+            "bot_message": text,
+            "timestamp": get_israel_time().isoformat(),
+            "message_type": "system_message"
+        })
         
-        if should_log_debug_prints():
-            print(f"[DEBUG] SENDING GPTA RESPONSE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
     except Exception as e:
-        if should_log_debug_prints():
-            print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
-    
-    import sys; sys.stdout.flush()
-    
-    for attempt in range(max_retries):
-        try:
-            sent_message = await asyncio.wait_for(
-                update.message.reply_text(formatted_text, parse_mode="HTML"),
-                timeout=10.0
-            )
-            
-            if should_log_message_debug():
-                print(f"[TELEGRAM_GPTA_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
-            
-            logging.info(f"[TELEGRAM_GPTA_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
-            
-            # עדכון היסטוריה ולוגים
-            update_chat_history(chat_id, "[תשובת GPT-A]", formatted_text)
-            log_event_to_file({
-                "chat_id": chat_id,
-                "gpta_response": formatted_text,
-                "timestamp": get_israel_time().isoformat()
-            })
-            if should_log_message_debug():
-                print(f"[GPTA_RESPONSE] {formatted_text.replace(chr(10), ' ')[:120]}")
-            
-            return True
-            
-        except asyncio.TimeoutError:
-            logging.warning(f"Timeout on attempt {attempt + 1}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2)
-                continue
-        except Exception as e:
-            error_msg = str(e).lower()
-            
-            # אם השגיאה קשורה לפורמט HTML, ננסה בלי parse_mode
-            if "parse entities" in error_msg or "unsupported start tag" in error_msg or "br" in error_msg:
-                try:
-                    plain_text = re.sub(r'<[^>]+>', '', formatted_text)
-                    sent_message = await asyncio.wait_for(
-                        update.message.reply_text(plain_text),
-                        timeout=10.0
-                    )
-                    logging.warning(f"⚠️ [GPTA_HTML_FALLBACK] נשלח טקסט רגיל במקום HTML | ניסיון: {attempt + 1}")
-                    
-                    # עדכון היסטוריה ולוגים גם עבור fallback
-                    update_chat_history(chat_id, "[תשובת GPT-A]", plain_text)
-                    log_event_to_file({
-                        "chat_id": chat_id,
-                        "gpta_response": plain_text,
-                        "timestamp": get_israel_time().isoformat(),
-                        "fallback_used": True
-                    })
-                    
-                    return True
-                except Exception as plain_error:
-                    logging.error(f"❌ [GPTA_PLAIN_FALLBACK] גם טקסט רגיל נכשל | ניסיון: {attempt + 1} | שגיאה: {plain_error}")
-            
-            if attempt < max_retries - 1:
-                await asyncio.sleep(1)
-                logging.warning(f"⚠️ [GPTA_RETRY] ניסיון {attempt + 1} נכשל, מנסה שוב | שגיאה: {e}")
-            else:
-                logging.error(f"❌ [GPTA_FINAL_FAILURE] כל הניסיונות נכשלו | שגיאה: {e}")
-                
-                # רישום שגיאה סופית
-                log_event_to_file({
-                    "chat_id": chat_id,
-                    "gpta_response": formatted_text,
-                    "timestamp": get_israel_time().isoformat(),
-                    "error": str(e),
-                    "final_failure": True
-                })
-                try:
-                    from notifications import send_error_notification
-                    send_error_notification(error_message=f"[send_gpta_response] שליחת תשובת GPT-A נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
-                except Exception as notify_err:
-                    if should_log_message_debug():
-                        print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
-                    logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
-                
-                return False
-    
-    return False
-
-
+        logging.error(f"שליחת הודעת מערכת נכשלה: {e}")

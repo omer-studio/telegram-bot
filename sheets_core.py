@@ -924,45 +924,51 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     מסתכל רק על שדות שיש להם show_in_summary ושהם מלאים
     """
     if not profile_data:
+        debug_log("Empty profile_data provided to generate_summary_from_profile_data")
         return ""
     
     try:
         from fields_dict import get_summary_fields, FIELDS_DICT
-    except ImportError:
-        # fallback אם לא ניתן לייבא
+    except ImportError as e:
+        debug_log(f"Failed to import fields_dict: {e}")
         return ""
     
     # ✅ תיקון: הסרת שדות טכניים שלא אמורים להיות בסיכום
     clean_profile = {k: v for k, v in profile_data.items() if k not in ["last_update", "summary", "code_try", "gpt_c_run_count"]}
+    debug_log(f"Cleaned profile has {len(clean_profile)} fields: {list(clean_profile.keys())}")
     
     summary_parts = []
     
     # ✅ תיקון: משתמש ברשימת השדות הנכונה מ-fields_dict
     summary_fields = get_summary_fields()
+    debug_log(f"Summary fields from fields_dict: {summary_fields}")
     
-    # עובר על השדות לפי הסדר שהם מופיעים ב-fields_dict
-    for field_name, field_info in FIELDS_DICT.items():
-        # ✅ תיקון: רק שדות שיש להם show_in_summary ולא ריק
-        if "show_in_summary" not in field_info or not field_info["show_in_summary"]:
+    # עובר על השדות שנמצאים ברשימת השדות לסיכום בלבד
+    for field_name in summary_fields:
+        if field_name not in FIELDS_DICT:
             continue
             
-        # ✅ תיקון: רק שדות שנמצאים ברשימת השדות לסיכום
-        if field_name not in summary_fields:
-            continue
-            
+        field_info = FIELDS_DICT[field_name]
         field_value = clean_profile.get(field_name, "")
         
         # רק אם השדה מלא
         if field_value and str(field_value).strip():
-            show_label = field_info["show_in_summary"]
+            show_label = field_info.get("show_in_summary", "")
             clean_value = str(field_value).strip()
             
             if show_label:  # יש label מיוחד
-                summary_parts.append(f"{show_label} {clean_value}")
+                part = f"{show_label} {clean_value}"
+                summary_parts.append(part)
+                debug_log(f"Added to summary with label: {field_name} = '{part}'")
             else:  # אין label - רק הערך
                 summary_parts.append(clean_value)
+                debug_log(f"Added to summary without label: {field_name} = '{clean_value}'")
+        else:
+            debug_log(f"Skipped empty field: {field_name}")
     
-    return " | ".join(summary_parts)
+    final_summary = " | ".join(summary_parts)
+    debug_log(f"Final generated summary: '{final_summary}' (from {len(summary_parts)} parts)")
+    return final_summary
 
 def compose_emotional_summary(row: List[str], headers: List[str] = None) -> str:
     """

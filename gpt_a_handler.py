@@ -309,18 +309,18 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
     """
     מוחק את ההודעה הזמנית (אם קיימת) ושולח למשתמש את התשובה האמיתית.
 
-    ✅ שיפור: משתמשים ב-send_gpta_response – בטוח ופשוט יותר.
+    ✅ שיפור: משתמשים ב-send_message עם is_gpt_a_response=True – בטוח ופשוט יותר.
     """
-    from message_handler import send_gpta_response  # local import to avoid circular
+    from message_handler import send_message  # local import to avoid circular
 
     try:
-        # מחיקת ההודעה הזמנית - לא רלוונטי כי send_gpta_response לא מחזיר אובייקט
+        # מחיקת ההודעה הזמנית - לא רלוונטי כי send_message לא מחזיר אובייקט
         if temp_message is not None:
-            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_gpta_response)")
+            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_message)")
 
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
-        await send_gpta_response(update, chat_id, new_text)
+        await send_message(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
         logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
         return True
 
@@ -338,19 +338,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
     # שלב 1: הכנת ההודעות
     prep_start_time = time.time()
     
-    # ---------------------------------------------------------------
-    # ⚙️ חוקיות הזרקת שאלות השלמת הפרופיל
-    # ---------------------------------------------------------------
-    # ✅ מתבצע רק כש:
-    #    1. יש לנו chat_id (כלומר אנחנו בתוך צ'אט רגיל)
-    #    2. משתמשים במודל *מהיר* → use_extra_emotion == False
-    #    3. create_missing_fields_system_message מחזירה טקסט (לפחות 2 שדות חסרים)
-    # אחרת (❌) – לא מכניסים כלום ל-messages.
-    missing_text = ""
-    if chat_id and not use_extra_emotion:
-        system_message, missing_text = create_missing_fields_system_message(chat_id)
-        if system_message:
-            full_messages.insert(1, {"role": "system", "content": system_message})
+    # ההוספה של השדות החסרים מתבצעת כעת ב-message_handler.py
+    # כדי להימנע מכפילויות, הסרנו את הקוד מכאן
     
     prep_time = time.time() - prep_start_time
     print(f"⚡ [TIMING] Preparation time: {prep_time:.3f}s")
@@ -503,14 +492,6 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         if chat_id and detect_profile_question_in_response(bot_reply):
             start_profile_question_cooldown(chat_id)
             logging.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={chat_id}")
-        
-        # 🆕 דיבאג: בדיקת התאמה בין missing_text לתשובת הבוט
-        if missing_text:
-            if did_bot_ask_profile_questions(missing_text, bot_reply, chat_id):
-                start_profile_question_cooldown(chat_id)
-                logging.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={chat_id}")
-            else:
-                logging.info(f"❌ [PROFILE_QUESTION] לא הופעל פסק זמן (הבוט לא שאל מספיק מהשאלות) | chat_id={chat_id}")
         
         return {
             "bot_reply": bot_reply, 
