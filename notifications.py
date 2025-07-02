@@ -19,6 +19,7 @@ from config import (
     BOT_TOKEN
 )
 from utils import log_error_stat, get_israel_time
+import time
 
 # קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
 CRITICAL_ERROR_USERS_FILE = "data/critical_error_users.json"
@@ -28,20 +29,91 @@ def _load_critical_error_users():
     try:
         if os.path.exists(CRITICAL_ERROR_USERS_FILE):
             with open(CRITICAL_ERROR_USERS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                print(f"✅ נטען קובץ משתמשים קריטיים עם {len(data)} משתמשים")
+                return data
+        
+        # 🔧 תיקון: בדיקת קובץ backup אם הקובץ הראשי לא קיים
+        backup_file = CRITICAL_ERROR_USERS_FILE + ".backup"
+        if os.path.exists(backup_file):
+            print("⚠️ קובץ ראשי לא קיים, מנסה לטעון מbackup...")
+            with open(backup_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # שחזור הקובץ הראשי מהbackup
+                _save_critical_error_users(data)
+                print(f"✅ שוחזר קובץ משתמשים קריטיים מbackup עם {len(data)} משתמשים")
+                return data
+        
+        print("ℹ️ אין קובץ משתמשים קריטיים קיים - מתחיל ברשימה ריקה")
         return {}
     except Exception as e:
         logging.error(f"Error loading critical error users: {e}")
+        print(f"🚨 שגיאה בטעינת קובץ משתמשים קריטיים: {e}")
+        
+        # 🔧 תיקון: ניסיון נוסף עם backup
+        try:
+            backup_file = CRITICAL_ERROR_USERS_FILE + ".backup"
+            if os.path.exists(backup_file):
+                print("🔄 מנסה לטעון מקובץ backup...")
+                with open(backup_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    print(f"✅ נטען מbackup: {len(data)} משתמשים")
+                    return data
+        except Exception as backup_error:
+            print(f"🚨 גם backup נכשל: {backup_error}")
+        
         return {}
 
 def _save_critical_error_users(users_data):
     """שומר רשימת משתמשים שקיבלו הודעות שגיאה קריטיות"""
     try:
+        # יצירת תיקייה אם לא קיימת
         os.makedirs(os.path.dirname(CRITICAL_ERROR_USERS_FILE), exist_ok=True)
+        
+        # 🔧 תיקון: שמירת backup לפני כתיבת הקובץ החדש
+        if os.path.exists(CRITICAL_ERROR_USERS_FILE):
+            backup_file = CRITICAL_ERROR_USERS_FILE + ".backup"
+            try:
+                import shutil
+                shutil.copy2(CRITICAL_ERROR_USERS_FILE, backup_file)
+                print(f"✅ נוצר backup של קובץ המשתמשים הקריטיים")
+            except Exception as backup_error:
+                print(f"⚠️ נכשל ביצירת backup: {backup_error}")
+        
+        # כתיבת הקובץ החדש
         with open(CRITICAL_ERROR_USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"✅ נשמר קובץ משתמשים קריטיים עם {len(users_data)} משתמשים")
+        
+        # 🔧 תיקון: אימות שהקובץ נשמר נכון
+        try:
+            with open(CRITICAL_ERROR_USERS_FILE, 'r', encoding='utf-8') as f:
+                verify_data = json.load(f)
+                if len(verify_data) != len(users_data):
+                    raise Exception(f"File verification failed: expected {len(users_data)} users, got {len(verify_data)}")
+            print(f"✅ אומת: הקובץ נשמר נכון עם {len(users_data)} משתמשים")
+        except Exception as verify_error:
+            print(f"🚨 אימות הקובץ נכשל: {verify_error}")
+            # ניסיון לשחזר מbackup
+            backup_file = CRITICAL_ERROR_USERS_FILE + ".backup"
+            if os.path.exists(backup_file):
+                import shutil
+                shutil.copy2(backup_file, CRITICAL_ERROR_USERS_FILE)
+                print("🔄 שוחזר הקובץ מbackup")
+                
     except Exception as e:
         logging.error(f"Error saving critical error users: {e}")
+        print(f"🚨 שגיאה בשמירת קובץ משתמשים קריטיים: {e}")
+        
+        # 🔧 תיקון: ניסיון לשמור בקובץ חירום
+        try:
+            emergency_file = CRITICAL_ERROR_USERS_FILE + ".emergency"
+            with open(emergency_file, 'w', encoding='utf-8') as f:
+                json.dump(users_data, f, ensure_ascii=False, indent=2)
+            print(f"⚠️ נשמר בקובץ חירום: {emergency_file}")
+        except Exception as emergency_error:
+            print(f"🚨 גם שמירת חירום נכשלה: {emergency_error}")
 
 def _add_user_to_critical_error_list(chat_id: str, error_message: str):
     """מוסיף משתמש לרשימת מי שקיבל הודעת שגיאה קריטית"""
@@ -54,8 +126,37 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str):
         }
         _save_critical_error_users(users_data)
         logging.info(f"Added user {chat_id} to critical error list")
+        print(f"✅ משתמש {chat_id} נוסף לרשימת המשתמשים הקריטיים")
     except Exception as e:
         logging.error(f"Error adding user to critical error list: {e}")
+        print(f"🚨 שגיאה בהוספת משתמש {chat_id} לרשימת משתמשים קריטיים: {e}")
+        
+        # 🔧 תיקון: ניסיון לשמור לפחות ברשימה זמנית
+        try:
+            temp_file = f"data/temp_critical_user_{chat_id}_{int(time.time())}.json"
+            os.makedirs("data", exist_ok=True)
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    str(chat_id): {
+                        "timestamp": get_israel_time().isoformat(),
+                        "error_message": error_message,
+                        "recovered": False
+                    }
+                }, f, ensure_ascii=False, indent=2)
+            print(f"⚠️ נשמר משתמש {chat_id} בקובץ זמני: {temp_file}")
+        except Exception as temp_error:
+            print(f"🚨 גם שמירה זמנית נכשלה: {temp_error}")
+            # לפחות נשלח התראה לאדמין
+            try:
+                send_admin_notification(
+                    f"🚨 CRITICAL: נכשל ברישום משתמש {chat_id} לרשימת התאוששות!\n"
+                    f"שגיאה: {e}\n"
+                    f"הודעת שגיאה: {error_message[:100]}\n"
+                    f"⚠️ המשתמש עלול לא לקבל הודעת התאוששות!",
+                    urgent=True
+                )
+            except Exception:
+                pass
 
 def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown error"):
     """
@@ -72,6 +173,14 @@ def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown e
 
 async def _send_user_friendly_error_message(update, chat_id: str):
     """שולח הודעת שגיאה ידידותית למשתמש"""
+    # 🔧 תיקון קריטי: רישום המשתמש לרשימה לפני ניסיון שליחת הודעה!
+    try:
+        _add_user_to_critical_error_list(chat_id, "User-friendly error message attempt")
+        print(f"✅ משתמש {chat_id} נרשם בבטחה לרשימת התאוששות")
+    except Exception as registration_error:
+        print(f"🚨 CRITICAL: נכשל ברישום משתמש {chat_id} לרשימת התאוששות: {registration_error}")
+        # גם אם נכשל ברישום - ננסה לפחות לשלוח הודעה
+    
     try:
         user_friendly_message = (
             "🙏 מתנצל, יש בעיה - הבוט כרגע לא עובד.\n\n"
@@ -98,24 +207,52 @@ async def _send_user_friendly_error_message(update, chat_id: str):
             bot = telegram.Bot(token=BOT_TOKEN)
             await bot.send_message(chat_id=chat_id, text=user_friendly_message)
         
-        # הוספת המשתמש לרשימת מי שקיבל הודעת שגיאה
-        _add_user_to_critical_error_list(chat_id, user_friendly_message)
-        
         logging.info(f"Sent user-friendly error message to user {chat_id}")
+        print(f"✅ הודעת שגיאה נשלחה בהצלחה למשתמש {chat_id}")
         return True
         
     except Exception as e:
         logging.error(f"Failed to send user-friendly error message to {chat_id}: {e}")
+        print(f"⚠️ שליחת הודעה נכשלה למשתמש {chat_id}, אבל המשתמש כבר נרשם לרשימת התאוששות")
+        # 🔧 תיקון: ניסיון נוסף לרישום המשתמש אם השליחה נכשלה
+        try:
+            _add_user_to_critical_error_list(chat_id, f"Message sending failed: {str(e)[:100]}")
+        except Exception:
+            pass  # לא נעצור את התהליך בגלל זה
         return False
 
 async def send_recovery_messages_to_affected_users():
     """שולח הודעות התאוששות לכל המשתמשים שקיבלו הודעות שגיאה"""
     try:
+        # 🔧 תיקון: איחוד קבצים זמניים לפני שליחת הודעות
+        merge_temporary_critical_files()
+        
+        # 🚨 הוספה חירום: וידוא שמשתמש 179392777 ברשימה (המשתמש שלא קיבל הודעת התאוששות)
+        try:
+            emergency_user = "179392777"
+            users_data_check = _load_critical_error_users()
+            if emergency_user not in users_data_check:
+                print(f"🚨 מוסיף משתמש חירום {emergency_user} לרשימת התאוששות...")
+                _add_user_to_critical_error_list(emergency_user, "Emergency fix - user reported no recovery message received")
+                print(f"✅ משתמש חירום {emergency_user} נוסף לרשימה")
+                send_admin_notification(f"🚨 הוספה חירום: משתמש {emergency_user} נוסף לרשימת התאוששות")
+            else:
+                print(f"ℹ️ משתמש חירום {emergency_user} כבר ברשימה")
+                # בדיקה אם הוא לא התאושש
+                if not users_data_check[emergency_user].get("recovered", False):
+                    print(f"⚠️ משתמש {emergency_user} ברשימה אבל לא התאושש - יקבל הודעה")
+                else:
+                    print(f"ℹ️ משתמש {emergency_user} כבר התאושש")
+        except Exception as emergency_error:
+            print(f"🚨 שגיאה בהוספת משתמש חירום: {emergency_error}")
+        
         users_data = _load_critical_error_users()
+        
         recovery_message = "👋  היי, חזרתי! הבעיה נפתרה והכל עובד שוב כרגיל. 😊\n\nאפשר לשלוח לי הודעה ואענה כרגיל!"
         
         bot = telegram.Bot(token=BOT_TOKEN)
         recovered_users = []
+        failed_users = []
         
         for chat_id, user_info in users_data.items():
             if not user_info.get("recovered", False):
@@ -126,26 +263,105 @@ async def send_recovery_messages_to_affected_users():
                     user_info["recovery_timestamp"] = get_israel_time().isoformat()
                     recovered_users.append(chat_id)
                     logging.info(f"Sent recovery message to user {chat_id}")
+                    print(f"✅ נשלחה הודעת התאוששות למשתמש {chat_id}")
                     
                     # מעט השהיה בין הודעות כדי לא לעמוס על טלגרם
                     await asyncio.sleep(0.5)
                     
                 except Exception as e:
                     logging.error(f"Failed to send recovery message to {chat_id}: {e}")
+                    print(f"⚠️ נכשל בשליחת הודעת התאוששות למשתמש {chat_id}: {e}")
+                    failed_users.append({"chat_id": chat_id, "error": str(e)})
         
         # שמירת המצב המעודכן
         _save_critical_error_users(users_data)
         
-        # התראה לאדמין על מספר ההתאוששויות
-        if recovered_users:
-            admin_message = f"✅ נשלחו הודעות התאוששות ל-{len(recovered_users)} משתמשים שקיבלו הודעות שגיאה קריטיות"
+        # התראה מפורטת לאדמין על מספר ההתאוששויות
+        if recovered_users or failed_users:
+            admin_message = f"📊 דוח הודעות התאוששות:\n"
+            admin_message += f"✅ נשלחו בהצלחה: {len(recovered_users)} משתמשים\n"
+            if failed_users:
+                admin_message += f"❌ נכשלו: {len(failed_users)} משתמשים\n"
+                admin_message += "פרטי הכשלונות:\n"
+                for failure in failed_users[:5]:  # מציג רק 5 ראשונים
+                    admin_message += f"- {failure['chat_id']}: {failure['error'][:50]}\n"
+                if len(failed_users) > 5:
+                    admin_message += f"... ועוד {len(failed_users) - 5} כשלונות\n"
+            
             send_admin_notification(admin_message)
         
         return len(recovered_users)
         
     except Exception as e:
         logging.error(f"Error sending recovery messages: {e}")
+        print(f"🚨 שגיאה כללית בשליחת הודעות התאוששות: {e}")
+        # התראה לאדמין על כשל כללי
+        try:
+            send_admin_notification(
+                f"🚨 כשל כללי בשליחת הודעות התאוששות!\n"
+                f"שגיאה: {str(e)[:200]}\n"
+                f"⚠️ ייתכן שמשתמשים לא קיבלו הודעות התאוששות!",
+                urgent=True
+            )
+        except Exception:
+            pass
         return 0
+
+def merge_temporary_critical_files():
+    """מאחד קבצים זמניים של משתמשים קריטיים לקובץ הראשי"""
+    try:
+        data_dir = "data"
+        if not os.path.exists(data_dir):
+            return
+        
+        main_users_data = _load_critical_error_users()
+        temp_files_found = []
+        merged_users = 0
+        
+        # חיפוש קבצים זמניים
+        for filename in os.listdir(data_dir):
+            if filename.startswith("temp_critical_user_") and filename.endswith(".json"):
+                temp_file_path = os.path.join(data_dir, filename)
+                temp_files_found.append(temp_file_path)
+                
+                try:
+                    with open(temp_file_path, 'r', encoding='utf-8') as f:
+                        temp_data = json.load(f)
+                    
+                    # איחוד הנתונים
+                    for chat_id, user_info in temp_data.items():
+                        if chat_id not in main_users_data:
+                            main_users_data[chat_id] = user_info
+                            merged_users += 1
+                            print(f"✅ מוזג משתמש {chat_id} מקובץ זמני")
+                        else:
+                            print(f"ℹ️ משתמש {chat_id} כבר קיים - מדלג")
+                    
+                    # מחיקת הקובץ הזמני אחרי איחוד מוצלח
+                    os.remove(temp_file_path)
+                    print(f"🗑️ נמחק קובץ זמני: {filename}")
+                    
+                except Exception as file_error:
+                    print(f"⚠️ שגיאה בעיבוד קובץ זמני {filename}: {file_error}")
+        
+        # שמירת הנתונים המאוחדים אם היו שינויים
+        if merged_users > 0:
+            _save_critical_error_users(main_users_data)
+            print(f"✅ אוחדו {merged_users} משתמשים מ-{len(temp_files_found)} קבצים זמניים")
+            
+            # התראה לאדמין על איחוד
+            send_admin_notification(
+                f"🔗 אוחדו קבצים זמניים של משתמשים קריטיים:\n"
+                f"📁 {len(temp_files_found)} קבצים זמניים\n"
+                f"👥 {merged_users} משתמשים נוספו\n"
+                f"📊 סה\"כ משתמשים: {len(main_users_data)}"
+            )
+        elif temp_files_found:
+            print(f"ℹ️ נמצאו {len(temp_files_found)} קבצים זמניים אבל לא נדרש איחוד")
+        
+    except Exception as e:
+        print(f"🚨 שגיאה באיחוד קבצים זמניים: {e}")
+        # לא נעצור את התהליך בגלל זה
 
 def clear_old_critical_error_users(days_old: int = 7):
     """מנקה משתמשים ישנים מרשימת השגיאות הקריטיות"""
@@ -1154,5 +1370,189 @@ async def gentle_reminder_background_task():
             # 🛡️ ממשיך לרוץ גם אחרי שגיאה
             logging.info("[REMINDER] 🔄 Continuing background task despite error...")
             await asyncio.sleep(3600)  # ממתין שעה גם במקרה של שגיאה
+
+def diagnose_critical_users_system():
+    """אבחון מלא של מערכת המשתמשים הקריטיים"""
+    try:
+        print("🔍 מתחיל אבחון מערכת המשתמשים הקריטיים...")
+        
+        # בדיקת הקובץ הראשי
+        main_file_status = {
+            "exists": os.path.exists(CRITICAL_ERROR_USERS_FILE),
+            "size": 0,
+            "users_count": 0,
+            "readable": False,
+            "last_modified": None
+        }
+        
+        if main_file_status["exists"]:
+            try:
+                stat_info = os.stat(CRITICAL_ERROR_USERS_FILE)
+                main_file_status["size"] = stat_info.st_size
+                main_file_status["last_modified"] = time.ctime(stat_info.st_mtime)
+                
+                with open(CRITICAL_ERROR_USERS_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    main_file_status["users_count"] = len(data)
+                    main_file_status["readable"] = True
+                    main_file_status["users"] = list(data.keys())
+                    
+                    # ספירת משתמשים שלא התאוששו
+                    unrecovered = [uid for uid, info in data.items() if not info.get("recovered", False)]
+                    main_file_status["unrecovered_count"] = len(unrecovered)
+                    main_file_status["unrecovered_users"] = unrecovered
+                    
+            except Exception as e:
+                main_file_status["error"] = str(e)
+        
+        # בדיקת קובץ backup
+        backup_file = CRITICAL_ERROR_USERS_FILE + ".backup"
+        backup_status = {
+            "exists": os.path.exists(backup_file),
+            "size": 0,
+            "users_count": 0,
+            "readable": False
+        }
+        
+        if backup_status["exists"]:
+            try:
+                stat_info = os.stat(backup_file)
+                backup_status["size"] = stat_info.st_size
+                backup_status["last_modified"] = time.ctime(stat_info.st_mtime)
+                
+                with open(backup_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    backup_status["users_count"] = len(data)
+                    backup_status["readable"] = True
+                    
+            except Exception as e:
+                backup_status["error"] = str(e)
+        
+        # בדיקת קבצים זמניים
+        temp_files = []
+        data_dir = "data"
+        if os.path.exists(data_dir):
+            for filename in os.listdir(data_dir):
+                if filename.startswith("temp_critical_user_") and filename.endswith(".json"):
+                    temp_file_path = os.path.join(data_dir, filename)
+                    temp_info = {
+                        "filename": filename,
+                        "path": temp_file_path,
+                        "size": os.path.getsize(temp_file_path),
+                        "readable": False,
+                        "users_count": 0
+                    }
+                    
+                    try:
+                        with open(temp_file_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            temp_info["users_count"] = len(data)
+                            temp_info["readable"] = True
+                            temp_info["users"] = list(data.keys())
+                    except Exception as e:
+                        temp_info["error"] = str(e)
+                    
+                    temp_files.append(temp_info)
+        
+        # בדיקת תיקיית data
+        data_dir_status = {
+            "exists": os.path.exists("data"),
+            "writable": False,
+            "permissions": None
+        }
+        
+        if data_dir_status["exists"]:
+            try:
+                # בדיקת הרשאות כתיבה
+                test_file = "data/test_write.tmp"
+                with open(test_file, 'w') as f:
+                    f.write("test")
+                os.remove(test_file)
+                data_dir_status["writable"] = True
+                data_dir_status["permissions"] = "OK"
+            except Exception as e:
+                data_dir_status["error"] = str(e)
+        
+        # דוח מלא
+        report = f"""
+🔍 דוח אבחון מערכת משתמשים קריטיים:
+
+📁 תיקיית DATA:
+   קיימת: {data_dir_status['exists']}
+   ניתנת לכתיבה: {data_dir_status['writable']}
+   {f"שגיאה: {data_dir_status.get('error', '')}" if 'error' in data_dir_status else ""}
+
+📄 קובץ ראשי ({CRITICAL_ERROR_USERS_FILE}):
+   קיים: {main_file_status['exists']}
+   גודל: {main_file_status['size']} bytes
+   ניתן לקריאה: {main_file_status['readable']}
+   משתמשים: {main_file_status['users_count']}
+   לא התאוששו: {main_file_status.get('unrecovered_count', 0)}
+   {f"שינוי אחרון: {main_file_status.get('last_modified', 'לא ידוע')}" if main_file_status['exists'] else ""}
+   {f"שגיאה: {main_file_status.get('error', '')}" if 'error' in main_file_status else ""}
+
+🔄 קובץ Backup:
+   קיים: {backup_status['exists']}
+   גודל: {backup_status['size']} bytes
+   ניתן לקריאה: {backup_status['readable']}
+   משתמשים: {backup_status['users_count']}
+   {f"שגיאה: {backup_status.get('error', '')}" if 'error' in backup_status else ""}
+
+⏳ קבצים זמניים:
+   נמצאו: {len(temp_files)}"""
+        
+        for temp_file in temp_files:
+            report += f"""
+   - {temp_file['filename']}: {temp_file['users_count']} משתמשים, {temp_file['size']} bytes"""
+            if 'error' in temp_file:
+                report += f" (שגיאה: {temp_file['error']})"
+        
+        if main_file_status.get('unrecovered_users'):
+            report += f"""
+
+👥 משתמשים שמחכים להתאוששות:
+   {', '.join(main_file_status['unrecovered_users'])}"""
+        
+        print(report)
+        
+        # שליחת דוח לאדמין
+        send_admin_notification(f"🔍 דוח אבחון מערכת משתמשים קריטיים:{report}")
+        
+        return {
+            "main_file": main_file_status,
+            "backup_file": backup_status,
+            "temp_files": temp_files,
+            "data_dir": data_dir_status
+        }
+        
+    except Exception as e:
+        error_msg = f"🚨 שגיאה באבחון מערכת משתמשים קריטיים: {e}"
+        print(error_msg)
+        send_admin_notification(error_msg, urgent=True)
+        return {"error": str(e)}
+
+def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition"):
+    """הוספה ידנית של משתמש לרשימת משתמשים קריטיים - לשימוש חירום"""
+    try:
+        print(f"🔧 הוספה ידנית של משתמש {chat_id} לרשימת התאוששות...")
+        _add_user_to_critical_error_list(str(chat_id), f"Manual: {error_context}")
+        print(f"✅ משתמש {chat_id} נוסף בהצלחה לרשימת התאוששות")
+        
+        # אימות שההוספה הצליחה
+        users_data = _load_critical_error_users()
+        if str(chat_id) in users_data:
+            print(f"✅ אומת: משתמש {chat_id} נמצא ברשימה")
+            send_admin_notification(f"✅ הוספה ידנית הצליחה: משתמש {chat_id} נוסף לרשימת התאוששות")
+            return True
+        else:
+            print(f"⚠️ משתמש {chat_id} לא נמצא ברשימה אחרי ההוספה!")
+            send_admin_notification(f"⚠️ הוספה ידנית נכשלה: משתמש {chat_id} לא נמצא ברשימה", urgent=True)
+            return False
+            
+    except Exception as e:
+        error_msg = f"🚨 שגיאה בהוספה ידנית של משתמש {chat_id}: {e}"
+        print(error_msg)
+        send_admin_notification(error_msg, urgent=True)
+        return False
 
 

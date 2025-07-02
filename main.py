@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup logic
     from utils import health_check
-    from notifications import send_error_notification, send_recovery_messages_to_affected_users
+    from notifications import send_error_notification, send_recovery_messages_to_affected_users, diagnose_critical_users_system
     
     # וודא שהבוט מוגדר
     get_bot_app()
@@ -124,6 +124,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         from traceback import format_exc
         send_error_notification(f"[STARTUP] שגיאה בבדיקת תקינות: {e}\n{format_exc()}")
+    
+    # 🔍 אבחון מערכת משתמשים קריטיים
+    try:
+        print("🔍 מבצע אבחון מערכת משתמשים קריטיים...")
+        diagnosis = diagnose_critical_users_system()
+        if diagnosis.get("error"):
+            print(f"⚠️ נמצאה בעיה במערכת משתמשים קריטיים: {diagnosis['error']}")
+        else:
+            print("✅ אבחון מערכת משתמשים קריטיים הושלם")
+    except Exception as e:
+        print(f"⚠️ שגיאה באבחון מערכת משתמשים קריטיים: {e}")
     
     # --- שליחת הודעות התאוששות אוטומטית ---
     try:
@@ -226,7 +237,7 @@ async def webhook(request: Request):
         print(f"❌ שגיאה ב-webhook: {ex}")
         print(f"📊 Traceback מלא: {error_details}")
         
-        # � הוספה: רישום בטוח למשתמש לרשימת התאוששות לפני כל טיפול אחר
+        # 🚨 הוספה: רישום בטוח למשתמש לרשימת התאוששות לפני כל טיפול אחר
         try:
             from notifications import safe_add_user_to_recovery_list
             if chat_id:
@@ -234,7 +245,7 @@ async def webhook(request: Request):
         except Exception:
             pass  # אל תיכשל בגלל זה
         
-        # �🚨 התראה מיידית לאדמין עם פרטים מלאים
+        # � התראה מיידית לאדמין עם פרטים מלאים
         try:
             from notifications import handle_critical_error
             await handle_critical_error(ex, chat_id, user_msg, update if 'update' in locals() else None)
