@@ -571,881 +571,195 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
         try:
-            # --- יצירת רשומה בהיסטוריה מראש ---
-            # מונע מצב הודעה כפולה לפני שמירת תשובת GPT,
-            # וכך נמנע שליחת ברכת "בוקר/לילה טוב" כפולה (Race-condition).
-            history_entry_created = False
-            try:
-                update_chat_history(chat_id, user_msg, "")
-                history_entry_created = True
-            except Exception as hist_err:
-                logging.warning(f"[HISTORY] לא הצלחתי ליצור רשומת היסטוריה מוקדמת: {hist_err}")
-
-            # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
-            current_summary = get_user_summary(chat_id) or ""
-            history_messages = get_chat_history_messages(chat_id, limit=15)  # 🔧 הגבלה ל-15 הודעות לחסוך בטוקנים
-            
-            # יצירת טיימסטמפ והנחיות יום השבוע
-            from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
-            from utils import should_send_time_greeting
-            
-            # ברכה מותאמת זמן נשלחת לפי תנאים (שיחה ראשונה, הודעת ברכה, החלפת בלוק זמן)
-            greeting_instruction = ""
-            weekday_instruction = ""
-            
-            try:
-                if should_send_time_greeting(chat_id, user_msg):
-                    # שליחת הנחיות ברכת זמן ויום שבוע
-                    weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
-                    greeting_instruction = get_time_greeting_instruction()
-                    print(f"[GREETING_DEBUG] שולח ברכה + יום שבוע עבור chat_id={chat_id}")
-                else:
-                    print(f"[GREETING_DEBUG] לא שולח ברכה עבור chat_id={chat_id} - המשך שיחה רגיל")
-            except Exception as greet_err:
-                logging.warning(f"[GREETING] שגיאה בהערכת greeting: {greet_err}")
-            
-            # בניית ההודעות ל-gpt_a
-            messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
-            
-            # 🔍 [DEBUG] הודעת ראשי SYSTEM_PROMPT
-            print(f"\n🔍 [MESSAGE_BUILD_DEBUG] === BUILDING MESSAGES FOR GPT ===")
-            print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
-            
-            # הוספת ברכת זמן אם יש
-            if greeting_instruction:
-                messages_for_gpt.append({"role": "system", "content": greeting_instruction})
-                print(f"🎯 [SYSTEM_2] TIME GREETING - Content: {greeting_instruction}")
-            
-            if weekday_instruction:
-                messages_for_gpt.append({"role": "system", "content": weekday_instruction})
-                print(f"🎯 [SYSTEM_3] WEEKDAY - Content: {weekday_instruction}")
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_4] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_5] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # ⭐ הוספת המידע על המשתמש ממש בסוף - לפני ההודעה החדשה בלבד
-            if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
-
-{current_summary}
-
-⚠️ **הנחיות חשובות לשימוש במידע:**
-• השתמש רק במידע שהמשתמש באמת סיפר לך - אל תמציא או תוסיף דברים
-• תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
-• התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
-• זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""})
-                print(f"🎯 [SYSTEM_6] USER SUMMARY (PRE-MESSAGE) - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
-                print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
-            messages_for_gpt.extend(history_messages)
-            
             # הוספת ההודעה החדשה עם טיימסטמפ באותו פורמט כמו בהיסטוריה
             from chat_utils import _format_timestamp_for_history
             import utils
             current_timestamp = _format_timestamp_for_history(utils.get_israel_time().isoformat())
             user_msg_with_timestamp = f"{current_timestamp} {user_msg}" if current_timestamp else user_msg
-            messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
+            messages_for_gpt = [{"role": "user", "content": user_msg_with_timestamp}]
             print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {current_timestamp}")
             print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
             print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
-                print(f"🎯 [SYSTEM_112] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_113] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_114] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_115] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_116] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_117] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_118] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_119] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_120] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_121] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_122] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_123] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_124] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_125] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_126] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_127] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_128] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_129] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_130] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_131] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_132] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_133] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_134] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_135] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_136] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_137] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_138] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_139] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_140] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_141] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_142] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_143] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_144] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_145] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_146] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_147] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_148] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_149] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_150] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_151] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_152] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_153] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_154] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_155] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_156] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_157] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_158] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_159] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_160] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_161] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_162] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_163] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_164] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_165] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_166] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_167] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_168] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_169] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_170] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_171] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_172] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_173] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_174] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_175] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_176] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_177] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_178] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_179] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_180] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_181] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_182] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_183] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_184] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_185] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_186] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_187] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_188] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_189] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_190] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_191] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_192] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_193] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_194] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_195] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_196] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_197] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_198] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_199] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_200] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_201] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_202] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_203] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש (רק במודל מהיר כדי לא להעמיס על המודל המתקדם)
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_204] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
-            messages_for_gpt.extend(history_messages)
-            
-            # הוספת הודעת חג
+
+            # שלב 2: שליחת תשובה מ-gpt_a
+            logging.info(f"📤 [GPAT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
+            print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
+            
+            bot_reply = await get_main_response(messages_for_gpt, chat_id)
+            
+            if not bot_reply:
+                error_msg = error_human_funny_message()
+                await send_system_message(update, chat_id, error_msg)
+                await end_monitoring_user(str(chat_id), False)
+                return
+
+            # שלב 3: עדכון היסטוריה עם התשובה הסופית
+            if history_entry_created:
+                # רשומה כבר קיימת, מעדכן אותה עם התשובה
+                update_last_bot_message(chat_id, bot_reply)
+            else:
+                # יוצר רשומה חדשה
+                update_chat_history(chat_id, user_msg, bot_reply)
+
+            # שלב 4: שליחת התשובה למשתמש עם פורמטינג מתקדם
+            await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
+
+            # שלב 5: רישום והפעלת כל התהליכים ברקע במקביל
+            try:
+                # חישוב זמן מענה
+                response_time = time.time() - user_request_start_time
+                log_payload["response_time"] = response_time
+                log_payload["timestamp_end"] = get_israel_time().isoformat()
+                log_payload["bot_reply"] = bot_reply
+                
+                # רישום לשיטס - מהיר וללא המתנה
+                asyncio.create_task(log_to_sheets(chat_id, user_msg, bot_reply, response_time))
+                
+                # הפעלת כל הטיפולים ברקע - GPT-C, GPT-D, GPT-E
+                asyncio.create_task(run_background_processors(chat_id, user_msg, bot_reply))
+                
+                # עדכון מידע עבור ניטור ביצועים
+                await update_user_processing_stage(str(chat_id), "completed")
+                
+                logging.info(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
+                print(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
+                
+            except Exception as ex:
+                logging.error(f"❌ שגיאה בטיפולים ברקע: {ex}")
+                # אל תעצרי את הזרם - המשתמש כבר קיבל תשובה
+                
+        except Exception as ex:
+            logging.error(f"❌ שגיאה בטיפול בהודעה: {ex}")
+            print(f"❌ שגיאה בטיפול בהודעה: {ex}")
+            await handle_critical_error(ex, chat_id, user_msg, update)
+            await end_monitoring_user(str(chat_id), False)
+            return
+
+        # סיום ניטור
+        await end_monitoring_user(str(chat_id), True)
+
+    except Exception as ex:
+        logging.error(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}")
+        print(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}")
+        await handle_critical_error(ex, None, None, update)
+        if 'chat_id' in locals():
+            await end_monitoring_user(str(chat_id), False)
+
+async def run_background_processors(chat_id, user_msg, bot_reply):
+    """
+    מפעיל את כל המעבדים ברקע במקביל - GPT-C, GPT-D, GPT-E
+    """
+    try:
+        # רשימת משימות לביצוע במקביל
+        tasks = []
+        
+        # GPT-C - עדכון פרופיל משתמש
+        if should_run_gpt_c(user_msg):
+            tasks.append(extract_user_info(chat_id, user_msg))
+            
+        # GPT-D - עדכון חכם של פרופיל
+        tasks.append(smart_update_profile_with_gpt_d(chat_id, user_msg, bot_reply))
+        
+        # GPT-E - אימוג'ים ותכונות מתקדמות
+        tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
+        
+        # הפעלה במקביל של כל התהליכים
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            
+    except Exception as e:
+        logging.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}")
+
+async def handle_new_user_background(update, context, chat_id, user_msg):
+    """
+    טיפול במשתמש חדש לגמרי ברקע
+    """
+    try:
+        logging.info("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
+        print("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
+        
+        # רישום ראשוני
+        register_result = register_user(chat_id, update.message.from_user)
+        
+        if register_result.get("success"):
+            # שליחת הודעות ברכה
+            welcome_messages = get_welcome_messages()
+            for msg in welcome_messages:
+                await send_system_message(update, chat_id, msg)
+                await asyncio.sleep(0.5)  # הפסקה קטנה בין הודעות
+            
+            # שליחת בקשת אישור תנאים
+            await send_approval_message(update, chat_id)
+            
+        else:
+            error_msg = "מצטער, הייתה בעיה ברישום. אנא נסה שוב."
+            await send_system_message(update, chat_id, error_msg)
+            
+    except Exception as e:
+        logging.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}")
+        await send_system_message(update, chat_id, "הייתה בעיה ברישום. אנא נסה שוב מאוחר יותר.")
+
+async def handle_unregistered_user_background(update, context, chat_id, user_msg):
+    """
+    טיפול במשתמש לא רשום ברקע
+    """
+    try:
+        logging.info("[Permissions] משתמש לא רשום - מנחה לרישום")
+        print("[Permissions] משתמש לא רשום - מנחה לרישום")
+        
+        unregistered_msg = "נראה שאתה משתמש חדש! 😊\nאני דניאל, המטפל הדיגיטלי שלך.\nבואו נתחיל בתהליך הכרות קצר."
+        await send_system_message(update, chat_id, unregistered_msg)
+        
+        # הפניה להליך רישום
+        await handle_new_user_background(update, context, chat_id, user_msg)
+        
+    except Exception as e:
+        logging.error(f"[Permissions] שגיאה בטיפול במשתמש לא רשום: {e}")
+
+async def handle_pending_user_background(update, context, chat_id, user_msg):
+    """
+    טיפול במשתמש שעדיין לא אישר תנאים ברקע
+    """
+    try:
+        if user_msg.strip() == APPROVE_BUTTON_TEXT:
+            # אישור תנאים
+            approval_result = approve_user(chat_id)
+            if approval_result.get("success"):
+                await send_system_message(update, chat_id, code_approved_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
+            else:
+                await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
+                
+        elif user_msg.strip() == DECLINE_BUTTON_TEXT:
+            # דחיית תנאים
+            decline_msg = not_approved_message()
+            await send_system_message(update, chat_id, decline_msg, reply_markup=ReplyKeyboardRemove())
+            
+        else:
+            # הודעה על הצורך באישור תנאים
+            pending_msg = "אנא אשר את תנאי השימוש על ידי לחיצה על הכפתור 'מאשר' למטה."
+            await send_approval_message(update, chat_id)
+            
+    except Exception as e:
+        logging.error(f"[Permissions] שגיאה בטיפול במשתמש ממתין לאישור: {e}")
+
+async def send_system_message(update, chat_id, text, reply_markup=None):
+    """
+    שולחת הודעת מערכת למשתמש ללא פורמטינג מתקדם
+    """
+    try:
+        if reply_markup:
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+        else:
+            await update.message.reply_text(text, parse_mode="HTML")
+            
+        # עדכון היסטוריה ולוגים
+        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", text)
+        log_event_to_file({
+            "chat_id": chat_id,
+            "bot_message": text,
+            "timestamp": get_israel_time().isoformat(),
+            "message_type": "system_message"
+        })
+        
+    except Exception as e:
+        logging.error(f"שליחת הודעת מערכת נכשלה: {e}")
