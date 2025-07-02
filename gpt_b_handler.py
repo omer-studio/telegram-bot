@@ -25,7 +25,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         
         messages = [
             {"role": "system", "content": BOT_REPLY_SUMMARY_PROMPT},
-            {"role": "user", "content": f"משתמש: {user_msg}\nבוט: {bot_reply}"}
+            {"role": "user", "content": bot_reply}
         ]
         
         completion_params = {
