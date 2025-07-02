@@ -174,6 +174,9 @@ def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str,
                 continue
             try:
                 sheet.update_cell(row_index, col_index, str(value))
+                # לוג מיוחד לעדכון הסיכום
+                if field.lower() == "summary":
+                    logging.info(f"[SHEETS_SYNC] עודכן סיכום בגוגל שיטס למשתמש {chat_id}: '{value}'")
             except Exception as e:
                 logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
     except Exception as exc:
