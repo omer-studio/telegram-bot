@@ -713,7 +713,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log_payload["bot_reply"] = bot_reply
                 
                 # רישום לשיטס - מהיר וללא המתנה
-                asyncio.create_task(log_to_sheets(chat_id, user_msg, bot_reply, response_time))
+                asyncio.create_task(log_to_sheets(
+                    message_id=str(message_id) if 'message_id' in locals() else f"msg_{int(time.time())}",
+                    chat_id=str(chat_id),
+                    user_msg=user_msg,
+                    reply_text=bot_reply,
+                    reply_summary="",  # יתמלא ע"י GPT-B אם יופעל
+                    main_usage=gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
+                    summary_usage={},  # יתמלא ע"י GPT-B אם יופעל
+                    extract_usage={},  # יתמלא ע"י GPT-C אם יופעל
+                    total_tokens=0,  # יחושב בפונקציה
+                    cost_usd=0.0,  # יחושב בפונקציה
+                    cost_ils=0.0   # יחושב בפונקציה
+                ))
                 
                 # הפעלת כל הטיפולים ברקע - GPT-C, GPT-D, GPT-E
                 asyncio.create_task(run_background_processors(chat_id, user_msg, bot_reply))
