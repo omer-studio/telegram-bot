@@ -589,18 +589,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
             from utils import should_send_time_greeting
             
-            # ברכה מותאמת זמן נשלחת רק בתחילת השיחה (אין היסטוריה קודמת)
+            # ברכה מותאמת זמן נשלחת לפי תנאים (שיחה ראשונה, הודעת ברכה, החלפת בלוק זמן)
             greeting_instruction = ""
-            timestamp = ""
             weekday_instruction = ""
             
             try:
                 if should_send_time_greeting(chat_id, user_msg):
-                    # רק אם צריך לשלוח ברכה - מוסיף גם טיימסטמפ ויום שבוע
-                    timestamp = create_human_context_for_gpt(chat_id)
+                    # שליחת הנחיות ברכת זמן ויום שבוע
                     weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
                     greeting_instruction = get_time_greeting_instruction()
-                    print(f"[GREETING_DEBUG] שולח ברכה + טיימסטמפ + יום שבוע עבור chat_id={chat_id}")
+                    print(f"[GREETING_DEBUG] שולח ברכה + יום שבוע עבור chat_id={chat_id}")
                 else:
                     print(f"[GREETING_DEBUG] לא שולח ברכה עבור chat_id={chat_id} - המשך שיחה רגיל")
             except Exception as greet_err:
@@ -618,24 +616,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"🎯 [SYSTEM_2] USER SUMMARY - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
                 print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
             
-            # הוספת טיימסטמפ והנחיות זמן
-            if timestamp:
-                messages_for_gpt.append({"role": "system", "content": timestamp})
-                print(f"🎯 [SYSTEM_3] TIMESTAMP - Content: {timestamp}")
+            # הוספת הנחיות זמן ויום שבוע (ללא טיימסטמפ נפרד)
             if greeting_instruction:
                 messages_for_gpt.append({"role": "system", "content": greeting_instruction})
-                print(f"🎯 [SYSTEM_4] GREETING - Content: {greeting_instruction}")
+                print(f"🎯 [SYSTEM_3] GREETING - Content: {greeting_instruction}")
             if weekday_instruction:
                 messages_for_gpt.append({"role": "system", "content": weekday_instruction})
-                print(f"🎯 [SYSTEM_5] WEEKDAY - Content: {weekday_instruction}")
+                print(f"🎯 [SYSTEM_4] WEEKDAY - Content: {weekday_instruction}")
             
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages...")
+            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps)...")
             messages_for_gpt.extend(history_messages)
             
-            # הוספת ההודעה החדשה עם טיימסטמפ
-            user_msg_with_timestamp = f"{timestamp} {user_msg}" if timestamp else user_msg
-            messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
-            print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {bool(timestamp)}")
+            # הוספת ההודעה החדשה (ללא טיימסטמפ נפרד כי כל ההיסטוריה כוללת טיימסטמפ)
+            messages_for_gpt.append({"role": "user", "content": user_msg})
+            print(f"👤 [USER_MSG] Length: {len(user_msg)} chars | Note: History includes timestamps")
             print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
             print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
 

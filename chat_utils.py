@@ -161,17 +161,18 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
                 print(f"[SECURITY] מסנן הודעת תשובה פנימית: {bot_content[:50]}...")
             continue
         
-        # הוספת טיימסטמפ להודעת user אם יש
-        if "time" in entry and user_content.strip():
-            user_content = f"[{entry['time']}] {entry['user']}"
+        # הוספת טיימסטמפ לכל הודעה בפורמט [01/07 18:03]
+        formatted_timestamp = _format_timestamp_for_history(entry.get("timestamp", ""))
         
-        # שולח רק הודעות עם תוכן
+        # הוספת הודעות עם טיימסטמפ
         if user_content.strip():
-            messages.append({"role": "user", "content": user_content})
+            user_content_with_time = f"{formatted_timestamp} {user_content}" if formatted_timestamp else user_content
+            messages.append({"role": "user", "content": user_content_with_time})
             user_count += 1
         
         if bot_content.strip():
-            messages.append({"role": "assistant", "content": bot_content})
+            bot_content_with_time = f"{formatted_timestamp} {bot_content}" if formatted_timestamp else bot_content
+            messages.append({"role": "assistant", "content": bot_content_with_time})
             assistant_count += 1
         
         # 🔧 הגבלה על מספר ההודעות הכולל
@@ -186,6 +187,26 @@ def get_chat_history_messages(chat_id: str, limit: int | None = None) -> list:
 # ---------------------------------------------------------------------------
 # 📊 Stats helpers
 # ---------------------------------------------------------------------------
+
+def _format_timestamp_for_history(timestamp_str: str) -> str:
+    """המרת טיימסטמפ לפורמט הנדרש: [01/07 18:03]"""
+    try:
+        if not timestamp_str:
+            return ""
+        
+        # המרת המחרוזת לאובייקט datetime
+        if "T" in timestamp_str:
+            # פורמט ISO
+            dt = datetime.fromisoformat(timestamp_str.replace("Z", ""))
+        else:
+            # פורמט רגיל
+            dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+        
+        # החזרת הפורמט הנדרש
+        return f"[{dt.day:02d}/{dt.month:02d} {dt.hour:02d}:{dt.minute:02d}]"
+    except Exception as e:
+        logging.warning(f"שגיאה בפרמוט טיימסטמפ: {e}")
+        return ""
 
 def _get_time_of_day(hour: int) -> str:
     if 5 <= hour <= 11:
