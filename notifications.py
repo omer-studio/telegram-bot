@@ -190,47 +190,13 @@ def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown e
 async def _send_user_friendly_error_message(update, chat_id: str, original_message: str = None):
     """שולח הודעת שגיאה ידידותית למשתמש - רק פעם אחת!"""
     
-    # � בדיקה קריטית: האם המשתמש כבר קיבל הודעת שגיאה?
+    # מוודא שהמשתמש נרשם לרשימת התאוששות (אם יש צורך) אך ללא קריאה רקורסיבית
     try:
-        users_data = _load_critical_error_users()
-        if str(chat_id) in users_data and not users_data[str(chat_id)].get("recovered", False):
-            # המשתמש כבר ברשימה ועדיין לא התאושש - לא נשלח הודעה נוספת!
-            print(f"⚠️ משתמש {chat_id} כבר קיבל הודעת שגיאה - מדלג על שליחה נוספת")
-            
-            # רק נוסיף את ההודעה החדשה לרשימה (אם יש)
-            if original_message and original_message.strip():
-                existing_messages = users_data[str(chat_id)].get("additional_messages", [])
-                existing_messages.append({
-                    "message": original_message.strip(),
-                    "timestamp": get_israel_time().isoformat()
-                })
-                users_data[str(chat_id)]["additional_messages"] = existing_messages
-                _save_critical_error_users(users_data)
-                print(f"💾 נשמרה הודעה נוספת למשתמש {chat_id}: '{original_message[:50]}...'")
-            
-            return True  # לא שולחים הודעה אבל המשתמש מטופל
-    except Exception as check_error:
-        print(f"⚠️ שגיאה בבדיקת משתמש קיים: {check_error}")
-    
-    # � תיקון קריטי: רישום המשתמש לרשימה לפני ניסיון שליחת הודעה!
-    try:
-        _add_user_to_critical_error_list(chat_id, "User-friendly error message attempt", original_message)
-        print(f"✅ משתמש {chat_id} נרשם בבטחה לרשימת התאוששות")
-        if original_message:
-            print(f"💾 נשמרה הודעה מקורית: '{original_message[:50]}...'")
-        
-        # 🚨 התראה לאדמין על רישום משתמש חדש
-        send_admin_notification(
-            f"🚨 משתמש חדש נרשם לרשימת התאוששות!\n"
-            f"👤 Chat ID: {chat_id}\n"
-            f"💬 הודעה: {(original_message or 'אין')[:100]}\n"
-            f"📊 עוכשיו ברשימה: {len(_load_critical_error_users())} משתמשים",
-            urgent=True
-        )
-        
-    except Exception as registration_error:
-        print(f"🚨 CRITICAL: נכשל ברישום משתמש {chat_id} לרשימת התאוששות: {registration_error}")
-        # גם אם נכשל ברישום - ננסה לפחות לשלוח הודעה
+        safe_add_user_to_recovery_list(chat_id, "user_friendly_error", original_message)
+    except Exception as e:
+        logging.error(f"Failed to add user {chat_id} to recovery list: {e}")
+
+    log_error_stat("user_friendly_error")
     
     try:
         user_friendly_message = (
@@ -267,7 +233,7 @@ async def send_recovery_messages_to_affected_users():
         # 🔧 תיקון: איחוד קבצים זמניים לפני שליחת הודעות
         merge_temporary_critical_files()
         
-        # � תיקון: הוסר קוד חירום זמני שגרם לדוחות חוזרים (user 179392777)
+        # 🔧 הוספה: הוסר קוד חירום זמני שגרם לדוחות חוזרים (user 179392777)
         # הקוד החירום הוסר כי הוא גרם לדפיקה באותה הודעה בכל דוח פריסה
         print("ℹ️ קוד החירום הזמני הוסר - הבעיה הקודמת נפתרה")
         
@@ -587,6 +553,35 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     user = emoji_or_na(os.getenv('USER', None))
     deploy_id = emoji_or_na(os.getenv('RENDER_DEPLOY_ID', None))
     git_commit = get_commit_7first(os.getenv('RENDER_GIT_COMMIT', None))
+    # Retrieve commit message (subject line) with multiple fallbacks
+    raw_commit_msg = os.getenv('RENDER_GIT_COMMIT_MESSAGE')
+    git_commit_msg = None
+
+    if raw_commit_msg and raw_commit_msg.strip():
+        git_commit_msg = raw_commit_msg.split('\n')[0][:100]
+    else:
+        # Fallback: retrieve message for the *current* commit only (accurate data)
+        commit_hash_for_lookup = os.getenv('RENDER_GIT_COMMIT')
+        if commit_hash_for_lookup:
+            try:
+                import subprocess
+                commit_msg_out = subprocess.check_output(
+                    ["git", "show", "-s", "--format=%s", commit_hash_for_lookup],
+                    text=True,
+                    timeout=5
+                ).strip()
+                if commit_msg_out:
+                    git_commit_msg = commit_msg_out.split('\n')[0][:100]
+            except Exception:
+                git_commit_msg = None
+        # If still None, we leave it unknown – no fake data
+        pass
+
+    # Final sanitisation
+    if git_commit_msg and git_commit_msg.strip():
+        git_commit_msg = emoji_or_na(git_commit_msg)
+    else:
+        git_commit_msg = "🤷🏼"
     current_commit = os.getenv('RENDER_GIT_COMMIT', None)
     previous_commit = get_last_deploy_commit_from_log()
     write_deploy_commit_to_log(current_commit)
@@ -633,6 +628,8 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
             fields.append(f"🦓 מזהה דפלוי: {deploy_id}")
         if git_commit not in ["🤷🏼", None, "None"]:
             fields.append(f"🔢 מזהה קומיט: {git_commit}")
+        if git_commit_msg not in ["🤷🏼", None, "None"]:
+            fields.append(f"📝 שם קומיט: {git_commit_msg}")
         fields.append("\nלפרטים נוספים בדוק את הלוגים ב-Render.")
         text = "אדמין יקר - ✅פריסה הצליחה והבוט שלך רץ !! איזה כיף !! 🚀\n\n" + "\n".join(fields)
         if debug_env:
