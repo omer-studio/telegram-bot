@@ -317,12 +317,13 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         approved_col = None
         
         for i, header in enumerate(headers):
-            if header.lower() == "chat_id":
-                chat_id_col = i
-            elif header.lower() == "code_approve":
-                code_approve_col = i
-            elif header.lower() == "approved":
-                approved_col = i
+            normalized = str(header).strip().lower()
+            if normalized == "chat_id":
+                chat_id_col = i + 1  # gspread משתמש ב-1-based indexing
+            elif normalized == "code_approve":
+                code_approve_col = i + 1
+            elif normalized == "approved":
+                approved_col = i + 1
         
         if chat_id_col is None:
             result = {"status": "error", "code": None}
@@ -409,7 +410,10 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
             elif header.lower() == "gpt_c_run_count":
                 new_row[i] = "0"
         
-        sheet_states.insert_row(new_row, 3)
+        # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
+        # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
+        insert_index = len(all_values) + 1  # 1-based index, +1 מוסיף אחרי השורה האחרונה
+        sheet_states.insert_row(new_row, insert_index)
         debug_log(f"Added new user {chat_id} to user_states with code_try=1")
         return True
         
@@ -503,9 +507,10 @@ def approve_user(sheet, chat_id: str) -> bool:
         approved_col = None
         
         for i, header in enumerate(headers):
-            if header.lower() == "chat_id":
+            normalized = str(header).strip().lower()
+            if normalized == "chat_id":
                 chat_id_col = i + 1  # gspread משתמש ב-1-based indexing
-            elif header.lower() == "approved":
+            elif normalized == "approved":
                 approved_col = i + 1
         
         if chat_id_col is None or approved_col is None:
@@ -856,7 +861,10 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
                     new_row[i] = timestamp
                     break
             
-            sheet_states.insert_row(new_row, 3)
+            # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
+            # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
+            insert_index = len(all_values) + 1  # 1-based index, +1 מוסיף אחרי השורה האחרונה
+            sheet_states.insert_row(new_row, insert_index)
 
             # מונה קריאת API (insert_row)
             _increment_api_call()
@@ -890,8 +898,19 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
         return -1
 
 def increment_gpt_c_run_count(chat_id: str) -> int:
-    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import increment_gpt_c_run_count_fast
+    """Increase the GPT-C run counter quickly with graceful fallback.
+
+    We normally import the fast helper via `utils` (which re-exports it
+    from `profile_utils`).  In rare edge-cases (circular import timing or
+    packaging errors) that symbol might be missing.  We therefore fall back
+    to importing directly from `profile_utils` ensuring the function is
+    always available without breaking existing APIs.
+    """
+    try:
+        from utils import increment_gpt_c_run_count_fast  # type: ignore
+    except (ImportError, AttributeError):
+        # ⛑️ Fallback — import directly to avoid runtime failure
+        from profile_utils import increment_gpt_c_run_count_fast  # type: ignore
     return increment_gpt_c_run_count_fast(chat_id)  # מהיר!
 
 def reset_gpt_c_run_count(chat_id: str) -> bool:
@@ -913,23 +932,35 @@ def reset_gpt_c_run_count(chat_id: str) -> bool:
 
 def get_user_summary(chat_id: str) -> str:
     """עכשיו קורא מהיר מ-chat_history.json"""
-    from utils import get_user_summary_fast
+    try:
+        from utils import get_user_summary_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import get_user_summary_fast  # type: ignore
     return get_user_summary_fast(chat_id)  # מהיר!
 
 def update_user_summary(chat_id: str, new_summary: str) -> bool:
     """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import update_user_summary_fast
+    try:
+        from utils import update_user_summary_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import update_user_summary_fast  # type: ignore
     update_user_summary_fast(chat_id, new_summary)  # מהיר!
     return True
 
 def get_user_profile_data(chat_id: str) -> Dict[str, Any]:
     """עכשיו קורא מהיר מ-chat_history.json"""
-    from utils import get_user_profile_fast
+    try:
+        from utils import get_user_profile_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import get_user_profile_fast  # type: ignore
     return get_user_profile_fast(chat_id)  # מהיר!
 
 def update_user_profile_data(chat_id: str, profile_updates: Dict[str, Any]) -> bool:
     """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import update_user_profile_fast
+    try:
+        from utils import update_user_profile_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import update_user_profile_fast  # type: ignore
     update_user_profile_fast(chat_id, profile_updates)  # מהיר!
     return True
 
@@ -985,7 +1016,7 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     debug_log(f"Final generated summary: '{final_summary}' (from {len(summary_parts)} parts)")
     return final_summary
 
-def compose_emotional_summary(row: List[str], headers: List[str] = None) -> str:
+def compose_emotional_summary(row: List[str], headers: Optional[List[str]] = None) -> str:
     """
     יוצר סיכום רגשי משורה לפי כותרות (לא מיקום!)
     אם לא מעבירים headers, מניח מיקום קלאסי

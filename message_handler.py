@@ -652,7 +652,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # ⭐ הוספת המידע על המשתמש לפני ההיסטוריה - ממוקם אסטרטגית
             if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
+                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש רק במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
 
 {current_summary}
 
@@ -858,7 +858,7 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
     טיפול במשתמש שעדיין לא אישר תנאים ברקע
     """
     try:
-        if user_msg.strip() == APPROVE_BUTTON_TEXT:
+        if user_msg.strip() == APPROVE_BUTTON_TEXT():
             # אישור תנאים
             approval_result = approve_user(chat_id)
             if approval_result.get("success"):
@@ -866,7 +866,7 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             else:
                 await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
                 
-        elif user_msg.strip() == DECLINE_BUTTON_TEXT:
+        elif user_msg.strip() == DECLINE_BUTTON_TEXT():
             # דחיית תנאים
             decline_msg = not_approved_message()
             await send_system_message(update, chat_id, decline_msg, reply_markup=ReplyKeyboardRemove())

@@ -456,6 +456,20 @@ async def update_user_profile_async(chat_id, field_values, priority: str = "crit
     data = {"chat_id": chat_id, "field_values": field_values}
     await sheets_queue_manager.add_operation("update_profile", priority, data)
 
+# -----------------------------------------------------
+# 📈 Increment code_try (Async wrapper that returns value)
+# -----------------------------------------------------
+
 async def increment_code_try_async(sheet_states, chat_id, priority: str = "normal"):
-    data = {"sheet_states": sheet_states, "chat_id": chat_id}
-    await sheets_queue_manager.add_operation("increment_code_try", priority, data) 
+    """Increments the code_try counter synchronously (non-blocking via thread)
+    so that the caller immediately gets the new attempt number back. We also
+    enqueue the operation for the queue to keep the existing batching / rate
+    limiting behaviour for the actual Sheet write as a fallback."""
+
+    from sheets_core import increment_code_try_sync  # imported here to avoid circular deps
+
+    # 1️⃣ Run the increment in a worker thread and await the result so we can
+    #    respond right away with the updated attempt number.
+    new_attempt_val = await asyncio.to_thread(increment_code_try_sync, sheet_states, chat_id)
+
+    return new_attempt_val 
