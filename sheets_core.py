@@ -332,14 +332,15 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         
         # חיפוש המשתמש לפי chat_id
         for row_data in all_values[1:]:  # מתחיל משורה 2
-            if len(row_data) > chat_id_col:
-                existing_chat_id = row_data[chat_id_col] if chat_id_col < len(row_data) else ""
+            # 💡 Ensure the row has at least `chat_id_col` entries (because we use 1-based index)
+            if len(row_data) >= chat_id_col:
+                existing_chat_id = row_data[chat_id_col - 1] if chat_id_col <= len(row_data) else ""
                 
                 # בדיקה: chat_id תואם
                 if str(existing_chat_id).strip() == str(chat_id).strip():
                     # מציאת הקוד והסטטוס
-                    code = row_data[code_approve_col] if code_approve_col is not None and code_approve_col < len(row_data) else None
-                    approved_status = row_data[approved_col] if approved_col is not None and approved_col < len(row_data) else ""
+                    code = row_data[code_approve_col - 1] if code_approve_col is not None and code_approve_col <= len(row_data) else None
+                    approved_status = row_data[approved_col - 1] if approved_col is not None and approved_col <= len(row_data) else ""
                     
                     # קביעת הסטטוס
                     if str(approved_status).strip().upper() == "TRUE":
