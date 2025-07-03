@@ -22,7 +22,7 @@ from utils import get_israel_time
 from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, update_last_bot_message
 # Telegram types (ignored if telegram package absent in testing env)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove  # type: ignore
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes  # type: ignore
 from datetime import datetime
 from utils import handle_secret_command, log_event_to_file
 from config import should_log_message_debug, should_log_debug_prints
