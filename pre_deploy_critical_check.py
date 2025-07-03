@@ -369,6 +369,102 @@ def check_new_user_full_access_message():
         errors.append(f"❌ שגיאה בבדיקת full_access_message: {e}")
         return False, errors
 
+# -----------------------------------------------------
+# 🔍 Additional static CI checks requested by user
+# -----------------------------------------------------
+
+def check_welcome_messages_once():
+    """Verifies that get_welcome_messages() is used only once (to send 3 welcome
+    messages on first user interaction).
+    Returns tuple(success, errors)."""
+    errors = []
+    target = "message_handler.py"
+    try:
+        if not os.path.exists(target):
+            return False, [f"❌ {target} לא נמצא"]
+        with open(target, "r", encoding="utf-8") as f:
+            content = f.read()
+        occurrences = content.count("get_welcome_messages(")
+        if occurrences == 1:
+            return True, []
+        else:
+            errors.append(f"❌ get_welcome_messages() הופיע {occurrences} פעמים – צריך רק פעם אחת (בflow של משתמש חדש)")
+            return False, errors
+    except Exception as e:
+        return False, [f"❌ שגיאה בבדיקת Welcome messages: {e}"]
+
+
+def check_state_transitions():
+    """Static check to ensure key sheet transition functions are present in the
+    expected handler functions (register_user, approve_user, check_user_access)."""
+    errors = []
+    target = "message_handler.py"
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        required_pairs = [
+            ("handle_new_user_background", "register_user("),
+            ("handle_unregistered_user_background", "register_user("),
+            ("handle_pending_user_background", "approve_user("),
+            ("handle_message", "check_user_access("),
+        ]
+
+        for fn_name, symbol in required_pairs:
+            pattern = rf"async def {fn_name}[\s\S]{{0,800}}{re.escape(symbol)}"
+            if not re.search(pattern, content):
+                errors.append(f"❌ לא נמצא שימוש ב-{symbol.strip()} בתוך {fn_name} – בדוק טרנזיציית סטייט")
+
+        return (len(errors) == 0), errors
+    except Exception as e:
+        return False, [f"❌ שגיאה בבדיקת טרנזיציות סטייט: {e}"]
+
+
+def check_code_try_increment_logic():
+    """Ensures increment_code_try_sync updates code_try_col. Static regex search."""
+    errors = []
+    target = "sheets_core.py"
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            content = f.read()
+        if "def increment_code_try_sync" not in content:
+            return False, ["❌ increment_code_try_sync לא נמצא"]
+
+        # מחפשים update_cell עם code_try_col
+        pattern = r"update_cell\(row_index,\s*code_try_col[\s,]"
+        if re.search(pattern, content):
+            return True, []
+        else:
+            errors.append("❌ increment_code_try_sync לא מעדכן code_try_col כמצופה")
+            return False, errors
+    except Exception as e:
+        return False, [f"❌ שגיאה בבדיקת code_try: {e}"]
+
+
+def check_critical_message_order():
+    """Verifies messages are sent in correct order in approval flow.
+    Specifically: in handle_unregistered_user_background – code_approved_message then send_approval_message.
+    In handle_pending_user_background – full_access_message then nice_keyboard_message."""
+    errors = []
+    target = "message_handler.py"
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Unregistered flow order
+        pattern_unreg = r"handle_unregistered_user_background[\s\S]{0,600}?code_approved_message\(\)[\s\S]{0,200}?send_approval_message\("
+        if not re.search(pattern_unreg, content):
+            errors.append("❌ הסדר 'code_approved_message → send_approval_message' חסר או שגוי ב-handle_unregistered_user_background")
+
+        # Pending flow order
+        pattern_pending = r"handle_pending_user_background[\s\S]{0,600}?full_access_message\(\)[\s\S]{0,200}?nice_keyboard_message\("
+        if not re.search(pattern_pending, content):
+            errors.append("❌ הסדר 'full_access_message → nice_keyboard_message' חסר או שגוי ב-handle_pending_user_background")
+
+        return (len(errors) == 0), errors
+    except Exception as e:
+        return False, [f"❌ שגיאה בבדיקת סדר הודעות קריטיות: {e}"]
+
 def main():
     """
     הפונקציה הראשית לבדיקה
@@ -393,6 +489,10 @@ def main():
         ("תיקון פרמטר 'store'", check_store_parameter_fix),
         ("תיקון הודעות כפולות", check_single_error_message_fix),
         ("בדיקת הודעת full_access_message בזרימת משתמש חדש", check_new_user_full_access_message),
+        ("Welcome messages once", check_welcome_messages_once),
+        ("State transitions", check_state_transitions),
+        ("code_try increment", check_code_try_increment_logic),
+        ("Critical message order", check_critical_message_order),
     ]
     
     # הרצת כל הבדיקות
