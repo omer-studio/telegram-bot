@@ -898,8 +898,19 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
         return -1
 
 def increment_gpt_c_run_count(chat_id: str) -> int:
-    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import increment_gpt_c_run_count_fast
+    """Increase the GPT-C run counter quickly with graceful fallback.
+
+    We normally import the fast helper via `utils` (which re-exports it
+    from `profile_utils`).  In rare edge-cases (circular import timing or
+    packaging errors) that symbol might be missing.  We therefore fall back
+    to importing directly from `profile_utils` ensuring the function is
+    always available without breaking existing APIs.
+    """
+    try:
+        from utils import increment_gpt_c_run_count_fast  # type: ignore
+    except (ImportError, AttributeError):
+        # ⛑️ Fallback — import directly to avoid runtime failure
+        from profile_utils import increment_gpt_c_run_count_fast  # type: ignore
     return increment_gpt_c_run_count_fast(chat_id)  # מהיר!
 
 def reset_gpt_c_run_count(chat_id: str) -> bool:
