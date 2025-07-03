@@ -553,12 +553,44 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     user = emoji_or_na(os.getenv('USER', None))
     deploy_id = emoji_or_na(os.getenv('RENDER_DEPLOY_ID', None))
     git_commit = get_commit_7first(os.getenv('RENDER_GIT_COMMIT', None))
-    # New: Commit message (first line only)
-    raw_commit_msg = os.getenv('RENDER_GIT_COMMIT_MESSAGE', None)
-    if raw_commit_msg:
-        # Use only the first line (subject) and trim to 100 chars max
-        commit_msg = raw_commit_msg.split('\n')[0][:100]
-        git_commit_msg = emoji_or_na(commit_msg)
+    # Retrieve commit message (subject line) with multiple fallbacks
+    raw_commit_msg = os.getenv('RENDER_GIT_COMMIT_MESSAGE')
+    git_commit_msg = None
+
+    if raw_commit_msg and raw_commit_msg.strip():
+        git_commit_msg = raw_commit_msg.split('\n')[0][:100]
+    else:
+        # Fallback: try to get message via Git using the commit hash
+        commit_hash_for_lookup = os.getenv('RENDER_GIT_COMMIT')
+        if commit_hash_for_lookup:
+            try:
+                import subprocess
+                commit_msg_out = subprocess.check_output(
+                    ["git", "show", "-s", "--format=%s", commit_hash_for_lookup],
+                    text=True,
+                    timeout=5
+                ).strip()
+                if commit_msg_out:
+                    git_commit_msg = commit_msg_out.split('\n')[0][:100]
+            except Exception:
+                git_commit_msg = None
+        # Additional fallback – take latest commit message in repo
+        if not git_commit_msg:
+            try:
+                import subprocess
+                commit_msg_out = subprocess.check_output(
+                    ["git", "log", "-1", "--pretty=%s"],
+                    text=True,
+                    timeout=5
+                ).strip()
+                if commit_msg_out:
+                    git_commit_msg = commit_msg_out.split('\n')[0][:100]
+            except Exception:
+                git_commit_msg = None
+
+    # Final sanitisation
+    if git_commit_msg and git_commit_msg.strip():
+        git_commit_msg = emoji_or_na(git_commit_msg)
     else:
         git_commit_msg = "🤷🏼"
     current_commit = os.getenv('RENDER_GIT_COMMIT', None)
