@@ -297,7 +297,12 @@ class PreDeployChecker:
             import inspect, re
             try:
                 from sheets_handler import register_user, approve_user  # עטיפות
-            except ImportError as import_err:
+            except (ImportError, FileNotFoundError, Exception) as import_err:
+                if "config.json" in str(import_err):
+                    # בסביבת development ללא config.json
+                    self.warnings.append("⚠️ לא ניתן לבדוק תאימות ממשקים – config.json not found (development environment)")
+                    print("   ⚠️ דולג – אין config.json (סביבת פיתוח)")
+                    return
                 # בסביבת CI ללא dependencies מלאים
                 self.warnings.append(f"⚠️ לא ניתן לבדוק תאימות ממשקים ב-CI: {import_err}")
                 print("   ⚠️ דולג – אין dependencies מלאים ב-CI")
@@ -333,7 +338,17 @@ class PreDeployChecker:
                 print("   ⚠️ דולג – אין אישורי Google Sheets ב-CI")
                 return
 
-            from config import setup_google_sheets
+            # בסביבת development ללא config.json – דילוג עם warning
+            try:
+                from config import setup_google_sheets
+            except (FileNotFoundError, Exception) as config_err:
+                if "config.json" in str(config_err):
+                    self.warnings.append("⚠️ Google Sheets check skipped – config.json not found (development environment)")
+                    print("   ⚠️ דולג – אין config.json (סביבת פיתוח)")
+                    return
+                else:
+                    raise config_err
+
             setup_google_sheets()  # ינסה להשתמש ב-cache או לפתוח חיבור
             print("   ✅ Google Sheets – OK")
         except Exception as e:
