@@ -608,4 +608,19 @@ crontab -e
 
 > 📝 שינוי שער דולר→ש"ח או מס' השורות – ערך אחד בראש `scripts/build_gpt_log.py`.
 
----
+### 1. בניית הדף ידנית
+```bash
+# יצירת / עדכון 100 הקריאות האחרונות
+python3 scripts/build_gpt_log.py
+# פתיחה בדפדפן (Linux)
+xdg-open data/gpt_log.html
+```
+
+### 2. יצירת נתוני דוגמה מקומית (ללא OpenAI)
+```bash
+# הוספת 5 רשומות סינתטיות (-n לשינוי הכמות)
+python3 scripts/generate_sample_gpt_log.py --n 5
+python3 scripts/build_gpt_log.py --upload
+# פתיחה בדפדפן (Linux)
+xdg-open data/gpt_log.html
+```

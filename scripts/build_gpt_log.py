@@ -3,6 +3,7 @@ import json
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List
+from argparse import ArgumentParser
 
 # -----------------------------------------------------------------------------
 # Configuration – single source of truth (avoids duplication across the script)
@@ -11,6 +12,13 @@ JSONL_PATH = os.path.join("data", "openai_calls.jsonl")
 HTML_OUT_PATH = os.path.join("data", "gpt_log.html")
 MAX_LINES = 100  # number of recent calls to display
 USD_TO_ILS = 3.7  # rough conversion; update in a single place if needed
+
+# Google Drive upload configuration (optional)
+DRIVE_FOLDER_ID = "1TdmdXbjOcarkWksddq5KlFlu6ZhSnWax"  # single source of truth
+SCOPES = [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
+]
 
 # -----------------------------------------------------------------------------
 # Helper utilities (isolated, side-effect free)
@@ -258,5 +266,63 @@ def build_html() -> None:
     print(f"✅ Wrote {HTML_OUT_PATH} with {len(entries_html)} entries.")
 
 
+# -----------------------------------------------------------------------------
+# Optional: upload the generated HTML to Google Drive
+# -----------------------------------------------------------------------------
+
+def upload_to_drive(html_path: str, folder_id: str = DRIVE_FOLDER_ID) -> None:
+    """Upload (or update) the HTML file in a specific Drive folder via OAuth creds.
+
+    Requires `token.json` (or credentials.json) in the working directory with
+    the required scopes. Imports are done lazily to avoid mandatory deps when
+    the flag is not used.
+    """
+
+    try:
+        from googleapiclient.discovery import build  # type: ignore
+        from googleapiclient.http import MediaFileUpload  # type: ignore
+        from google.oauth2.credentials import Credentials  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover
+        raise SystemExit(
+            "google-api-python-client not installed. Run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib"
+        ) from exc
+
+    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    drive_service = build("drive", "v3", credentials=creds)
+
+    file_name = os.path.basename(html_path)
+    # Search for existing file in the folder
+    response = (
+        drive_service.files()
+        .list(
+            q=f"name='{file_name}' and '{folder_id}' in parents and mimeType='text/html'",
+            spaces="drive",
+            fields="files(id, name)",
+        )
+        .execute()
+    )
+    files = response.get("files", [])
+
+    media = MediaFileUpload(html_path, mimetype="text/html", resumable=True)
+    if files:
+        file_id = files[0]["id"]
+        drive_service.files().update(fileId=file_id, media_body=media).execute()
+        print("☁️  Updated existing gpt_log.html in Drive.")
+    else:
+        metadata = {"name": file_name, "parents": [folder_id], "mimeType": "text/html"}
+        file = (
+            drive_service.files()
+            .create(body=metadata, media_body=media, fields="id")
+            .execute()
+        )
+        print(f"☁️  Uploaded new gpt_log.html to Drive (ID: {file.get('id')}).")
+
+
 if __name__ == "__main__":
+    parser = ArgumentParser(description="Build GPT HTML log (and optionally upload to Drive)")
+    parser.add_argument("--upload", action="store_true", help="Also upload/update the file on Google Drive")
+    args = parser.parse_args()
+
     build_html()
+    if args.upload:
+        upload_to_drive(HTML_OUT_PATH)
