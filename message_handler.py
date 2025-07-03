@@ -825,10 +825,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         logging.info("[Permissions] משתמש לא רשום - מנחה לרישום")
         print("[Permissions] משתמש לא רשום - מנחה לרישום")
         
-        unregistered_msg = "נראה שאתה משתמש חדש! 😊\nאני דניאל, המטפל הדיגיטלי שלך.\nבואו נתחיל בתהליך הכרות קצר."
-        await send_system_message(update, chat_id, unregistered_msg)
-        
-        # הפניה להליך רישום
+        # הודעת קבלת הפנים למשתמש חדש הוסרה בהתאם למדיניות החדשה
         await handle_new_user_background(update, context, chat_id, user_msg)
 
     except Exception as ex:
