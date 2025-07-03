@@ -874,15 +874,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
                 
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
-            # דחיית תנאים
-            decline_msg = not_approved_message()
-            await send_system_message(update, chat_id, decline_msg, reply_markup=ReplyKeyboardRemove())
-            
-        else:
-            # הודעה על הצורך באישור תנאים
-            pending_msg = "אנא אשר את תנאי השימוש על ידי לחיצה על הכפתור 'מאשר' למטה."
+            # דחיית תנאים – הצגת הודעת האישור מחדש
+            # במקום להחזיר את המשתמש לשלב הקוד (שעלול ליצור מבוי סתום),
+            # נשלח שוב את הודעת האישור עם המקלדת כדי שיוכל לאשר במידת הצורך.
             await send_approval_message(update, chat_id)
-            
+            return
+
+        else:
+            # כל הודעה אחרת – להזכיר את הצורך באישור תנאי השימוש
+            await send_approval_message(update, chat_id)
+            return
+
     except Exception as e:
         logging.error(f"[Permissions] שגיאה בטיפול במשתמש ממתין לאישור: {e}")
 
