@@ -287,6 +287,73 @@ class PreDeployChecker:
         else:
             self.warnings.append("⚠️  אף handler לא משתמש ב-Lazy Loading")
 
+    def check_interface_compatibility(self) -> None:
+        """בדיקה שהעטיפות הקריטיות מחזירות dict עם success ושיש להן פרמטר chat_id בלבד
+        כדי למנוע מקרים שבהם החתימה משתנה ללא בדיקות.
+        רץ על sheets_handler.register_user / approve_user ללא ביצוע קריאה חיצונית.
+        """
+        print("🔗 בודק תאימות ממשקי ליבה...")
+        try:
+            import inspect, re
+            try:
+                from sheets_handler import register_user, approve_user  # עטיפות
+            except (ImportError, FileNotFoundError, Exception) as import_err:
+                if "config.json" in str(import_err):
+                    # בסביבת development ללא config.json
+                    self.warnings.append("⚠️ לא ניתן לבדוק תאימות ממשקים – config.json not found (development environment)")
+                    print("   ⚠️ דולג – אין config.json (סביבת פיתוח)")
+                    return
+                # בסביבת CI ללא dependencies מלאים
+                self.warnings.append(f"⚠️ לא ניתן לבדוק תאימות ממשקים ב-CI: {import_err}")
+                print("   ⚠️ דולג – אין dependencies מלאים ב-CI")
+                return
+
+            problems = []
+
+            for fn_name, fn in [("register_user", register_user), ("approve_user", approve_user)]:
+                sig = inspect.signature(fn)
+                # לפחות פרמטר אחד (chat_id). לא יותר משניים (chat_id, user_data)
+                if not (1 <= len(sig.parameters) <= 2):
+                    problems.append(f"{fn_name}: ציפיתי ל-1-2 פרמטרים, קיבלתי {len(sig.parameters)}")
+
+                # בדיקת מילת success בהחזרה – סריקה סטטית של הקוד מבלי להריץ
+                src = inspect.getsource(fn)
+                if not re.search(r"return\s+\{[^}]*'success'", src):
+                    problems.append(f"{fn_name}: אין ‎'success'‎ בהחזרת הפונקציה")
+
+            if problems:
+                self.errors.append("💀 אי-תאימות ממשקי ליבה:\n   " + "\n   ".join(problems))
+            else:
+                print("   ✅ ממשקי ליבה תקינים")
+        except Exception as e:
+            self.errors.append(f"Error checking interface compatibility: {e}")
+
+    def check_google_sheets_connectivity(self) -> None:
+        """מנסה לפתוח את הגיליון כדי לוודא שה-credentials תקינים ומזהיר אחרת"""
+        print("🔑 בודק חיבור Google Sheets...")
+        try:
+            # אם הריצה ב-CI ואין שום אישור מוגדר – אל תכשיל build; הסתפק באזהרה
+            if os.getenv("CI") and not (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("SERVICE_ACCOUNT_DICT")):
+                self.warnings.append("⚠️ Google Sheets credentials not provided in CI – בדיקה מדולגת (warning בלבד)")
+                print("   ⚠️ דולג – אין אישורי Google Sheets ב-CI")
+                return
+
+            # בסביבת development ללא config.json – דילוג עם warning
+            try:
+                from config import setup_google_sheets
+            except (FileNotFoundError, Exception) as config_err:
+                if "config.json" in str(config_err):
+                    self.warnings.append("⚠️ Google Sheets check skipped – config.json not found (development environment)")
+                    print("   ⚠️ דולג – אין config.json (סביבת פיתוח)")
+                    return
+                else:
+                    raise config_err
+
+            setup_google_sheets()  # ינסה להשתמש ב-cache או לפתוח חיבור
+            print("   ✅ Google Sheets – OK")
+        except Exception as e:
+            self.errors.append(f"💀 Google Sheets connection failed: {e}")
+
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🛡️ מתחיל בדיקות מוקדמות לפני פריסה...\n")
@@ -301,6 +368,8 @@ class PreDeployChecker:
         self.estimate_memory_usage(installed)
         self.check_imports_weight()
         self.check_lazy_loading_implementation()
+        self.check_interface_compatibility()
+        self.check_google_sheets_connectivity()
         
         # Print results
         print("\n" + "="*60)

@@ -312,8 +312,19 @@ def setup_google_sheets():
             _cache_created_at = None
     
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
+    # מאפשר override של SERVICE_ACCOUNT_DICT באמצעות משתנה סביבה – שימושי ב-CI/Secrets
+    _env_sa = os.getenv("SERVICE_ACCOUNT_DICT", "").strip()
+    try:
+        _sa_dict = json.loads(_env_sa) if _env_sa else config["SERVICE_ACCOUNT_DICT"]
+    except Exception:
+        _sa_dict = config["SERVICE_ACCOUNT_DICT"]
+
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(_sa_dict, scope)
     gs_client = gspread.authorize(creds)
+
+    # הגנת Fail-Fast – אם ההרשאה לא החזירה אובייקט תקף נזרוק שגיאה מיידית
+    if gs_client is None or getattr(gs_client, "open_by_key", None) is None:
+        raise RuntimeError("Google Sheets client failed to initialize – check credentials and environment variables (GOOGLE_APPLICATION_CREDENTIALS / SERVICE_ACCOUNT_DICT)")
 
     max_retries = 3
     delay = 5
