@@ -18,11 +18,13 @@ from config import (
     ADMIN_CHAT_ID,
     MAX_CODE_TRIES
 )
-from utils import log_error_stat, get_israel_time
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from utils import get_israel_time
+from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, update_last_bot_message
+# Telegram types (ignored if telegram package absent in testing env)
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove  # type: ignore
 from telegram.ext import ContextTypes
 from datetime import datetime
-from utils import handle_secret_command, log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
+from utils import handle_secret_command, log_event_to_file
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
