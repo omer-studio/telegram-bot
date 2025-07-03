@@ -1004,7 +1004,7 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     debug_log(f"Final generated summary: '{final_summary}' (from {len(summary_parts)} parts)")
     return final_summary
 
-def compose_emotional_summary(row: List[str], headers: List[str] = None) -> str:
+def compose_emotional_summary(row: List[str], headers: Optional[List[str]] = None) -> str:
     """
     יוצר סיכום רגשי משורה לפי כותרות (לא מיקום!)
     אם לא מעבירים headers, מניח מיקום קלאסי
