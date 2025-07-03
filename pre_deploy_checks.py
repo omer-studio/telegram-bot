@@ -317,6 +317,16 @@ class PreDeployChecker:
         except Exception as e:
             self.errors.append(f"Error checking interface compatibility: {e}")
 
+    def check_google_sheets_connectivity(self) -> None:
+        """מנסה לפתוח את הגיליון כדי לוודא שה-credentials תקינים ומזהיר אחרת"""
+        print("🔑 בודק חיבור Google Sheets...")
+        try:
+            from config import setup_google_sheets
+            setup_google_sheets()  # ינסה להשתמש ב-cache או לפתוח חיבור
+            print("   ✅ Google Sheets – OK")
+        except Exception as e:
+            self.errors.append(f"💀 Google Sheets connection failed: {e}")
+
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🛡️ מתחיל בדיקות מוקדמות לפני פריסה...\n")
@@ -332,6 +342,7 @@ class PreDeployChecker:
         self.check_imports_weight()
         self.check_lazy_loading_implementation()
         self.check_interface_compatibility()
+        self.check_google_sheets_connectivity()
         
         # Print results
         print("\n" + "="*60)
