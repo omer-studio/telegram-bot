@@ -317,12 +317,13 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         approved_col = None
         
         for i, header in enumerate(headers):
-            if header.lower() == "chat_id":
-                chat_id_col = i
-            elif header.lower() == "code_approve":
-                code_approve_col = i
-            elif header.lower() == "approved":
-                approved_col = i
+            normalized = str(header).strip().lower()
+            if normalized == "chat_id":
+                chat_id_col = i + 1  # gspread משתמש ב-1-based indexing
+            elif normalized == "code_approve":
+                code_approve_col = i + 1
+            elif normalized == "approved":
+                approved_col = i + 1
         
         if chat_id_col is None:
             result = {"status": "error", "code": None}
@@ -506,9 +507,10 @@ def approve_user(sheet, chat_id: str) -> bool:
         approved_col = None
         
         for i, header in enumerate(headers):
-            if header.lower() == "chat_id":
+            normalized = str(header).strip().lower()
+            if normalized == "chat_id":
                 chat_id_col = i + 1  # gspread משתמש ב-1-based indexing
-            elif header.lower() == "approved":
+            elif normalized == "approved":
                 approved_col = i + 1
         
         if chat_id_col is None or approved_col is None:
