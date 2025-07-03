@@ -560,7 +560,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
     if raw_commit_msg and raw_commit_msg.strip():
         git_commit_msg = raw_commit_msg.split('\n')[0][:100]
     else:
-        # Fallback: try to get message via Git using the commit hash
+        # Fallback: retrieve message for the *current* commit only (accurate data)
         commit_hash_for_lookup = os.getenv('RENDER_GIT_COMMIT')
         if commit_hash_for_lookup:
             try:
@@ -574,19 +574,8 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
                     git_commit_msg = commit_msg_out.split('\n')[0][:100]
             except Exception:
                 git_commit_msg = None
-        # Additional fallback – take latest commit message in repo
-        if not git_commit_msg:
-            try:
-                import subprocess
-                commit_msg_out = subprocess.check_output(
-                    ["git", "log", "-1", "--pretty=%s"],
-                    text=True,
-                    timeout=5
-                ).strip()
-                if commit_msg_out:
-                    git_commit_msg = commit_msg_out.split('\n')[0][:100]
-            except Exception:
-                git_commit_msg = None
+        # If still None, we leave it unknown – no fake data
+        pass
 
     # Final sanitisation
     if git_commit_msg and git_commit_msg.strip():
