@@ -567,3 +567,60 @@ aiming, או שדות token usage.
 *הסבר קצר*: כל שורה היא אובייקט JSON עצמאי → לכן יש להעביר ל-`jq` בלי דגל `-s`. אם תרצה לנתח סטטיסטית (למשל BigQuery/Snowflake) פשוט טען את הקובץ כ-JSONL.
 
 ---
+
+## 📄 GPT Log Viewer (HTML)
+
+> תצוגה גרפית וידידותית לקריאות GPT האחרונות בקובץ יחיד (`data/gpt_log.html`).
+
+### 1. בניית הדף ידנית
+```bash
+# יצירת / עדכון 100 הקריאות האחרונות
+python3 scripts/build_gpt_log.py
+# פתיחה בדפדפן (Linux)
+xdg-open data/gpt_log.html
+```
+
+### 2. יצירת נתוני דוגמה מקומית (ללא OpenAI)
+```bash
+# הוספת 5 רשומות סינתטיות (-n לשינוי הכמות)
+python3 scripts/generate_sample_gpt_log.py --n 5
+python3 scripts/build_gpt_log.py && xdg-open data/gpt_log.html
+```
+הסקריפט מייצר רשומות חוקיות לגמרי ולכן מתאים גם לבדיקה ב-CI.
+
+### 3. הפעלה אוטומטית (Cron)
+הדרך הפשוטה ביותר היא להריץ את הבנייה פעם ב-5 דקות בצד השרת:
+```bash
+crontab -e
+#
+*/5 * * * * cd /path/to/repo && /usr/bin/python3 scripts/build_gpt_log.py >> /tmp/gpt_log_build.log 2>&1
+```
+• הקרון קורא רק 100 שורות → פגיעה זניחה בביצועים
+• אין השפעה על Latency של הבוט – הריצה מתבצעת בתהליך נפרד
+
+### 4. מיקום הקבצים
+| קובץ | תפקיד |
+|------|--------|
+| `data/openai_calls.jsonl` | לוג גולמי (נכתב ע"י `GPTJSONLLogger`) |
+| `scripts/build_gpt_log.py` | בונה את `gpt_log.html` על בסיס 100 השורות האחרונות |
+| `scripts/generate_sample_gpt_log.py` | מייצר נתוני דמה לבדיקות-offline |
+| `data/gpt_log.html` | דף HTML מוכן לצפייה |
+
+> 📝 שינוי שער דולר→ש"ח או מס' השורות – ערך אחד בראש `scripts/build_gpt_log.py`.
+
+### 1. בניית הדף ידנית
+```bash
+# יצירת / עדכון 100 הקריאות האחרונות
+python3 scripts/build_gpt_log.py
+# פתיחה בדפדפן (Linux)
+xdg-open data/gpt_log.html
+```
+
+### 2. יצירת נתוני דוגמה מקומית (ללא OpenAI)
+```bash
+# הוספת 5 רשומות סינתטיות (-n לשינוי הכמות)
+python3 scripts/generate_sample_gpt_log.py --n 5
+python3 scripts/build_gpt_log.py --upload
+# פתיחה בדפדפן (Linux)
+xdg-open data/gpt_log.html
+```
