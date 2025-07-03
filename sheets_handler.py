@@ -49,28 +49,24 @@ print("✅ sheets_handler.py טען בהצלחה עם אריכטקטורה חד�
 # עטיפות תאימות (Backward-compatibility wrappers)
 # -----------------------------------------------------
 
-def register_user(chat_id, user_data=None):
+def register_user(chat_id, code_input=None):
     """
     Wrapper for sheets_core.register_user providing a dict response as
-    expected by message_handler. Performs minimal onboarding by ensuring
-    a user_state row and returns {"success": bool}.
-
-    Parameters
-    ----------
-    chat_id : int | str
-        Telegram chat id of the new user.
-    user_data : Any, optional
-        Currently unused placeholder kept to maintain the original call
-        signature from message_handler. Can later carry invite-code or
-        Telegram User object.
+    expected by message_handler. When code_input is provided, attempts to
+    attach the chat_id to that code. Falls back to legacy behaviour if
+    code_input is None.
     """
     try:
-        # שלב 1: יצירת/וידוא שורת מצב למשתמש (user_states)
-        state_ok = ensure_user_state_row(sheet_users, sheet_states, str(chat_id))
+        if code_input is not None:
+            # נסיון רישום מלא עם קוד
+            success = _core_register_user(sheet_users, str(chat_id), str(code_input))
+            # מבטיח שקיימת שורה ב-user_states (לצורך מונים עתידיים)
+            ensure_user_state_row(sheet_users, sheet_states, str(chat_id))
+            return {"success": bool(success)}
 
-        # שלב 2: ניתן להרחיב כאן בעתיד לרישום מלא עם קוד
-        success = bool(state_ok)
-        return {"success": success}
+        # 🔙 Legacy path – ללא קוד (לא מומלץ)
+        state_ok = ensure_user_state_row(sheet_users, sheet_states, str(chat_id))
+        return {"success": bool(state_ok)}
 
     except Exception as e:
         logging.error(f"[SheetsHandler] register_user wrapper failed for {chat_id}: {e}")
