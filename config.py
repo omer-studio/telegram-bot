@@ -547,3 +547,19 @@ for engine, routes in MODEL_ROUTES.items():
 # --------------------------------------------------------------------------
 # סוף SECTION – From here downwards אין שינויי מודלים נוספים.
 # --------------------------------------------------------------------------
+
+# ================================
+# ⚙️ GPT-E Trigger Settings
+# ================================
+# קל לשנות את תדירות ההפעלה של GPT-E באמצעות שני קבועים מרכזיים בלבד.
+# ניתן גם לשנות אותם ב-runtime דרך משתני סביבה – שימושי ללא שינוי קוד.
+#   GPTE_GPTC_TRIGGER_PRIMARY   – כמות ריצות GPT-C הדרושה כדי להפעיל GPT-E מיד.
+#   GPTE_GPTC_TRIGGER_SECONDARY – כמות ריצות GPT-C מינימלית להפעלה אם עברו 24 שעות
+#                                  מאז ההפעלה הקודמת של GPT-E.
+# ברירת מחדל: 10 ו-7 (בהתאמה)
+GPTE_GPTC_TRIGGER_PRIMARY = int(os.getenv("GPTE_GPTC_TRIGGER_PRIMARY", 10))
+GPTE_GPTC_TRIGGER_SECONDARY = int(os.getenv("GPTE_GPTC_TRIGGER_SECONDARY", 7))
+
+# ודא שהטריגר המשני לא גדול מהראשי – תיקון אוטומטי למניעת באגים
+if GPTE_GPTC_TRIGGER_SECONDARY > GPTE_GPTC_TRIGGER_PRIMARY:
+    GPTE_GPTC_TRIGGER_SECONDARY = GPTE_GPTC_TRIGGER_PRIMARY - 1 if GPTE_GPTC_TRIGGER_PRIMARY > 1 else 1

@@ -4,7 +4,8 @@ gpt_e_handler.py
 מנוע gpt_e: חידוד, תיקון והשלמת פרופיל רגשי על בסיס היסטוריה ופרופיל קיים.
 משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 
-- מופעל כל 25 ריצות gpt_c, או מעל 15 ריצות gpt_c אם עברו 24 שעות מאז הריצה האחרונה.
+- מופעל כברירת מחדל כל 10 ריצות gpt_c (ניתן לשינוי דרך GPTE_GPTC_TRIGGER_PRIMARY בקובץ config.py),
+- או מעל 7 ריצות gpt_c אם עברו 24 שעות מאז הריצה האחרונה (GPTE_GPTC_TRIGGER_SECONDARY).
 - מתמקד בעדכון הקונפליקט המרכזי (primary_conflict) ושדות נוספים לפי הצורך.
 - שולח ל-GPT את ההיסטוריה והפרופיל, מקבל שדות חדשים/מתוקנים בלבד.
 - מעדכן Google Sheets, user_state, ולוגים.
@@ -23,7 +24,7 @@ from utils import get_chat_history_messages, get_israel_time
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
 from prompts import build_profile_extraction_enhanced_prompt
 from gpt_utils import normalize_usage_dict, safe_get_usage_value, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
-from config import GPT_MODELS, GPT_PARAMS
+from config import GPT_MODELS, GPT_PARAMS, GPTE_GPTC_TRIGGER_PRIMARY, GPTE_GPTC_TRIGGER_SECONDARY
 
 # הגדרת לוגר
 logger = logging.getLogger(__name__)
@@ -37,13 +38,13 @@ def should_run_gpt_e(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: O
     :param last_gpt_e_timestamp: טיימסטמפ של הריצה האחרונה של gpt_e
     :return: True אם צריך להפעיל gpt_e, False אחרת
     """
-    # תנאי 1: הגענו ל-25 ריצות gpt_c
-    if gpt_c_run_count >= 25:
-        logger.info(f"[gpt_e] Triggering run - gpt_c_run_count >= 25 ({gpt_c_run_count})")
+    # תנאי 1: הגענו למספר ריצות gpt_c כפי שהוגדר בקונפיג (ברירת מחדל 10)
+    if gpt_c_run_count >= GPTE_GPTC_TRIGGER_PRIMARY:
+        logger.info(f"[gpt_e] Triggering run - gpt_c_run_count >= {GPTE_GPTC_TRIGGER_PRIMARY} ({gpt_c_run_count})")
         return True
     
-    # תנאי 2: מעל 15 ריצות gpt_c ועברו 24 שעות מאז הריצה האחרונה
-    if gpt_c_run_count > 15 and last_gpt_e_timestamp:
+    # תנאי 2: מעל {second_threshold} ריצות gpt_c ועברו 24 שעות מאז הריצה האחרונה
+    if gpt_c_run_count > GPTE_GPTC_TRIGGER_SECONDARY and last_gpt_e_timestamp:
         try:
             last_run = datetime.fromisoformat(last_gpt_e_timestamp.replace('Z', '+00:00'))
             time_since_last_run = datetime.now(last_run.tzinfo) - last_run
@@ -348,9 +349,9 @@ async def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e
     """
     בודק אם צריך להפעיל gpt_e ומפעיל אם כן.
     
-    התנאים להפעלה:
-    1. gpt_c_run_count >= 25
-    2. או gpt_c_run_count >= 16 AND עברו 24 שעות מאז הריצה האחרונה
+    התנאים להפעלה (ניתן לשנות בקובץ config.py):
+    1. gpt_c_run_count >= GPTE_GPTC_TRIGGER_PRIMARY (ברירת מחדל 10)
+    2. או gpt_c_run_count >= GPTE_GPTC_TRIGGER_SECONDARY (ברירת מחדל 7) AND עברו 24 שעות מאז הריצה האחרונה
     
     :param chat_id: מזהה המשתמש
     :param gpt_c_run_count: מספר ריצות gpt_c מאז הריצה האחרונה של gpt_e
@@ -358,19 +359,19 @@ async def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e
     :return: תוצאות הריצה אם הופעל, None אם לא הופעל
     """
     logger.info(f"[gpt_e] Checking conditions for chat_id={chat_id}, gpt_c_run_count={gpt_c_run_count}")
-    print(f"🔍 [GPT-E] בדיקת תנאים: gpt_c רץ {gpt_c_run_count} פעמים (gpt_e רץ כל 25 ריצות gpt_c)")
+    print(f"🔍 [GPT-E] בדיקת תנאים: gpt_c רץ {gpt_c_run_count} פעמים (gpt_e רץ כל {GPTE_GPTC_TRIGGER_PRIMARY} ריצות gpt_c)")
     
     # בדיקה אם יש צורך להפעיל gpt_e
     should_run = False
     reason = ""
     
-    # תנאי 1: 25 ריצות או יותר
-    if gpt_c_run_count >= 25:
+    # תנאי 1: הגיע/עבר את הסף הראשי
+    if gpt_c_run_count >= GPTE_GPTC_TRIGGER_PRIMARY:
         should_run = True
-        reason = f"gpt_c_run_count >= 25 (current: {gpt_c_run_count})"
+        reason = f"gpt_c_run_count >= {GPTE_GPTC_TRIGGER_PRIMARY} (current: {gpt_c_run_count})"
     
-    # תנאי 2: 16-24 ריצות + 24 שעות
-    elif gpt_c_run_count >= 16:
+    # תנאי 2: סף משני + 24 שעות מאז ריצה קודמת
+    elif gpt_c_run_count >= GPTE_GPTC_TRIGGER_SECONDARY:
         if last_gpt_e_timestamp:
             try:
                 from datetime import datetime
@@ -385,18 +386,18 @@ async def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e
                 
                 if hours_since_last >= 24:
                     should_run = True
-                    reason = f"gpt_c_run_count >= 16 ({gpt_c_run_count}) AND 24+ hours passed ({hours_since_last:.1f}h)"
+                    reason = f"gpt_c_run_count >= {GPTE_GPTC_TRIGGER_SECONDARY} ({gpt_c_run_count}) AND 24+ hours passed ({hours_since_last:.1f}h)"
                 else:
                     logger.info(f"[gpt_e] Not enough time passed: {hours_since_last:.1f}h < 24h")
             except Exception as e:
                 logger.error(f"[gpt_e] Error parsing timestamp {last_gpt_e_timestamp}: {e}")
                 # אם יש שגיאה בפענוח הטיימסטמפ, נפעיל gpt_e
                 should_run = True
-                reason = f"Error parsing timestamp, running gpt_e as fallback"
+                reason = f"Error parsing timestamp, running gpt_e as fallback (secondary trigger: {GPTE_GPTC_TRIGGER_SECONDARY})"
         else:
             # אין טיימסטמפ קודם, נפעיל gpt_e
             should_run = True
-            reason = f"No previous gpt_e timestamp, running gpt_e"
+            reason = f"No previous gpt_e timestamp, running gpt_e (secondary trigger: {GPTE_GPTC_TRIGGER_SECONDARY})"
     
     if should_run:
         logger.info(f"[gpt_e] Conditions met for chat_id={chat_id}: {reason}")
