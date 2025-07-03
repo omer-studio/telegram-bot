@@ -287,6 +287,36 @@ class PreDeployChecker:
         else:
             self.warnings.append("⚠️  אף handler לא משתמש ב-Lazy Loading")
 
+    def check_interface_compatibility(self) -> None:
+        """בדיקה שהעטיפות הקריטיות מחזירות dict עם success ושיש להן פרמטר chat_id בלבד
+        כדי למנוע מקרים שבהם החתימה משתנה ללא בדיקות.
+        רץ על sheets_handler.register_user / approve_user ללא ביצוע קריאה חיצונית.
+        """
+        print("🔗 בודק תאימות ממשקי ליבה...")
+        try:
+            import inspect, re
+            from sheets_handler import register_user, approve_user  # עטיפות
+
+            problems = []
+
+            for fn_name, fn in [("register_user", register_user), ("approve_user", approve_user)]:
+                sig = inspect.signature(fn)
+                # לפחות פרמטר אחד (chat_id). לא יותר משניים (chat_id, user_data)
+                if not (1 <= len(sig.parameters) <= 2):
+                    problems.append(f"{fn_name}: ציפיתי ל-1-2 פרמטרים, קיבלתי {len(sig.parameters)}")
+
+                # בדיקת מילת success בהחזרה – סריקה סטטית של הקוד מבלי להריץ
+                src = inspect.getsource(fn)
+                if not re.search(r"return\s+\{[^}]*'success'", src):
+                    problems.append(f"{fn_name}: אין ‎'success'‎ בהחזרת הפונקציה")
+
+            if problems:
+                self.errors.append("💀 אי-תאימות ממשקי ליבה:\n   " + "\n   ".join(problems))
+            else:
+                print("   ✅ ממשקי ליבה תקינים")
+        except Exception as e:
+            self.errors.append(f"Error checking interface compatibility: {e}")
+
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🛡️ מתחיל בדיקות מוקדמות לפני פריסה...\n")
@@ -301,6 +331,7 @@ class PreDeployChecker:
         self.estimate_memory_usage(installed)
         self.check_imports_weight()
         self.check_lazy_loading_implementation()
+        self.check_interface_compatibility()
         
         # Print results
         print("\n" + "="*60)
