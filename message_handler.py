@@ -10,9 +10,6 @@ import asyncio
 import re
 import json
 import time
-import telegram
-from telegram.constants import ParseMode
-from telegram.error import BadRequest, TelegramError
 from config import (
     BOT_TOKEN, 
     ADMIN_NOTIFICATION_CHAT_ID, 
@@ -39,7 +36,7 @@ from fields_dict import FIELDS_DICT
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active
-from utils import should_send_time_greeting, get_time_greeting_instruction
+from chat_utils import should_send_time_greeting, get_time_greeting_instruction
 import profile_utils as _pu
 
 def format_text_for_telegram(text):
@@ -604,8 +601,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             history_messages = get_chat_history_messages(chat_id, limit=15)  # 🔧 הגבלה ל-15 הודעות לחסוך בטוקנים
             
             # יצירת טיימסטמפ והנחיות יום השבוע
-            from utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
-            from utils import should_send_time_greeting
+            from chat_utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
             
             # ברכה מותאמת זמן נשלחת לפי תנאים (שיחה ראשונה, הודעת ברכה, החלפת בלוק זמן)
             greeting_instruction = ""
@@ -845,7 +841,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 except Exception:
                     attempt_num = -1
 
-                retry_msg = get_retry_message_by_attempt(attempt_num if attempt_num > 0 else 1)
+                retry_msg = get_retry_message_by_attempt(attempt_num if attempt_num and attempt_num > 0 else 1)
                 await send_system_message(update, chat_id, retry_msg)
                 return
 
