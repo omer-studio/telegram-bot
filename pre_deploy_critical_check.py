@@ -18,6 +18,7 @@ import importlib
 import importlib.util
 import json
 import traceback
+import re
 
 def check_syntax_and_imports():
     """
@@ -333,6 +334,41 @@ def check_single_error_message_fix():
     
     return len(errors) == 0, errors
 
+# -----------------------------------------------------
+# ✅ NEW CHECK: New-user full access message after approval
+# -----------------------------------------------------
+
+def check_new_user_full_access_message():
+    """
+    מוודא שלאחר אישור תנאים הבוט שולח את full_access_message (ולא הודעת קוד כפולה).
+    הבדיקה קוראת את message_handler.py ומחפשת שהפונקציה
+    handle_pending_user_background משתמשת ב-full_access_message().
+
+    Returns:
+        tuple: (success: bool, errors: list)
+    """
+    errors = []
+    target_file = "message_handler.py"
+
+    if not os.path.exists(target_file):
+        errors.append(f"❌ {target_file} לא נמצא")
+        return False, errors
+
+    try:
+        with open(target_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # חיפוש שימוש ב-full_access_message בתוך 600 תווים אחרי ההגדרה
+        pattern = r"async def handle_pending_user_background[\s\S]{0,800}?full_access_message\("
+        if re.search(pattern, content):
+            return True, []
+        else:
+            errors.append("❌ handle_pending_user_background לא שולחת full_access_message – יתכן שהזרימה למשתמש חדש תישבר")
+            return False, errors
+    except Exception as e:
+        errors.append(f"❌ שגיאה בבדיקת full_access_message: {e}")
+        return False, errors
+
 def main():
     """
     הפונקציה הראשית לבדיקה
@@ -356,6 +392,7 @@ def main():
         ("מערכת התראות", check_notifications_system),
         ("תיקון פרמטר 'store'", check_store_parameter_fix),
         ("תיקון הודעות כפולות", check_single_error_message_fix),
+        ("בדיקת הודעת full_access_message בזרימת משתמש חדש", check_new_user_full_access_message),
     ]
     
     # הרצת כל הבדיקות
@@ -408,7 +445,7 @@ def main():
             print("🚨" * 25)
             print("🚨 GPT-A לא עובד - זה הכי חמור!")
             print("🚨 המשתמשים לא יקבלו תשובות!")
-            print("🚨 אסור לפרוס בשום מצב!")
+            print("🚨 אסור לפרוס עד שGPT-A יעבוד!")
             print("🚨" * 25)
         else:
             print("🚨 יש בעיות קריטיות!")
