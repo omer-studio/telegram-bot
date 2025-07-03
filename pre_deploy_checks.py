@@ -321,6 +321,12 @@ class PreDeployChecker:
         """מנסה לפתוח את הגיליון כדי לוודא שה-credentials תקינים ומזהיר אחרת"""
         print("🔑 בודק חיבור Google Sheets...")
         try:
+            # אם הריצה ב-CI ואין שום אישור מוגדר – אל תכשיל build; הסתפק באזהרה
+            if os.getenv("CI") and not (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("SERVICE_ACCOUNT_DICT")):
+                self.warnings.append("⚠️ Google Sheets credentials not provided in CI – בדיקה מדולגת (warning בלבד)")
+                print("   ⚠️ דולג – אין אישורי Google Sheets ב-CI")
+                return
+
             from config import setup_google_sheets
             setup_google_sheets()  # ינסה להשתמש ב-cache או לפתוח חיבור
             print("   ✅ Google Sheets – OK")
