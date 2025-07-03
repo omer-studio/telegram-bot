@@ -43,7 +43,14 @@ class GPTJSONLLogger:
     # ------------------------------------------------------------------
     # Public helpers
     # ------------------------------------------------------------------
-    def chat_completion(self, client: Any, /, **payload: Any):
+    def chat_completion(
+        self,
+        client: Any,
+        /,
+        *,
+        cost_usd: float | None = None,
+        **payload: Any,
+    ):
         """Provider-agnostic chat completion with automatic JSONL logging.
 
         Supported clients (first positional arg):
@@ -85,19 +92,6 @@ class GPTJSONLLogger:
                 response_dict = response.to_dict_recursive()  # type: ignore[attr-defined]
             except AttributeError:
                 response_dict = json.loads(json.dumps(response, default=str))
-
-        # ------------------------------------------------------------------
-        # Optional: compute cost via LiteLLM if available
-        # ------------------------------------------------------------------
-        cost_usd = None
-        try:
-            import litellm  # type: ignore  # local import to avoid hard dependency
-
-            # Only works if response originates from litellm or is OpenAI-style
-            cost_usd = litellm.completion_cost(completion_response=response)  # type: ignore[arg-type]
-        except Exception:
-            # Cost calculation failed/unavailable – leave as None
-            pass
 
         # Append to log
         self._append_log(request_copy, response_dict, endpoint_name, cost_usd)
