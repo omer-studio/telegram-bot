@@ -146,7 +146,55 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
     
     return updated_profile, combined_usage
 
-def smart_update_profile_with_gpt_d_async(existing_profile, user_message, interaction_id=None):
-    import asyncio
+# ---------------------------------------------------------------------------
+# 🧵 Async helper – run in thread & persist changes
+# ---------------------------------------------------------------------------
+
+def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_id=None):
+    """Background helper executed inside a ThreadPool – merges & persists profile.
+
+    1. Loads the existing profile for the given chat_id (safe – returns {}).
+    2. Runs smart_update_profile_with_gpt_d to obtain an updated profile.
+    3. Persists the merged profile back to disk/Sheets via update_user_profile_fast.
+    4. Returns (updated_profile, usage) just like the underlying function.
+    """
+
+    # Lazy import to avoid circular dependencies at module import time
+    from profile_utils import get_user_profile_fast, update_user_profile_fast  # noqa: WPS433
+
+    try:
+        existing_profile = get_user_profile_fast(chat_id)
+        # Run merge (sync, heavy – runs LLMs)
+        updated_profile, usage = smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id)
+
+        # Persist only if there is any diff
+        try:
+            if updated_profile and isinstance(updated_profile, dict):
+                update_user_profile_fast(chat_id, updated_profile)
+        except Exception as persist_exc:  # pragma: no cover – just in case
+            import logging
+            logging.error(f"[GPT_D] Failed to persist profile for {chat_id}: {persist_exc}")
+
+        return updated_profile, usage
+
+    except Exception as exc:  # pragma: no cover – keep background thread alive
+        import logging, traceback  # noqa: WPS433
+        logging.error(f"[GPT_D] Critical error in profile merge for {chat_id}: {exc}\n{traceback.format_exc()}")
+        return {}, {}
+
+
+def smart_update_profile_with_gpt_d_async(chat_id: str, user_message: str, interaction_id=None):
+    """Public async wrapper – accepts chat_id (not profile).
+
+    It delegates the heavy lifting to _run_profile_merge_and_persist which is
+    executed in a background thread (so we don't block the event-loop). The
+    original API expected *existing_profile* as the first argument, but the
+    only call-site (message_handler.py) actually passed chat_id. This change
+    aligns the signature with real usage and, importantly, ensures the merged
+    profile is persisted immediately.
+    """
+
+    import asyncio  # noqa: WPS433
+
     loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, smart_update_profile_with_gpt_d, existing_profile, user_message, interaction_id) 
+    return loop.run_in_executor(None, _run_profile_merge_and_persist, str(chat_id), user_message, interaction_id) 
