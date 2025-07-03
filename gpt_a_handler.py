@@ -451,35 +451,29 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         # שלב 4: חישוב עלויות
         billing_start_time = time.time()
         
-        # 🔬 מדידת ביצועים מבוטלת זמנית
-        
-        # 📊 מעקב אחר חיוב
-        if hasattr(response, 'usage'):
-            try:
-                cost_usd = litellm.completion_cost(completion_response=response)
-                if cost_usd > 0:
-                    billing_status = billing_guard.add_cost(cost_usd, response.model, "paid" if use_extra_emotion else "free")
-                    
-                    # התראות לאדמין
-                    if billing_status["warnings"]:
-                        for warning in billing_status["warnings"]:
-                            logging.warning(f"[💰 תקציב] {warning}")
-                    
-                    # התראה בטלגרם אם צריך
-                    status = billing_guard.get_current_status()
-                    alert_billing_issue(
-                        cost_usd=cost_usd,
-                        model_name=response.model,
-                        tier="paid" if use_extra_emotion else "free",
-                        daily_usage=status["daily_usage"],
-                        monthly_usage=status["monthly_usage"],
-                        daily_limit=status["daily_limit"],
-                        monthly_limit=status["monthly_limit"]
-                    )
+        #  מעקב אחר חיוב
+        if 'cost_info' in locals():
+            cost_usd = cost_info.get("cost_total", 0.0)
+            if cost_usd and cost_usd > 0:
+                billing_status = billing_guard.add_cost(cost_usd, response.model, "paid" if use_extra_emotion else "free")
                 
-            except Exception as cost_error:
-                logging.error(f"[💰] שגיאה בחישוב עלות: {cost_error}")
-        
+                # התראות לאדמין
+                if billing_status.get("warnings"):
+                    for warning in billing_status["warnings"]:
+                        logging.warning(f"[💰 תקציב] {warning}")
+                
+                # התראה בטלגרם אם צריך
+                status = billing_guard.get_current_status()
+                alert_billing_issue(
+                    cost_usd=cost_usd,
+                    model_name=response.model,
+                    tier="paid" if use_extra_emotion else "free",
+                    daily_usage=status["daily_usage"],
+                    monthly_usage=status["monthly_usage"],
+                    daily_limit=status["daily_limit"],
+                    monthly_limit=status["monthly_limit"]
+                )
+            
         billing_time = time.time() - billing_start_time
         print(f"⚡ [TIMING] Billing time: {billing_time:.3f}s")
         

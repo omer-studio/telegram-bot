@@ -538,3 +538,32 @@ GENTLE_REMINDER_MESSAGE = "ההודעה החדשה שלך כאן"
 - `message_handler.py` - הוסרה קריאה כפולה ל-`log_to_sheets`
 
 **תוצאה:** עכשיו כל הודעה נשמרת רק פעם אחת בגיליון, בשורה אחת כמו שצריך.
+
+---
+
+## 🔍 צפייה בלוג JSONL של GPT
+
+> החל מגרסת **openai_calls.jsonl** (או כל נתיב שתגדיר ב-`GPTJSONLLogger`) כל קריאה ל-GPT נשמרת בשורה אחת בפורמט JSON. כך תוכל לעיין בהן בקלות:
+
+### 1. VS Code
+
+1. פתח את הקובץ `data/openai_calls.jsonl`.
+2. התקן את ההרחבה **JSON Lines** (אם טרם מותקנת) ‑ היא מציגה כל שורה כאובייקט JSON מעוצב.
+3. `Ctrl+Shift+P → JSON Lines: Pretty print` יעצב שורה נבחרת.
+4. חיפוש (`Ctrl+F`) עובד כרגיל – אפשר למצוא System Prompt, user
+aiming, או שדות token usage.
+
+### 2. פקודות טרמינל מהירות
+
+| פעולה                  | פקודה |
+|------------------------|-------|
+| להציג 10 השורות האחרונות | `tail -n 10 data/openai_calls.jsonl` |
+| לעקוב בלייב            | `tail -f data/openai_calls.jsonl` |
+| לעצב בזמן אמת עם *jq*  | `tail -f data/openai_calls.jsonl \| jq -C .` |
+| פורמט צבעוני לקובץ שלם | `jq -C . data/openai_calls.jsonl \| less -R` |
+| להציג רק ההודעות שנשלחו | `jq -C '.request.messages' data/openai_calls.jsonl` |
+| להציג רק מספר הטוקנים  | `jq '.response.usage' data/openai_calls.jsonl` |
+
+*הסבר קצר*: כל שורה היא אובייקט JSON עצמאי → לכן יש להעביר ל-`jq` בלי דגל `-s`. אם תרצה לנתח סטטיסטית (למשל BigQuery/Snowflake) פשוט טען את הקובץ כ-JSONL.
+
+---
