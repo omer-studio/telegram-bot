@@ -10,9 +10,18 @@ def get_welcome_messages():
     מחזיר את כל הודעות קבלת הפנים שנשלחות למשתמש חדש.
     פלט: list של הודעות (str)
     """
-    return []
+    # החל מגרסה זו מבוטלות הודעות ה"היי מלך". נשארת רק בקשת קוד האישור.
+    return [get_code_request_message()]
 
-
+def get_code_request_message():
+    """
+    הודעה שמבקשת מהמשתמש להקליד את קוד האישור שקיבל במייל.
+    פלט: str
+    """
+    return (
+        "בבקשה הקלד את <b>מספר האישור</b> שקיבלת במייל 🔢\n"
+        "כתוב אותו <u>ללא תווים נוספים</u> – רק ספרות ✍️"
+    )
 
 def get_retry_message_by_attempt(attempt):
     """

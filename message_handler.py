@@ -27,7 +27,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 from utils import handle_secret_command, log_event_to_file, update_chat_history, get_chat_history_messages, update_last_bot_message
 from config import should_log_message_debug, should_log_debug_prints
-from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response
+from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state
 from gpt_a_handler import get_main_response
@@ -796,19 +796,15 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         logging.info("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
         print("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
         
-        # רישום ראשוני
-        register_result = register_user(chat_id, update.message.from_user)
-        
+        # ensures user_state row exists (לא מצמיד עדיין chat_id לקוד)
+        register_result = register_user(chat_id)
+
         if register_result.get("success"):
-            # שליחת הודעות ברכה
-            welcome_messages = get_welcome_messages()
-            for msg in welcome_messages:
+            # שליחת הודעת בקשה לקוד בלבד
+            for msg in get_welcome_messages():
                 await send_system_message(update, chat_id, msg)
-                await asyncio.sleep(0.5)  # הפסקה קטנה בין הודעות
-            
-            # שליחת בקשת אישור תנאים
-            await send_approval_message(update, chat_id)
-            
+                await asyncio.sleep(0.5)
+
         else:
             error_msg = "מצטער, הייתה בעיה ברישום. אנא נסה שוב."
             await send_system_message(update, chat_id, error_msg)
@@ -819,14 +815,42 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
 
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
     """
-    טיפול במשתמש לא רשום ברקע
+    טיפול במשתמש לא רשום. מבקש קוד אישור, מוודא אותו ורק לאחר מכן שולח בקשת אישור תנאים.
     """
     try:
-        logging.info("[Permissions] משתמש לא רשום - מנחה לרישום")
-        print("[Permissions] משתמש לא רשום - מנחה לרישום")
-        
-        # הודעת קבלת הפנים למשתמש חדש הוסרה בהתאם למדיניות החדשה
-        await handle_new_user_background(update, context, chat_id, user_msg)
+        logging.info("[Permissions] משתמש לא רשום - תהליך קבלת קוד")
+        print("[Permissions] משתמש לא רשום - תהליך קבלת קוד")
+
+        user_input = user_msg.strip()
+
+        # אם המשתמש שלח רק ספרות – מניח שזה קוד האישור
+        if user_input.isdigit():
+            code_input = user_input
+
+            # ניסיון רישום עם הקוד
+            register_success = register_user(chat_id, code_input)
+
+            if register_success.get("success", False):
+                # קוד אושר
+                await send_system_message(update, chat_id, code_approved_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
+
+                # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
+                await send_approval_message(update, chat_id)
+                return
+            else:
+                # קוד לא תקין – מגדיל מונה ומחזיר הודעת שגיאה מתאימה
+                try:
+                    sheet_states = context.bot_data["sheet_states"]
+                    attempt_num = await increment_code_try(sheet_states, chat_id)
+                except Exception:
+                    attempt_num = -1
+
+                retry_msg = get_retry_message_by_attempt(attempt_num if attempt_num > 0 else 1)
+                await send_system_message(update, chat_id, retry_msg)
+                return
+
+        # אם לא קיבלנו קוד – שולחים בקשה ברורה להזין קוד
+        await send_system_message(update, chat_id, get_code_request_message())
 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
