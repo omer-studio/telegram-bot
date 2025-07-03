@@ -44,44 +44,85 @@ class GPTJSONLLogger:
     # Public helpers
     # ------------------------------------------------------------------
     def chat_completion(self, client: Any, /, **payload: Any):
-        """Thin wrapper around ``client.chat.completions.create`` *with logging*.
+        """Provider-agnostic chat completion with automatic JSONL logging.
 
-        The original response object is returned unchanged so your existing code
-        keeps working. The request payload **and** serialised response are
-        appended to ``self.log_path`` as a single JSON object.
+        Supported clients (first positional arg):
+        • **OpenAI SDK** – pass an `openai.OpenAI()` instance (has `chat.completions.create`).
+        • **LiteLLM** – pass the imported `litellm` module itself (has `completion`).
+
+        The function detects the proper call, executes it, then logs:
+        request, response, and ‑ אם קיים ‑ עלות (`cost_usd`) שחושבה ע"י `litellm.completion_cost`.
         """
-        # Keep a deep-ish copy of what the caller sent (it may be mutated by SDK)
+
+        # Snapshot the original request for the log (avoid mutation by SDKs)
         request_copy: Dict[str, Any] = json.loads(json.dumps(payload, default=str))
 
-        response = client.chat.completions.create(**payload)
+        # ------------------------------------------------------------------
+        # Execute the completion call depending on the client type
+        # ------------------------------------------------------------------
+        if hasattr(client, "chat") and hasattr(client.chat, "completions"):
+            # OpenAI-style SDK ≥1.0
+            response = client.chat.completions.create(**payload)
+            endpoint_name = "chat/completions"
+        elif hasattr(client, "completion"):
+            # LiteLLM shim (supports OpenAI, Gemini, Anthropic…)
+            response = client.completion(**payload)  # type: ignore[attr-defined]
+            endpoint_name = "litellm/completion"
+        else:
+            raise ValueError(
+                "Unsupported client passed to GPTJSONLLogger. "
+                "Pass an OpenAI client or the litellm module."
+            )
 
-        # Convert response object to plain Python primitives so it's JSON-friendly
+        # ------------------------------------------------------------------
+        # Serialise the response object to JSON-safe primitives
+        # ------------------------------------------------------------------
         response_dict: Any
         try:
-            # openai>=1.0 uses Pydantic -> model_dump()
-            response_dict = response.model_dump()
+            response_dict = response.model_dump()  # type: ignore[attr-defined]
         except AttributeError:
             try:
-                # openai<1.0 legacy helper
-                response_dict = response.to_dict_recursive()
+                response_dict = response.to_dict_recursive()  # type: ignore[attr-defined]
             except AttributeError:
-                # Fallback – best-effort string representation
-                response_dict = str(response)
+                response_dict = json.loads(json.dumps(response, default=str))
 
-        self._append_log(request_copy, response_dict)
+        # ------------------------------------------------------------------
+        # Optional: compute cost via LiteLLM if available
+        # ------------------------------------------------------------------
+        cost_usd = None
+        try:
+            import litellm  # type: ignore  # local import to avoid hard dependency
+
+            # Only works if response originates from litellm or is OpenAI-style
+            cost_usd = litellm.completion_cost(completion_response=response)  # type: ignore[arg-type]
+        except Exception:
+            # Cost calculation failed/unavailable – leave as None
+            pass
+
+        # Append to log
+        self._append_log(request_copy, response_dict, endpoint_name, cost_usd)
         return response
 
     # ------------------------------------------------------------------
     # Internal utils
     # ------------------------------------------------------------------
-    def _append_log(self, request_body: Dict[str, Any], response_body: Any) -> None:
+    def _append_log(
+        self,
+        request_body: Dict[str, Any],
+        response_body: Any,
+        endpoint_name: str,
+        cost_usd: Any = None,
+    ) -> None:
         """Append a single JSONL line atomically (thread-safe)."""
         entry = {
             "ts": datetime.utcnow().isoformat() + "Z",
-            "endpoint": "chat/completions",
+            "endpoint": endpoint_name,
             "request": request_body,
             "response": response_body,
         }
+        if cost_usd is not None:
+            entry["cost_usd"] = cost_usd
+
         line = json.dumps(entry, ensure_ascii=False)
         with self._lock:
             with open(self.log_path, "a", encoding="utf-8") as file:
