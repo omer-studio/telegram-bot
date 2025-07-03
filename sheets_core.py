@@ -409,7 +409,10 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
             elif header.lower() == "gpt_c_run_count":
                 new_row[i] = "0"
         
-        sheet_states.insert_row(new_row, 3)
+        # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
+        # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
+        insert_index = len(all_values) + 1  # 1-based index, +1 מוסיף אחרי השורה האחרונה
+        sheet_states.insert_row(new_row, insert_index)
         debug_log(f"Added new user {chat_id} to user_states with code_try=1")
         return True
         
@@ -856,7 +859,10 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
                     new_row[i] = timestamp
                     break
             
-            sheet_states.insert_row(new_row, 3)
+            # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
+            # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
+            insert_index = len(all_values) + 1  # 1-based index, +1 מוסיף אחרי השורה האחרונה
+            sheet_states.insert_row(new_row, insert_index)
 
             # מונה קריאת API (insert_row)
             _increment_api_call()
