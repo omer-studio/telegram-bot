@@ -932,23 +932,35 @@ def reset_gpt_c_run_count(chat_id: str) -> bool:
 
 def get_user_summary(chat_id: str) -> str:
     """עכשיו קורא מהיר מ-chat_history.json"""
-    from utils import get_user_summary_fast
+    try:
+        from utils import get_user_summary_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import get_user_summary_fast  # type: ignore
     return get_user_summary_fast(chat_id)  # מהיר!
 
 def update_user_summary(chat_id: str, new_summary: str) -> bool:
     """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import update_user_summary_fast
+    try:
+        from utils import update_user_summary_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import update_user_summary_fast  # type: ignore
     update_user_summary_fast(chat_id, new_summary)  # מהיר!
     return True
 
 def get_user_profile_data(chat_id: str) -> Dict[str, Any]:
     """עכשיו קורא מהיר מ-chat_history.json"""
-    from utils import get_user_profile_fast
+    try:
+        from utils import get_user_profile_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import get_user_profile_fast  # type: ignore
     return get_user_profile_fast(chat_id)  # מהיר!
 
 def update_user_profile_data(chat_id: str, profile_updates: Dict[str, Any]) -> bool:
     """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    from utils import update_user_profile_fast
+    try:
+        from utils import update_user_profile_fast  # type: ignore
+    except (ImportError, AttributeError):
+        from profile_utils import update_user_profile_fast  # type: ignore
     update_user_profile_fast(chat_id, profile_updates)  # מהיר!
     return True
 
