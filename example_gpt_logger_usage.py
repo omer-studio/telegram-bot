@@ -36,6 +36,9 @@ def main():
         temperature=0.5,
     )
 
+    # If you already calculated cost elsewhere, pass it in:
+    # logger.chat_completion(client, cost_usd=0.0021, **same_payload)
+
     print(response.choices[0].message.content)
 
 
