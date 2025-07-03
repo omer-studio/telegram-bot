@@ -835,6 +835,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
                 await send_approval_message(update, chat_id)
                 return
+
             else:
                 # קוד לא תקין – מגדיל מונה ומחזיר הודעת שגיאה מתאימה
                 try:
@@ -862,7 +863,13 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             # אישור תנאים
             approval_result = approve_user(chat_id)
             if approval_result.get("success"):
-                await send_system_message(update, chat_id, code_approved_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
+                await send_system_message(update, chat_id, full_access_message())
+                await send_system_message(
+                    update,
+                    chat_id,
+                    nice_keyboard_message(),
+                    reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True)
+                )
             else:
                 await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
                 
