@@ -59,10 +59,14 @@ jobs:
       # 6. הרצת בדיקות עם pytest
       - name: 🧪 Run Tests with pytest
         run: |
-          # אם אין תיקיית tests, pytest יריץ discovery mode
-          # ויחפש קבצים שמתחילים ב-test_ או מסתיימים ב-_test.py
-          python -m pytest -v --tb=short || echo "⚠️ לא נמצאו בדיקות, אבל זה בסדר לעת עתה"
-          echo "✅ שלב הבדיקות הושלם!"
+          # אם אין בדיקות – pytest יחזיר exit-code 5 (no tests collected)
+          # זה ייכשל את ה־CI, כפי שנרצה. לכן אין יותר התעלמות משגיאות.
+          python -m pytest -v --tb=short
+
+      # 7. בדיקת pre-deploy הקריטית – חייבת לעבור לפני deploy
+      - name: 🔒 Pre-deploy critical check
+        run: |
+          python pre_deploy_critical_check.py
 
   # שלב 2: Deploy ל-Render (רק אחרי שהבדיקות עברו בהצלחה)
   deploy:
