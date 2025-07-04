@@ -62,6 +62,13 @@ def register_user(chat_id, code_input=None):
             success = _core_register_user(sheet_users, str(chat_id), str(code_input))
             # מבטיח שקיימת שורה ב-user_states (לצורך מונים עתידיים)
             ensure_user_state_row(sheet_users, sheet_states, str(chat_id))
+            
+            # 🔧 תיקון קריטי: ניקוי cache אחרי רישום מוצלח
+            if success:
+                from sheets_core import _clear_user_cache
+                _clear_user_cache(str(chat_id))
+                print(f"[REGISTER_DEBUG] רישום מוצלח + ניקוי cache עבור {chat_id}")
+            
             return {"success": bool(success)}
 
         # 🔙 Legacy path – ללא קוד (לא מומלץ)
@@ -84,6 +91,13 @@ def approve_user(chat_id):
     """
     try:
         success = _core_approve_user(sheet_users, str(chat_id))
+        
+        # 🔧 תיקון קריטי: ניקוי cache אחרי אישור מוצלח
+        if success:
+            from sheets_core import _clear_user_cache
+            _clear_user_cache(str(chat_id))
+            print(f"[APPROVE_DEBUG] אישור מוצלח + ניקוי cache עבור {chat_id}")
+        
         if not success:
             try:
                 # התראה לאדמין על כישלון אישור
