@@ -56,7 +56,20 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             usage.update(cost_info)
         except Exception as _cost_e:
             logging.warning(f"[gpt_b] Cost calc failed: {_cost_e}")
-        return {"summary": summary, "usage": usage, "model": response.model}
+        result = {"summary": summary, "usage": usage, "model": response.model}
+        try:
+            from gpt_jsonl_logger import GPTJSONLLogger
+            GPTJSONLLogger.log_gpt_call(
+                log_path="data/openai_calls.jsonl",
+                gpt_type="B",
+                request=completion_params,
+                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                cost_usd=usage.get("cost_total", 0),
+                extra={"chat_id": chat_id, "message_id": message_id}
+            )
+        except Exception as log_exc:
+            print(f"[LOGGING_ERROR] Failed to log GPT-B call: {log_exc}")
+        return result
         
     except Exception as e:
         logging.error(f"[gpt_b] Error: {e}")

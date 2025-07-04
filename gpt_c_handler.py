@@ -82,7 +82,20 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
         except Exception as _cost_e:
             logging.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
         
-        return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
+        result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
+        try:
+            from gpt_jsonl_logger import GPTJSONLLogger
+            GPTJSONLLogger.log_gpt_call(
+                log_path="data/openai_calls.jsonl",
+                gpt_type="C",
+                request=completion_params,
+                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                cost_usd=usage.get("cost_total", 0),
+                extra={"chat_id": chat_id, "message_id": message_id}
+            )
+        except Exception as log_exc:
+            print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
+        return result
         
     except Exception as e:
         error_str = str(e)
@@ -146,16 +159,55 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 except Exception as _cost_e:
                     logging.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
                 
-                return {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
+                result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
+                try:
+                    from gpt_jsonl_logger import GPTJSONLLogger
+                    GPTJSONLLogger.log_gpt_call(
+                        log_path="data/openai_calls.jsonl",
+                        gpt_type="C",
+                        request=completion_params,
+                        response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                        cost_usd=usage.get("cost_total", 0),
+                        extra={"chat_id": chat_id, "message_id": message_id}
+                    )
+                except Exception as log_exc:
+                    print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
+                return result
                 
             except Exception as fallback_error:
                 logging.error(f"[gpt_c] Fallback also failed: {fallback_error}")
                 print(f"❌ [GPT-C] שגיאה גם ב-fallback: {fallback_error}")
-                return {"extracted_fields": {}, "usage": {}, "model": fallback_model}
+                result = {"extracted_fields": {}, "usage": {}, "model": fallback_model}
+                try:
+                    from gpt_jsonl_logger import GPTJSONLLogger
+                    GPTJSONLLogger.log_gpt_call(
+                        log_path="data/openai_calls.jsonl",
+                        gpt_type="C",
+                        request=completion_params,
+                        response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                        cost_usd=usage.get("cost_total", 0),
+                        extra={"chat_id": chat_id, "message_id": message_id}
+                    )
+                except Exception as log_exc:
+                    print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
+                return result
         else:
             logging.error(f"[gpt_c] Error (not rate limit): {e}")
             print(f"❌ [GPT-C] שגיאה: {e}")
-            return {"extracted_fields": {}, "usage": {}, "model": model}
+            result = {"extracted_fields": {}, "usage": {}, "model": model}
+            try:
+                from gpt_jsonl_logger import GPTJSONLLogger
+                GPTJSONLLogger.log_gpt_call(
+                    log_path="data/openai_calls.jsonl",
+                    gpt_type="C",
+                    request=completion_params,
+                    response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                    cost_usd=usage.get("cost_total", 0),
+                    extra={"chat_id": chat_id, "message_id": message_id}
+                )
+            except Exception as log_exc:
+                print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
+            return result
 
 def should_run_gpt_c(user_message):
     """

@@ -486,7 +486,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             start_profile_question_cooldown(chat_id)
             logging.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={chat_id}")
         
-        return {
+        result = {
             "bot_reply": bot_reply, 
             "usage": usage, 
             "model": response.model,
@@ -499,6 +499,19 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             "processing_time": processing_time,
             "billing_time": billing_time
         }
+        try:
+            from gpt_jsonl_logger import GPTJSONLLogger
+            GPTJSONLLogger.log_gpt_call(
+                log_path="data/openai_calls.jsonl",
+                gpt_type="A",
+                request=completion_params,
+                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                cost_usd=usage.get("cost_total", 0),
+                extra={"chat_id": chat_id, "message_id": message_id}
+            )
+        except Exception as log_exc:
+            print(f"[LOGGING_ERROR] Failed to log GPT-A call: {log_exc}")
+        return result
         
     except Exception as e:
         logging.error(f"[gpt_a] שגיאה במודל {model}: {e}")

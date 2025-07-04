@@ -730,7 +730,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if should_run_gpt_c(user_msg):
                     all_tasks.append(asyncio.create_task(asyncio.to_thread(extract_user_info, user_msg, chat_id)))
                 all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply))
-                all_tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
+                all_tasks.append(execute_gpt_e_if_needed(chat_id))
                 
                 results = await asyncio.gather(*all_tasks, return_exceptions=True)
                 
@@ -738,55 +738,65 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # 🔔 שליחת הודעה לאדמין על הרצת GPT-C / D / E (לוג תמציתי)
                 # ------------------------------------------------------------------
                 try:
-                    from notifications import send_admin_notification_raw
-
-                    ran_components = []
-                    summary_lines = []
-
-                    # התאמת תוצאות לסדר המשימות
+                    from profile_utils import _send_admin_profile_overview_notification, _detect_profile_changes, get_user_profile_fast
                     idx = 0
+                    gpt_c_changes = []
+                    gpt_d_changes = []
+                    gpt_e_changes = []
+                    gpt_c_info = "GPT-C: לא הופעל"
+                    gpt_d_info = "GPT-D: לא הופעל"
+                    gpt_e_info = "GPT-E: לא הופעל"
+                    # --- GPT-C ---
                     if should_run_gpt_c(user_msg):
                         gpt_c_res = results[idx]
                         idx += 1
-                        if not isinstance(gpt_c_res, Exception):
-                            ran_components.append("GPT-C")
-                            # ניסיון לחלץ מספר שדות שחולצו
-                            try:
-                                extracted_fields = gpt_c_res.get("extracted_fields", {}) if isinstance(gpt_c_res, dict) else {}
-                                summary_lines.append(f"🔍 GPT-C: {len(extracted_fields)} שדות חולצו")
-                            except Exception:
-                                summary_lines.append("🔍 GPT-C: הופעל")
-
-                    # GPT-D תוצאה
+                        if not isinstance(gpt_c_res, Exception) and gpt_c_res is not None:
+                            extracted_fields = gpt_c_res.get("extracted_fields", {}) if isinstance(gpt_c_res, dict) else {}
+                            old_profile = get_user_profile_fast(chat_id)
+                            new_profile = {**old_profile, **extracted_fields}
+                            gpt_c_changes = _detect_profile_changes(old_profile, new_profile)
+                            gpt_c_info = f"GPT-C: עודכנו {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: לא עודכנו שדות"
+                        else:
+                            gpt_c_info = "GPT-C: לא הופעל או שגיאה"
+                    # --- GPT-D ---
                     gpt_d_res = results[idx] if idx < len(results) else None
                     idx += 1
                     if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
-                        ran_components.append("GPT-D")
-                        try:
-                            updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
-                            changes_cnt = len(updated_profile or {}) if isinstance(updated_profile, dict) else 0
-                            summary_lines.append(f"🔄 GPT-D: {changes_cnt} שדות אוחדו")
-                        except Exception:
-                            summary_lines.append("🔄 GPT-D: הופעל")
-
-                    # GPT-E תוצאה
+                        updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
+                        if updated_profile and isinstance(updated_profile, dict):
+                            old_profile = get_user_profile_fast(chat_id)
+                            gpt_d_changes = _detect_profile_changes(old_profile, updated_profile)
+                            gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות אוחדו" if gpt_d_changes else "GPT-D: לא אוחדו שדות"
+                        else:
+                            gpt_d_info = "GPT-D: לא הופעל או אין שינויים"
+                    else:
+                        gpt_d_info = "GPT-D: לא הופעל או שגיאה"
+                    # --- GPT-E ---
                     gpt_e_res = results[idx] if idx < len(results) else None
                     if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
-                        ran_components.append("GPT-E")
-                        try:
-                            changes_cnt = len(gpt_e_res.get("changes", {})) if isinstance(gpt_e_res, dict) else 0
-                            summary_lines.append(f"✨ GPT-E: {changes_cnt} שינויים מוצעים")
-                        except Exception:
-                            summary_lines.append("✨ GPT-E: הופעל")
-
-                    if ran_components:
-                        msg = (
-                            f"<b>🛠️ הרצת מעבדי פרופיל ({', '.join(ran_components)})</b>\n"
-                            f"<code>{chat_id}</code> | הודעה: {user_msg[:60]}...\n\n" + "\n".join(summary_lines)
-                        )
-                        send_admin_notification_raw(msg)
+                        changes = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
+                        if changes:
+                            old_profile = get_user_profile_fast(chat_id)
+                            new_profile = {**old_profile, **changes}
+                            gpt_e_changes = _detect_profile_changes(old_profile, new_profile)
+                            gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שינויים מוצעים" if gpt_e_changes else "GPT-E: לא הוצעו שינויים"
+                        else:
+                            gpt_e_info = "GPT-E: לא הופעל או אין שינויים"
+                    else:
+                        gpt_e_info = "GPT-E: לא הופעל או שגיאה"
+                    _send_admin_profile_overview_notification(
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        gpt_c_changes=gpt_c_changes,
+                        gpt_d_changes=gpt_d_changes,
+                        gpt_e_changes=gpt_e_changes,
+                        gpt_c_info=gpt_c_info,
+                        gpt_d_info=gpt_d_info,
+                        gpt_e_info=gpt_e_info,
+                        summary=""
+                    )
                 except Exception as notify_exc:
-                    logging.error(f"[ADMIN_NOTIFY] Failed to send GPT processors summary: {notify_exc}")
+                    logging.error(f"[ADMIN_NOTIFY] Failed to send detailed admin profile overview: {notify_exc}")
                 
                 # עדכון מידע עבור ניטור ביצועים
                 await update_user_processing_stage(str(chat_id), "completed")
@@ -832,7 +842,7 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
         tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply))
         
         # GPT-E - אימוג'ים ותכונות מתקדמות
-        tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
+        tasks.append(execute_gpt_e_if_needed(chat_id))
         
         # הפעלה במקביל של כל התהליכים ואיסוף תוצאות
         all_tasks = []

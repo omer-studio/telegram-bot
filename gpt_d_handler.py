@@ -87,7 +87,20 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         if should_log_data_extraction_debug():
             print(f"📋 [GPT-D] פרופיל מוזג: {json.dumps(extracted_fields, ensure_ascii=False, indent=2)}")
         
-        return {"merged_profile": extracted_fields, "usage": usage, "model": response.model}
+        result = {"merged_profile": extracted_fields, "usage": usage, "model": response.model}
+        try:
+            from gpt_jsonl_logger import GPTJSONLLogger
+            GPTJSONLLogger.log_gpt_call(
+                log_path="data/openai_calls.jsonl",
+                gpt_type="D",
+                request=completion_params,
+                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                cost_usd=usage.get("cost_total", 0),
+                extra={"chat_id": chat_id, "message_id": message_id}
+            )
+        except Exception as log_exc:
+            print(f"[LOGGING_ERROR] Failed to log GPT-D call: {log_exc}")
+        return result
         
     except Exception as e:
         logging.error(f"[gpt_d] Error: {e}")

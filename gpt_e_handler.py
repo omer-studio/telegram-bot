@@ -228,6 +228,19 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
             result['tokens_used'] = response.usage.total_tokens
             result['cost_data'] = usage
             
+            try:
+                from gpt_jsonl_logger import GPTJSONLLogger
+                GPTJSONLLogger.log_gpt_call(
+                    log_path="data/openai_calls.jsonl",
+                    gpt_type="E",
+                    request=completion_params if 'completion_params' in locals() else {},
+                    response=response.model_dump() if 'response' in locals() and hasattr(response, 'model_dump') else {},
+                    cost_usd=usage.get("cost_total", 0) if 'usage' in locals() else 0,
+                    extra={"chat_id": chat_id}
+                )
+            except Exception as log_exc:
+                print(f"[LOGGING_ERROR] Failed to log GPT-E call: {log_exc}")
+            
         except Exception as e:
             result['errors'].append(f"GPT API error: {str(e)}")
             logger.error(f"[gpt_e] GPT API error for chat_id={chat_id}: {e}")
@@ -344,71 +357,27 @@ def log_gpt_e_run(chat_id: str, result: Dict[str, Any]) -> None:
     
     logger.info(f"[gpt_e] Run log: {json.dumps(log_entry, ensure_ascii=False)}")
 
-async def execute_gpt_e_if_needed(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: str = None) -> Optional[Dict[str, Any]]:
+async def execute_gpt_e_if_needed(chat_id: str) -> Optional[Dict[str, Any]]:
     """
-    בודק אם צריך להפעיל gpt_e ומפעיל אם כן.
-    
-    התנאים להפעלה:
-    1. gpt_c_run_count >= 25
-    2. או gpt_c_run_count >= 16 AND עברו 24 שעות מאז הריצה האחרונה
-    
+    בודק אם צריך להפעיל gpt_e (כל 10 הודעות משתמש) ומפעיל אם כן.
     :param chat_id: מזהה המשתמש
-    :param gpt_c_run_count: מספר ריצות gpt_c מאז הריצה האחרונה של gpt_e
-    :param last_gpt_e_timestamp: טיימסטמפ של הריצה האחרונה של gpt_e
     :return: תוצאות הריצה אם הופעל, None אם לא הופעל
     """
-    logger.info(f"[gpt_e] Checking conditions for chat_id={chat_id}, gpt_c_run_count={gpt_c_run_count}")
-    print(f"🔍 [GPT-E] בדיקת תנאים: gpt_c רץ {gpt_c_run_count} פעמים (gpt_e רץ כל 25 ריצות gpt_c)")
-    
-    # בדיקה אם יש צורך להפעיל gpt_e
-    should_run = False
-    reason = ""
-    
-    # תנאי 1: 25 ריצות או יותר
-    if gpt_c_run_count >= 25:
-        should_run = True
-        reason = f"gpt_c_run_count >= 25 (current: {gpt_c_run_count})"
-    
-    # תנאי 2: 16-24 ריצות + 24 שעות
-    elif gpt_c_run_count >= 16:
-        if last_gpt_e_timestamp:
-            try:
-                from datetime import datetime
-                last_run = datetime.fromisoformat(last_gpt_e_timestamp.replace('Z', '+00:00'))
-                now = get_israel_time()
-                # וידוא שיש timezone תואם לשני התאריכים
-                if last_run.tzinfo is None:
-                    import pytz
-                    israel_tz = pytz.timezone('Asia/Jerusalem')
-                    last_run = israel_tz.localize(last_run)
-                hours_since_last = (now - last_run).total_seconds() / 3600
-                
-                if hours_since_last >= 24:
-                    should_run = True
-                    reason = f"gpt_c_run_count >= 16 ({gpt_c_run_count}) AND 24+ hours passed ({hours_since_last:.1f}h)"
-                else:
-                    logger.info(f"[gpt_e] Not enough time passed: {hours_since_last:.1f}h < 24h")
-            except Exception as e:
-                logger.error(f"[gpt_e] Error parsing timestamp {last_gpt_e_timestamp}: {e}")
-                # אם יש שגיאה בפענוח הטיימסטמפ, נפעיל gpt_e
-                should_run = True
-                reason = f"Error parsing timestamp, running gpt_e as fallback"
+    from chat_utils import get_user_stats_and_history
+    logger.info(f"[gpt_e] Checking if should run for chat_id={chat_id} (every 10 user messages)")
+    try:
+        stats, _ = get_user_stats_and_history(chat_id)
+        total_messages = stats.get("total_messages", 0)
+        if total_messages > 0 and total_messages % 10 == 0:
+            logger.info(f"[gpt_e] Triggered for chat_id={chat_id} (user sent {total_messages} messages)")
+            result = await run_gpt_e(chat_id)
+            if result['success']:
+                await update_user_state_after_gpt_e(chat_id, result)
+            log_gpt_e_run(chat_id, result)
+            return result
         else:
-            # אין טיימסטמפ קודם, נפעיל gpt_e
-            should_run = True
-            reason = f"No previous gpt_e timestamp, running gpt_e"
-    
-    if should_run:
-        logger.info(f"[gpt_e] Conditions met for chat_id={chat_id}: {reason}")
-        result = await run_gpt_e(chat_id)
-        
-        # עדכון מצב המשתמש ולוגים
-        if result['success']:
-            await update_user_state_after_gpt_e(chat_id, result)
-        
-        log_gpt_e_run(chat_id, result)
-        
-        return result
-    else:
-        logger.info(f"[gpt_e] Conditions not met for chat_id={chat_id}, gpt_c_run_count={gpt_c_run_count}")
+            logger.info(f"[gpt_e] Not running for chat_id={chat_id} (user sent {total_messages} messages)")
+            return None
+    except Exception as e:
+        logger.error(f"[gpt_e] Error in execute_gpt_e_if_needed: {e}")
         return None 

@@ -121,3 +121,47 @@ class GPTJSONLLogger:
         with self._lock:
             with open(self.log_path, "a", encoding="utf-8") as file:
                 file.write(line + "\n")
+
+    @staticmethod
+    def log_gpt_call(
+        log_path: str,
+        gpt_type: str,
+        request: dict,
+        response: dict,
+        cost_usd: float = None,
+        extra: dict = None,
+    ) -> None:
+        """
+        רושם קריאה ל־openai_calls.jsonl בפורמט אחיד, ללא תלות ב-client.
+        :param log_path: נתיב הקובץ
+        :param gpt_type: סוג ה־GPT (A/B/C/D/E)
+        :param request: פרטי הבקשה (messages, model וכו')
+        :param response: פרטי התשובה (כולל usage)
+        :param cost_usd: עלות (אם ידועה)
+        :param extra: שדות נוספים (chat_id, message_id וכו')
+        """
+        entry = {
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "gpt_type": gpt_type,
+            "request": request,
+            "response": response,
+        }
+        if cost_usd is not None:
+            entry["cost_usd"] = cost_usd
+        if extra:
+            entry.update(extra)
+        # יצירת התיקייה אם צריך
+        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        # כתיבה לקובץ (thread-safe)
+        lock = threading.Lock()
+        with lock:
+            with open(log_path, "a", encoding="utf-8") as file:
+                file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        # הפעלת build_gpt_log.py --upload לעדכון ה-HTML בדרייב
+        try:
+            import subprocess
+            subprocess.Popen([
+                "python", "scripts/build_gpt_log.py", "--upload"
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as html_exc:
+            print(f"[LOGGING_ERROR] Failed to update HTML log: {html_exc}")
