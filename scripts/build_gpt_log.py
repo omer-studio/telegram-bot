@@ -271,23 +271,26 @@ def build_html() -> None:
 # -----------------------------------------------------------------------------
 
 def upload_to_drive(html_path: str, folder_id: str = DRIVE_FOLDER_ID) -> None:
-    """Upload (or update) the HTML file in a specific Drive folder via OAuth creds.
+    """Upload (or update) the HTML file in a specific Drive folder via service account creds from config.
 
-    Requires `token.json` (or credentials.json) in the working directory with
-    the required scopes. Imports are done lazily to avoid mandatory deps when
-    the flag is not used.
+    Requires SERVICE_ACCOUNT_DICT in config.py with the required scopes.
     """
-
     try:
         from googleapiclient.discovery import build  # type: ignore
         from googleapiclient.http import MediaFileUpload  # type: ignore
-        from google.oauth2.credentials import Credentials  # type: ignore
+        from google.oauth2.service_account import Credentials  # type: ignore
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from config import SERVICE_ACCOUNT_DICT
     except ModuleNotFoundError as exc:  # pragma: no cover
         raise SystemExit(
             "google-api-python-client not installed. Run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib"
         ) from exc
+    except ImportError as exc:
+        raise SystemExit(f"Failed to import SERVICE_ACCOUNT_DICT from config: {exc}")
 
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_DICT, scopes=SCOPES)
     drive_service = build("drive", "v3", credentials=creds)
 
     file_name = os.path.basename(html_path)
