@@ -779,22 +779,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             old_profile = get_user_profile_fast(chat_id)
                             new_profile = {**old_profile, **changes}
                             gpt_e_changes = _detect_profile_changes(old_profile, new_profile)
-                            gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שינויים מוצעים" if gpt_e_changes else "GPT-E: לא הוצעו שינויים"
+                            gpt_e_info = f"<b>GPT-E:</b> {len(gpt_e_changes)} שינויים מוצעים" if gpt_e_changes else "<b>GPT-E:</b> לא הוצעו שינויים"
                         else:
-                            gpt_e_info = "GPT-E: לא הופעל או אין שינויים"
+                            gpt_e_info = "<b>GPT-E:</b> לא הופעל או אין שינויים"
                     else:
-                        gpt_e_info = "GPT-E: לא הופעל או שגיאה"
-                    _send_admin_profile_overview_notification(
-                        chat_id=chat_id,
-                        user_msg=user_msg,
-                        gpt_c_changes=gpt_c_changes,
-                        gpt_d_changes=gpt_d_changes,
-                        gpt_e_changes=gpt_e_changes,
-                        gpt_c_info=gpt_c_info,
-                        gpt_d_info=gpt_d_info,
-                        gpt_e_info=gpt_e_info,
-                        summary=""
-                    )
+                        gpt_e_info = "<b>GPT-E:</b> לא הופעל או שגיאה"
+
+                    # --- Only send if at least one actually ran ---
+                    should_send = bool(gpt_c_changes or gpt_d_changes or gpt_e_changes)
+                    if should_send:
+                        from profile_utils import get_user_summary_fast
+                        summary = get_user_summary_fast(chat_id)
+                        _send_admin_profile_overview_notification(
+                            chat_id=chat_id,
+                            user_msg=user_msg,
+                            gpt_c_changes=gpt_c_changes,
+                            gpt_d_changes=gpt_d_changes,
+                            gpt_e_changes=gpt_e_changes,
+                            gpt_c_info=f"<b>{gpt_c_info.replace('<b>', '').replace('</b>', '')}</b>",
+                            gpt_d_info=f"<b>{gpt_d_info.replace('<b>', '').replace('</b>', '')}</b>",
+                            gpt_e_info=gpt_e_info,
+                            summary=summary
+                        )
                 except Exception as notify_exc:
                     logging.error(f"[ADMIN_NOTIFY] Failed to send detailed admin profile overview: {notify_exc}")
                 
