@@ -31,11 +31,8 @@ ngrok-v3-stable-windows-amd64/ngrok.exe
 # Ignore all data directory
 /data/
 
-/tests/
-
-# Ignore HTML log files
+# Keep HTML log files ignored but allow tests for CI
 gpt_e_results.html
-summary_updates.html
 
 # Ignore recycle bin folder
 /recycle_bin/
@@ -57,3 +54,6 @@ gpt_d_performance.jsonl
 # Ignore test user files
 *test_user*.json
 *gap_test*.json
+
+# Allow tests directory (needed for CI) – previously ignored
+# /tests/
