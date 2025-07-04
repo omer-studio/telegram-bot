@@ -725,8 +725,68 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     cost_ils=0.0   # יחושב בפונקציה
                 ))
                 
-                # הפעלת כל הטיפולים ברקע - GPT-C, GPT-D, GPT-E
-                asyncio.create_task(run_background_processors(chat_id, user_msg, bot_reply))
+                # הפעלה במקביל של כל התהליכים ואיסוף תוצאות
+                all_tasks = []
+                if should_run_gpt_c(user_msg):
+                    all_tasks.append(asyncio.create_task(asyncio.to_thread(extract_user_info, user_msg, chat_id)))
+                all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply))
+                all_tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
+                
+                results = await asyncio.gather(*all_tasks, return_exceptions=True)
+                
+                # ------------------------------------------------------------------
+                # 🔔 שליחת הודעה לאדמין על הרצת GPT-C / D / E (לוג תמציתי)
+                # ------------------------------------------------------------------
+                try:
+                    from notifications import send_admin_notification_raw
+
+                    ran_components = []
+                    summary_lines = []
+
+                    # התאמת תוצאות לסדר המשימות
+                    idx = 0
+                    if should_run_gpt_c(user_msg):
+                        gpt_c_res = results[idx]
+                        idx += 1
+                        if not isinstance(gpt_c_res, Exception):
+                            ran_components.append("GPT-C")
+                            # ניסיון לחלץ מספר שדות שחולצו
+                            try:
+                                extracted_fields = gpt_c_res.get("extracted_fields", {}) if isinstance(gpt_c_res, dict) else {}
+                                summary_lines.append(f"🔍 GPT-C: {len(extracted_fields)} שדות חולצו")
+                            except Exception:
+                                summary_lines.append("🔍 GPT-C: הופעל")
+
+                    # GPT-D תוצאה
+                    gpt_d_res = results[idx] if idx < len(results) else None
+                    idx += 1
+                    if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
+                        ran_components.append("GPT-D")
+                        try:
+                            updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
+                            changes_cnt = len(updated_profile or {}) if isinstance(updated_profile, dict) else 0
+                            summary_lines.append(f"🔄 GPT-D: {changes_cnt} שדות אוחדו")
+                        except Exception:
+                            summary_lines.append("🔄 GPT-D: הופעל")
+
+                    # GPT-E תוצאה
+                    gpt_e_res = results[idx] if idx < len(results) else None
+                    if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
+                        ran_components.append("GPT-E")
+                        try:
+                            changes_cnt = len(gpt_e_res.get("changes", {})) if isinstance(gpt_e_res, dict) else 0
+                            summary_lines.append(f"✨ GPT-E: {changes_cnt} שינויים מוצעים")
+                        except Exception:
+                            summary_lines.append("✨ GPT-E: הופעל")
+
+                    if ran_components:
+                        msg = (
+                            f"<b>🛠️ הרצת מעבדי פרופיל ({', '.join(ran_components)})</b>\n"
+                            f"<code>{chat_id}</code> | הודעה: {user_msg[:60]}...\n\n" + "\n".join(summary_lines)
+                        )
+                        send_admin_notification_raw(msg)
+                except Exception as notify_exc:
+                    logging.error(f"[ADMIN_NOTIFY] Failed to send GPT processors summary: {notify_exc}")
                 
                 # עדכון מידע עבור ניטור ביצועים
                 await update_user_processing_stage(str(chat_id), "completed")
@@ -774,14 +834,69 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
         # GPT-E - אימוג'ים ותכונות מתקדמות
         tasks.append(execute_gpt_e_if_needed(chat_id, user_msg, bot_reply))
         
-        # הפעלה במקביל של כל התהליכים
+        # הפעלה במקביל של כל התהליכים ואיסוף תוצאות
         all_tasks = []
         if gpt_c_task:
             all_tasks.append(gpt_c_task)
         all_tasks.extend(tasks)
         
+        results = []
         if all_tasks:
-            await asyncio.gather(*all_tasks, return_exceptions=True)
+            results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+        # ------------------------------------------------------------------
+        # 🔔 שליחת הודעה לאדמין על הרצת GPT-C / D / E (לוג תמציתי)
+        # ------------------------------------------------------------------
+        try:
+            from notifications import send_admin_notification_raw
+
+            ran_components = []
+            summary_lines = []
+
+            # התאמת תוצאות לסדר המשימות
+            idx = 0
+            if gpt_c_task:
+                gpt_c_res = results[idx]
+                idx += 1
+                if not isinstance(gpt_c_res, Exception):
+                    ran_components.append("GPT-C")
+                    # ניסיון לחלץ מספר שדות שחולצו
+                    try:
+                        extracted_fields = gpt_c_res.get("extracted_fields", {}) if isinstance(gpt_c_res, dict) else {}
+                        summary_lines.append(f"🔍 GPT-C: {len(extracted_fields)} שדות חולצו")
+                    except Exception:
+                        summary_lines.append("🔍 GPT-C: הופעל")
+
+            # GPT-D תוצאה
+            gpt_d_res = results[idx] if idx < len(results) else None
+            idx += 1
+            if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
+                ran_components.append("GPT-D")
+                try:
+                    updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
+                    changes_cnt = len(updated_profile or {}) if isinstance(updated_profile, dict) else 0
+                    summary_lines.append(f"🔄 GPT-D: {changes_cnt} שדות אוחדו")
+                except Exception:
+                    summary_lines.append("🔄 GPT-D: הופעל")
+
+            # GPT-E תוצאה
+            gpt_e_res = results[idx] if idx < len(results) else None
+            if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
+                ran_components.append("GPT-E")
+                try:
+                    changes_cnt = len(gpt_e_res.get("changes", {})) if isinstance(gpt_e_res, dict) else 0
+                    summary_lines.append(f"✨ GPT-E: {changes_cnt} שינויים מוצעים")
+                except Exception:
+                    summary_lines.append("✨ GPT-E: הופעל")
+
+            if ran_components:
+                msg = (
+                    f"<b>🛠️ הרצת מעבדי פרופיל ({', '.join(ran_components)})</b>\n"
+                    f"<code>{chat_id}</code> | הודעה: {user_msg[:60]}...\n\n" + "\n".join(summary_lines)
+                )
+                send_admin_notification_raw(msg)
+        except Exception as notify_exc:
+            logging.error(f"[ADMIN_NOTIFY] Failed to send GPT processors summary: {notify_exc}")
             
     except Exception as e:
         logging.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}")
