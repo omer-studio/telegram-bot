@@ -44,6 +44,7 @@ from dataclasses import dataclass, asdict
 from collections import defaultdict, deque
 import logging
 import os
+import psutil  # לניטור זיכרון
 from utils import get_israel_time
 
 @dataclass
@@ -72,6 +73,81 @@ class PerformanceMetrics:
     error_rate: float
     memory_usage_mb: float
     rejected_users: int  # משתמשים שנדחו בגלל עומס
+
+class MemoryMonitor:
+    """מערכת ניטור זיכרון מתקדמת"""
+    
+    def __init__(self):
+        self.memory_history = deque(maxlen=100)  # היסטוריית זיכרון
+        self.last_check = time.time()
+        self.memory_warnings = 0
+        
+    def get_memory_usage(self) -> dict:
+        """מחזיר מידע על שימוש הזיכרון"""
+        try:
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            
+            return {
+                "rss_mb": memory_info.rss / 1024 / 1024,  # Resident Set Size
+                "vms_mb": memory_info.vms / 1024 / 1024,  # Virtual Memory Size
+                "percent": process.memory_percent(),
+                "available_mb": psutil.virtual_memory().available / 1024 / 1024,
+                "total_mb": psutil.virtual_memory().total / 1024 / 1024
+            }
+        except Exception as e:
+            logging.warning(f"[MemoryMonitor] Error getting memory info: {e}")
+            return {"error": str(e)}
+    
+    def check_memory_health(self) -> dict:
+        """בודק את בריאות הזיכרון"""
+        memory_info = self.get_memory_usage()
+        
+        if "error" in memory_info:
+            return {"status": "error", "error": memory_info["error"]}
+        
+        # שמירת היסטוריה
+        self.memory_history.append({
+            "timestamp": time.time(),
+            "rss_mb": memory_info["rss_mb"],
+            "percent": memory_info["percent"]
+        })
+        
+        # בדיקת סף אזהרה
+        warnings = []
+        if memory_info["percent"] > 80:
+            warnings.append("שימוש זיכרון גבוה (>80%)")
+            self.memory_warnings += 1
+        if memory_info["rss_mb"] > 500:  # 500MB
+            warnings.append("שימוש זיכרון מוחלט גבוה (>500MB)")
+        
+        return {
+            "status": "warning" if warnings else "ok",
+            "memory_info": memory_info,
+            "warnings": warnings,
+            "memory_warnings": self.memory_warnings
+        }
+    
+    def get_memory_trend(self) -> dict:
+        """מחזיר מגמת שימוש הזיכרון"""
+        if len(self.memory_history) < 2:
+            return {"trend": "insufficient_data"}
+        
+        recent = list(self.memory_history)[-10:]  # 10 מדידות אחרונות
+        if len(recent) < 2:
+            return {"trend": "insufficient_data"}
+        
+        # חישוב מגמה
+        first_rss = recent[0]["rss_mb"]
+        last_rss = recent[-1]["rss_mb"]
+        growth_rate = (last_rss - first_rss) / len(recent)
+        
+        if growth_rate > 10:  # גדילה של יותר מ-10MB למדידה
+            return {"trend": "increasing", "growth_rate_mb": growth_rate}
+        elif growth_rate < -10:
+            return {"trend": "decreasing", "growth_rate_mb": growth_rate}
+        else:
+            return {"trend": "stable", "growth_rate_mb": growth_rate}
 
 class ConcurrentMonitor:
     """
@@ -365,6 +441,19 @@ class ConcurrentMonitor:
         if self.total_requests > 0:
             error_rate = self.error_count / self.total_requests
         
+        # 🧠 ניטור זיכרון
+        memory_usage_mb = 0
+        try:
+            memory_health = _memory_monitor.check_memory_health()
+            if memory_health["status"] != "error":
+                memory_usage_mb = memory_health["memory_info"]["rss_mb"]
+                
+                # התראה על בעיות זיכרון
+                if memory_health["status"] == "warning":
+                    self._send_memory_warning(memory_health)
+        except Exception as e:
+            logging.warning(f"[ConcurrentMonitor] Memory monitoring error: {e}")
+        
         return PerformanceMetrics(
             timestamp=get_israel_time(),
             active_users=len(self.active_sessions),
@@ -373,7 +462,7 @@ class ConcurrentMonitor:
             max_response_time=max(self.response_times) if self.response_times else 0,
             sheets_operations_per_minute=0,  # יש לחבר למערכת Sheets
             error_rate=error_rate,
-            memory_usage_mb=0,  # יש לחבר למערכת Memory
+            memory_usage_mb=memory_usage_mb,
             rejected_users=self.rejected_users
         )
     
@@ -493,6 +582,26 @@ class ConcurrentMonitor:
             })
         except Exception as e:
             logging.error(f"[ConcurrentMonitor] Failed to send load warning: {e}")
+    
+    def _send_memory_warning(self, memory_health: dict):
+        """שליחת התראת זיכרון"""
+        try:
+            from notifications import send_concurrent_alert
+            memory_info = memory_health["memory_info"]
+            warnings = memory_health["warnings"]
+            
+            memory_details = {
+                "component": "MemoryMonitor",
+                "error": f"Memory warnings: {', '.join(warnings)}",
+                "chat_id": "System",
+                "rss_mb": memory_info["rss_mb"],
+                "percent": memory_info["percent"],
+                "available_mb": memory_info["available_mb"]
+            }
+            
+            send_concurrent_alert("memory_warning", memory_details)
+        except Exception as e:
+            logging.error(f"[ConcurrentMonitor] Failed to send memory warning: {e}")
     
     def _send_error_alert(self, alert_type: str, details: dict):
         """שליחת התראת שגיאה כללית"""

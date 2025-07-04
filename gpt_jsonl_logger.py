@@ -170,9 +170,22 @@ class GPTJSONLLogger:
             print(f"[LOGGING_ERROR] Failed to write log: {write_exc}")
         # הפעלת build_gpt_log.py --upload לעדכון ה-HTML בדרייב
         try:
-            import subprocess
-            subprocess.Popen([
-                "python", "scripts/build_gpt_log.py", "--upload"
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # במקום subprocess - הפעלה ישירה של הפונקציות
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            
+            # ייבוא הפונקציות ישירות
+            from scripts.build_gpt_log import build_html, upload_to_drive
+            
+            # בניית ה-HTML
+            build_html()
+            print(f"[DEBUG][log_gpt_call] Successfully built HTML")
+            
+            # העלאה לדרייב
+            upload_to_drive("data/gpt_log.html")
+            print(f"[DEBUG][log_gpt_call] Successfully uploaded to Drive")
+            
         except Exception as html_exc:
             print(f"[LOGGING_ERROR] Failed to update HTML log: {html_exc}")
+            print(f"[LOGGING_ERROR] Full error: {str(html_exc)}")

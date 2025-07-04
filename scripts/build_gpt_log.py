@@ -155,8 +155,10 @@ def render_entry(idx: int, rec: Dict[str, Any]) -> str:
         <b>טוקנים:</b> {total_toks} (prompt: {prompt_toks}, completion: {completion_toks}, cached: {cached_toks})
       </div>
       <button class=\"button\" onclick=\"toggle('{req_id}')\">▶ בקשה</button>
+      <button class=\"copy-button\" onclick=\"showJsonModal('JSON גולמי - בקשה', {json.dumps(request, ensure_ascii=False)})\">📋 העתק JSON גולמי</button>
       <div id=\"{req_id}\" style=\"display:none;\">{request_block}</div>
       <button class=\"button\" onclick=\"toggle('{res_id}')\">▶ תשובה</button>
+      <button class=\"copy-button\" onclick=\"showJsonModal('JSON גולמי - תשובה', {json.dumps(response, ensure_ascii=False)})\">📋 העתק JSON גולמי</button>
       <div id=\"{res_id}\" style=\"display:none;\">{response_block}</div>
     </td>
     <td class=\"gpt-cell gpt{gpt_type}\">G<br>P<br>T<br>{gpt_type}</td>
@@ -224,7 +226,9 @@ def build_html() -> None:
         .gpt-cell.gptC { background: #f3eeff; color: #8a2be2; border-left-color: #dda0dd; }
         .gpt-cell.gptD { background: #efffef; color: #228b22; border-left-color: #90ee90; }
         .meta { font-size: 0.9em; color: #666 }
-        .button { cursor: pointer; color: blue; text-decoration: underline; border: none; background: none; font-size: 0.9em }
+        .button { cursor: pointer; color: blue; text-decoration: underline; border: none; background: none; font-size: 0.9em; margin: 2px; }
+        .copy-button { cursor: pointer; color: #0066cc; text-decoration: underline; border: none; background: none; font-size: 0.85em; margin: 2px; padding: 2px 6px; border-radius: 3px; }
+        .copy-button:hover { background: #e6f3ff; }
         .cost { color: #0066cc; font-weight: bold; }
         .content-table { border-collapse: collapse; width: 100%; margin-top: 10px; background: #fff; }
         .content-table th, .content-table td { border: 1px solid #ddd; padding: 8px; text-align: right; }
@@ -243,10 +247,71 @@ def build_html() -> None:
         .legend-color { width: 20px; height: 15px; display: inline-block; margin-left: 5px; vertical-align: middle; border-radius: 3px; }
         .telegram-message { background: #dcf8c6; border-radius: 12px 12px 4px 12px; padding: 8px 12px; margin: 5px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.35; max-width: 100%; word-wrap: break-word; color: #303030; position: relative; white-space: pre-line; }
         .telegram-message::after { content: ''; position: absolute; bottom: 0; right: -2px; width: 0; height: 0; border: 6px solid transparent; border-top-color: #dcf8c6; border-right: 0; transform: rotate(45deg); }
+        .json-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .json-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 800px; max-height: 80%; overflow-y: auto; border-radius: 8px; }
+        .json-text { background: #f5f5f5; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; word-break: break-all; font-size: 12px; max-height: 400px; overflow-y: auto; }
+        .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #000; }
+        .copy-success { color: green; font-size: 12px; margin-left: 10px; }
     </style>
-    <script>function toggle(id){var e=document.getElementById(id);e.style.display=e.style.display==='none'?'block':'none';}</script>
+    <script>
+        function toggle(id){var e=document.getElementById(id);e.style.display=e.style.display==='none'?'block':'none';}
+        
+        function showJsonModal(title, jsonData) {
+            var modal = document.getElementById('jsonModal');
+            var modalTitle = document.getElementById('jsonModalTitle');
+            var jsonText = document.getElementById('jsonText');
+            
+            modalTitle.textContent = title;
+            jsonText.textContent = JSON.stringify(jsonData, null, 2);
+            modal.style.display = 'block';
+        }
+        
+        function closeJsonModal() {
+            document.getElementById('jsonModal').style.display = 'none';
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // הצג הודעת הצלחה
+                var copyBtn = event.target;
+                var originalText = copyBtn.textContent;
+                copyBtn.textContent = '✓ הועתק!';
+                copyBtn.style.color = 'green';
+                setTimeout(function() {
+                    copyBtn.textContent = originalText;
+                    copyBtn.style.color = '#0066cc';
+                }, 2000);
+            }).catch(function(err) {
+                console.error('שגיאה בהעתקה: ', err);
+                alert('שגיאה בהעתקה. נסה שוב.');
+            });
+        }
+        
+        function copyJsonData(jsonData) {
+            copyToClipboard(JSON.stringify(jsonData, null, 2));
+        }
+        
+        // סגירת modal בלחיצה מחוץ לתוכן
+        window.onclick = function(event) {
+            var modal = document.getElementById('jsonModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
 </head><body>
-<h2>100 הקריאות האחרונות ל־GPT</h2>"""
+<h2>100 הקריאות האחרונות ל־GPT</h2>
+
+<!-- JSON Modal -->
+<div id="jsonModal" class="json-modal">
+    <div class="json-content">
+        <span class="close" onclick="closeJsonModal()">&times;</span>
+        <h3 id="jsonModalTitle">JSON גולמי</h3>
+        <button class="copy-button" onclick="copyToClipboard(document.getElementById('jsonText').textContent)">📋 העתק JSON</button>
+        <div id="jsonText" class="json-text"></div>
+    </div>
+</div>"""
 
     legend = """
 <div class=\"legend\">

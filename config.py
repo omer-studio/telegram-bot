@@ -352,6 +352,15 @@ def setup_google_sheets():
             sheet_states = sheet.worksheet(config["SHEET_STATES_TAB"])
             print(f"[DEBUG] ✅ Google Sheets loaded successfully and cached!")
             
+            # וידוא שעמודת name קיימת בגיליונות
+            try:
+                from sheets_core import ensure_name_column_exists
+                ensure_name_column_exists(sheet_users)
+                ensure_name_column_exists(sheet_states)
+                print(f"[DEBUG] ✅ Ensured 'name' column exists in sheets")
+            except Exception as e:
+                print(f"[DEBUG] ⚠️ Warning: Could not ensure 'name' column: {e}")
+            
             # שמירה ב-cache עם timestamp
             _sheets_cache = (gs_client, sheet_users, sheet_log, sheet_states)
             _cache_created_at = time.time()
@@ -452,7 +461,7 @@ def get_config_snapshot():
 MAX_CONCURRENT_USERS = 50  # מספר משתמשים מקסימלי במקביל (הוגדל ל-50 - הרבה מקום)
 MAX_SHEETS_OPERATIONS_PER_MINUTE = 60  # מגבלת Google Sheets (60% מ-100)
 SHEETS_QUEUE_SIZE = 100  # גודל תור לפעולות Sheets
-SHEETS_BATCH_SIZE = 5  # כמות פעולות לעיבוד במקביל
+SHEETS_BATCH_SIZE = 10  # כמות פעולות לעיבוד במקביל (הוגדל מ-5 ל-10 לטיפול בשימוש מוגזם)
 
 # סוגי עדכונים לפי עדיפות
 UPDATE_PRIORITY = {

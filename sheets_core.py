@@ -40,7 +40,7 @@ CACHE_DURATION_SECONDS = 600  # 10 דקות cache (הוגדל מ-5 דקות)
 # Cache נפרד לנתונים קריטיים עם זמן חיים ארוך יותר
 _critical_data_cache = {}  # Cache לנתונים קריטיים (פרופיל משתמש, הרשאות)
 _critical_cache_timestamps = {}
-CRITICAL_CACHE_DURATION_SECONDS = 1800  # 30 דקות cache לנתונים קריטיים
+CRITICAL_CACHE_DURATION_SECONDS = 3600  # שעה cache לנתונים קריטיים (הוגדל מ-30 דקות לטיפול בניקוי תכוף)
 
 # ===================================
 # 📊 מונה קריאות Google Sheets API
@@ -410,6 +410,8 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
                 new_row[i] = timestamp
             elif header.lower() == "gpt_c_run_count":
                 new_row[i] = "0"
+            elif header.lower() == "name":
+                new_row[i] = ""  # שם ריק כברירת מחדל
         
         # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
         # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
@@ -658,7 +660,7 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
         
         # בניית state לפי כותרות
         state = {}
-        for field_name in ["chat_id", "code_try", "summary", "last_updated", "profile_data", "created_at", "gpt_c_run_count"]:
+        for field_name in ["chat_id", "code_try", "summary", "last_updated", "profile_data", "created_at", "gpt_c_run_count", "name"]:
             col_index = field_to_col.get(field_name.lower())
             if col_index is not None and col_index < len(row_data):
                 value = row_data[col_index]
@@ -772,6 +774,8 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
                 col_index = field_to_col["created_at"]
             elif field == "gpt_c_run_count" and "gpt_c_run_count" in field_to_col:
                 col_index = field_to_col["gpt_c_run_count"]
+            elif field == "name" and "name" in field_to_col:
+                col_index = field_to_col["name"]
             
             # עדכון התא אם נמצאה העמודה
             if col_index:
@@ -781,6 +785,9 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
                 sheet_states.update_cell(row_index, col_index, str(value))
                 updated_fields.append(field)
                 debug_log(f"Updated {field} for user {chat_id}")
+                # לוג מיוחד לעדכון השם
+                if field.lower() == "name":
+                    debug_log(f"Updated name for user {chat_id}: '{value}'")
         
         if updated_fields and "last_updated" not in updates:
             # עדכון otomatik של last_updated אם לא עודכן ידנית
@@ -860,7 +867,8 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
             for i, header in enumerate(headers):
                 if header.lower() in ["created_at", "last_updated"]:
                     new_row[i] = timestamp
-                    break
+                elif header.lower() == "name":
+                    new_row[i] = ""  # שם ריק כברירת מחדל
             
             # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
             # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
@@ -990,8 +998,20 @@ def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
     summary_fields = get_summary_fields()
     debug_log(f"Summary fields from fields_dict: {summary_fields}")
     
+    # מיון מיוחד - השם תמיד ראשון, אחר כך גיל, ואז שאר השדות
+    def get_field_priority(field_name):
+        if field_name == "name":
+            return 0  # ראשון
+        elif field_name == "age":
+            return 1  # שני
+        else:
+            return 2  # שאר השדות
+    
+    # מיון השדות לפי עדיפות
+    sorted_summary_fields = sorted(summary_fields, key=get_field_priority)
+    
     # עובר על השדות שנמצאים ברשימת השדות לסיכום בלבד
-    for field_name in summary_fields:
+    for field_name in sorted_summary_fields:
         if field_name not in FIELDS_DICT:
             continue
             
@@ -1035,16 +1055,17 @@ def compose_emotional_summary(row: List[str], headers: Optional[List[str]] = Non
             
             summary_parts = []
             
-            # חיפוש שדות לפי כותרות
-            for field_name in ["name", "age", "location", "mood"]:
+            # חיפוש שדות לפי כותרות - השם תמיד ראשון
+            priority_fields = ["name", "age", "location", "mood"]
+            for field_name in priority_fields:
                 col_index = field_to_col.get(field_name.lower())
                 if col_index is not None and col_index < len(row):
                     value = row[col_index]
                     if value and str(value).strip():
                         if field_name == "name":
-                            summary_parts.append(f"שם: {value}")
+                            summary_parts.append(f"{value}")  # השם ללא label
                         elif field_name == "age":
-                            summary_parts.append(f"גיל: {value}")
+                            summary_parts.append(f"בן {value}")
                         elif field_name == "location":
                             summary_parts.append(f"מיקום: {value}")
                         elif field_name == "mood":
@@ -1063,8 +1084,8 @@ def compose_emotional_summary(row: List[str], headers: Optional[List[str]] = Non
             mood = row[4] if len(row) > 4 else ""
             
             summary_parts = []
-            if name: summary_parts.append(f"שם: {name}")
-            if age: summary_parts.append(f"גיל: {age}")
+            if name: summary_parts.append(f"{name}")  # השם ללא label
+            if age: summary_parts.append(f"בן {age}")
             if location: summary_parts.append(f"מיקום: {location}")
             if mood: summary_parts.append(f"מצב רוח: {mood}")
             
@@ -1073,6 +1094,39 @@ def compose_emotional_summary(row: List[str], headers: Optional[List[str]] = Non
     except Exception as e:
         debug_log(f"Error composing emotional summary: {e}")
         return ""
+
+def ensure_name_column_exists(sheet):
+    """
+    בודק אם עמודת 'name' קיימת בגיליון ומוסיף אותה אם לא
+    """
+    try:
+        # קריאת הכותרות
+        _increment_api_call()
+        all_values = sheet.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return False
+        
+        headers = all_values[0]
+        
+        # בדיקה אם עמודת name קיימת
+        name_col_exists = any(header.lower() == "name" for header in headers)
+        
+        if not name_col_exists:
+            debug_log("Adding 'name' column to sheet")
+            # הוספת עמודה חדשה בסוף
+            new_col_index = len(headers) + 1
+            sheet.update_cell(1, new_col_index, "name")
+            debug_log(f"Added 'name' column at position {new_col_index}")
+            return True
+        else:
+            debug_log("'name' column already exists")
+            return True
+            
+    except Exception as e:
+        debug_log(f"Error ensuring name column exists: {e}")
+        return False
 
 def is_user_exists(chat_id: str) -> bool:
     try:

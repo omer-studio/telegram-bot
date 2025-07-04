@@ -182,6 +182,9 @@ def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str,
                 # לוג מיוחד לעדכון הסיכום
                 if field.lower() == "summary":
                     logging.info(f"[SHEETS_SYNC] עודכן סיכום בגוגל שיטס למשתמש {chat_id}: '{value}'")
+                # לוג מיוחד לעדכון השם
+                elif field.lower() == "name":
+                    logging.info(f"[SHEETS_SYNC] עודכן שם בגוגל שיטס למשתמש {chat_id}: '{value}'")
             except Exception as e:
                 logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
     except Exception as exc:
@@ -222,8 +225,14 @@ def _detect_profile_changes(old: Dict[str, Any], new: Dict[str, Any]) -> List[Di
         if field not in old:
             if new_val not in [None, ""]:
                 changes.append({"field": field, "old_value": None, "new_value": new_val, "change_type": "added"})
+                # לוג מיוחד להוספת שם
+                if field.lower() == "name":
+                    logging.info(f"[PROFILE_CHANGE] Added name for user: '{new_val}'")
         elif old_val != new_val:
             changes.append({"field": field, "old_value": old_val, "new_value": new_val, "change_type": "updated"})
+            # לוג מיוחד לעדכון שם
+            if field.lower() == "name":
+                logging.info(f"[PROFILE_CHANGE] Updated name for user: '{old_val}' → '{new_val}'")
 
     for field in old:
         if field not in new and field not in technical_fields:
@@ -297,11 +306,20 @@ def _send_admin_profile_overview_notification(
                 new_val = _pretty_val(ch.get("new_value"))
                 ct = ch.get("change_type")
                 if ct == "added":
-                    lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
+                    if field.lower() == "name":
+                        lines.append(f"  ➕ שם: [ריק] → [{new_val}]")
+                    else:
+                        lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
                 elif ct == "updated":
-                    lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
+                    if field.lower() == "name":
+                        lines.append(f"  ✏️ שם: [{old_val}] → [{new_val}]")
+                    else:
+                        lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
                 elif ct == "removed":
-                    lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
+                    if field.lower() == "name":
+                        lines.append(f"  ➖ שם: [{old_val}] → <i>נמחק</i>")
+                    else:
+                        lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
         lines.append("")
         lines.append(f"<b>{gpt_d_info}</b>")
@@ -313,11 +331,20 @@ def _send_admin_profile_overview_notification(
                 new_val = _pretty_val(ch.get("new_value"))
                 ct = ch.get("change_type")
                 if ct == "added":
-                    lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
+                    if field.lower() == "name":
+                        lines.append(f"  ➕ שם: [ריק] → [{new_val}]")
+                    else:
+                        lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
                 elif ct == "updated":
-                    lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
+                    if field.lower() == "name":
+                        lines.append(f"  ✏️ שם: [{old_val}] → [{new_val}]")
+                    else:
+                        lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
                 elif ct == "removed":
-                    lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
+                    if field.lower() == "name":
+                        lines.append(f"  ➖ שם: [{old_val}] → <i>נמחק</i>")
+                    else:
+                        lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
         lines.append("")
         lines.append(f"<b>{gpt_e_info}</b>")
@@ -329,11 +356,20 @@ def _send_admin_profile_overview_notification(
                 new_val = _pretty_val(ch.get("new_value"))
                 ct = ch.get("change_type")
                 if ct == "added":
-                    lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
+                    if field.lower() == "name":
+                        lines.append(f"  ➕ שם: [ריק] → [{new_val}]")
+                    else:
+                        lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
                 elif ct == "updated":
-                    lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
+                    if field.lower() == "name":
+                        lines.append(f"  ✏️ שם: [{old_val}] → [{new_val}]")
+                    else:
+                        lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
                 elif ct == "removed":
-                    lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
+                    if field.lower() == "name":
+                        lines.append(f"  ➖ שם: [{old_val}] → <i>נמחק</i>")
+                    else:
+                        lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
         if summary and summary.strip():
             lines.append("")
@@ -475,6 +511,7 @@ def ensure_emotional_identity_consistency(chat_id: str) -> bool:
 def get_all_emotional_identity_fields() -> List[str]:
     return [
         "summary",
+        "name",
         "age",
         "pronoun_preference",
         "occupation_or_role",

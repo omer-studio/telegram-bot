@@ -18,6 +18,7 @@ FIELDS_DICT - יש להשתמש אך ורק בשמות מה־DICT הזה בכל 
 
 FIELDS_DICT = {
     # --- טבלת משתמשים ---
+    "name": {"label": "שם", "type": str, "show_in_summary": "", "show_in_prompt": "שם פרטי", "missing_question": "", "include_in_summary": True},
     "age": {"label": "גיל", "type": int, "show_in_summary": "בן", "show_in_prompt": "גיל (מספר בין 18 ל־99 בלבד)", "missing_question": "בן כמה אתה?", "include_in_summary": True},
     "pronoun_preference": {"label": "לשון פניה (את/אתה/מעורב)", "type": str, "show_in_summary": "לשון פנייה:", "show_in_prompt": "לשון פניה מועדפת", "missing_question": "", "include_in_summary": True},
     "occupation_or_role": {"label": "עיסוק (מה עושה בחיים?)", "type": str, "show_in_summary": "", "show_in_prompt": "עיסוק בפועל (למשל: סטודנט למשפטים, מורה, עובד בהייטק)", "missing_question": "מה אתה עושה בחיים?", "include_in_summary": True},
@@ -95,7 +96,7 @@ FIELDS_DICT = {
 def get_user_profile_fields():
     """מחזיר רשימה של שדות פרופיל משתמש בלבד"""
     user_fields = [
-        "age", "pronoun_preference", "occupation_or_role", "attracted_to", "relationship_type", 
+        "name", "age", "pronoun_preference", "occupation_or_role", "attracted_to", "relationship_type", 
         "parental_status", "self_religious_affiliation", "self_religiosity_level", "family_religiosity", 
         "closet_status", "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", 
         "trauma_history", "goal_in_course", "language_of_strength", "date_first_seen", 

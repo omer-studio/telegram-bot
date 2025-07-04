@@ -107,19 +107,26 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         print(f"❌ [GPT-D] שגיאה: {e}")
         return {"merged_profile": {}, "usage": {}, "model": model}
 
-def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None):
+def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None, gpt_c_result=None):
     """
     מעדכן פרופיל רגשי קיים עם gpt_d על בסיס הודעת משתמש חדשה.
     מחזיר tuple: (updated_profile, combined_usage)
     """
     # 1. חילוץ שדות חדשים מהודעת המשתמש (gpt_c)
-    from gpt_c_handler import extract_user_info
-    gpt_c_result = extract_user_info(user_message)
     extracted_fields = {}
     gpt_c_usage = {}
-    if isinstance(gpt_c_result, dict):
+    
+    if gpt_c_result is not None and isinstance(gpt_c_result, dict):
+        # השתמש בתוצאת GPT-C שכבר קיימת
         extracted_fields = gpt_c_result.get("extracted_fields", {})
         gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
+    else:
+        # fallback - הפעל GPT-C רק אם לא קיבלנו תוצאה
+        from gpt_c_handler import extract_user_info
+        gpt_c_result = extract_user_info(user_message)
+        if isinstance(gpt_c_result, dict):
+            extracted_fields = gpt_c_result.get("extracted_fields", {})
+            gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
     
     # 2. אם אין שדות חדשים, מחזירים את הפרופיל הקיים
     if not extracted_fields:
@@ -163,7 +170,7 @@ def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_
 # 🧵 Async helper – run in thread & persist changes
 # ---------------------------------------------------------------------------
 
-def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_id=None):
+def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_id=None, gpt_c_result=None):
     """Background helper executed inside a ThreadPool – merges & persists profile.
 
     1. Loads the existing profile for the given chat_id (safe – returns {}).
@@ -178,7 +185,7 @@ def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_
     try:
         existing_profile = get_user_profile_fast(chat_id)
         # Run merge (sync, heavy – runs LLMs)
-        updated_profile, usage = smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id)
+        updated_profile, usage = smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id, gpt_c_result)
 
         # Persist only if there is any diff
         try:
@@ -196,7 +203,7 @@ def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_
         return {}, {}
 
 
-def smart_update_profile_with_gpt_d_async(chat_id: str, user_message: str, interaction_id=None):
+def smart_update_profile_with_gpt_d_async(chat_id: str, user_message: str, interaction_id=None, gpt_c_result=None):
     """Public async wrapper – accepts chat_id (not profile).
 
     It delegates the heavy lifting to _run_profile_merge_and_persist which is
@@ -210,4 +217,4 @@ def smart_update_profile_with_gpt_d_async(chat_id: str, user_message: str, inter
     import asyncio  # noqa: WPS433
 
     loop = asyncio.get_event_loop()
-    return loop.run_in_executor(None, _run_profile_merge_and_persist, str(chat_id), user_message, interaction_id) 
+    return loop.run_in_executor(None, _run_profile_merge_and_persist, str(chat_id), user_message, interaction_id, gpt_c_result) 

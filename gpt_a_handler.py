@@ -116,7 +116,7 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
             logging.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
             return "", ""
         profile_data = get_user_state(chat_id).get("profile_data", {})
-        key_fields = ["age", "attracted_to", "relationship_type", "self_religious_affiliation", 
+        key_fields = ["name", "age", "attracted_to", "relationship_type", "self_religious_affiliation", 
                      "closet_status", "pronoun_preference", "occupation_or_role", 
                      "self_religiosity_level", "primary_conflict", "goal_in_course"]
         missing = [FIELDS_DICT[f]["missing_question"] for f in key_fields
@@ -579,17 +579,23 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
     gpt_start_time = time.time()
     
     try:
-        # הרצת GPT ב-thread כדי שלא לחסום את האירועים
+        # 🚨 הגדלת timeout ל-45 שניות (במקום 30) לטיפול ב-latency גבוה
+        GPT_TIMEOUT_SECONDS = 45
+        
+        # הרצת GPT ב-thread עם timeout מתקדם
         loop = asyncio.get_event_loop()
-        gpt_result = await loop.run_in_executor(
-            None, 
-            get_main_response_sync, 
-            full_messages, 
-            chat_id, 
-            message_id, 
-            use_extra_emotion, 
-            filter_reason,
-            match_type
+        gpt_result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None, 
+                get_main_response_sync, 
+                full_messages, 
+                chat_id, 
+                message_id, 
+                use_extra_emotion, 
+                filter_reason,
+                match_type
+            ),
+            timeout=GPT_TIMEOUT_SECONDS
         )
         
         gpt_duration = time.time() - gpt_start_time
@@ -623,6 +629,27 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 logging.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
         
         return gpt_result
+        
+    except asyncio.TimeoutError:
+        logging.error(f"[gpt_a] Timeout - GPT לא הגיב תוך {GPT_TIMEOUT_SECONDS} שניות")
+        
+        # שליחת התראה לאדמין על timeout
+        send_error_notification(
+            error_message=f"GPT timeout - לא הגיב תוך {GPT_TIMEOUT_SECONDS} שניות",
+            chat_id=chat_id,
+            user_msg=full_messages[-1]["content"] if full_messages else "לא זמין", 
+            error_type="gpt_a_timeout_error"
+        )
+        
+        return {
+            "bot_reply": "מצטער, אני עסוק כרגע. נסה שוב בעוד כמה שניות 🔄", 
+            "usage": {}, 
+            "model": "timeout",
+            "used_extra_emotion": use_extra_emotion,
+            "filter_reason": filter_reason,
+            "match_type": match_type,
+            "error": "timeout"
+        }
         
     except Exception as e:
         logging.error(f"[gpt_a] שגיאה כללית: {e}")

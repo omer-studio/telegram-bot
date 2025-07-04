@@ -292,6 +292,11 @@ app_fastapi = FastAPI(lifespan=lifespan)
 # הוספת app_fastapi כדי שיהיה זמין ל-uvicorn
 __all__ = ['app_fastapi']
 
+# ================================
+# ℹ️  הערה: מנגנון deduplication כבר קיים ב-message_handler.py
+# ================================
+# אין צורך בכפילות - המערכת הקיימת עובדת טוב
+
 @app_fastapi.post("/webhook")
 async def webhook(request: Request):
     """
@@ -311,6 +316,8 @@ async def webhook(request: Request):
         if update.message:
             chat_id = update.message.chat_id
             user_msg = getattr(update.message, 'text', '[הודעה לא טקסטואלית]')
+            
+            # ℹ️  מנגנון deduplication כבר קיים ב-message_handler.py
             await handle_message(update, context)
         else:
             print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")

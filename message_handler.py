@@ -375,6 +375,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב gpt, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
     from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
+    
+    # 🔧 מניעת כפילות - בדיקה אם ההודעה כבר טופלה
+    try:
+        chat_id = update.message.chat_id if hasattr(update, 'message') and hasattr(update.message, 'chat_id') else None
+        message_id = update.message.message_id if hasattr(update, 'message') and hasattr(update.message, 'message_id') else None
+        
+        if chat_id and message_id:
+            # בדיקה אם ההודעה כבר טופלה (בתוך 5 שניות)
+            import time
+            current_time = time.time()
+            message_key = f"{chat_id}_{message_id}"
+            
+            # שימוש ב-context.bot_data לאחסון הודעות שטופלו
+            if "processed_messages" not in context.bot_data:
+                context.bot_data["processed_messages"] = {}
+            
+            # ניקוי הודעות ישנות (יותר מ-10 שניות)
+            context.bot_data["processed_messages"] = {
+                k: v for k, v in context.bot_data["processed_messages"].items() 
+                if current_time - v < 10
+            }
+            
+            # בדיקה אם ההודעה כבר טופלה
+            if message_key in context.bot_data["processed_messages"]:
+                logging.info(f"[DUPLICATE] Message {message_id} for chat {chat_id} already processed - skipping")
+                print(f"🔄 [DUPLICATE] Message {message_id} for chat {chat_id} already processed - skipping")
+                return
+            
+            # סימון ההודעה כטופלת
+            context.bot_data["processed_messages"][message_key] = current_time
+            
+    except Exception as e:
+        logging.warning(f"[DUPLICATE_CHECK] Error in duplicate check: {e}")
+        # ממשיכים גם אם יש שגיאה בבדיקת כפילות
 
     # 🐞 דיבאג היסטוריה - כמה הודעות יש בקובץ
     try:
@@ -710,26 +744,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log_payload["timestamp_end"] = get_israel_time().isoformat()
                 log_payload["bot_reply"] = bot_reply
                 
-                # רישום לשיטס - מהיר וללא המתנה
-                asyncio.create_task(log_to_sheets(
-                    message_id=str(message_id) if 'message_id' in locals() else f"msg_{int(time.time())}",
-                    chat_id=str(chat_id),
-                    user_msg=user_msg,
-                    reply_text=bot_reply,
-                    reply_summary="",  # יתמלא ע"י GPT-B אם יופעל
-                    main_usage=gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
-                    summary_usage={},  # יתמלא ע"י GPT-B אם יופעל
-                    extract_usage={},  # יתמלא ע"י GPT-C אם יופעל
-                    total_tokens=0,  # יחושב בפונקציה
-                    cost_usd=0.0,  # יחושב בפונקציה
-                    cost_ils=0.0   # יחושב בפונקציה
-                ))
+                # שלב 4.5: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
+                summary_result = None
+                summary_usage = {}
+                if len(bot_reply) > 100:  # רק אם התשובה ארוכה מספיק
+                    try:
+                        summary_result = get_summary(user_msg, bot_reply, chat_id, message_id)
+                        if summary_result and isinstance(summary_result, dict):
+                            summary_usage = summary_result.get("usage", {})
+                            print(f"📝 [GPT-B] נוצר סיכום: {summary_result.get('summary', '')[:50]}...")
+                    except Exception as summary_err:
+                        logging.warning(f"[GPT-B] שגיאה ביצירת סיכום: {summary_err}")
+                        summary_result = None
                 
                 # הפעלה במקביל של כל התהליכים ואיסוף תוצאות
                 all_tasks = []
+                gpt_c_result = None
                 if should_run_gpt_c(user_msg):
-                    all_tasks.append(asyncio.create_task(asyncio.to_thread(extract_user_info, user_msg, chat_id)))
-                all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply))
+                    gpt_c_result = await asyncio.to_thread(extract_user_info, user_msg, chat_id)
+                all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply, gpt_c_result))
                 all_tasks.append(execute_gpt_e_if_needed(chat_id))
                 
                 results = await asyncio.gather(*all_tasks, return_exceptions=True)
@@ -747,20 +780,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     gpt_d_info = "GPT-D: לא הופעל"
                     gpt_e_info = "GPT-E: לא הופעל"
                     # --- GPT-C ---
-                    if should_run_gpt_c(user_msg):
-                        gpt_c_res = results[idx]
-                        idx += 1
-                        if not isinstance(gpt_c_res, Exception) and gpt_c_res is not None:
-                            extracted_fields = gpt_c_res.get("extracted_fields", {}) if isinstance(gpt_c_res, dict) else {}
+                    if should_run_gpt_c(user_msg) and gpt_c_result is not None:
+                        if not isinstance(gpt_c_result, Exception):
+                            extracted_fields = gpt_c_result.get("extracted_fields", {}) if isinstance(gpt_c_result, dict) else {}
                             old_profile = get_user_profile_fast(chat_id)
                             new_profile = {**old_profile, **extracted_fields}
                             gpt_c_changes = _detect_profile_changes(old_profile, new_profile)
                             gpt_c_info = f"GPT-C: עודכנו {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: לא עודכנו שדות"
                         else:
                             gpt_c_info = "GPT-C: לא הופעל או שגיאה"
+                    else:
+                        gpt_c_info = "GPT-C: לא הופעל"
                     # --- GPT-D ---
-                    gpt_d_res = results[idx] if idx < len(results) else None
-                    idx += 1
+                    gpt_d_res = results[0] if len(results) > 0 else None
                     if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
                         updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
                         if updated_profile and isinstance(updated_profile, dict):
@@ -772,7 +804,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         gpt_d_info = "GPT-D: לא הופעל או שגיאה"
                     # --- GPT-E ---
-                    gpt_e_res = results[idx] if idx < len(results) else None
+                    gpt_e_res = results[1] if len(results) > 1 else None
                     if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
                         changes = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
                         if changes:

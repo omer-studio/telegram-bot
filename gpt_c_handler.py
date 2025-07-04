@@ -18,6 +18,12 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     מחלץ מידע רלוונטי מהודעת המשתמש לעדכון הפרופיל שלו
     כולל מערכת fallback למקרה של rate limit ב-Gemini.
     """
+    # בדיקה קריטית - אם אין chat_id תקין, לא מפעילים GPT-C
+    if not chat_id:
+        logging.error("[GPT_C] chat_id is None - skipping GPT-C execution")
+        print("❌ [GPT-C] chat_id is None - skipping GPT-C execution")
+        return {"extracted_fields": {}, "usage": {}, "model": "none"}
+    
     metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_c"]
     model = GPT_MODELS["gpt_c"]

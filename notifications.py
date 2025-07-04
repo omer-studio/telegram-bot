@@ -908,6 +908,14 @@ def send_concurrent_alert(alert_type: str, details: dict):
                 f"🔄 סוג פעולה: {details.get('operation_type', 'לא ידוע')}\n"
                 f"⚠️ נתונים עלולים להיאבד!"
             )
+        elif alert_type == "memory_warning":
+            message = (
+                f"🧠 **התראת זיכרון**\n"
+                f"📊 שימוש זיכרון: {details.get('rss_mb', 0):.1f}MB ({details.get('percent', 0):.1f}%)\n"
+                f"💾 זיכרון זמין: {details.get('available_mb', 0):.1f}MB\n"
+                f"⚠️ {details.get('error', 'בעיית זיכרון')}\n"
+                f"🔧 יש לבדוק memory leaks"
+            )
         else:
             message = f"🔔 התראת Concurrent: {alert_type}\n{details}"
         
