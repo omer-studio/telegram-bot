@@ -263,11 +263,14 @@ def check_notifications_system():
 
         # ניסיון שליחה
         try:
-            send_admin_notification_raw("pre-deploy notification test 🛡️")
+            test_chat = "predeploy_chat"
+            send_admin_notification_raw(f"Notification for {test_chat}")
             if not captured:
                 errors.append("❌ send_admin_notification_raw לא קרא ל-requests.post")
             else:
-                print("✅ send_admin_notification_raw קורא ל-requests.post כצפוי")
+                if test_chat not in captured['data'].get('text', ''):
+                    errors.append("chat_id missing in admin raw notification")
+                print("✅ send_admin_notification_raw קורא ל-requests.post עם תוכן תקין")
         except Exception as e:
             errors.append(f"❌ שליחת התראה דמה נכשלה: {e}")
 
@@ -290,7 +293,7 @@ def check_notifications_system():
 
         # Test send_admin_notification wrapper
         try:
-            nt.send_admin_notification("pre-deploy wrapper test")
+            nt.send_admin_notification("Wrapper predeploy test")
             if 'data' not in captured or not captured['data'].get('parse_mode'):
                 errors.append("send_admin_notification did not set parse_mode")
             else:
