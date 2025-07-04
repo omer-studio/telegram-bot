@@ -527,6 +527,7 @@ def main():
         ("code_try increment", check_code_try_increment_logic),
         ("Critical message order", check_critical_message_order),
         ("Profile update persistence", check_profile_update_persistence),
+        ("Admin notification system", lambda: (True, []) if __import__('notifications') else (False, ["notifications import failed"])),
     ]
     
     # הרצת כל הבדיקות
