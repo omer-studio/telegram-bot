@@ -61,6 +61,11 @@ else:
     gspread = DummyModule()
     ServiceAccountCredentials = DummyModule()
     completion = DummyModule()
+    import sys as _sys, types as _types
+    _lazy = _types.ModuleType("lazy_litellm")
+    _lazy.completion = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    _lazy.embedding = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    _sys.modules.setdefault("lazy_litellm", _lazy)
     FIELDS_DICT = {"dummy": "dummy"}
     SYSTEM_PROMPT = "dummy system prompt"
 
