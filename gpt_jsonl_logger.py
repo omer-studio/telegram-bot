@@ -140,6 +140,10 @@ class GPTJSONLLogger:
         :param cost_usd: עלות (אם ידועה)
         :param extra: שדות נוספים (chat_id, message_id וכו')
         """
+        print(f"[DEBUG][log_gpt_call] called! log_path={log_path} gpt_type={gpt_type}")
+        print(f"[DEBUG][log_gpt_call] request: {json.dumps(request, ensure_ascii=False)[:500]}")
+        print(f"[DEBUG][log_gpt_call] response: {str(response)[:500]}")
+        print(f"[DEBUG][log_gpt_call] cost_usd: {cost_usd} extra: {extra}")
         entry = {
             "ts": datetime.utcnow().isoformat() + "Z",
             "gpt_type": gpt_type,
@@ -151,12 +155,19 @@ class GPTJSONLLogger:
         if extra:
             entry.update(extra)
         # יצירת התיקייה אם צריך
-        os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        try:
+            os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+        except Exception as e:
+            print(f"[LOGGING_ERROR] Failed to create log dir: {e}")
         # כתיבה לקובץ (thread-safe)
         lock = threading.Lock()
-        with lock:
-            with open(log_path, "a", encoding="utf-8") as file:
-                file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        try:
+            with lock:
+                with open(log_path, "a", encoding="utf-8") as file:
+                    file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            print(f"[DEBUG][log_gpt_call] Successfully wrote to {log_path}")
+        except Exception as write_exc:
+            print(f"[LOGGING_ERROR] Failed to write log: {write_exc}")
         # הפעלת build_gpt_log.py --upload לעדכון ה-HTML בדרייב
         try:
             import subprocess
