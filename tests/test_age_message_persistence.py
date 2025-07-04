@@ -14,6 +14,7 @@ from unittest.mock import Mock
 
 # Stub external dependency 'pytz' if absent
 sys.modules.setdefault("pytz", ModuleType("pytz"))
+sys.modules["pytz"].timezone = lambda *a, **k: None  # type: ignore[attr-defined]  # simple stub
 
 # Build a minimal mock hierarchy for the 'telegram' package
 telegram_mock = Mock(name="telegram")
@@ -57,7 +58,8 @@ class TestAgeMessagePersistence(unittest.TestCase):
                 profile_utils = _reload_module("profile_utils")
                 # Patch profile_utils path and disable sheets sync
                 with patch.object(profile_utils, "USER_PROFILES_PATH", profiles_path, create=True), \
-                     patch.object(profile_utils, "_schedule_sheets_sync_safely", lambda _cid: None, create=True):
+                     patch.object(profile_utils, "_schedule_sheets_sync_safely", lambda _cid: None, create=True), \
+                     patch("utils.get_israel_time", lambda: __import__("datetime").datetime.utcnow()):
 
                     # Stub GPT helper functions that run inside background processors
                     async def _fake_gpt_d_async(chat_id, *_a, **_k):
