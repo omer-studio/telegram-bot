@@ -58,8 +58,13 @@ def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
 
 
 def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
-    """Low-level helper that writes the updated profile dictionary to disk."""
+    """Writes *updates* into user_profiles.json (minimal logic only)."""
     try:
+        # 🚦 Mini-sanity: convert numeric strings like "35" in the *age* field to int 35
+        if "age" in updates and isinstance(updates["age"], str) and updates["age"].isdigit():
+            updates = {**updates, "age": int(updates["age"])}  # shallow copy – keep immutability
+
+        # Load existing data (if any)
         try:
             with open(USER_PROFILES_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)

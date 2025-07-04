@@ -61,6 +61,11 @@ else:
     gspread = DummyModule()
     ServiceAccountCredentials = DummyModule()
     completion = DummyModule()
+    import sys as _sys, types as _types
+    _lazy = _types.ModuleType("lazy_litellm")
+    _lazy.completion = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    _lazy.embedding = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    _sys.modules.setdefault("lazy_litellm", _lazy)
     FIELDS_DICT = {"dummy": "dummy"}
     SYSTEM_PROMPT = "dummy system prompt"
 
@@ -80,6 +85,15 @@ def load_config():
         os.getenv("RUNNER_OS")  # GitHub Actions specific
     ])
     
+    # 🌐 1) Highest priority – explicit JSON passed via CONFIG_GITHUB_JSON (secret)
+    _env_json = os.getenv("CONFIG_GITHUB_JSON", "").strip()
+    if _env_json:
+        try:
+            return json.loads(_env_json)
+        except Exception as env_err:
+            print(f"⚠️ CONFIG_GITHUB_JSON malformed: {env_err}. Falling back to defaults")
+
+    # 🌐 2) CI environment without explicit JSON – use built-in dummy config
     if is_ci_environment:
         print("DEBUG: CI/CD environment detected - using dummy config")
         return {
@@ -298,18 +312,13 @@ def setup_google_sheets():
     """
     global _sheets_cache, _cache_created_at
     
-    # אם יש cache תקף, מחזיר אותו
-    if _sheets_cache is not None:
-        try:
-            # בדיקת חיבור
-            _sheets_cache[1].get('A1')  # בדיקה קטנה על sheet_users
-            cache_age = round(time.time() - _cache_created_at, 1) if _cache_created_at else 0
-            print(f"[DEBUG] ♻️ Using cached Google Sheets connection (age: {cache_age}s)")
-            return _sheets_cache
-        except Exception as e:
-            print(f"[DEBUG] ⚠️ Cache expired, creating new connection: {e}")
-            _sheets_cache = None
-            _cache_created_at = None
+    # 📦  אם רצים בסביבת CI – מחזירים dummy placeholders ומדלגים על התחברות אמיתית
+    if any(os.getenv(var) for var in ["CI", "GITHUB_ACTIONS", "CONTINUOUS_INTEGRATION"]):
+        if _sheets_cache is None:
+            # יצירת tuple ריק פעם אחת ושמירתו ב-cache כדי להימנע מיצירה חוזרת בבדיקות
+            _sheets_cache = (None, None, None, None)
+            _cache_created_at = time.time()
+        return _sheets_cache
     
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     # מאפשר override של SERVICE_ACCOUNT_DICT באמצעות משתנה סביבה – שימושי ב-CI/Secrets
