@@ -31,6 +31,15 @@ telegram_ext_mock.ContextTypes = Mock(name="ContextTypes")
 sys.modules["telegram"] = telegram_mock
 sys.modules["telegram.ext"] = telegram_ext_mock
 
+try:
+    import pytest  # type: ignore
+except ImportError:  # pragma: no cover
+    pytest = None  # type: ignore
+
+# Skip this module in CI to avoid config-based external calls
+if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) and pytest is not None:
+    pytest.skip("Skipping Google-Sheets dependent tests in CI", allow_module_level=True)
+
 
 def _reload_module(name):
     """Reload helper to avoid stale references between patches."""
