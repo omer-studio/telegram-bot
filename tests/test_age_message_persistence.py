@@ -9,25 +9,23 @@ import importlib
 import asyncio
 import unittest
 from unittest.mock import patch
-
-# Stub external deps absent in test env
 import types
+from unittest.mock import MagicMock
+
+# Stub modules absent in CI/testing env
 sys.modules.setdefault("pytz", types.ModuleType("pytz"))
 
-# Minimal dummy telegram package (used by notifications)
+# Create dummy telegram package hierarchy relied upon by notifications module
 telegram_dummy = types.ModuleType("telegram")
+telegram_dummy.Update = MagicMock()
+telegram_dummy.ReplyKeyboardMarkup = MagicMock()
+telegram_dummy.ReplyKeyboardRemove = MagicMock()
+
 telegram_ext_dummy = types.ModuleType("telegram.ext")
+telegram_ext_dummy.ContextTypes = MagicMock()
 
-class _Dummy:
-    pass
-
-telegram_dummy.Update = _Dummy
-telegram_dummy.ReplyKeyboardMarkup = _Dummy
-telegram_dummy.ReplyKeyboardRemove = _Dummy
-telegram_ext_dummy.ContextTypes = _Dummy
-
-sys.modules.setdefault("telegram", telegram_dummy)
-sys.modules.setdefault("telegram.ext", telegram_ext_dummy)
+sys.modules["telegram"] = telegram_dummy
+sys.modules["telegram.ext"] = telegram_ext_dummy
 
 
 def _reload_module(name):
