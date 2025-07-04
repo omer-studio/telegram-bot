@@ -465,6 +465,39 @@ def check_critical_message_order():
     except Exception as e:
         return False, [f"❌ שגיאה בבדיקת סדר הודעות קריטיות: {e}"]
 
+def check_profile_update_persistence():
+    """Ensure profile updates are written locally – fast, offline test."""
+    errors = []
+    try:
+        import tempfile, json, importlib, os
+        os.environ.setdefault("CI", "1")
+
+        import config
+        import profile_utils as pu
+
+        tmp_dir = tempfile.mkdtemp()
+        tmp_path = os.path.join(tmp_dir, "user_profiles.json")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write("{}")
+
+        # Patch paths
+        config.USER_PROFILES_PATH = tmp_path  # type: ignore
+        importlib.reload(pu)
+        pu.USER_PROFILES_PATH = tmp_path  # type: ignore
+        pu._schedule_sheets_sync_safely = lambda _cid: None  # type: ignore
+
+        ok = pu.update_user_profile_fast("predeploy", {"age": 99}, send_admin_notification=False)
+        if not ok:
+            errors.append("update_user_profile_fast returned False")
+        else:
+            with open(tmp_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if data.get("predeploy", {}).get("age") != 99:
+                errors.append("Profile age not persisted")
+    except Exception as e:
+        errors.append(str(e))
+    return len(errors) == 0, errors
+
 def main():
     """
     הפונקציה הראשית לבדיקה
@@ -493,6 +526,7 @@ def main():
         ("State transitions", check_state_transitions),
         ("code_try increment", check_code_try_increment_logic),
         ("Critical message order", check_critical_message_order),
+        ("Profile update persistence", check_profile_update_persistence),
     ]
     
     # הרצת כל הבדיקות
