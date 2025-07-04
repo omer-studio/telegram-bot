@@ -9,23 +9,26 @@ import importlib
 import asyncio
 import unittest
 from unittest.mock import patch
-import types
-from unittest.mock import MagicMock
+from types import ModuleType
+from unittest.mock import Mock
 
-# Stub modules absent in CI/testing env
-sys.modules.setdefault("pytz", types.ModuleType("pytz"))
+# Stub external dependency 'pytz' if absent
+sys.modules.setdefault("pytz", ModuleType("pytz"))
 
-# Create dummy telegram package hierarchy relied upon by notifications module
-telegram_dummy = types.ModuleType("telegram")
-telegram_dummy.Update = MagicMock()
-telegram_dummy.ReplyKeyboardMarkup = MagicMock()
-telegram_dummy.ReplyKeyboardRemove = MagicMock()
+# Build a minimal mock hierarchy for the 'telegram' package
+telegram_mock = Mock(name="telegram")
+telegram_ext_mock = Mock(name="telegram.ext")
 
-telegram_ext_dummy = types.ModuleType("telegram.ext")
-telegram_ext_dummy.ContextTypes = MagicMock()
+# Expose commonly used classes
+telegram_mock.Update = Mock(name="Update")
+telegram_mock.ReplyKeyboardMarkup = Mock(name="ReplyKeyboardMarkup")
+telegram_mock.ReplyKeyboardRemove = Mock(name="ReplyKeyboardRemove")
 
-sys.modules["telegram"] = telegram_dummy
-sys.modules["telegram.ext"] = telegram_ext_dummy
+telegram_ext_mock.ContextTypes = Mock(name="ContextTypes")
+
+# Register the mocks so import machinery finds them
+sys.modules["telegram"] = telegram_mock
+sys.modules["telegram.ext"] = telegram_ext_mock
 
 
 def _reload_module(name):
