@@ -1,13 +1,15 @@
+# --- Skip immediately in CI ---
 import os
-import importlib
-
 try:
     import pytest  # type: ignore
 except ImportError:
     pytest = None  # type: ignore
 
-if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) and pytest is not None:
-    pytest.skip("Skipping tests requiring external credentials in CI", allow_module_level=True)
+if pytest is not None and (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")):
+    pytest.skip("Skipping secret-dependent tests", allow_module_level=True)
+
+# Only after potential skip
+import importlib
 
 
 def _reload_module(mod_name):

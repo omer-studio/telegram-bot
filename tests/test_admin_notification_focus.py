@@ -1,15 +1,16 @@
+# -------- Skip immediately if in CI ----------
 import os
-import importlib
-import asyncio
-
 try:
     import pytest  # type: ignore
-except ImportError:  # pragma: no cover
+except ImportError:
     pytest = None  # type: ignore
 
-# Skip this module entirely in CI environments lacking real credentials
-if (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")) and pytest is not None:
-    pytest.skip("Skipping Google-Sheets dependent tests in CI", allow_module_level=True)
+if pytest is not None and (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")):
+    pytest.skip("Skipping secret-dependent tests", allow_module_level=True)
+
+# -------- after potential skip --------
+import importlib
+import asyncio
 
 def _reload_module(mod_name):
     import sys
