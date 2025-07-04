@@ -80,6 +80,15 @@ def load_config():
         os.getenv("RUNNER_OS")  # GitHub Actions specific
     ])
     
+    # 🌐 1) Highest priority – explicit JSON passed via CONFIG_GITHUB_JSON (secret)
+    _env_json = os.getenv("CONFIG_GITHUB_JSON", "").strip()
+    if _env_json:
+        try:
+            return json.loads(_env_json)
+        except Exception as env_err:
+            print(f"⚠️ CONFIG_GITHUB_JSON malformed: {env_err}. Falling back to defaults")
+
+    # 🌐 2) CI environment without explicit JSON – use built-in dummy config
     if is_ci_environment:
         print("DEBUG: CI/CD environment detected - using dummy config")
         return {
