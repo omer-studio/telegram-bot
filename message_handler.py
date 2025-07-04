@@ -549,22 +549,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             access_result = check_user_access(context.bot_data["sheet"], chat_id)
             status = access_result.get("status", "not_found")
             
+            # 🔍 הוספת לוגים מפורטים לבדיקת הרשאות
+            print(f"[ACCESS_CHECK_DEBUG] chat_id={chat_id} | access_result={access_result}")
+            print(f"[ACCESS_CHECK_DEBUG] status={status}")
+            print(f"[ACCESS_CHECK_DEBUG] user_msg='{user_msg}'")
+            
             if status == "not_found":
+                print(f"[ACCESS_CHECK_DEBUG] משתמש לא נמצא - שולח לטיפול במשתמש לא רשום")
                 # משתמש לא קיים - טיפול ברקע
                 asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
                 await end_monitoring_user(str(chat_id), True)
                 return
                 
             elif status == "pending":
+                print(f"[ACCESS_CHECK_DEBUG] משתמש ממתין לאישור - שולח לטיפול באישור תנאים")
                 # משתמש קיים אבל לא אישר תנאים - טיפול באישור
                 asyncio.create_task(handle_pending_user_background(update, context, chat_id, user_msg))
+                await end_monitoring_user(str(chat_id), True)
+                return
+            
+            elif status == "approved":
+                print(f"[ACCESS_CHECK_DEBUG] משתמש מאושר - ממשיך לתשובה רגילה")
+                # ממשיך לטיפול רגיל במשתמש מאושר
+            
+            else:
+                print(f"[ACCESS_CHECK_DEBUG] סטטוס לא מזוהה: {status} - מטפל כמשתמש לא נמצא")
+                # סטטוס לא מוכר - מטפל כמו "not_found"
+                asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
                 await end_monitoring_user(str(chat_id), True)
                 return
                 
         except Exception as ex:
             logging.error(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
             print(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
-            await handle_critical_error(ex, chat_id, user_msg, update)
+            print(f"[ACCESS_CHECK_DEBUG] שגיאה בבדיקת הרשאות - מנסה לטפל כמשתמש לא רשום")
+            # במקרה של שגיאה, מנסה לטפל כמשתמש לא רשום
+            asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
             await end_monitoring_user(str(chat_id), False)
             return
 
@@ -859,10 +879,28 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
     טיפול במשתמש שעדיין לא אישר תנאים ברקע
     """
     try:
+        # 🔍 הוספת לוגים מפורטים
+        print(f"[PENDING_USER_DEBUG] chat_id={chat_id} | user_msg='{user_msg}'")
+        print(f"[PENDING_USER_DEBUG] APPROVE_BUTTON_TEXT='{APPROVE_BUTTON_TEXT()}'")
+        print(f"[PENDING_USER_DEBUG] DECLINE_BUTTON_TEXT='{DECLINE_BUTTON_TEXT()}'")
+        print(f"[PENDING_USER_DEBUG] user_msg.strip()='{user_msg.strip()}'")
+        
+        # בדיקת סטטוס המשתמש לפני הטיפול
+        from sheets_handler import check_user_access
+        access_result = check_user_access(context.bot_data["sheet"], chat_id)
+        print(f"[PENDING_USER_DEBUG] Current access status: {access_result}")
+        
         if user_msg.strip() == APPROVE_BUTTON_TEXT():
+            print(f"[PENDING_USER_DEBUG] משתמש לחץ על אישור!")
             # אישור תנאים
             approval_result = approve_user(chat_id)
+            print(f"[PENDING_USER_DEBUG] approval_result: {approval_result}")
+            
             if approval_result.get("success"):
+                # בדיקת סטטוס אחרי אישור
+                access_result_after = check_user_access(context.bot_data["sheet"], chat_id)
+                print(f"[PENDING_USER_DEBUG] Access status after approval: {access_result_after}")
+                
                 await send_system_message(update, chat_id, full_access_message())
                 await send_system_message(
                     update,
@@ -871,22 +909,31 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                     reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True)
                 )
             else:
+                print(f"[PENDING_USER_DEBUG] אישור נכשל!")
                 await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
                 
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
+            print(f"[PENDING_USER_DEBUG] משתמש לחץ על דחיה - שולח שוב הודעת אישור")
             # דחיית תנאים – הצגת הודעת האישור מחדש
             # במקום להחזיר את המשתמש לשלב הקוד (שעלול ליצור מבוי סתום),
             # נשלח שוב את הודעת האישור עם המקלדת כדי שיוכל לאשר במידת הצורך.
+            await send_system_message(update, chat_id, not_approved_message())
             await send_approval_message(update, chat_id)
             return
 
         else:
+            print(f"[PENDING_USER_DEBUG] הודעה לא מזוהה - שולח שוב הודעת אישור")
             # כל הודעה אחרת – להזכיר את הצורך באישור תנאי השימוש
+            await send_system_message(update, chat_id, "כדי להמשיך, יש לאשר את התנאים במקלדת למטה:")
             await send_approval_message(update, chat_id)
             return
 
     except Exception as e:
+        print(f"[PENDING_USER_DEBUG] שגיאה: {e}")
         logging.error(f"[Permissions] שגיאה בטיפול במשתמש ממתין לאישור: {e}")
+        # במקרה של שגיאה, שולח שוב הודעת אישור
+        await send_system_message(update, chat_id, "הייתה שגיאה. בואו ננסה שוב:")
+        await send_approval_message(update, chat_id)
 
 async def send_system_message(update, chat_id, text, reply_markup=None):
     """
