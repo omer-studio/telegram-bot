@@ -288,6 +288,16 @@ def check_notifications_system():
         except Exception as e:
             errors.append(f"❌ _load_critical_error_users נכשל: {e}")
 
+        # Test send_admin_notification wrapper
+        try:
+            nt.send_admin_notification("pre-deploy wrapper test")
+            if 'data' not in captured or not captured['data'].get('parse_mode'):
+                errors.append("send_admin_notification did not set parse_mode")
+            else:
+                print("✅ send_admin_notification קורא ל-requests.post עם parse_mode")
+        except Exception as e:
+            errors.append(f"❌ send_admin_notification failed: {e}")
+
     except Exception as e:
         errors.append(f"❌ שגיאה בבדיקת מערכת התראות: {e}")
     
