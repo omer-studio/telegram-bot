@@ -19,6 +19,7 @@ import importlib.util
 import json
 import traceback
 import re
+import types
 
 def check_syntax_and_imports():
     """
@@ -240,14 +241,36 @@ def check_notifications_system():
     print("🔍 בודק מערכת התראות...")
     
     try:
+        import notifications as nt
+
         from notifications import (
-            _load_critical_error_users, 
-            _save_critical_error_users,
-            safe_add_user_to_recovery_list,
-            send_admin_notification
+            _load_critical_error_users,
+            send_admin_notification_raw,
         )
         print("✅ notifications - כל הפונקציות יובאו בהצלחה")
-        
+
+        # Patch requests.post to avoid real network calls
+        captured = {}
+        class _DummyResp:
+            status_code = 200
+
+        def _fake_post(url, data=None, timeout=10):
+            captured['url'] = url
+            captured['data'] = data
+            return _DummyResp()
+
+        nt.requests.post = _fake_post  # type: ignore
+
+        # ניסיון שליחה
+        try:
+            send_admin_notification_raw("pre-deploy notification test 🛡️")
+            if not captured:
+                errors.append("❌ send_admin_notification_raw לא קרא ל-requests.post")
+            else:
+                print("✅ send_admin_notification_raw קורא ל-requests.post כצפוי")
+        except Exception as e:
+            errors.append(f"❌ שליחת התראה דמה נכשלה: {e}")
+
         # בדיקה שתיקיית data קיימת או יכולה להיווצר
         if not os.path.exists("data"):
             try:
@@ -257,14 +280,14 @@ def check_notifications_system():
                 errors.append(f"❌ לא הצלחתי ליצור תיקיית data: {e}")
         else:
             print("✅ תיקיית data - קיימת")
-        
-        # בדיקה בסיסית של טעינה ושמירה (בלי לשנות קבצים אמיתיים)
+
+        # בדיקה טעינה בסיסית
         try:
-            test_users = _load_critical_error_users()
+            _load_critical_error_users()
             print("✅ _load_critical_error_users - עובד")
         except Exception as e:
             errors.append(f"❌ _load_critical_error_users נכשל: {e}")
-        
+
     except Exception as e:
         errors.append(f"❌ שגיאה בבדיקת מערכת התראות: {e}")
     
