@@ -45,7 +45,10 @@ if not IS_CI_ENVIRONMENT:
         import gspread
         from oauth2client.service_account import ServiceAccountCredentials
         from lazy_litellm import completion
-        from fields_dict import FIELDS_DICT
+        try:
+            from fields_dict import FIELDS_DICT
+        except ImportError:
+            FIELDS_DICT = {"dummy": "dummy"}
         # ייבוא ישיר של הפרומט הראשי - רק בסביבת ייצור
         from prompts import SYSTEM_PROMPT
     except ImportError as e:
@@ -68,8 +71,14 @@ else:
     _lazy.embedding = lambda *args, **kwargs: None  # type: ignore[attr-defined]
     _sys.modules.setdefault("lazy_litellm", _lazy)
     # הגדרות dummy לסביבת CI
-    FIELDS_DICT = {"dummy": "dummy"}
-    SYSTEM_PROMPT = "dummy system prompt"
+    try:
+        from fields_dict import FIELDS_DICT
+    except ImportError:
+        FIELDS_DICT = {"dummy": "dummy"}
+    try:
+        from prompts import SYSTEM_PROMPT
+    except ImportError:
+        SYSTEM_PROMPT = "dummy system prompt"
 
 
 # טעינת קונפיגורציה

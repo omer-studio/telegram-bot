@@ -191,23 +191,19 @@ class ConcurrentMonitor:
                 # Clean up any dead tasks before starting new ones
                 await self._cleanup_dead_tasks()
                 
-                # 🔧 תיקון זליגת זיכרון: רק cleanup חיוני, לא כל ה-background tasks
-                # השארתי רק ניקוי סשנים תקועים - זה קריטי למניעת תקיעות
-                if not os.getenv("RENDER"):  # רק בפיתוח מקומי
-                    loop = asyncio.get_running_loop()
-                    if loop and not loop.is_closed():
-                        # יצירת task עם error handling - only if not already running
-                        if not any(not task.done() and "cleanup_stale_sessions" in str(task.get_coro()) 
-                                  for task in self._active_tasks):
-                            cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
-                            cleanup_task.add_done_callback(self._handle_cleanup_error)
-                            self._active_tasks.append(cleanup_task)
-                            logging.info("[ConcurrentMonitor] Started essential cleanup only")
-                        else:
-                            logging.debug("[ConcurrentMonitor] Cleanup task already running")
-                else:
-                    # בסביבת production - מדלגים על כל background tasks
-                    logging.info("[ConcurrentMonitor] Skipping background tasks in production")
+                # 🔧 תיקון קריטי: cleanup חייב לרוץ גם ב-production!
+                # בלי זה סשנים נשארים תקועים לנצח
+                loop = asyncio.get_running_loop()
+                if loop and not loop.is_closed():
+                    # יצירת task עם error handling - only if not already running
+                    if not any(not task.done() and "cleanup_stale_sessions" in str(task.get_coro()) 
+                              for task in self._active_tasks):
+                        cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
+                        cleanup_task.add_done_callback(self._handle_cleanup_error)
+                        self._active_tasks.append(cleanup_task)
+                        logging.info("[ConcurrentMonitor] Started essential cleanup task")
+                    else:
+                        logging.debug("[ConcurrentMonitor] Cleanup task already running")
                 self._background_tasks_started = True
             except (RuntimeError, AttributeError) as e:
                 # אם אין event loop פעיל, ננסה שוב בפעם הבאה
@@ -350,7 +346,8 @@ class ConcurrentMonitor:
             
             # הסרת הסשן
             self._remove_from_queue(chat_id)
-            del self.active_sessions[chat_id]
+            if chat_id in self.active_sessions:
+                del self.active_sessions[chat_id]
             
             logging.info(f"[ConcurrentMonitor] 🏁 Ended session for user {chat_id}. "
                         f"Duration: {response_time:.2f}s, Success: {success}, Active: {len(self.active_sessions)}")
@@ -367,7 +364,7 @@ class ConcurrentMonitor:
     
     async def _cleanup_stale_sessions(self):
         """
-        🧹 ניקוי אוטומטי של סשנים תקועים (כל 30 שניות)
+        🧹 ניקוי אוטומטי של סשנים תקועים (כל 15 שניות)
         ⚠️  מנגנון בטיחות קריטי למניעת memory leaks וסשנים תקועים
         🚨 בלי הפונקציה הזו - סשנים יישארו תקועים לנצח ויגרמו לקריסה!
         """
@@ -410,7 +407,8 @@ class ConcurrentMonitor:
                     except Exception as e:
                         logging.error(f"[ConcurrentMonitor] Failed to send cleanup alert: {e}")
                 
-                await asyncio.sleep(30)  # בדיקה כל 30 שניות
+                # 🔧 תיקון: בדיקה תכופה יותר למניעת תקיעות
+                await asyncio.sleep(15)  # בדיקה כל 15 שניות במקום 30
                 
             except asyncio.CancelledError:
                 # Task בוטל - יציאה נקייה
@@ -638,6 +636,7 @@ class ConcurrentMonitor:
 
 # יצירת instance גלובלי - lazy initialization
 _concurrent_monitor_instance = None
+_memory_monitor = MemoryMonitor()  # 🔧 תיקון: יצירת instance של MemoryMonitor
 
 def get_concurrent_monitor():
     """קבלת instance של ConcurrentMonitor עם lazy initialization"""

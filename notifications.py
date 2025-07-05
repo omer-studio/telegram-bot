@@ -5,7 +5,21 @@ import re
 import traceback
 import logging
 import asyncio
-import telegram
+try:
+    import telegram
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    # סביבת CI או הרצה בלי הספרייה – יוצר dummy minimal כדי שהבדיקות הסטטיות ירוצו
+    class telegram:
+        class Bot:
+            def __init__(self, token):
+                self.token = token
+            async def get_chat(self, chat_id):
+                raise Exception("Telegram not available")
+        class error:
+            class BadRequest(Exception):
+                pass
+    TELEGRAM_AVAILABLE = False
 from datetime import datetime, timedelta
 import requests
 import pytz

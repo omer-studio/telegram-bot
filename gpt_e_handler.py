@@ -228,11 +228,25 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
             
             try:
                 from gpt_jsonl_logger import GPTJSONLLogger
+                # בניית response מלא עם כל המידע הנדרש
+                response_data = {
+                    "id": getattr(response, "id", ""),
+                    "choices": [
+                        {
+                            "message": {
+                                "content": content_raw,
+                                "role": "assistant"
+                            }
+                        }
+                    ],
+                    "usage": usage,
+                    "model": response.model
+                }
                 GPTJSONLLogger.log_gpt_call(
                     log_path="data/openai_calls.jsonl",
                     gpt_type="E",
                     request=completion_params if 'completion_params' in locals() else {},
-                    response=response.model_dump() if 'response' in locals() and hasattr(response, 'model_dump') else {},
+                    response=response_data,
                     cost_usd=usage.get("cost_total", 0) if 'usage' in locals() else 0,
                     extra={"chat_id": chat_id}
                 )

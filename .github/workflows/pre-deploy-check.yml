@@ -27,32 +27,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: 🛡️ Run pre-deploy checks
+    - name: 🛡️ Run comprehensive deploy checks
       run: |
-        python pre_deploy_checks.py
+        python comprehensive_deploy_check.py
         
-    - name: 📊 Memory estimation report
-      if: always()  # רוץ גם אם הבדיקה נכשלה
+    - name: ✅ Deploy checks completed
       run: |
-        echo "## 📊 Memory Usage Report" >> $GITHUB_STEP_SUMMARY
-        echo "| Package | Memory Impact |" >> $GITHUB_STEP_SUMMARY
-        echo "|---------|---------------|" >> $GITHUB_STEP_SUMMARY
-        python -c "
-        import json, subprocess, sys
-        result = subprocess.run([sys.executable, '-m', 'pip', 'list', '--format=json'], capture_output=True, text=True)
-        packages = json.loads(result.stdout)
-        heavy = {'litellm': 200, 'torch': 500, 'tensorflow': 600, 'transformers': 300}
-        total = 80  # base
-        for pkg in packages:
-            name = pkg['name'].lower()
-            if name in heavy:
-                memory = heavy[name]
-                total += memory
-                print(f'| {pkg[\"name\"]} {pkg[\"version\"]} | {memory}MB |')
-        print(f'| **Total Estimated** | **{total}MB** |')
-        " >> $GITHUB_STEP_SUMMARY
-        
-    - name: 🚨 Fail if critical issues found
-      run: |
-        # הסקריפט כבר יסיים עם exit code מתאים
-        echo "✅ בדיקות הושלמו"
+        echo "✅ כל הבדיקות הושלמו בהצלחה!"
+        echo "🎉 הפריסה מאושרת לביצוע!"

@@ -28,10 +28,10 @@ jobs:
           pip install -r requirements.txt
         fi
         
-    - name: 🚨 Run Critical Health Check
+    - name: 🚨 Run Comprehensive Deploy Check
       run: |
-        echo "🚨 רץ בדיקת תקינות קריטית..."
-        python3 health_check.py
+        echo "🚨 רץ בדיקת פריסה מקיפה..."
+        python comprehensive_deploy_check.py
       env:
         # Add any required environment variables for testing
         TELEGRAM_BOT_TOKEN: "dummy_token_for_testing"
@@ -77,7 +77,7 @@ jobs:
     - name: 🚨 Post-Deploy Safety Check
       run: |
         echo "🚨 מריץ בדיקת post-deploy..."
-        python3 auto_rollback.py
+        python comprehensive_deploy_check.py
       env:
         TELEGRAM_BOT_TOKEN: "dummy_token_for_testing"
         ADMIN_BOT_TELEGRAM_TOKEN: "dummy_token_for_testing" 

@@ -59,11 +59,25 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         result = {"summary": summary, "usage": usage, "model": response.model}
         try:
             from gpt_jsonl_logger import GPTJSONLLogger
+            # בניית response מלא עם כל המידע הנדרש
+            response_data = {
+                "id": getattr(response, "id", ""),
+                "choices": [
+                    {
+                        "message": {
+                            "content": summary,
+                            "role": "assistant"
+                        }
+                    }
+                ],
+                "usage": usage,
+                "model": response.model
+            }
             GPTJSONLLogger.log_gpt_call(
                 log_path="data/openai_calls.jsonl",
                 gpt_type="B",
                 request=completion_params,
-                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                response=response_data,
                 cost_usd=usage.get("cost_total", 0),
                 extra={"chat_id": chat_id, "message_id": message_id}
             )

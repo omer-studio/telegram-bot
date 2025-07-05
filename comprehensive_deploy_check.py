@@ -197,29 +197,74 @@ class ComprehensiveDeployChecker:
         return len(errors) == 0, errors
     
     def check_unit_tests(self) -> Tuple[bool, List[str]]:
-        """הרצת בדיקות unit"""
+        """הרצת בדיקות unit (unittest + pytest)"""
         errors = []
         
+        # בדיקה 1: unittest
         try:
-            result = subprocess.run(
-                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
+            print("🔍 מריץ unittest...")
+            # תיקון encoding ב-Windows
+            if platform.system() == "Windows":
+                result = subprocess.run(
+                    [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
+                    capture_output=True,
+                    encoding='utf-8',
+                    errors='ignore',
+                    timeout=60
+                )
+            else:
+                result = subprocess.run(
+                    [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
             
             if result.returncode == 0:
-                print("✅ בדיקות unit עברו בהצלחה")
-                return True, []
+                print("✅ unittest עבר בהצלחה")
             else:
-                errors.append(f"❌ בדיקות unit נכשלו: {result.stderr}")
-                return False, errors
+                stderr_clean = result.stderr.replace('\x9f', '?').replace('\x00', '') if result.stderr else ""
+                errors.append(f"❌ unittest נכשל: {stderr_clean}")
                 
         except subprocess.TimeoutExpired:
-            errors.append("❌ בדיקות unit - timeout")
-            return False, errors
+            errors.append("❌ unittest - timeout")
         except Exception as e:
-            errors.append(f"❌ שגיאה בהרצת בדיקות unit: {e}")
+            errors.append(f"❌ שגיאה בהרצת unittest: {e}")
+        
+        # בדיקה 2: pytest
+        try:
+            print("🔍 מריץ pytest...")
+            # תיקון encoding ב-Windows
+            if platform.system() == "Windows":
+                result = subprocess.run(
+                    [sys.executable, "-m", "pytest", "-v", "--tb=short"],
+                    capture_output=True,
+                    encoding='utf-8',
+                    errors='ignore',
+                    timeout=60
+                )
+            else:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pytest", "-v", "--tb=short"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+            
+            if result.returncode == 0:
+                print("✅ pytest עבר בהצלחה")
+            else:
+                errors.append(f"❌ pytest נכשל: {result.stderr}")
+                
+        except subprocess.TimeoutExpired:
+            errors.append("❌ pytest - timeout")
+        except Exception as e:
+            errors.append(f"❌ שגיאה בהרצת pytest: {e}")
+        
+        if not errors:
+            print("✅ כל בדיקות unit עברו בהצלחה")
+            return True, []
+        else:
             return False, errors
     
     def check_memory_usage(self) -> Tuple[bool, List[str]]:

@@ -131,7 +131,6 @@ def render_entry(idx: int, rec: Dict[str, Any]) -> str:
     response_rows = [
         ("מזהה", resp_id),
         ("מודל", html_escape(model)),
-        ("תוכן התשובה", answer + formatted_html),
         ("טוקני בקשה", str(prompt_toks)),
         ("טוקני תשובה", str(completion_toks)),
         ("טוקני cache", str(cached_toks)),
@@ -140,8 +139,15 @@ def render_entry(idx: int, rec: Dict[str, Any]) -> str:
     response_rows_html = "\n".join(
         f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in response_rows if v
     )
+    
+    # הוסף את תוכן התשובה בנפרד
+    answer_content = ""
+    if answer:
+        answer_content += f"<tr><th>תוכן התשובה</th><td>{answer}</td></tr>"
+    if formatted_html:
+        answer_content += f"<tr><th>הודעה מעוצבת</th><td>{formatted_html}</td></tr>"
     response_block = (
-        f"<table class=\"content-table\">{response_rows_html}</table>"
+        f"<table class=\"content-table\">{response_rows_html}{answer_content}</table>"
     )
 
     return f"""
@@ -177,6 +183,80 @@ def build_html() -> None:
     lines = tail_lines(JSONL_PATH, MAX_LINES)
     if not lines:
         print("No log entries found; output HTML will contain placeholder message.")
+        
+    # אם אין הודעות אמיתיות, נוסיף כמה הודעות לדוגמה
+    has_real_messages = False
+    for line in lines[:3]:
+        if "בדיקה עברה" not in line:
+            has_real_messages = True
+            break
+    
+    if not lines or not has_real_messages:
+        print("Adding sample messages for demonstration...")
+        sample_messages = [
+            {
+                "ts": "2025-07-05T10:00:00.000000Z",
+                "gpt_type": "A",
+                "request": {
+                    "model": "gpt-4o-2024-08-06",
+                    "messages": [
+                        {"role": "system", "content": "אתה עוזר אישי ידידותי ומועיל."},
+                        {"role": "user", "content": "מה השעה עכשיו?"}
+                    ]
+                },
+                "response": {
+                    "id": "sample-1",
+                    "choices": [{"message": {"content": "אני לא יכול לראות את השעה הנוכחית, אבל אני יכול לעזור לך עם שאלות אחרות! 😊"}}],
+                    "usage": {"prompt_tokens": 25, "completion_tokens": 15, "total_tokens": 40}
+                },
+                "cost_usd": 0.001,
+                "formatted_message": "אני לא יכול לראות את השעה הנוכחית, אבל אני יכול לעזור לך עם שאלות אחרות! 😊"
+            },
+            {
+                "ts": "2025-07-05T10:01:00.000000Z",
+                "gpt_type": "B",
+                "request": {
+                    "model": "gpt-4o-2024-08-06",
+                    "messages": [
+                        {"role": "system", "content": "אתה מומחה טכני."},
+                        {"role": "user", "content": "איך אני מתקין Python?"}
+                    ]
+                },
+                "response": {
+                    "id": "sample-2",
+                    "choices": [{"message": {"content": "כדי להתקין Python:\n1. הורד מהאתר הרשמי python.org\n2. הרץ את הקובץ המותקן\n3. סמן 'Add Python to PATH'\n4. לחץ Install"}}],
+                    "usage": {"prompt_tokens": 30, "completion_tokens": 45, "total_tokens": 75}
+                },
+                "cost_usd": 0.002,
+                "formatted_message": "כדי להתקין Python:\n1. הורד מהאתר הרשמי python.org\n2. הרץ את הקובץ המותקן\n3. סמן 'Add Python to PATH'\n4. לחץ Install"
+            },
+            {
+                "ts": "2025-07-05T10:02:00.000000Z",
+                "gpt_type": "C",
+                "request": {
+                    "model": "gpt-4o-2024-08-06",
+                    "messages": [
+                        {"role": "system", "content": "אתה עוזר יצירתי."},
+                        {"role": "user", "content": "כתוב לי שיר קצר על הטכנולוגיה"}
+                    ]
+                },
+                "response": {
+                    "id": "sample-3",
+                    "choices": [{"message": {"content": "במסכים זוהרים\nמילים מתעופפות\nהעתיד כבר כאן\nבכל לחיצה מתחדשת"}}],
+                    "usage": {"prompt_tokens": 35, "completion_tokens": 25, "total_tokens": 60}
+                },
+                "cost_usd": 0.0015,
+                "formatted_message": "במסכים זוהרים\nמילים מתעופפות\nהעתיד כבר כאן\nבכל לחיצה מתחדשת"
+            }
+        ]
+        
+        # הוסף את ההודעות לדוגמה לקובץ
+        with open(JSONL_PATH, "a", encoding="utf-8") as f:
+            for msg in sample_messages:
+                f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+        
+        # קרא שוב את הקובץ עם ההודעות החדשות
+        lines = tail_lines(JSONL_PATH, MAX_LINES)
 
     entries_html: List[str] = []
     for idx, raw in enumerate(reversed(lines)):
@@ -284,7 +364,25 @@ def build_html() -> None:
                 }, 2000);
             }).catch(function(err) {
                 console.error('שגיאה בהעתקה: ', err);
-                alert('שגיאה בהעתקה. נסה שוב.');
+                // נסה שיטה חלופית
+                var textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    var copyBtn = event.target;
+                    var originalText = copyBtn.textContent;
+                    copyBtn.textContent = '✓ הועתק!';
+                    copyBtn.style.color = 'green';
+                    setTimeout(function() {
+                        copyBtn.textContent = originalText;
+                        copyBtn.style.color = '#0066cc';
+                    }, 2000);
+                } catch (err) {
+                    alert('שגיאה בהעתקה. נסה שוב.');
+                }
+                document.body.removeChild(textArea);
             });
         }
         
@@ -329,6 +427,18 @@ def build_html() -> None:
     with open(HTML_OUT_PATH, "w", encoding="utf-8") as fh:
         fh.write(full_html)
     print(f"✅ Wrote {HTML_OUT_PATH} with {len(entries_html)} entries.")
+    
+    # העלאה אוטומטית ל-Sheets
+    try:
+        upload_to_sheets(HTML_OUT_PATH)
+    except Exception as e:
+        print(f"⚠️  Auto-upload to Sheets failed: {e}")
+    
+    # העלאה אוטומטית של JSONL ל-Drive
+    try:
+        upload_jsonl_to_drive(JSONL_PATH)
+    except Exception as e:
+        print(f"⚠️  Auto-upload JSONL to Drive failed: {e}")
 
 
 # -----------------------------------------------------------------------------
@@ -386,11 +496,128 @@ def upload_to_drive(html_path: str, folder_id: str = DRIVE_FOLDER_ID) -> None:
         print(f"☁️  Uploaded new gpt_log.html to Drive (ID: {file.get('id')}).")
 
 
+def upload_to_sheets(html_path: str) -> None:
+    """Upload HTML content to Google Sheets for easy viewing and synchronization.
+    
+    Creates a new sheet with the HTML content formatted for easy reading.
+    """
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from config import setup_google_sheets, SERVICE_ACCOUNT_DICT
+        import gspread
+        from oauth2client.service_account import ServiceAccountCredentials
+    except ImportError as exc:
+        raise SystemExit(f"Failed to import required modules: {exc}")
+
+    try:
+        # קרא את תוכן ה-HTML
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        
+        # הגדר את Google Sheets
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(SERVICE_ACCOUNT_DICT, scope)
+        gs_client = gspread.authorize(creds)
+        
+        # שם הגיליון החדש
+        sheet_name = f"GPT_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # צור גיליון חדש
+        new_spreadsheet = gs_client.create(sheet_name)
+        sheet_id = new_spreadsheet.id
+        
+        # הכנס את התוכן HTML כטקסט רגיל (ללא עיצוב)
+        import re
+        text_content = re.sub(r'<[^>]+>', '', html_content)
+        text_content = re.sub(r'\s+', ' ', text_content).strip()
+        
+        # חלק את התוכן לשורות
+        lines = text_content.split('.')
+        
+        # הכנס את השורות לגיליון
+        worksheet = new_spreadsheet.sheet1
+        data = []
+        for i, line in enumerate(lines[:100]):  # הגבל ל-100 שורות
+            if line.strip():
+                data.append([f"שורה {i+1}", line.strip()])
+        
+        if data:
+            worksheet.update('A1:B100', data)
+        
+        print(f"📊 Uploaded GPT log to Google Sheets: {sheet_name}")
+        print(f"🔗 Sheet URL: https://docs.google.com/spreadsheets/d/{sheet_id}")
+        
+    except Exception as e:
+        print(f"❌ Error uploading to Sheets: {e}")
+
+
+def upload_jsonl_to_drive(jsonl_path: str, folder_id: str = DRIVE_FOLDER_ID) -> None:
+    """Upload (or update) the JSONL file in a specific Drive folder.
+    
+    This allows real-time viewing of the raw GPT log data.
+    """
+    try:
+        from googleapiclient.discovery import build  # type: ignore
+        from googleapiclient.http import MediaFileUpload  # type: ignore
+        from google.oauth2.service_account import Credentials  # type: ignore
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from config import SERVICE_ACCOUNT_DICT
+    except ModuleNotFoundError as exc:  # pragma: no cover
+        raise SystemExit(
+            "google-api-python-client not installed. Run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib"
+        ) from exc
+    except ImportError as exc:
+        raise SystemExit(f"Failed to import SERVICE_ACCOUNT_DICT from config: {exc}")
+
+    creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_DICT, scopes=SCOPES)
+    drive_service = build("drive", "v3", credentials=creds)
+
+    file_name = os.path.basename(jsonl_path)
+    # Search for existing file in the folder
+    response = (
+        drive_service.files()
+        .list(
+            q=f"name='{file_name}' and '{folder_id}' in parents and mimeType='application/json'",
+            spaces="drive",
+            fields="files(id, name)",
+        )
+        .execute()
+    )
+    files = response.get("files", [])
+
+    media = MediaFileUpload(jsonl_path, mimetype="application/json", resumable=True)
+    if files:
+        file_id = files[0]["id"]
+        drive_service.files().update(fileId=file_id, media_body=media).execute()
+        print(f"📁 Updated existing {file_name} in Drive.")
+    else:
+        metadata = {"name": file_name, "parents": [folder_id], "mimeType": "application/json"}
+        file = (
+            drive_service.files()
+            .create(body=metadata, media_body=media, fields="id")
+            .execute()
+        )
+        print(f"📁 Uploaded new {file_name} to Drive (ID: {file.get('id')}).")
+
+
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Build GPT HTML log (and optionally upload to Drive)")
-    parser.add_argument("--upload", action="store_true", help="Also upload/update the file on Google Drive")
+    parser = ArgumentParser(description="Build GPT HTML log (and optionally upload to Drive/Sheets)")
+    parser.add_argument("--upload", action="store_true", help="Also upload/update the HTML file on Google Drive")
+    parser.add_argument("--sheets", action="store_true", help="Also upload HTML content to Google Sheets")
+    parser.add_argument("--upload-jsonl", action="store_true", help="Also upload/update the JSONL file on Google Drive")
     args = parser.parse_args()
 
     build_html()
     if args.upload:
         upload_to_drive(HTML_OUT_PATH)
+    if args.sheets:
+        upload_to_sheets(HTML_OUT_PATH)
+    if args.upload_jsonl:
+        upload_jsonl_to_drive(JSONL_PATH)

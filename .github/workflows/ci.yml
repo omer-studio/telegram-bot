@@ -56,14 +56,7 @@ jobs:
           python -m py_compile *.py
           echo "✅ כל קבצי Python עברו בדיקת תחביר בהצלחה!"
           
-      # 6. הרצת בדיקות עם pytest
-      - name: 🧪 Run Tests with pytest
-        run: |
-          # אם אין בדיקות – pytest יחזיר exit-code 5 (no tests collected)
-          # זה ייכשל את ה־CI, כפי שנרצה. לכן אין יותר התעלמות משגיאות.
-          python -m pytest -v --tb=short
-
-      # 7. בדיקת pre-deploy מקיפה – חייבת לעבור לפני deploy
+      # 6. בדיקת pre-deploy מקיפה – כוללת כל הבדיקות הנחוצות
       - name: 🔒 Comprehensive pre-deploy check
         run: |
           python comprehensive_deploy_check.py

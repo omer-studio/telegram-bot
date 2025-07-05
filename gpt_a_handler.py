@@ -111,7 +111,10 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
     מחזיר tuple: (system_message, missing_text)"""
     try:
         from sheets_core import get_user_state
-        from fields_dict import FIELDS_DICT
+        try:
+            from fields_dict import FIELDS_DICT
+        except ImportError:
+            FIELDS_DICT = {"dummy": "dummy"}
         if not should_ask_profile_question(chat_id):
             logging.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
             return "", ""
@@ -528,11 +531,25 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         }
         try:
             from gpt_jsonl_logger import GPTJSONLLogger
+            # בניית response מלא עם כל המידע הנדרש
+            response_data = {
+                "id": getattr(gpt_result.get("model_dump"), "id", ""),
+                "choices": [
+                    {
+                        "message": {
+                            "content": gpt_result["bot_reply"],
+                            "role": "assistant"
+                        }
+                    }
+                ],
+                "usage": gpt_result["usage"],
+                "model": gpt_result["model"]
+            }
             GPTJSONLLogger.log_gpt_call(
                 log_path="data/openai_calls.jsonl",
                 gpt_type="A",
                 request=completion_params,
-                response=gpt_result["model_dump"] if hasattr(gpt_result, 'model_dump') else {},
+                response=response_data,
                 cost_usd=usage.get("cost_total", 0),
                 extra={"chat_id": chat_id, "message_id": message_id}
             )

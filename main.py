@@ -48,9 +48,22 @@ import json
 import time
 import sys
 import urllib.parse
-from telegram import Update, BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from telegram.error import TelegramError
+try:
+    from telegram import Update, BotCommand
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+    from telegram.error import TelegramError
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    # סביבת CI או הרצה בלי הספרייה – יוצר dummy minimal כדי שהבדיקות הסטטיות ירוצו
+    class Update: pass
+    class BotCommand: pass
+    class Application: pass
+    class CommandHandler: pass
+    class MessageHandler: pass
+    class filters: pass
+    class ContextTypes: pass
+    class TelegramError(Exception): pass
+    TELEGRAM_AVAILABLE = False
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from bot_setup import setup_bot

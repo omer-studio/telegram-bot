@@ -34,7 +34,10 @@ from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d, smart_update_profile_with_gpt_d_async
 from gpt_utils import normalize_usage_dict
-from fields_dict import FIELDS_DICT
+try:
+    from fields_dict import FIELDS_DICT
+except ImportError:
+    FIELDS_DICT = {"dummy": "dummy"}
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active
@@ -779,6 +782,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     gpt_c_info = "GPT-C: לא הופעל"
                     gpt_d_info = "GPT-D: לא הופעל"
                     gpt_e_info = "GPT-E: לא הופעל"
+                    
                     # --- GPT-C ---
                     if should_run_gpt_c(user_msg) and gpt_c_result is not None:
                         if not isinstance(gpt_c_result, Exception):
@@ -786,11 +790,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             old_profile = get_user_profile_fast(chat_id)
                             new_profile = {**old_profile, **extracted_fields}
                             gpt_c_changes = _detect_profile_changes(old_profile, new_profile)
-                            gpt_c_info = f"GPT-C: עודכנו {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: לא עודכנו שדות"
+                            gpt_c_info = f"GPT-C: עודכנו {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: רץ ולא עודכנו שדות"
                         else:
-                            gpt_c_info = "GPT-C: לא הופעל או שגיאה"
+                            gpt_c_info = "GPT-C: רץ ונתקל בשגיאה"
                     else:
                         gpt_c_info = "GPT-C: לא הופעל"
+                    
                     # --- GPT-D ---
                     gpt_d_res = results[0] if len(results) > 0 else None
                     if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
@@ -798,11 +803,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if updated_profile and isinstance(updated_profile, dict):
                             old_profile = get_user_profile_fast(chat_id)
                             gpt_d_changes = _detect_profile_changes(old_profile, updated_profile)
-                            gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות אוחדו" if gpt_d_changes else "GPT-D: לא אוחדו שדות"
+                            gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות אוחדו" if gpt_d_changes else "GPT-D: רץ ולא אוחדו שדות"
                         else:
-                            gpt_d_info = "GPT-D: לא הופעל או אין שינויים"
+                            gpt_d_info = "GPT-D: רץ ולא אוחדו שדות"
                     else:
-                        gpt_d_info = "GPT-D: לא הופעל או שגיאה"
+                        gpt_d_info = "GPT-D: לא הופעל"
+                    
                     # --- GPT-E ---
                     gpt_e_res = results[1] if len(results) > 1 else None
                     if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
@@ -811,11 +817,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             old_profile = get_user_profile_fast(chat_id)
                             new_profile = {**old_profile, **changes}
                             gpt_e_changes = _detect_profile_changes(old_profile, new_profile)
-                            gpt_e_info = f"<b>GPT-E:</b> {len(gpt_e_changes)} שינויים מוצעים" if gpt_e_changes else "<b>GPT-E:</b> לא הוצעו שינויים"
+                            gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שינויים מוצעים" if gpt_e_changes else "GPT-E: רץ ולא הוצעו שינויים"
                         else:
-                            gpt_e_info = "<b>GPT-E:</b> לא הופעל או אין שינויים"
+                            gpt_e_info = "GPT-E: רץ ולא הוצעו שינויים"
                     else:
-                        gpt_e_info = "<b>GPT-E:</b> לא הופעל או שגיאה"
+                        # בדיקה אם GPT-E לא הופעל בגלל הספירה
+                        try:
+                            from chat_utils import get_user_stats_and_history
+                            stats, _ = get_user_stats_and_history(chat_id)
+                            total_messages = stats.get("total_messages", 0)
+                            if total_messages > 0:
+                                gpt_e_info = f"GPT-E: לא הופעל ({total_messages % 10}/10 הודעות)"
+                            else:
+                                gpt_e_info = "GPT-E: לא הופעל"
+                        except:
+                            gpt_e_info = "GPT-E: לא הופעל"
 
                     # --- Only send if at least one actually ran ---
                     should_send = bool(gpt_c_changes or gpt_d_changes or gpt_e_changes)
@@ -828,9 +844,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             gpt_c_changes=gpt_c_changes,
                             gpt_d_changes=gpt_d_changes,
                             gpt_e_changes=gpt_e_changes,
-                            gpt_c_info=f"<b>{gpt_c_info.replace('<b>', '').replace('</b>', '')}</b>",
-                            gpt_d_info=f"<b>{gpt_d_info.replace('<b>', '').replace('</b>', '')}</b>",
-                            gpt_e_info=gpt_e_info,
+                            gpt_c_info=f"<b>{gpt_c_info}</b>",
+                            gpt_d_info=f"<b>{gpt_d_info}</b>",
+                            gpt_e_info=f"<b>{gpt_e_info}</b>",
                             summary=summary
                         )
                 except Exception as notify_exc:

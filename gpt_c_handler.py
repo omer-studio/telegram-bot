@@ -91,11 +91,25 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
         result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
         try:
             from gpt_jsonl_logger import GPTJSONLLogger
+            # בניית response מלא עם כל המידע הנדרש
+            response_data = {
+                "id": getattr(response, "id", ""),
+                "choices": [
+                    {
+                        "message": {
+                            "content": content_raw,
+                            "role": "assistant"
+                        }
+                    }
+                ],
+                "usage": usage,
+                "model": response.model
+            }
             GPTJSONLLogger.log_gpt_call(
                 log_path="data/openai_calls.jsonl",
                 gpt_type="C",
                 request=completion_params,
-                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                response=response_data,
                 cost_usd=usage.get("cost_total", 0),
                 extra={"chat_id": chat_id, "message_id": message_id}
             )
@@ -168,11 +182,25 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
                 try:
                     from gpt_jsonl_logger import GPTJSONLLogger
+                    # בניית response מלא עם כל המידע הנדרש
+                    response_data = {
+                        "id": getattr(response, "id", ""),
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": content_raw,
+                                    "role": "assistant"
+                                }
+                            }
+                        ],
+                        "usage": usage,
+                        "model": response.model
+                    }
                     GPTJSONLLogger.log_gpt_call(
                         log_path="data/openai_calls.jsonl",
                         gpt_type="C",
                         request=completion_params,
-                        response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                        response=response_data,
                         cost_usd=usage.get("cost_total", 0),
                         extra={"chat_id": chat_id, "message_id": message_id}
                     )
@@ -186,12 +214,26 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 result = {"extracted_fields": {}, "usage": {}, "model": fallback_model}
                 try:
                     from gpt_jsonl_logger import GPTJSONLLogger
+                    # בניית response ריק במקרה שגיאה
+                    response_data = {
+                        "id": "",
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": f"[שגיאה: {fallback_error}]",
+                                    "role": "assistant"
+                                }
+                            }
+                        ],
+                        "usage": {},
+                        "model": fallback_model
+                    }
                     GPTJSONLLogger.log_gpt_call(
                         log_path="data/openai_calls.jsonl",
                         gpt_type="C",
                         request=completion_params,
-                        response=response.model_dump() if hasattr(response, 'model_dump') else {},
-                        cost_usd=usage.get("cost_total", 0),
+                        response=response_data,
+                        cost_usd=0,
                         extra={"chat_id": chat_id, "message_id": message_id}
                     )
                 except Exception as log_exc:
@@ -203,12 +245,26 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
             result = {"extracted_fields": {}, "usage": {}, "model": model}
             try:
                 from gpt_jsonl_logger import GPTJSONLLogger
+                # בניית response ריק במקרה שגיאה
+                response_data = {
+                    "id": "",
+                    "choices": [
+                        {
+                            "message": {
+                                "content": f"[שגיאה: {e}]",
+                                "role": "assistant"
+                            }
+                        }
+                    ],
+                    "usage": {},
+                    "model": model
+                }
                 GPTJSONLLogger.log_gpt_call(
                     log_path="data/openai_calls.jsonl",
                     gpt_type="C",
                     request=completion_params,
-                    response=response.model_dump() if hasattr(response, 'model_dump') else {},
-                    cost_usd=usage.get("cost_total", 0),
+                    response=response_data,
+                    cost_usd=0,
                     extra={"chat_id": chat_id, "message_id": message_id}
                 )
             except Exception as log_exc:

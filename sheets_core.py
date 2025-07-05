@@ -27,7 +27,10 @@ except ImportError:
             return None
 from config import setup_google_sheets, SUMMARY_FIELD, should_log_sheets_debug
 from notifications import send_error_notification
-from fields_dict import FIELDS_DICT
+try:
+    from fields_dict import FIELDS_DICT
+except ImportError:
+    FIELDS_DICT = {"dummy": "dummy"}
 
 # ================================
 # 🚀 מנגנון Cache לנתוני משתמשים
@@ -398,11 +401,7 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
         from utils import get_israel_time
         timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
         
-        # יצירת שורה חדשה עם מיקום נכון של chat_id
-        new_row = [""] * len(headers)  # שורה ריקה באורך הכותרות
-        new_row[chat_id_col - 1] = chat_id  # מיקום chat_id
-        
-        # ✅ שיפור: וידוא שכל העמודות הנדרשות קיימות
+        # ✅ שיפור: עבודה ישירה עם כותרות במקום מספרי עמודות
         required_fields = {
             "code_try": "1",
             "created_at": timestamp,
@@ -411,10 +410,20 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
             "name": ""
         }
         
-        for field, default_value in required_fields.items():
-            col_index = ensure_column_exists(sheet_states, field)
-            if col_index:
-                new_row[col_index - 1] = default_value  # -1 כי new_row הוא 0-based
+        # וידוא שכל העמודות הנדרשות קיימות
+        for field in required_fields.keys():
+            ensure_column_exists(sheet_states, field)
+        
+        # יצירת שורה חדשה לפי כותרות
+        new_row = [""] * len(headers)  # שורה ריקה באורך הכותרות
+        
+        # מילוי השדות לפי כותרות
+        for i, header in enumerate(headers):
+            header_lower = header.lower()
+            if header_lower == "chat_id":
+                new_row[i] = chat_id
+            elif header_lower in required_fields:
+                new_row[i] = required_fields[header_lower]
         
         # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
         # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
@@ -691,7 +700,7 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
                     debug_log(f"Profile data parsed but not a dict for user {chat_id}: {type(data)}")
                     state["profile_data"] = {}
             except json.JSONDecodeError as json_err:
-                logging.error(f"[sheets_core] JSON parsing error: {json_err} | raw: {raw}")
+                debug_log(f"JSON parsing error: {json_err} | raw: {raw}")
                 state["profile_data"] = {}
             except Exception as e:
                 debug_log(f"Unexpected error parsing profile_data for user {chat_id}: {e} | Data: {state['profile_data'][:200]}...")
@@ -771,8 +780,10 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
             
             # חיפוש עמודת last_updated
             last_updated_col = None
-            if "last_updated" in field_to_col:
-                last_updated_col = field_to_col["last_updated"]
+            for i, header in enumerate(headers):
+                if header.lower() == "last_updated":
+                    last_updated_col = i + 1  # gspread uses 1-based indexing
+                    break
             
             if last_updated_col:
                 sheet_states.update_cell(row_index, last_updated_col, timestamp)
@@ -1078,8 +1089,7 @@ def ensure_name_column_exists(sheet):
     בודק אם עמודת 'name' קיימת בגיליון ומוסיף אותה אם לא
     """
     try:
-        col_index = ensure_column_exists(sheet, "name")
-        return col_index is not None
+        return ensure_column_exists(sheet, "name")
     except Exception as e:
         debug_log(f"Error ensuring name column exists: {e}")
         return False
@@ -1093,10 +1103,10 @@ def is_user_exists(chat_id: str) -> bool:
         debug_log(f"Error checking if user exists {chat_id}: {e}")
         return False
 
-def ensure_column_exists(sheet, column_name: str) -> int:
+def ensure_column_exists(sheet, column_name: str) -> bool:
     """
     בודק אם עמודה קיימת בגיליון ומוסיף אותה אם לא
-    מחזיר את מספר העמודה (1-based index)
+    מחזיר True אם העמודה קיימת או נוספה בהצלחה
     """
     try:
         # קריאת הכותרות
@@ -1105,22 +1115,22 @@ def ensure_column_exists(sheet, column_name: str) -> int:
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")
-            return None
+            return False
         
         headers = all_values[0]
         
         # בדיקה אם העמודה קיימת
-        for i, header in enumerate(headers):
+        for header in headers:
             if header.lower() == column_name.lower():
-                return i + 1  # gspread uses 1-based indexing
+                return True  # העמודה כבר קיימת
         
         # העמודה לא קיימת - מוסיף אותה בסוף
         debug_log(f"Adding '{column_name}' column to sheet")
         new_col_index = len(headers) + 1
         sheet.update_cell(1, new_col_index, column_name)
         debug_log(f"Added '{column_name}' column at position {new_col_index}")
-        return new_col_index
+        return True
             
     except Exception as e:
         debug_log(f"Error ensuring column '{column_name}' exists: {e}")
-        return None 
+        return False 
