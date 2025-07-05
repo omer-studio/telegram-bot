@@ -60,6 +60,18 @@ import requests
 from gpt_c_logger import clear_gpt_c_html_log
 from config import DATA_DIR, PRODUCTION_PORT
 
+# 🧠 Memory logging helper
+def log_memory_usage(stage: str):
+    """Log current memory usage"""
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        print(f"📊 Memory usage at {stage}: {memory_mb:.1f} MB")
+        logging.info(f"[MEMORY] {stage}: {memory_mb:.1f} MB")
+    except Exception as e:
+        print(f"⚠️ Could not log memory usage: {e}")
+
 # 🚨 בדיקת post-deploy אוטומטית - הפעלת מערכת rollback
 def run_post_deploy_check():
     """מריץ בדיקת post-deploy אם זה deploy חדש בסביבת ייצור - OPTIMIZED for memory"""
@@ -114,7 +126,9 @@ def run_post_deploy_check():
         print("[DEPLOY] ⚠️ ממשיך להפעלת הבוט למרות שגיאת verification (memory-safe mode)")
 
 # הפעלת הבדיקה מיד כשהקובץ נטען
+log_memory_usage("after_imports")
 run_post_deploy_check()
+log_memory_usage("after_post_deploy_check")
 
 # 🪟 תיקון: מניעת setup מרובה
 _bot_setup_completed = False
@@ -172,6 +186,7 @@ async def lifespan(app: FastAPI):
     
     # וודא שהבוט מוגדר
     get_bot_app()
+    log_memory_usage("after_bot_setup")
     
     try:
         health = health_check()
@@ -199,10 +214,9 @@ async def lifespan(app: FastAPI):
         if recovered_count > 0:
             print(f"[STARTUP] ✅ נשלחו הודעות התאוששות ל-{recovered_count} משתמשים!")
         else:
-            print("[STARTUP] ℹ️  אין משתמשים שמחכים להודעות התאוששות")
+            print("[STARTUP] ℹ️ אין משתמשים שמחכים להודעות התאוששות")
     except Exception as e:
         print(f"[STARTUP] ⚠️ שגיאה בשליחת הודעות התאוששות: {e}")
-        # לא עוצרים את ההפעלה בגלל זה
     
     # --- הגדרת webhook בטלגרם ---
     try:
@@ -243,40 +257,44 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[STARTUP] שגיאה בהגדרת webhook בטלגרם: {e}")
     
-            # 🚨 בדיקת תפקוד קריטית אחרי הפעלה מלאה
+    log_memory_usage("after_webhook_setup")
+    
+    # 🚨 בדיקת תפקוד קריטית אחרי הפעלה מלאה
+    try:
+        print("🔍 מבצע בדיקת תפקוד קריטית אחרי הפעלה...")
+        
+        # נותן לכל המערכות רגע להיות מוכנות
+        time.sleep(3)
+        
+        # בדיקה בטוחה של auto_rollback
         try:
-            print("🔍 מבצע בדיקת תפקוד קריטית אחרי הפעלה...")
-            
-            # נותן לכל המערכות רגע להיות מוכנות
-            time.sleep(3)
-            
-            # בדיקה בטוחה של auto_rollback
-            try:
-                from auto_rollback import emergency_rollback_if_broken
-                rollback_result = emergency_rollback_if_broken()
-                if rollback_result:
-                    print("✅ בדיקת תפקוד קריטית עברה בהצלחה!")
-                else:
-                    print("🚨 בדיקת תפקוד זיהתה בעיות - בדוק התראות אדמין!")
-            except ImportError as import_error:
-                print(f"⚠️ auto_rollback לא זמין: {import_error}")
-                print("✅ ממשיך ללא בדיקת rollback")
-            except Exception as rollback_error:
-                print(f"⚠️ שגיאה בבדיקת rollback: {rollback_error}")
-                print("✅ ממשיך ללא בדיקת rollback")
-        except Exception as health_check_error:
-            print(f"⚠️ בדיקת תפקוד קריטית נכשלה: {health_check_error}")
-            # נשלח התראה לאדמין
-            try:
-                from notifications import send_admin_notification
-                send_admin_notification(
-                    f"🚨 בדיקת תפקוד קריטית נכשלה בהפעלה!\n\n"
-                    f"❌ שגיאה: {health_check_error}\n"
-                    f"⚠️ ייתכן שהבוט לא עובד תקין!",
-                    urgent=True
-                )
-            except Exception:
-                pass
+            from auto_rollback import emergency_rollback_if_broken
+            rollback_result = emergency_rollback_if_broken()
+            if rollback_result:
+                print("✅ בדיקת תפקוד קריטית עברה בהצלחה!")
+            else:
+                print("🚨 בדיקת תפקוד זיהתה בעיות - בדוק התראות אדמין!")
+        except ImportError as import_error:
+            print(f"⚠️ auto_rollback לא זמין: {import_error}")
+            print("✅ ממשיך ללא בדיקת rollback")
+        except Exception as rollback_error:
+            print(f"⚠️ שגיאה בבדיקת rollback: {rollback_error}")
+            print("✅ ממשיך ללא בדיקת rollback")
+    except Exception as health_check_error:
+        print(f"⚠️ בדיקת תפקוד קריטית נכשלה: {health_check_error}")
+        # נשלח התראה לאדמין
+        try:
+            from notifications import send_admin_notification
+            send_admin_notification(
+                f"🚨 בדיקת תפקוד קריטית נכשלה בהפעלה!\n\n"
+                f"❌ שגיאה: {health_check_error}\n"
+                f"⚠️ ייתכן שהבוט לא עובד תקין!",
+                urgent=True
+            )
+        except Exception:
+            pass
+
+    log_memory_usage("startup_complete")
     
     # הודעת הצלחה ברורה כשהכל מוכן
     print('\n' + '='*80)

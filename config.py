@@ -377,7 +377,8 @@ def setup_google_sheets():
                 print(f"[DEBUG] Retrying in {delay} seconds...")
                 time.sleep(delay)
     print(f"[FATAL] All attempts to access Google Sheets failed.")
-    raise last_exception
+    logging.critical("[FATAL] All attempts to access Google Sheets failed.")
+    return None, None, None, None
 
 
 # ⚠️ יש להשתמש אך ורק במפתחות מתוך FIELDS_DICT! אין להכניס שמות שדה קשיחים חדשים כאן או בקוד אחר.

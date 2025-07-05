@@ -95,6 +95,6 @@ def approve_user(chat_id):
         logging.error(f"[SheetsHandler] approve_user wrapper failed for {chat_id}: {e}")
         try:
             send_error_notification(error_message=f"approve_user wrapper error: {e}", chat_id=str(chat_id))
-        except Exception:
-            pass
+        except Exception as notify_err:
+            logging.warning(f"[SheetsHandler] שגיאה בשליחת התראה לאדמין: {notify_err}")
         return {"success": False, "error": str(e)}

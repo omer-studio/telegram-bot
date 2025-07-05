@@ -254,14 +254,22 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         try:
             # חיפוש JSON בתגובה
             if content.startswith('{') and content.endswith('}'):
-                changes = json.loads(content)
+                try:
+                    changes = json.loads(content)
+                except json.JSONDecodeError as e:
+                    logging.error(f"[GPT_E] JSON decode error: {e} | Content: {content[:200]}")
+                    changes = {}
             else:
                 # חיפוש JSON בתוך הטקסט
                 start_idx = content.find('{')
                 end_idx = content.rfind('}') + 1
                 if start_idx != -1 and end_idx > start_idx:
                     json_str = content[start_idx:end_idx]
-                    changes = json.loads(json_str)
+                    try:
+                        changes = json.loads(json_str)
+                    except json.JSONDecodeError as e:
+                        logging.error(f"[GPT_E] JSON decode error: {e} | Content: {json_str[:200]}")
+                        changes = {}
                 else:
                     changes = {}
             
@@ -294,9 +302,9 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
             else:
                 logger.info(f"[gpt_e] No changes to apply for chat_id={chat_id}")
                 
-        except json.JSONDecodeError as e:
-            result['errors'].append(f"Failed to parse JSON response: {e}")
-            logger.error(f"[gpt_e] JSON parsing error for chat_id={chat_id}: {e}")
+        except Exception as e:
+            result['errors'].append(f"Failed to parse changes: {e}")
+            logger.error(f"[gpt_e] Error parsing changes for chat_id={chat_id}: {e}")
             return result
         
         # שלב 7: עדכון סטטיסטיקות

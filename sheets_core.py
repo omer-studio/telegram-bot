@@ -402,16 +402,19 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
         new_row = [""] * len(headers)  # שורה ריקה באורך הכותרות
         new_row[chat_id_col - 1] = chat_id  # מיקום chat_id
         
-        # הוספת ערכים נוספים אם יש עמודות מתאימות
-        for i, header in enumerate(headers):
-            if header.lower() == "code_try":
-                new_row[i] = "1"
-            elif header.lower() in ["created_at", "last_updated"]:
-                new_row[i] = timestamp
-            elif header.lower() == "gpt_c_run_count":
-                new_row[i] = "0"
-            elif header.lower() == "name":
-                new_row[i] = ""  # שם ריק כברירת מחדל
+        # ✅ שיפור: וידוא שכל העמודות הנדרשות קיימות
+        required_fields = {
+            "code_try": "1",
+            "created_at": timestamp,
+            "last_updated": timestamp,
+            "gpt_c_run_count": "0",
+            "name": ""
+        }
+        
+        for field, default_value in required_fields.items():
+            col_index = ensure_column_exists(sheet_states, field)
+            if col_index:
+                new_row[col_index - 1] = default_value  # -1 כי new_row הוא 0-based
         
         # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
         # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
@@ -680,19 +683,15 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
         # טיפול מיוחד ב-profile_data (JSON) עם לוגים מפורטים
         if state["profile_data"]:
             try:
-                profile_data_str = state["profile_data"].strip()
-                if profile_data_str.startswith("{") and profile_data_str.endswith("}"):
-                    parsed_data = json.loads(profile_data_str)
-                    if isinstance(parsed_data, dict):
-                        state["profile_data"] = parsed_data
-                    else:
-                        debug_log(f"Profile data parsed but not a dict for user {chat_id}: {type(parsed_data)}")
-                        state["profile_data"] = {}
+                raw = state["profile_data"].strip()
+                data = json.loads(raw)
+                if isinstance(data, dict):
+                    state["profile_data"] = data
                 else:
-                    debug_log(f"Profile data doesn't look like JSON for user {chat_id}: {profile_data_str[:100]}...")
+                    debug_log(f"Profile data parsed but not a dict for user {chat_id}: {type(data)}")
                     state["profile_data"] = {}
-            except json.JSONDecodeError as e:
-                debug_log(f"JSON decode error in profile_data for user {chat_id}: {e} | Data: {state['profile_data'][:200]}...")
+            except json.JSONDecodeError as json_err:
+                logging.error(f"[sheets_core] JSON parsing error: {json_err} | raw: {raw}")
                 state["profile_data"] = {}
             except Exception as e:
                 debug_log(f"Unexpected error parsing profile_data for user {chat_id}: {e} | Data: {state['profile_data'][:200]}...")
@@ -747,37 +746,11 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
             debug_log(f"User {chat_id} not found in user_states")
             return False
         
-        # מיפוי דינמי של שדות לעמודות לפי כותרות
-        field_to_col = {}
-        for i, header in enumerate(headers):
-            field_to_col[header.lower()] = i + 1  # gspread uses 1-based indexing
-        
         updated_fields = []
         for field, value in updates.items():
-            # חיפוש העמודה לפי שם השדה
-            col_index = None
+            # ✅ שיפור: וידוא שהעמודה קיימת לפני עדכון
+            col_index = ensure_column_exists(sheet_states, field)
             
-            # חיפוש ישיר
-            if field.lower() in field_to_col:
-                col_index = field_to_col[field.lower()]
-            
-            # חיפוש עם וריאציות נפוצות
-            elif field == "code_try" and "code_try" in field_to_col:
-                col_index = field_to_col["code_try"]
-            elif field == "summary" and "summary" in field_to_col:
-                col_index = field_to_col["summary"]
-            elif field == "last_updated" and "last_updated" in field_to_col:
-                col_index = field_to_col["last_updated"]
-            elif field == "profile_data" and "profile_data" in field_to_col:
-                col_index = field_to_col["profile_data"]
-            elif field == "created_at" and "created_at" in field_to_col:
-                col_index = field_to_col["created_at"]
-            elif field == "gpt_c_run_count" and "gpt_c_run_count" in field_to_col:
-                col_index = field_to_col["gpt_c_run_count"]
-            elif field == "name" and "name" in field_to_col:
-                col_index = field_to_col["name"]
-            
-            # עדכון התא אם נמצאה העמודה
             if col_index:
                 if field == "profile_data" and isinstance(value, dict):
                     value = json.dumps(value, ensure_ascii=False)
@@ -788,6 +761,8 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
                 # לוג מיוחד לעדכון השם
                 if field.lower() == "name":
                     debug_log(f"Updated name for user {chat_id}: '{value}'")
+            else:
+                debug_log(f"⚠️ Could not ensure column '{field}' exists for user {chat_id}")
         
         if updated_fields and "last_updated" not in updates:
             # עדכון otomatik של last_updated אם לא עודכן ידנית
@@ -847,8 +822,11 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
             return -1
         
         if not code_try_col:
-            debug_log("code_try column not found")
-            return -1
+            debug_log("code_try column not found - creating it")
+            code_try_col = ensure_column_exists(sheet_states, "code_try")
+            if not code_try_col:
+                debug_log("Failed to create code_try column")
+                return -1
 
         # מציאת השורה של המשתמש בגיליון
         row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
@@ -1100,30 +1078,8 @@ def ensure_name_column_exists(sheet):
     בודק אם עמודת 'name' קיימת בגיליון ומוסיף אותה אם לא
     """
     try:
-        # קריאת הכותרות
-        _increment_api_call()
-        all_values = sheet.get_all_values()
-        
-        if not all_values or len(all_values) < 1:
-            debug_log("Sheet is empty or has no headers")
-            return False
-        
-        headers = all_values[0]
-        
-        # בדיקה אם עמודת name קיימת
-        name_col_exists = any(header.lower() == "name" for header in headers)
-        
-        if not name_col_exists:
-            debug_log("Adding 'name' column to sheet")
-            # הוספת עמודה חדשה בסוף
-            new_col_index = len(headers) + 1
-            sheet.update_cell(1, new_col_index, "name")
-            debug_log(f"Added 'name' column at position {new_col_index}")
-            return True
-        else:
-            debug_log("'name' column already exists")
-            return True
-            
+        col_index = ensure_column_exists(sheet, "name")
+        return col_index is not None
     except Exception as e:
         debug_log(f"Error ensuring name column exists: {e}")
         return False
@@ -1135,4 +1091,36 @@ def is_user_exists(chat_id: str) -> bool:
         return bool(state.get("chat_id"))
     except Exception as e:
         debug_log(f"Error checking if user exists {chat_id}: {e}")
-        return False 
+        return False
+
+def ensure_column_exists(sheet, column_name: str) -> int:
+    """
+    בודק אם עמודה קיימת בגיליון ומוסיף אותה אם לא
+    מחזיר את מספר העמודה (1-based index)
+    """
+    try:
+        # קריאת הכותרות
+        _increment_api_call()
+        all_values = sheet.get_all_values()
+        
+        if not all_values or len(all_values) < 1:
+            debug_log("Sheet is empty or has no headers")
+            return None
+        
+        headers = all_values[0]
+        
+        # בדיקה אם העמודה קיימת
+        for i, header in enumerate(headers):
+            if header.lower() == column_name.lower():
+                return i + 1  # gspread uses 1-based indexing
+        
+        # העמודה לא קיימת - מוסיף אותה בסוף
+        debug_log(f"Adding '{column_name}' column to sheet")
+        new_col_index = len(headers) + 1
+        sheet.update_cell(1, new_col_index, column_name)
+        debug_log(f"Added '{column_name}' column at position {new_col_index}")
+        return new_col_index
+            
+    except Exception as e:
+        debug_log(f"Error ensuring column '{column_name}' exists: {e}")
+        return None 

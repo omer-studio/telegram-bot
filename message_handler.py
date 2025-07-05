@@ -40,6 +40,7 @@ from concurrent_monitor import start_monitoring_user, update_user_processing_sta
 from notifications import mark_user_active
 from chat_utils import should_send_time_greeting, get_time_greeting_instruction
 import profile_utils as _pu
+import traceback
 
 def format_text_for_telegram(text):
     """
@@ -497,7 +498,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
             except Exception as e:
                 logging.error(f"[MESSAGE_HANDLER] Error starting monitoring: {e}")
-                import traceback
                 logging.error(f"[MESSAGE_HANDLER] Traceback: {traceback.format_exc()}")
                 await send_system_message(update, chat_id, "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות.")
                 return
@@ -522,8 +522,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if 'chat_id' in locals():
                     # הערה: כאן אין הודעה מקורית כי השגיאה היא בextraction של ההודעה עצמה
                     safe_add_user_to_recovery_list(str(chat_id), f"Message extraction error: {str(ex)[:50]}", "")
-            except Exception:
-                pass
+            except Exception as e:
+                logging.warning(f"[handle_message] שגיאה ברישום לרשימת התאוששות: {e}")
             
             await handle_critical_error(ex, None, None, update)
             await end_monitoring_user(str(chat_id) if 'chat_id' in locals() else "unknown", False)
@@ -838,6 +838,63 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # עדכון מידע עבור ניטור ביצועים
                 await update_user_processing_stage(str(chat_id), "completed")
+                
+                # 📊 רישום לגוגל שיטס
+                try:
+                    # חילוץ נתוני GPT-A
+                    main_usage = gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {}
+                    
+                    # חילוץ נתוני GPT-C
+                    extract_usage = {}
+                    if gpt_c_result and not isinstance(gpt_c_result, Exception):
+                        extract_usage = gpt_c_result.get("usage", {}) if isinstance(gpt_c_result, dict) else {}
+                    
+                    # חילוץ נתוני GPT-D
+                    gpt_d_usage = {}
+                    if results and len(results) > 0 and not isinstance(results[0], Exception):
+                        gpt_d_res = results[0]
+                        if isinstance(gpt_d_res, tuple) and len(gpt_d_res) > 1:
+                            gpt_d_usage = gpt_d_res[1] if isinstance(gpt_d_res[1], dict) else {}
+                    
+                    # חילוץ נתוני GPT-E
+                    gpt_e_usage = {}
+                    if results and len(results) > 1 and not isinstance(results[1], Exception):
+                        gpt_e_res = results[1]
+                        if isinstance(gpt_e_res, dict):
+                            gpt_e_usage = gpt_e_res.get("usage", {})
+                    
+                    # חישוב עלויות
+                    cost_usd = main_usage.get("cost_total", 0) + summary_usage.get("cost_total", 0) + extract_usage.get("cost_total", 0) + gpt_d_usage.get("cost_total", 0) + gpt_e_usage.get("cost_total", 0)
+                    cost_ils = main_usage.get("cost_ils", 0) + summary_usage.get("cost_ils", 0) + extract_usage.get("cost_ils", 0) + gpt_d_usage.get("cost_ils", 0) + gpt_e_usage.get("cost_ils", 0)
+                    
+                    # חישוב טוקנים
+                    total_tokens = main_usage.get("total_tokens", 0) + summary_usage.get("total_tokens", 0) + extract_usage.get("total_tokens", 0) + gpt_d_usage.get("total_tokens", 0) + gpt_e_usage.get("total_tokens", 0)
+                    prompt_tokens_total = main_usage.get("prompt_tokens", 0) + summary_usage.get("prompt_tokens", 0) + extract_usage.get("prompt_tokens", 0) + gpt_d_usage.get("prompt_tokens", 0) + gpt_e_usage.get("prompt_tokens", 0)
+                    completion_tokens_total = main_usage.get("completion_tokens", 0) + summary_usage.get("completion_tokens", 0) + extract_usage.get("completion_tokens", 0) + gpt_d_usage.get("completion_tokens", 0) + gpt_e_usage.get("completion_tokens", 0)
+                    cached_tokens = main_usage.get("cached_tokens", 0) + summary_usage.get("cached_tokens", 0) + extract_usage.get("cached_tokens", 0) + gpt_d_usage.get("cached_tokens", 0) + gpt_e_usage.get("cached_tokens", 0)
+                    
+                    # רישום לגוגל שיטס
+                    log_to_sheets(
+                        message_id=message_id,
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        reply_text=bot_reply,
+                        reply_summary=summary_result.get("summary", "") if summary_result else "",
+                        main_usage=main_usage,
+                        summary_usage=summary_usage,
+                        extract_usage=extract_usage,
+                        total_tokens=total_tokens,
+                        cost_usd=cost_usd,
+                        cost_ils=cost_ils,
+                        prompt_tokens_total=prompt_tokens_total,
+                        completion_tokens_total=completion_tokens_total,
+                        cached_tokens=cached_tokens,
+                        gpt_d_usage=gpt_d_usage,
+                        gpt_e_usage=gpt_e_usage
+                    )
+                    logging.info(f"📊 [SHEETS_LOG] נשלח לגוגל שיטס | chat_id={chat_id} | message_id={message_id}")
+                except Exception as log_exc:
+                    logging.error(f"❌ [SHEETS_LOG] שגיאה ברישום לגוגל שיטס: {log_exc}")
                 
                 logging.info(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
                 print(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")

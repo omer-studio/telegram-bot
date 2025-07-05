@@ -51,7 +51,12 @@ def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
     """טוען במהירות את הפרופיל מקובץ JSON המקומי."""
     try:
         with open(USER_PROFILES_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            raw = f.read()
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as json_err:
+            logging.error(f"[profile_utils] JSON parsing error: {json_err} | raw: {raw}")
+            data = {}
         return data.get(str(chat_id), {})
     except Exception:
         return {}
@@ -172,19 +177,22 @@ def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str,
         if row_index == len(all_values) + 1:
             sheet.update_cell(row_index, chat_id_col, chat_id)
 
-        field_to_col = {h.lower(): i + 1 for i, h in enumerate(headers)}
+        # ✅ שיפור: וידוא שכל העמודות קיימות לפני עדכון
         for field, value in local_profile.items():
-            col_index = field_to_col.get(field.lower())
-            if not col_index:
-                continue
             try:
-                sheet.update_cell(row_index, col_index, str(value))
-                # לוג מיוחד לעדכון הסיכום
-                if field.lower() == "summary":
-                    logging.info(f"[SHEETS_SYNC] עודכן סיכום בגוגל שיטס למשתמש {chat_id}: '{value}'")
-                # לוג מיוחד לעדכון השם
-                elif field.lower() == "name":
-                    logging.info(f"[SHEETS_SYNC] עודכן שם בגוגל שיטס למשתמש {chat_id}: '{value}'")
+                from sheets_core import ensure_column_exists
+                col_index = ensure_column_exists(sheet, field)
+                
+                if col_index:
+                    sheet.update_cell(row_index, col_index, str(value))
+                    # לוג מיוחד לעדכון הסיכום
+                    if field.lower() == "summary":
+                        logging.info(f"[SHEETS_SYNC] עודכן סיכום בגוגל שיטס למשתמש {chat_id}: '{value}'")
+                    # לוג מיוחד לעדכון השם
+                    elif field.lower() == "name":
+                        logging.info(f"[SHEETS_SYNC] עודכן שם בגוגל שיטס למשתמש {chat_id}: '{value}'")
+                else:
+                    logging.warning(f"⚠️ לא ניתן ליצור עמודה '{field}' עבור משתמש {chat_id}")
             except Exception as e:
                 logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
     except Exception as exc:

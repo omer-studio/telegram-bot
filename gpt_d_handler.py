@@ -61,23 +61,9 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         
         # ניסיון לפרס JSON
         try:
-            if content and content.strip():
-                content_clean = content.strip()
-                if content_clean.startswith("{") and content_clean.endswith("}"):
-                    extracted_fields = json.loads(content_clean)
-                    if not isinstance(extracted_fields, dict):
-                        logging.warning(f"[GPT_D] JSON parsed but not a dict: {type(extracted_fields)}")
-                        extracted_fields = {}
-                else:
-                    logging.warning(f"[GPT_D] Content doesn't look like JSON: {content_clean[:100]}...")
-                    extracted_fields = {}
-            else:
-                extracted_fields = {}
-        except json.JSONDecodeError as e:
-            logging.error(f"[GPT_D] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...")
-            extracted_fields = {}
-        except Exception as e:
-            logging.error(f"[GPT_D] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...")
+            extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
+        except json.JSONDecodeError as json_err:
+            logging.error(f"[gpt_d] JSON parsing error: {json_err} | content: {content}")
             extracted_fields = {}
         
         # הדפסת מידע חשוב על מיזוג נתונים (תמיד יופיע!)

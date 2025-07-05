@@ -155,10 +155,10 @@ def render_entry(idx: int, rec: Dict[str, Any]) -> str:
         <b>טוקנים:</b> {total_toks} (prompt: {prompt_toks}, completion: {completion_toks}, cached: {cached_toks})
       </div>
       <button class=\"button\" onclick=\"toggle('{req_id}')\">▶ בקשה</button>
-      <button class=\"copy-button\" onclick=\"showJsonModal('JSON גולמי - בקשה', {json.dumps(request, ensure_ascii=False)})\">📋 העתק JSON גולמי</button>
+      <button class=\"copy-button\" onclick=\"showJsonModal('JSON גולמי - בקשה', {json.dumps(rec['request'], ensure_ascii=False)})\">📋 העתק JSON גולמי</button>
       <div id=\"{req_id}\" style=\"display:none;\">{request_block}</div>
       <button class=\"button\" onclick=\"toggle('{res_id}')\">▶ תשובה</button>
-      <button class=\"copy-button\" onclick=\"showJsonModal('JSON גולמי - תשובה', {json.dumps(response, ensure_ascii=False)})\">📋 העתק JSON גולמי</button>
+      <button class=\"copy-button\" onclick=\"showJsonModal('JSON גולמי - תשובה', {json.dumps(rec['response'], ensure_ascii=False)})\">📋 העתק JSON גולמי</button>
       <div id=\"{res_id}\" style=\"display:none;\">{response_block}</div>
     </td>
     <td class=\"gpt-cell gpt{gpt_type}\">G<br>P<br>T<br>{gpt_type}</td>

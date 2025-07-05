@@ -401,21 +401,37 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
     print(f"🚀 [SENDING] Request to {model}...")
     print(f"🔍 [GPT_REQUEST_DEBUG] === END ANALYSIS ===\n")
     
-    # שלב 2: קריאה ל-GPT
+    # שלב 2: הפעלת GPT ב-thread נפרד
     gpt_start_time = time.time()
+    log_memory_usage("before_gpt_call")
+    
     try:
-        # 🔬 תזמון הטוקן הראשון - צריך להשתמש ב-streaming לזה
-        with measure_llm_latency(model):
-            response = litellm.completion(**completion_params)
-        gpt_end_time = time.time()
-        gpt_pure_latency = gpt_end_time - gpt_start_time
+        # 🚨 הגדלת timeout ל-45 שניות (במקום 30) לטיפול ב-latency גבוה
+        GPT_TIMEOUT_SECONDS = 45
+        
+        # הרצת GPT ב-thread עם timeout מתקדם
+        loop = asyncio.get_event_loop()
+        gpt_result = loop.run_in_executor(
+            None, 
+            get_main_response_sync, 
+            full_messages, 
+            chat_id, 
+            message_id, 
+            use_extra_emotion, 
+            filter_reason,
+            match_type
+        )
+        
+        gpt_duration = time.time() - gpt_start_time
+        log_memory_usage("after_gpt_call")
+        logging.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
         
         # שלב 3: עיבוד התשובה
         processing_start_time = time.time()
         
         # 🔬 רישום הטוקן הראשון מבוטל זמנית
         
-        bot_reply = response.choices[0].message.content.strip()
+        bot_reply = gpt_result["bot_reply"]
         
         # 🆕 ניקוי תשובה מטקסט טכני ומאחורי הקלעים
         bot_reply = clean_bot_response(bot_reply)
@@ -426,7 +442,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         # גם ניקוי תגי br עם attributes שונים
         bot_reply = re.sub(r'<br\s*/?>', '\n', bot_reply)
         
-        usage = normalize_usage_dict(response.usage, response.model)
+        usage = gpt_result["usage"]
         
         # הוספת נתוני עלות מדויקים ל-usage על סמך completion_response
         try:
@@ -434,8 +450,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
                 prompt_tokens=usage.get("prompt_tokens", 0),
                 completion_tokens=usage.get("completion_tokens", 0),
                 cached_tokens=usage.get("cached_tokens", 0),
-                model_name=response.model,
-                completion_response=response
+                model_name=gpt_result["model"],
+                completion_response=gpt_result
             )
             usage.update(cost_info)
         except Exception as _cost_e:
@@ -445,8 +461,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         print(f"⚡ [TIMING] Processing time: {processing_time:.3f}s")
         
         if should_log_debug_prints():
-            print(f"[GPT_A_RESPONSE] {len(bot_reply)} chars from {response.model}")
-        print(f"⚡ [DETAILED_TIMING] GPT pure latency: {gpt_pure_latency:.3f}s | Model: {model}")
+            print(f"[GPT_A_RESPONSE] {len(bot_reply)} chars from {gpt_result['model']}")
+        print(f"⚡ [DETAILED_TIMING] GPT pure latency: {gpt_duration:.3f}s | Model: {gpt_result['model']}")
         
         # שלב 4: חישוב עלויות
         billing_start_time = time.time()
@@ -455,7 +471,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         if 'cost_info' in locals():
             cost_usd = cost_info.get("cost_total", 0.0)
             if cost_usd and cost_usd > 0:
-                billing_status = billing_guard.add_cost(cost_usd, response.model, "paid" if use_extra_emotion else "free")
+                billing_status = billing_guard.add_cost(cost_usd, gpt_result["model"], "paid" if use_extra_emotion else "free")
                 
                 # התראות לאדמין
                 if billing_status.get("warnings"):
@@ -466,7 +482,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
                 status = billing_guard.get_current_status()
                 alert_billing_issue(
                     cost_usd=cost_usd,
-                    model_name=response.model,
+                    model_name=gpt_result["model"],
                     tier="paid" if use_extra_emotion else "free",
                     daily_usage=status["daily_usage"],
                     monthly_usage=status["monthly_usage"],
@@ -479,7 +495,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         
         # סיכום זמנים
         total_time = time.time() - total_start_time
-        print(f"📊 [TIMING_SUMMARY] Total: {total_time:.3f}s | GPT: {gpt_pure_latency:.3f}s | Prep: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
+        print(f"📊 [TIMING_SUMMARY] Total: {total_time:.3f}s | GPT: {gpt_duration:.3f}s | Prep: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
         
         # 🆕 בדיקה אם התשובה מכילה שאלת פרופיל והתחלת פסק זמן
         if chat_id and detect_profile_question_in_response(bot_reply):
@@ -489,11 +505,11 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         result = {
             "bot_reply": bot_reply, 
             "usage": usage, 
-            "model": response.model,
+            "model": gpt_result["model"],
             "used_extra_emotion": use_extra_emotion,
             "filter_reason": filter_reason,
             "match_type": match_type,
-            "gpt_pure_latency": gpt_pure_latency,
+            "gpt_pure_latency": gpt_duration,
             "total_time": total_time,
             "prep_time": prep_time,
             "processing_time": processing_time,
@@ -505,7 +521,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
                 log_path="data/openai_calls.jsonl",
                 gpt_type="A",
                 request=completion_params,
-                response=response.model_dump() if hasattr(response, 'model_dump') else {},
+                response=gpt_result["model_dump"] if hasattr(gpt_result, 'model_dump') else {},
                 cost_usd=usage.get("cost_total", 0),
                 extra={"chat_id": chat_id, "message_id": message_id}
             )
@@ -514,7 +530,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         return result
         
     except Exception as e:
-        logging.error(f"[gpt_a] שגיאה במודל {model}: {e}")
+        logging.error(f"[gpt_a] שגיאה במודל {gpt_result['model']}: {e}")
         
         # שליחת הודעת שגיאה טכנית לאדמין
         send_error_notification(
@@ -544,7 +560,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         return {
             "bot_reply": error_reply, 
             "usage": {}, 
-            "model": model,
+            "model": gpt_result["model"],
             "used_extra_emotion": use_extra_emotion,
             "filter_reason": filter_reason,
             "match_type": match_type,
@@ -584,18 +600,15 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         
         # הרצת GPT ב-thread עם timeout מתקדם
         loop = asyncio.get_event_loop()
-        gpt_result = await asyncio.wait_for(
-            loop.run_in_executor(
-                None, 
-                get_main_response_sync, 
-                full_messages, 
-                chat_id, 
-                message_id, 
-                use_extra_emotion, 
-                filter_reason,
-                match_type
-            ),
-            timeout=GPT_TIMEOUT_SECONDS
+        gpt_result = loop.run_in_executor(
+            None, 
+            get_main_response_sync, 
+            full_messages, 
+            chat_id, 
+            message_id, 
+            use_extra_emotion, 
+            filter_reason,
+            match_type
         )
         
         gpt_duration = time.time() - gpt_start_time
@@ -802,3 +815,15 @@ def clean_bot_response(bot_reply: str) -> str:
         return "אני כאן איתך. מה עולה לך כרגע? 🤔"
     
     return cleaned_reply
+
+# 🧠 Memory logging helper
+def log_memory_usage(stage: str):
+    """Log current memory usage"""
+    try:
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        logging.info(f"[MEMORY] GPT-A {stage}: {memory_mb:.1f} MB")
+    except Exception as e:
+        logging.warning(f"Could not log memory usage: {e}")

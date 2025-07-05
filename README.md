@@ -607,6 +607,24 @@ GENTLE_REMINDER_MESSAGE = "ההודעה החדשה שלך כאן"
 
 **תוצאה:** עכשיו כל הודעה נשמרת רק פעם אחת בגיליון, בשורה אחת כמו שצריך.
 
+### תיקון הודעות לא מתועדות בגוגל שיטס (יולי 2025)
+**בעיה:** הודעות חדשות הפסיקו להיות מתועדות בלשונית log שבגוגל שיטס.
+
+**סיבה:** הקריאה ל-`log_to_sheets` הוסרה לגמרי במקום לתקן את הכפילות.
+
+**תיקון:** הוספתי בחזרה את הקריאה ל-`log_to_sheets` עם כל הנתונים הנדרשים:
+- נתוני GPT-A (main_usage)
+- נתוני GPT-B (summary_usage) 
+- נתוני GPT-C (extract_usage)
+- נתוני GPT-D (gpt_d_usage)
+- נתוני GPT-E (gpt_e_usage)
+- חישוב סכומי עלויות וטוקנים
+
+**קבצים שהשתנו:**
+- `message_handler.py` - הוספתי קריאה ל-`log_to_sheets` בשורות 837-875
+
+**תוצאה:** עכשיו כל הודעות חדשות מתועדות שוב בגוגל שיטס עם כל הנתונים המלאים.
+
 ---
 
 ## 🔍 צפייה בלוג JSONL של GPT
