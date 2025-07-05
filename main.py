@@ -195,7 +195,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup logic
     from utils import health_check
-    from notifications import send_error_notification, send_recovery_messages_to_affected_users, diagnose_critical_users_system
+    from notifications import send_error_notification, send_recovery_messages_to_affected_users
     
     # וודא שהבוט מוגדר
     get_bot_app()
@@ -209,16 +209,15 @@ async def lifespan(app: FastAPI):
         from traceback import format_exc
         send_error_notification(f"[STARTUP] שגיאה בבדיקת תקינות: {e}\n{format_exc()}")
     
-    # 🔍 אבחון מערכת משתמשים קריטיים
+    # 🔍 בדיקה שקטה של מערכת משתמשים קריטיים
     try:
-        print("[STARTUP] 🔍 מבצע אבחון מערכת משתמשים קריטיים...")
-        diagnosis = diagnose_critical_users_system()
-        if diagnosis.get("error"):
-            print(f"[STARTUP] ⚠️ נמצאה בעיה במערכת משתמשים קריטיים: {diagnosis['error']}")
-        else:
-            print("[STARTUP] ✅ אבחון מערכת משתמשים קריטיים הושלם")
+        print("[STARTUP] 🔍 בודק מערכת משתמשים קריטיים...")
+        from notifications import _load_critical_error_users
+        users_data = _load_critical_error_users()
+        unrecovered_count = len([uid for uid, data in users_data.items() if not data.get("recovered", False)])
+        print(f"[STARTUP] ✅ מערכת משתמשים קריטיים: {len(users_data)} משתמשים, {unrecovered_count} מחכים להתאוששות")
     except Exception as e:
-        print(f"[STARTUP] ⚠️ שגיאה באבחון מערכת משתמשים קריטיים: {e}")
+        print(f"[STARTUP] ⚠️ שגיאה בבדיקת מערכת משתמשים קריטיים: {e}")
     
     # --- שליחת הודעות התאוששות אוטומטית ---
     try:

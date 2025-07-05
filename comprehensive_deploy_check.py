@@ -11,6 +11,7 @@ import json
 import re
 import inspect
 import platform
+import time
 from typing import Dict, List, Tuple
 
 class ComprehensiveDeployChecker:
@@ -196,6 +197,19 @@ class ComprehensiveDeployChecker:
         
         return len(errors) == 0, errors
     
+    def check_function_signatures(self) -> Tuple[bool, List[str]]:
+        """בדיקת סנכרון חתימות פונקציות"""
+        errors = []
+        
+        try:
+            from tests.test_function_signature_sync import test_function_signatures
+            test_function_signatures()
+            print("✅ סנכרון חתימות פונקציות - תקין")
+            return True, []
+        except Exception as e:
+            errors.append(f"❌ בעיה בסנכרון חתימות פונקציות: {e}")
+            return False, errors
+
     def check_unit_tests(self) -> Tuple[bool, List[str]]:
         """הרצת בדיקות unit (unittest + pytest)"""
         errors = []
@@ -339,6 +353,172 @@ class ComprehensiveDeployChecker:
             errors.append(f"❌ שגיאה בבדיקת תאימות: {e}")
         
         return len(errors) == 0, errors
+
+    def check_sheets_logging(self) -> Tuple[bool, List[str]]:
+        """בדיקת רישום לוגים לגיליונות Google Sheets"""
+        errors = []
+        
+        try:
+            from config import setup_google_sheets
+            from sheets_advanced import log_to_sheets_sync
+            import gspread
+            
+            # בדיקת חיבור לגיליונות
+            print("🔍 בודק חיבור לגיליונות Google Sheets...")
+            gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
+            
+            # בדיקת גיליון הלוגים
+            if not sheet_log:
+                errors.append("❌ גיליון לוגים לא נטען")
+                return False, errors
+            
+            print(f"✅ גיליון לוגים נטען: {sheet_log.title}")
+            
+            # בדיקת כותרות גיליון
+            headers = sheet_log.row_values(1)
+            required_headers = ["message_id", "chat_id", "user_msg", "bot_reply"]
+            missing_headers = [h for h in required_headers if h not in headers]
+            
+            if missing_headers:
+                errors.append(f"❌ כותרות חסרות בגיליון: {missing_headers}")
+                return False, errors
+            
+            print(f"✅ כותרות גיליון תקינות: {len(headers)} עמודות")
+            
+            # בדיקת כתיבה לגיליון
+            print("🔍 בודק כתיבה לגיליון...")
+            test_message_id = f"ci_test_{int(time.time())}"
+            test_chat_id = "ci_test_chat"
+            
+            # כתיבת שורת בדיקה
+            result = log_to_sheets_sync(
+                message_id=test_message_id,
+                chat_id=test_chat_id,
+                user_msg="בדיקת CI - הודעת משתמש",
+                reply_text="בדיקת CI - תשובת בוט",
+                reply_summary="בדיקת CI - סיכום",
+                main_usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "model": "gpt-4"},
+                summary_usage={},
+                extract_usage={},
+                total_tokens=15,
+                cost_usd=0.001,
+                cost_ils=0.004
+            )
+            
+            if not result:
+                errors.append("❌ כתיבה לגיליון נכשלה")
+                return False, errors
+            
+            print("✅ כתיבה לגיליון הצליחה")
+            
+            # בדיקת קריאה מהגיליון
+            print("🔍 בודק קריאה מהגיליון...")
+            all_values = sheet_log.get_all_values()
+            # מציאת אינדקסים של העמודות
+            msgid_col = headers.index("message_id")
+            chatid_col = headers.index("chat_id")
+            # חיפוש שורה תואמת
+            test_row_idx = None
+            for idx, row in enumerate(all_values[1:], start=2):  # gspread: שורה 1=כותרות, שורה 2=ראשונה אמיתית
+                if len(row) > max(msgid_col, chatid_col) and row[msgid_col] == test_message_id and row[chatid_col] == test_chat_id:
+                    test_row_idx = idx
+                    break
+            if not test_row_idx:
+                errors.append("❌ שורת הבדיקה לא נמצאה בגיליון")
+                return False, errors
+            print(f"✅ שורת בדיקה נמצאה בגיליון: שורה {test_row_idx}")
+            # מחיקת שורת הבדיקה
+            try:
+                sheet_log.delete_rows(test_row_idx)
+                print(f"✅ שורת בדיקה נמחקה מהגיליון (שורה {test_row_idx})")
+            except Exception as e:
+                errors.append(f"❌ שגיאה במחיקת שורת בדיקה: {e}")
+                return False, errors
+            # המשך הבדיקות (היסטוריה וכו')
+            total_rows = len(all_values)
+            if total_rows < 10:
+                errors.append(f"❌ מעט מדי שורות בגיליון: {total_rows}")
+                return False, errors
+            print(f"✅ גיליון מכיל {total_rows} שורות")
+            print("🔍 בודק היסטוריית הודעות...")
+            recent_rows = all_values[-10:]  # 10 השורות האחרונות
+            message_rows = [row for row in recent_rows if len(row) > 2 and row[0] and row[1] and row[2]]
+            if len(message_rows) < 3:
+                errors.append(f"❌ מעט מדי הודעות בהיסטוריה: {len(message_rows)} הודעות ב-10 שורות אחרונות")
+                return False, errors
+            print(f"✅ היסטוריה תקינה: {len(message_rows)} הודעות ב-10 שורות אחרונות")
+            chat_ids = set()
+            for row in recent_rows:
+                if len(row) > 1 and row[1]:
+                    chat_ids.add(row[1])
+            if len(chat_ids) < 1:
+                errors.append(f"❌ אין משתמשים בהיסטוריה: {len(chat_ids)} משתמשים שונים")
+                return False, errors
+            print(f"✅ מגוון משתמשים תקין: {len(chat_ids)} משתמשים שונים")
+            return True, []
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת גיליונות: {e}")
+            return False, errors
+    
+    def check_concurrent_system(self) -> Tuple[bool, List[str]]:
+        """בדיקת מערכת Concurrent Handling"""
+        errors = []
+        
+        try:
+            import concurrent_monitor
+            from concurrent_monitor import get_concurrent_monitor, start_monitoring_user, end_monitoring_user
+            
+            print("✅ concurrent_monitor - יובא בהצלחה")
+            
+            # בדיקת יצירת monitor
+            monitor = get_concurrent_monitor()
+            if not monitor:
+                errors.append("❌ get_concurrent_monitor - לא מחזיר monitor")
+                return False, errors
+            
+            print("✅ get_concurrent_monitor - עובד")
+            
+            # בדיקת הגדרות timeout
+            from concurrent_monitor import UserSession
+            test_session = UserSession(
+                chat_id="test_123",
+                start_time=time.time(),
+                message_id="test_msg",
+                stage="test",
+                queue_position=1
+            )
+            
+            if test_session.max_allowed_time != 45.0:
+                errors.append(f"❌ timeout לא נכון: {test_session.max_allowed_time} (צריך להיות 45.0)")
+            else:
+                print("✅ timeout מוגדר נכון: 45.0 שניות")
+            
+            # בדיקת is_timeout
+            if test_session.is_timeout():
+                errors.append("❌ is_timeout מחזיר True לסשן חדש")
+            else:
+                print("✅ is_timeout עובד נכון לסשן חדש")
+            
+            # בדיקת סשן ישן (timeout)
+            old_session = UserSession(
+                chat_id="old_test",
+                start_time=time.time() - 50,  # 50 שניות אחורה
+                message_id="old_msg",
+                stage="old",
+                queue_position=1
+            )
+            
+            if not old_session.is_timeout():
+                errors.append("❌ is_timeout לא מזהה סשן ישן")
+            else:
+                print("✅ is_timeout מזהה סשן ישן נכון")
+            
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת Concurrent: {e}")
+            import traceback
+            print(f"🔍 Traceback: {traceback.format_exc()}")
+        
+        return len(errors) == 0, errors
     
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
@@ -351,9 +531,12 @@ class ComprehensiveDeployChecker:
             ("Syntax וייבוא קבצים", self.check_syntax_and_imports),
             ("הגדרות קריטיות", self.check_critical_configuration),
             ("מערכת התראות", self.check_notifications_system),
+            ("סנכרון חתימות פונקציות", self.check_function_signatures),
             ("בדיקות Unit", self.check_unit_tests),
             ("צריכת זיכרון", self.check_memory_usage),
             ("תאימות ממשקי ליבה", self.check_interface_compatibility),
+            ("רישום לוגים לגיליונות", self.check_sheets_logging),
+            ("מערכת Concurrent Handling", self.check_concurrent_system),
         ]
         
         # הרצת כל הבדיקות

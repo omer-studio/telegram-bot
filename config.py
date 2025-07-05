@@ -124,9 +124,9 @@ def load_config():
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token"
             },
-            "SHEET_USER_TAB": "משתמשים",
-            "SHEET_LOG_TAB": "לוגים", 
-            "SHEET_STATES_TAB": "מצבים"
+            "SHEET_USER_TAB": "user_profiles",
+            "SHEET_LOG_TAB": "log", 
+            "SHEET_STATES_TAB": "user_states"
         }
     
     env_path = os.getenv("CONFIG_PATH")

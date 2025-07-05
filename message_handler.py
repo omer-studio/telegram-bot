@@ -16,7 +16,8 @@ from config import (
     ADMIN_BOT_TELEGRAM_TOKEN,
     MAX_MESSAGE_LENGTH,
     ADMIN_CHAT_ID,
-    MAX_CODE_TRIES
+    MAX_CODE_TRIES,
+    SYSTEM_PROMPT
 )
 from utils import get_israel_time
 from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, update_last_bot_message
@@ -625,100 +626,60 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
         try:
-            # --- יצירת רשומה בהיסטוריה מראש ---
-            # מונע מצב הודעה כפולה לפני שמירת תשובת GPT,
-            # וכך נמנע שליחת ברכת "בוקר/לילה טוב" כפולה (Race-condition).
-            history_entry_created = False
-            # try:
-            #     update_chat_history(chat_id, user_msg, "")
-            #     history_entry_created = True
-            # except Exception as hist_err:
-            #     logging.warning(f"[HISTORY] לא הצלחתי ליצור רשומת היסטוריה מוקדמת: {hist_err}")
+            # 🔧 תיקון קריטי: שליחת הודעת ביניים מהירה אחרי 3 שניות
+            temp_message_task = None
+            temp_message_sent = False
+            
+            async def send_temp_message():
+                nonlocal temp_message_sent
+                await asyncio.sleep(3)  # חכה 3 שניות
+                if not temp_message_sent:
+                    try:
+                        temp_msg = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך... 🚀"
+                        await send_system_message(update, chat_id, temp_msg)
+                        temp_message_sent = True
+                        logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
+                    except Exception as temp_err:
+                        logging.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
+            
+            # התחלת הודעת ביניים ברקע
+            temp_message_task = asyncio.create_task(send_temp_message())
 
-            # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
-            current_summary = get_user_summary(chat_id) or ""
-            history_messages = get_chat_history_messages(chat_id, limit=15)  # 🔧 הגבלה ל-15 הודעות לחסוך בטוקנים
-            
-            # יצירת טיימסטמפ והנחיות יום השבוע
-            from chat_utils import create_human_context_for_gpt, get_weekday_context_instruction, get_time_greeting_instruction
-            
-            # ברכה מותאמת זמן נשלחת לפי תנאים (שיחה ראשונה, הודעת ברכה, החלפת בלוק זמן)
-            greeting_instruction = ""
-            weekday_instruction = ""
+            # 🔧 תיקון קריטי: איסוף נתונים מהיר בלבד - בלי Google Sheets!
+            # שלב 1: איסוף נתונים מהיר מקובץ מקומי בלבד
+            current_summary = ""
+            history_messages = []
             
             try:
-                if should_send_time_greeting(chat_id, user_msg):
-                    # שליחת הנחיות ברכת זמן ויום שבוע
-                    weekday_instruction = get_weekday_context_instruction(chat_id, user_msg)
-                    greeting_instruction = get_time_greeting_instruction()
-                    print(f"[GREETING_DEBUG] שולח ברכה + יום שבוע עבור chat_id={chat_id}")
-                else:
-                    print(f"[GREETING_DEBUG] לא שולח ברכה עבור chat_id={chat_id} - המשך שיחה רגיל")
-            except Exception as greet_err:
-                logging.warning(f"[GREETING] שגיאה בהערכת greeting: {greet_err}")
+                # קריאה מהירה מקובץ מקומי בלבד - בלי Google Sheets!
+                from chat_utils import get_chat_history_messages_fast
+                history_messages = get_chat_history_messages_fast(chat_id, limit=10)  # 🔧 הקטנה ל-10 הודעות
+                
+                # קריאה מהירה מפרופיל מקומי בלבד
+                from profile_utils import get_user_summary_fast
+                current_summary = get_user_summary_fast(chat_id)
+                    
+            except Exception as data_err:
+                logging.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}")
+                # ממשיכים בלי נתונים - עדיף תשובה מהירה מאשר נתונים מלאים
             
-            # בניית ההודעות ל-gpt_a
+            # בניית ההודעות ל-gpt_a - מינימלי ומהיר
             messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
             
-            # 🔍 [DEBUG] הודעת ראשי SYSTEM_PROMPT
-            print(f"\n🔍 [MESSAGE_BUILD_DEBUG] === BUILDING MESSAGES FOR GPT ===")
-            print(f"🎯 [SYSTEM_1] MAIN PROMPT - Length: {len(SYSTEM_PROMPT)} chars")
-            
-            # הוספת ברכת זמן אם יש
-            if greeting_instruction:
-                messages_for_gpt.append({"role": "system", "content": greeting_instruction})
-                print(f"🎯 [SYSTEM_2] TIME GREETING - Content: {greeting_instruction}")
-            
-            if weekday_instruction:
-                messages_for_gpt.append({"role": "system", "content": weekday_instruction})
-                print(f"🎯 [SYSTEM_3] WEEKDAY - Content: {weekday_instruction}")
-            
-            # הוספת הודעת חגים אם רלוונטי
-            from chat_utils import get_holiday_system_message
-            holiday_instruction = get_holiday_system_message(str(chat_id))
-            if holiday_instruction:
-                messages_for_gpt.append({"role": "system", "content": holiday_instruction})
-                print(f"🎯 [SYSTEM_4] HOLIDAY - Content: {holiday_instruction}")
-            
-            # הוספת שדות חסרים אם יש
-            from gpt_a_handler import create_missing_fields_system_message
-            missing_fields_instruction, missing_text = create_missing_fields_system_message(str(chat_id))
-            if missing_fields_instruction:
-                messages_for_gpt.append({"role": "system", "content": missing_fields_instruction})
-                print(f"🎯 [SYSTEM_5] MISSING FIELDS - Found {len(missing_text.split(','))} missing fields")
-            
-            # ⭐ הוספת המידע על המשתמש לפני ההיסטוריה - ממוקם אסטרטגית
+            # הוספת סיכום משתמש אם יש (מהיר)
             if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש רק במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
-
-{current_summary}
-
-⚠️ **הנחיות חשובות לשימוש במידע:**
-• השתמש רק במידע שהמשתמש באמת סיפר לך - אל תמציא או תוסיף דברים
-• תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
-• התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
-• זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""})
-                print(f"🎯 [SYSTEM_6] USER SUMMARY (PRE-HISTORY) - Length: {len(current_summary)} chars | Preview: {current_summary[:80]}...")
-                print(f"🔍 [SUMMARY_DEBUG] User {chat_id}: '{current_summary}' (source: user_profiles.json)")
+                messages_for_gpt.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
             
-            # 📚 הוספת ההיסטוריה בצמידות להודעה החדשה
-            print(f"📚 [HISTORY] Adding {len(history_messages)} history messages (all with timestamps) - positioned close to new message...")
-            messages_for_gpt.extend(history_messages)
+            # הוספת היסטוריה (מהיר)
+            if history_messages:
+                messages_for_gpt.extend(history_messages)
             
-            # הוספת ההודעה החדשה עם טיימסטמפ באותו פורמט כמו בהיסטוריה
-            from chat_utils import _format_timestamp_for_history
-            import utils
-            current_timestamp = _format_timestamp_for_history(utils.get_israel_time().isoformat())
-            user_msg_with_timestamp = f"{current_timestamp} {user_msg}" if current_timestamp else user_msg
-            messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
-            print(f"👤 [USER_MSG] Length: {len(user_msg_with_timestamp)} chars | With timestamp: {current_timestamp}")
-            print(f"📊 [FINAL_COUNT] Total messages: {len(messages_for_gpt)}")
-            print(f"🔍 [MESSAGE_BUILD_DEBUG] === READY TO SEND ===\n")
+            # הוספת ההודעה החדשה
+            messages_for_gpt.append({"role": "user", "content": user_msg})
+            
+            print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A (מהיר)")
 
-            # שלב 2: שליחת תשובה מ-gpt_a
-            logging.info(f"📤 [GPAT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
-            print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A")
-            
+            # שלב 2: שליחת תשובה מ-gpt_a - זה השלב הכי חשוב!
             gpt_result = get_main_response(messages_for_gpt, chat_id)
             bot_reply = gpt_result.get("bot_reply") if isinstance(gpt_result, dict) else gpt_result
             
@@ -728,197 +689,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await end_monitoring_user(str(chat_id), False)
                 return
 
-            # שלב 3: עדכון היסטוריה עם התשובה הסופית
-            if history_entry_created:
-                # רשומה כבר קיימת, מעדכן אותה עם התשובה
-                update_last_bot_message(chat_id, bot_reply)
-            else:
-                # יוצר רשומה חדשה
-                update_chat_history(chat_id, user_msg, bot_reply)
+            # 🔧 תיקון: ביטול הודעת ביניים אם התשובה הגיעה מהר
+            if temp_message_task and not temp_message_task.done():
+                temp_message_task.cancel()
+                temp_message_sent = True  # מונע שליחה כפולה
 
-            # שלב 4: שליחת התשובה למשתמש עם פורמטינג מתקדם
+            # שלב 3: שליחת התשובה למשתמש מיד!
             await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
-            # שלב 5: רישום והפעלת כל התהליכים ברקע במקביל
-            try:
-                # חישוב זמן מענה
-                response_time = time.time() - user_request_start_time
-                log_payload["response_time"] = response_time
-                log_payload["timestamp_end"] = get_israel_time().isoformat()
-                log_payload["bot_reply"] = bot_reply
-                
-                # שלב 4.5: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
-                summary_result = None
-                summary_usage = {}
-                if len(bot_reply) > 100:  # רק אם התשובה ארוכה מספיק
-                    try:
-                        summary_result = get_summary(user_msg, bot_reply, chat_id, message_id)
-                        if summary_result and isinstance(summary_result, dict):
-                            summary_usage = summary_result.get("usage", {})
-                            print(f"📝 [GPT-B] נוצר סיכום: {summary_result.get('summary', '')[:50]}...")
-                    except Exception as summary_err:
-                        logging.warning(f"[GPT-B] שגיאה ביצירת סיכום: {summary_err}")
-                        summary_result = None
-                
-                # הפעלה במקביל של כל התהליכים ואיסוף תוצאות
-                all_tasks = []
-                gpt_c_result = None
-                if should_run_gpt_c(user_msg):
-                    gpt_c_result = await asyncio.to_thread(extract_user_info, user_msg, chat_id)
-                all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply, gpt_c_result))
-                all_tasks.append(execute_gpt_e_if_needed(chat_id))
-                
-                results = await asyncio.gather(*all_tasks, return_exceptions=True)
-                
-                # ------------------------------------------------------------------
-                # 🔔 שליחת הודעה לאדמין על הרצת GPT-C / D / E (לוג תמציתי)
-                # ------------------------------------------------------------------
-                try:
-                    from profile_utils import _send_admin_profile_overview_notification, _detect_profile_changes, get_user_profile_fast
-                    idx = 0
-                    gpt_c_changes = []
-                    gpt_d_changes = []
-                    gpt_e_changes = []
-                    gpt_c_info = "GPT-C: לא הופעל"
-                    gpt_d_info = "GPT-D: לא הופעל"
-                    gpt_e_info = "GPT-E: לא הופעל"
-                    
-                    # --- GPT-C ---
-                    if should_run_gpt_c(user_msg) and gpt_c_result is not None:
-                        if not isinstance(gpt_c_result, Exception):
-                            extracted_fields = gpt_c_result.get("extracted_fields", {}) if isinstance(gpt_c_result, dict) else {}
-                            old_profile = get_user_profile_fast(chat_id)
-                            new_profile = {**old_profile, **extracted_fields}
-                            gpt_c_changes = _detect_profile_changes(old_profile, new_profile)
-                            gpt_c_info = f"GPT-C: עודכנו {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: רץ ולא עודכנו שדות"
-                        else:
-                            gpt_c_info = "GPT-C: רץ ונתקל בשגיאה"
-                    else:
-                        gpt_c_info = "GPT-C: לא הופעל"
-                    
-                    # --- GPT-D ---
-                    gpt_d_res = results[0] if len(results) > 0 else None
-                    if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
-                        updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
-                        if updated_profile and isinstance(updated_profile, dict):
-                            old_profile = get_user_profile_fast(chat_id)
-                            gpt_d_changes = _detect_profile_changes(old_profile, updated_profile)
-                            gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות אוחדו" if gpt_d_changes else "GPT-D: רץ ולא אוחדו שדות"
-                        else:
-                            gpt_d_info = "GPT-D: רץ ולא אוחדו שדות"
-                    else:
-                        gpt_d_info = "GPT-D: לא הופעל"
-                    
-                    # --- GPT-E ---
-                    gpt_e_res = results[1] if len(results) > 1 else None
-                    if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
-                        changes = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
-                        if changes:
-                            old_profile = get_user_profile_fast(chat_id)
-                            new_profile = {**old_profile, **changes}
-                            gpt_e_changes = _detect_profile_changes(old_profile, new_profile)
-                            gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שינויים מוצעים" if gpt_e_changes else "GPT-E: רץ ולא הוצעו שינויים"
-                        else:
-                            gpt_e_info = "GPT-E: רץ ולא הוצעו שינויים"
-                    else:
-                        # בדיקה אם GPT-E לא הופעל בגלל הספירה
-                        try:
-                            from chat_utils import get_user_stats_and_history
-                            stats, _ = get_user_stats_and_history(chat_id)
-                            total_messages = stats.get("total_messages", 0)
-                            if total_messages > 0:
-                                gpt_e_info = f"GPT-E: לא הופעל ({total_messages % 10}/10 הודעות)"
-                            else:
-                                gpt_e_info = "GPT-E: לא הופעל"
-                        except:
-                            gpt_e_info = "GPT-E: לא הופעל"
-
-                    # --- Only send if at least one actually ran ---
-                    should_send = bool(gpt_c_changes or gpt_d_changes or gpt_e_changes)
-                    if should_send:
-                        from profile_utils import get_user_summary_fast
-                        summary = get_user_summary_fast(chat_id)
-                        _send_admin_profile_overview_notification(
-                            chat_id=chat_id,
-                            user_msg=user_msg,
-                            gpt_c_changes=gpt_c_changes,
-                            gpt_d_changes=gpt_d_changes,
-                            gpt_e_changes=gpt_e_changes,
-                            gpt_c_info=f"<b>{gpt_c_info}</b>",
-                            gpt_d_info=f"<b>{gpt_d_info}</b>",
-                            gpt_e_info=f"<b>{gpt_e_info}</b>",
-                            summary=summary
-                        )
-                except Exception as notify_exc:
-                    logging.error(f"[ADMIN_NOTIFY] Failed to send detailed admin profile overview: {notify_exc}")
-                
-                # עדכון מידע עבור ניטור ביצועים
-                await update_user_processing_stage(str(chat_id), "completed")
-                
-                # 📊 רישום לגוגל שיטס
-                try:
-                    # חילוץ נתוני GPT-A
-                    main_usage = gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {}
-                    
-                    # חילוץ נתוני GPT-C
-                    extract_usage = {}
-                    if gpt_c_result and not isinstance(gpt_c_result, Exception):
-                        extract_usage = gpt_c_result.get("usage", {}) if isinstance(gpt_c_result, dict) else {}
-                    
-                    # חילוץ נתוני GPT-D
-                    gpt_d_usage = {}
-                    if results and len(results) > 0 and not isinstance(results[0], Exception):
-                        gpt_d_res = results[0]
-                        if isinstance(gpt_d_res, tuple) and len(gpt_d_res) > 1:
-                            gpt_d_usage = gpt_d_res[1] if isinstance(gpt_d_res[1], dict) else {}
-                    
-                    # חילוץ נתוני GPT-E
-                    gpt_e_usage = {}
-                    if results and len(results) > 1 and not isinstance(results[1], Exception):
-                        gpt_e_res = results[1]
-                        if isinstance(gpt_e_res, dict):
-                            gpt_e_usage = gpt_e_res.get("usage", {})
-                    
-                    # חישוב עלויות
-                    cost_usd = main_usage.get("cost_total", 0) + summary_usage.get("cost_total", 0) + extract_usage.get("cost_total", 0) + gpt_d_usage.get("cost_total", 0) + gpt_e_usage.get("cost_total", 0)
-                    cost_ils = main_usage.get("cost_ils", 0) + summary_usage.get("cost_ils", 0) + extract_usage.get("cost_ils", 0) + gpt_d_usage.get("cost_ils", 0) + gpt_e_usage.get("cost_ils", 0)
-                    
-                    # חישוב טוקנים
-                    total_tokens = main_usage.get("total_tokens", 0) + summary_usage.get("total_tokens", 0) + extract_usage.get("total_tokens", 0) + gpt_d_usage.get("total_tokens", 0) + gpt_e_usage.get("total_tokens", 0)
-                    prompt_tokens_total = main_usage.get("prompt_tokens", 0) + summary_usage.get("prompt_tokens", 0) + extract_usage.get("prompt_tokens", 0) + gpt_d_usage.get("prompt_tokens", 0) + gpt_e_usage.get("prompt_tokens", 0)
-                    completion_tokens_total = main_usage.get("completion_tokens", 0) + summary_usage.get("completion_tokens", 0) + extract_usage.get("completion_tokens", 0) + gpt_d_usage.get("completion_tokens", 0) + gpt_e_usage.get("completion_tokens", 0)
-                    cached_tokens = main_usage.get("cached_tokens", 0) + summary_usage.get("cached_tokens", 0) + extract_usage.get("cached_tokens", 0) + gpt_d_usage.get("cached_tokens", 0) + gpt_e_usage.get("cached_tokens", 0)
-                    
-                    # רישום לגוגל שיטס
-                    log_to_sheets(
-                        message_id=message_id,
-                        chat_id=chat_id,
-                        user_msg=user_msg,
-                        reply_text=bot_reply,
-                        reply_summary=summary_result.get("summary", "") if summary_result else "",
-                        main_usage=main_usage,
-                        summary_usage=summary_usage,
-                        extract_usage=extract_usage,
-                        total_tokens=total_tokens,
-                        cost_usd=cost_usd,
-                        cost_ils=cost_ils,
-                        prompt_tokens_total=prompt_tokens_total,
-                        completion_tokens_total=completion_tokens_total,
-                        cached_tokens=cached_tokens,
-                        gpt_d_usage=gpt_d_usage,
-                        gpt_e_usage=gpt_e_usage
-                    )
-                    logging.info(f"📊 [SHEETS_LOG] נשלח לגוגל שיטס | chat_id={chat_id} | message_id={message_id}")
-                except Exception as log_exc:
-                    logging.error(f"❌ [SHEETS_LOG] שגיאה ברישום לגוגל שיטס: {log_exc}")
-                
-                logging.info(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
-                print(f"✅ [SUCCESS] chat_id={chat_id} | זמן מענה: {response_time:.2f}s")
-                
-            except Exception as ex:
-                logging.error(f"❌ שגיאה בטיפולים ברקע: {ex}")
-                # אל תעצרי את הזרם - המשתמש כבר קיבל תשובה
-                
+            # 🔧 תיקון: כל השאר ברקע - המשתמש כבר קיבל תשובה!
+            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result))
+            
         except Exception as ex:
             logging.error(f"❌ שגיאה בטיפול בהודעה: {ex}")
             print(f"❌ שגיאה בטיפול בהודעה: {ex}")
@@ -965,59 +746,27 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
         if all_tasks:
             results = await asyncio.gather(*all_tasks, return_exceptions=True)
 
-        # ------------------------------------------------------------------
-        # 🔔 שליחת הודעה לאדמין על הרצת GPT-C / D / E (לוג תמציתי)
-        # ------------------------------------------------------------------
-        try:
-            from notifications import send_admin_notification_raw
-
+        # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
+        if should_log_debug_prints():
             ran_components = []
-            summary_lines = []
-
-            # התאמת תוצאות לסדר המשימות
             idx = 0
             if gpt_c_task:
-                gpt_c_res = results[idx]
+                gpt_c_res = results[idx] if idx < len(results) else None
                 idx += 1
-                if not isinstance(gpt_c_res, Exception):
+                if gpt_c_res is not None and not isinstance(gpt_c_res, Exception):
                     ran_components.append("GPT-C")
-                    # ניסיון לחלץ מספר שדות שחולצו
-                    try:
-                        extracted_fields = gpt_c_res.get("extracted_fields", {}) if isinstance(gpt_c_res, dict) else {}
-                        summary_lines.append(f"🔍 GPT-C: {len(extracted_fields)} שדות חולצו")
-                    except Exception:
-                        summary_lines.append("🔍 GPT-C: הופעל")
-
-            # GPT-D תוצאה
+            
             gpt_d_res = results[idx] if idx < len(results) else None
             idx += 1
             if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
                 ran_components.append("GPT-D")
-                try:
-                    updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
-                    changes_cnt = len(updated_profile or {}) if isinstance(updated_profile, dict) else 0
-                    summary_lines.append(f"🔄 GPT-D: {changes_cnt} שדות אוחדו")
-                except Exception:
-                    summary_lines.append("🔄 GPT-D: הופעל")
-
-            # GPT-E תוצאה
+            
             gpt_e_res = results[idx] if idx < len(results) else None
             if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
                 ran_components.append("GPT-E")
-                try:
-                    changes_cnt = len(gpt_e_res.get("changes", {})) if isinstance(gpt_e_res, dict) else 0
-                    summary_lines.append(f"✨ GPT-E: {changes_cnt} שינויים מוצעים")
-                except Exception:
-                    summary_lines.append("✨ GPT-E: הופעל")
-
+            
             if ran_components:
-                msg = (
-                    f"<b>🛠️ הרצת מעבדי פרופיל ({', '.join(ran_components)})</b>\n"
-                    f"<code>{chat_id}</code> | הודעה: {user_msg[:60]}...\n\n" + "\n".join(summary_lines)
-                )
-                send_admin_notification_raw(msg)
-        except Exception as notify_exc:
-            logging.error(f"[ADMIN_NOTIFY] Failed to send GPT processors summary: {notify_exc}")
+                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל: {', '.join(ran_components)} | chat_id={chat_id}")
             
     except Exception as e:
         logging.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}")
@@ -1145,3 +894,206 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
         
     except Exception as e:
         logging.error(f"שליחת הודעת מערכת נכשלה: {e}")
+
+async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result):
+    """
+    🔧 פונקציה חדשה: מטפלת בכל המשימות ברקע אחרי שהמשתמש קיבל תשובה
+    זה מבטיח שהמשתמש מקבל תשובה מהר, וכל השאר קורה ברקע
+    """
+    try:
+        # חישוב זמן מענה
+        response_time = time.time() - user_request_start_time
+        log_payload = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "response_time": response_time,
+            "timestamp_end": get_israel_time().isoformat(),
+            "bot_reply": bot_reply
+        }
+        
+        logging.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={chat_id} | זמן תגובה: {response_time:.2f}s")
+        
+        # שלב 1: עדכון היסטוריה
+        try:
+            update_chat_history(chat_id, user_msg, bot_reply)
+        except Exception as hist_err:
+            logging.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}")
+        
+        # שלב 2: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
+        summary_result = None
+        summary_usage = {}
+        if len(bot_reply) > 100:
+            try:
+                summary_result = get_summary(user_msg, bot_reply, chat_id, message_id)
+                if summary_result and isinstance(summary_result, dict):
+                    summary_usage = summary_result.get("usage", {})
+                    print(f"📝 [BACKGROUND] נוצר סיכום: {summary_result.get('summary', '')[:50]}...")
+            except Exception as summary_err:
+                logging.warning(f"[BACKGROUND] שגיאה ביצירת סיכום: {summary_err}")
+        
+        # שלב 3: הפעלה במקביל של כל התהליכים
+        all_tasks = []
+        gpt_c_result = None
+        
+        if should_run_gpt_c(user_msg):
+            gpt_c_result = await asyncio.to_thread(extract_user_info, user_msg, chat_id)
+        
+        all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply, gpt_c_result))
+        all_tasks.append(execute_gpt_e_if_needed(chat_id))
+        
+        results = await asyncio.gather(*all_tasks, return_exceptions=True)
+        
+        # שלב 4: רישום לגיליונות Google Sheets
+        try:
+            # איסוף נתונים מלאים לרישום
+            current_summary = get_user_summary(chat_id) or ""
+            history_messages = get_chat_history_messages(chat_id, limit=15)
+            
+            # בניית הודעות מלאות לרישום
+            messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
+            if current_summary:
+                messages_for_log.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
+            if history_messages:
+                messages_for_log.extend(history_messages)
+            messages_for_log.append({"role": "user", "content": user_msg})
+            
+            # רישום לגיליונות
+            log_to_sheets(
+                message_id=message_id,
+                chat_id=chat_id,
+                user_msg=user_msg,
+                reply_text=bot_reply,
+                reply_summary=summary_result.get("summary", "") if summary_result else "",
+                main_usage=gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
+                summary_usage=summary_usage,
+                extract_usage=gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
+                total_tokens=gpt_result.get("usage", {}).get("total_tokens", 0) if isinstance(gpt_result, dict) else 0,
+                cost_usd=gpt_result.get("usage", {}).get("cost_total", 0) if isinstance(gpt_result, dict) else 0,
+                cost_ils=gpt_result.get("usage", {}).get("cost_total_ils", 0) if isinstance(gpt_result, dict) else 0
+            )
+            
+            logging.info(f"📊 [BACKGROUND] נשלח לגוגל שיטס | chat_id={chat_id}")
+            
+        except Exception as log_exc:
+            logging.error(f"❌ [BACKGROUND] שגיאה ברישום לגוגל שיטס: {log_exc}")
+        
+        # שלב 5: רישום לקובץ לוג מקומי (לתחזוקת הדוחות היומיים)
+        try:
+            from sheets_advanced import log_gpt_usage_to_file
+            
+            # חישוב עלות כוללת
+            total_cost_ils = 0
+            if isinstance(gpt_result, dict) and gpt_result.get("usage"):
+                total_cost_ils += gpt_result["usage"].get("cost_total_ils", 0)
+            if summary_usage:
+                total_cost_ils += summary_usage.get("cost_total_ils", 0)
+            if gpt_c_result and isinstance(gpt_c_result, dict) and gpt_c_result.get("usage"):
+                total_cost_ils += gpt_c_result["usage"].get("cost_total_ils", 0)
+            
+            # רישום לקובץ
+            log_gpt_usage_to_file(
+                message_id=message_id,
+                chat_id=chat_id,
+                main_usage=gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
+                summary_usage=summary_usage,
+                extract_usage=gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
+                gpt_d_usage={},  # לא נדרש כרגע
+                gpt_e_usage={},  # לא נדרש כרגע
+                total_cost_ils=total_cost_ils
+            )
+            
+            logging.info(f"📝 [BACKGROUND] נשלח לקובץ לוג | chat_id={chat_id}")
+            
+        except Exception as log_file_exc:
+            logging.error(f"❌ [BACKGROUND] שגיאה ברישום לקובץ לוג: {log_file_exc}")
+        
+        # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
+        if should_log_debug_prints():
+            ran_components = []
+            if should_run_gpt_c(user_msg) and gpt_c_result is not None:
+                ran_components.append("GPT-C")
+            if len(results) > 0 and results[0] is not None:
+                ran_components.append("GPT-D")
+            if len(results) > 1 and results[1] is not None:
+                ran_components.append("GPT-E")
+            
+            if ran_components:
+                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={chat_id}")
+        
+        logging.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={chat_id} | זמן כולל: {time.time() - user_request_start_time:.2f}s")
+        
+        # שלב 5: התראות אדמין (אם יש שינויים)
+        try:
+            from profile_utils import _send_admin_profile_overview_notification, _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
+            
+            gpt_c_changes = []
+            gpt_d_changes = []
+            gpt_e_changes = []
+            
+            # GPT-C changes
+            if should_run_gpt_c(user_msg) and gpt_c_result is not None and not isinstance(gpt_c_result, Exception):
+                extracted_fields = gpt_c_result.get("extracted_fields", {}) if isinstance(gpt_c_result, dict) else {}
+                old_profile = get_user_profile_fast(chat_id)
+                new_profile = {**old_profile, **extracted_fields}
+                gpt_c_changes = _detect_profile_changes(old_profile, new_profile)
+            
+            # GPT-D changes
+            gpt_d_res = results[0] if len(results) > 0 else None
+            if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
+                updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
+                if updated_profile and isinstance(updated_profile, dict):
+                    old_profile = get_user_profile_fast(chat_id)
+                    gpt_d_changes = _detect_profile_changes(old_profile, updated_profile)
+            
+            # GPT-E changes
+            gpt_e_res = results[1] if len(results) > 1 else None
+            if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
+                changes = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
+                if changes:
+                    old_profile = get_user_profile_fast(chat_id)
+                    new_profile = {**old_profile, **changes}
+                    gpt_e_changes = _detect_profile_changes(old_profile, new_profile)
+            
+            # שליחת התראה רק אם יש שינויים
+            if gpt_c_changes or gpt_d_changes or gpt_e_changes:
+                # בניית מידע על השינויים
+                gpt_c_info = f"GPT-C: {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: אין שינויים"
+                gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות" if gpt_d_changes else "GPT-D: אין שינויים"
+                gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות" if gpt_e_changes else "GPT-E: אין שינויים"
+                
+                # יצירת סיכום מהיר
+                current_summary = get_user_summary_fast(chat_id) or ""
+                
+                _send_admin_profile_overview_notification(
+                    chat_id=chat_id,
+                    user_msg=user_msg,
+                    gpt_c_changes=gpt_c_changes,
+                    gpt_d_changes=gpt_d_changes,
+                    gpt_e_changes=gpt_e_changes,
+                    gpt_c_info=gpt_c_info,
+                    gpt_d_info=gpt_d_info,
+                    gpt_e_info=gpt_e_info,
+                    summary=current_summary
+                )
+                
+        except Exception as admin_err:
+            logging.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}")
+        
+        # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
+        if should_log_debug_prints():
+            ran_components = []
+            if should_run_gpt_c(user_msg) and gpt_c_result is not None:
+                ran_components.append("GPT-C")
+            if len(results) > 0 and results[0] is not None:
+                ran_components.append("GPT-D")
+            if len(results) > 1 and results[1] is not None:
+                ran_components.append("GPT-E")
+            
+            if ran_components:
+                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={chat_id}")
+        
+        logging.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={chat_id} | זמן כולל: {time.time() - user_request_start_time:.2f}s")
+        
+    except Exception as ex:
+        logging.error(f"❌ [BACKGROUND] שגיאה במשימות ברקע: {ex}")
+        # לא נכשל אם המשימות ברקע נכשלות - המשתמש כבר קיבל תשובה

@@ -827,3 +827,5527 @@ CRITICAL_CACHE_DURATION_SECONDS = 3600  # שעה במקום 30 דקות
 2. **Sheets API** - פחות קריאות, יעילות גבוהה יותר
 3. **Memory** - זיהוי מוקדם של memory leaks
 4. **Stability** - פחות race conditions ו-duplicate processing
+
+## 📊 דוחות מערכת משופרים
+
+### 🔍 דוח אבחון מערכת משתמשים קריטיים
+
+**דוח ישן (ארוך ומבלבל):**
+```
+🔍 דוח אבחון מערכת משתמשים קריטיים:
+
+📁 תיקיית DATA:
+   קיימת: True
+   ניתנת לכתיבה: True
+
+📄 קובץ ראשי (data/critical_error_users.json):
+   קיים: False
+   גודל: 0 bytes
+   ניתן לקריאה: False
+   משתמשים: 0
+   לא התאוששו: 0
+```
+
+**דוח חדש (קצר וברור):**
+```
+🔍 דוח אבחון מערכת משתמשים קריטיים:
+
+✅ סטטוס: תקין
+
+📊 סיכום:
+   • משתמשים קריטיים: 0
+   • מחכים להתאוששות: 0
+   • קבצים זמניים: 0
+
+✅ הכל תקין - המערכת מוכנה!
+```
+
+### 🛠️ דוח הרצת מעבדי פרופיל
+
+**דוח ישן:**
+```
+🛠️ הרצת מעבדי פרופיל (GPT-C, GPT-D, GPT-E)
+age_test_user | הודעה: אני בן 35...
+
+🔍 GPT-C: 1 שדות חולצו
+🔄 GPT-D: 1 שדות אוחדו
+✨ GPT-E: 0 שינויים מוצעים
+```
+
+**דוח חדש:**
+```
+🛠️ הרצת מעבדי פרופיל
+age_test_user | אני בן 35...
+
+✅ סטטוס: תקין
+📊 🔍 GPT-C: 1 שדות חולצו, 🔄 GPT-D: 1 שדות אוחדו, ✨ GPT-E: 0 שינויים מוצעים
+```
+
+**אם יש בעיות:**
+```
+🛠️ הרצת מעבדי פרופיל
+age_test_user | אני בן 35...
+
+⚠️ סטטוס: בעיות
+📊 🔍 GPT-C: 1 שדות חולצו, 🔄 GPT-D: שגיאה, ✨ GPT-E: 0 שינויים מוצעים
+
+🚨 בעיות: נמצאו שגיאות
+```
+
+---
+
+## ⚡ כלל ברזל: תגובה ראשונית מהירה למשתמש
+
+- המשתמש חייב לקבל תשובה ראשונית מהבוט תוך שניות בודדות (מומלץ: <5 שניות).
+- כל עיבוד שאינו קריטי לתגובה המיידית (לוגים, עדכון פרופיל, סנכרון ל-Google Sheets, סיכומים וכו') יתבצע תמיד ברקע בלבד.
+- אם יש עיכוב או תקלה — נשלחת למשתמש הודעת ביניים אוטומטית ("⏳ אני עובד על תשובה בשבילך...").
+- כל שלב עיבוד נמדד, נרשם ללוגים, ואם יש חריגה — נשלחת התראה מפורטת לאדמין.
+
+### 🧪 בדיקת CI ייעודית
+- קיימת בדיקת CI שמוודאת שהתגובה הראשונית למשתמש תמיד מהירה, גם אם יש עיבוד איטי ברקע.
+- כל שינוי בקוד עובר בדיקה זו — אם התגובה הראשונית איטית (למשל, בגלל עיבוד איטי או קריאה חיצונית לפני שליחת תשובה), ה־CI ייכשל והקוד לא יעלה לייצור.
+- כך מובטח שהמשתמש לעולם לא יחכה זמן רב לתגובה, גם אם יש עומס או תקלות חיצוניות.
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:** שימוש ב-GPT
+- **`data/bot_trace_log.jsonl`:** מעקב אירועים
+
+---
+
+## 🎛️ בדיקת מצב הלוגים
+
+**פקודה פשוטה:**
+
+```bash
+# הצגת מצב נוכחי
+python utils.py log-status
+```
+
+**דוגמת תפוקה:**
+```
+🎛️  מצב הלוגים הנוכחי:
+========================================
+📊 רמת לוג כללית:     INFO
+🐛 דיבאג כללי:        ❌
+💰 עלויות GPT:        ✅
+📋 חילוץ נתונים:      ✅
+⏱️  ביצועים:           ✅
+💬 הודעות:            ✅
+📊 גיליונות:          ❌
+========================================
+💡 לשינוי: ערוך את config.py או השתמש במשתני סביבה
+```
+
+### 🔧 עקיפה עם משתני סביבה
+
+```bash
+# Windows PowerShell
+$env:ENABLE_GPT_COST_DEBUG="false"; python main.py
+
+# Linux/Mac
+ENABLE_GPT_COST_DEBUG=false python main.py
+
+# הגדרה קבועה במשתני הסביבה של המערכת
+export ENABLE_DATA_EXTRACTION_DEBUG=true
+```
+
+### 📁 קבצי לוג:
+- **קונסול:** פלט מבוקר למסך
+- **`data/bot.log`:** לוג מרכזי
+- **`data/gpt_usage_log.jsonl`:**

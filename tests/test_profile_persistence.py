@@ -108,7 +108,24 @@ def test_admin_notification_on_profile_update(monkeypatch):
 
     # Run the background processor
     chat_id_sample = "chat_flow"
-    asyncio.run(message_handler.run_background_processors(chat_id_sample, "אני בן 35", "תודה"))
+    # 🔧 תיקון: שימוש בפונקציה החדשה handle_background_tasks
+    # יצירת mock objects נדרשים
+    class MockUpdate:
+        pass
+    
+    class MockContext:
+        def __init__(self):
+            self.bot_data = {}
+    
+    mock_update = MockUpdate()
+    mock_context = MockContext()
+    message_id = "test_msg_456"
+    user_request_start_time = 0.0
+    
+    # יצירת mock gpt_result
+    mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
+
+    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result))
 
     assert sent_msgs, "Admin notification should have been sent"
     # Verify content includes chat id and GPT indication
@@ -232,7 +249,24 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
     monkeypatch.setattr(mh, "execute_gpt_e_if_needed", _fake_gpt_e_async_loc, raising=False)
 
     # Run background processors
-    asyncio.run(mh.run_background_processors(chat_id, user_msg, "דיון"))
+    # 🔧 תיקון: שימוש בפונקציה החדשה handle_background_tasks
+    # יצירת mock objects נדרשים
+    class MockUpdate:
+        pass
+    
+    class MockContext:
+        def __init__(self):
+            self.bot_data = {}
+    
+    mock_update = MockUpdate()
+    mock_context = MockContext()
+    message_id = "test_msg_789"
+    user_request_start_time = 0.0
+    
+    # יצירת mock gpt_result
+    mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
+
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "דיון", message_id, user_request_start_time, mock_gpt_result))
 
     assert captured, "Notification not sent"
     msg = captured['msg']
@@ -282,7 +316,24 @@ def test_admin_notification_age_update(monkeypatch):
     monkeypatch.setattr(mh, "smart_update_profile_with_gpt_d_async", _fake_gpt_d_async_age, raising=False)
     monkeypatch.setattr(mh, "execute_gpt_e_if_needed", _fake_gpt_e_async_age, raising=False)
 
-    asyncio.run(mh.run_background_processors(chat_id, user_msg, "תשובה"))
+    # 🔧 תיקון: שימוש בפונקציה החדשה handle_background_tasks
+    # יצירת mock objects נדרשים
+    class MockUpdate:
+        pass
+    
+    class MockContext:
+        def __init__(self):
+            self.bot_data = {}
+    
+    mock_update = MockUpdate()
+    mock_context = MockContext()
+    message_id = "test_msg_999"
+    user_request_start_time = 0.0
+    
+    # יצירת mock gpt_result
+    mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
+
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "תשובה", message_id, user_request_start_time, mock_gpt_result))
 
     assert captured, "Notification not sent"
     txt = captured['msg']

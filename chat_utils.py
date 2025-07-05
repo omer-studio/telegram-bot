@@ -38,6 +38,7 @@ __all__: List[str] = [
     # chat-history helpers
     "update_chat_history",
     "get_chat_history_messages",
+    "get_chat_history_messages_fast",
     "get_user_stats_and_history",
     "get_user_stats",
     # context & greeting helpers
@@ -181,6 +182,51 @@ def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list
 
     if should_log_message_debug():
         print(f"[HISTORY_DEBUG] נשלחה היסטוריה מ-{CHAT_HISTORY_PATH} | chat_id={chat_id} | סה\"כ הודעות={len(messages)} | user={user_count} | assistant={assistant_count}")
+    return messages
+
+
+def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) -> list:
+    """
+    🔧 פונקציה מהירה לקריאת היסטוריה מקובץ מקומי בלבד
+    זו גרסה מהירה יותר של get_chat_history_messages - בלי Google Sheets
+    """
+    try:
+        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
+            history_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []  # מחזיר רשימה ריקה אם אין קובץ
+
+    chat_id = str(chat_id)
+    if chat_id not in history_data or "history" not in history_data[chat_id]:
+        return []
+
+    history = history_data[chat_id]["history"]
+    max_entries = limit * 2 if limit is not None else 20  # 🔧 הקטנה ל-20 במקום 30
+    last_entries = history if len(history) < max_entries else history[-max_entries:]
+
+    messages: List[Dict[str, str]] = []
+    for entry in last_entries:
+        user_content = entry.get("user", "").strip()
+        bot_content = entry.get("bot", "").strip()
+        
+        # 🚨 SECURITY: סינון הודעות פנימיות
+        if bot_content and any(marker in bot_content for marker in ["[עדכון פרופיל]", "[הודעה אוטומטית", "[תשובת GPT-A]"]):
+            continue
+        
+        if user_content and user_content.startswith("[הודעה"):
+            continue
+        
+        # הוספת הודעות
+        if user_content:
+            messages.append({"role": "user", "content": user_content})
+        
+        if bot_content:
+            messages.append({"role": "assistant", "content": bot_content})
+        
+        # הגבלה
+        if limit and len(messages) >= limit:
+            break
+
     return messages
 
 

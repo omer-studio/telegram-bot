@@ -55,7 +55,7 @@ class UserSession:
     message_id: str
     stage: str  # "queued", "processing", "gpt_a", "background", "completed"
     queue_position: int  # FIFO position
-    max_allowed_time: float = 30.0  # מקסימום 30 שניות לסשן
+    max_allowed_time: float = 45.0  # 🔧 תיקון: הגדלה ל-45 שניות במקום 30
     
     def is_timeout(self) -> bool:
         """בדיקה אם הסשן עבר timeout"""
@@ -334,13 +334,18 @@ class ConcurrentMonitor:
                 self.timeout_count += 1
                 try:
                     # 🔧 תיקון: הוספת פרטים ספציפיים יותר למניעת "Unknown error"
-                    self._send_error_alert("session_timeout", {
+                    timeout_details = {
                         "error": f"Session timeout after {response_time:.2f}s",
                         "chat_id": chat_id,
                         "duration": response_time,
                         "stage": session.stage,
-                        "message_id": session.message_id
-                    })
+                        "message_id": session.message_id,
+                        "queue_position": session.queue_position,
+                        "max_allowed_time": session.max_allowed_time,
+                        "timestamp": get_israel_time().strftime('%d/%m/%Y %H:%M:%S')
+                    }
+                    self._send_error_alert("session_timeout", timeout_details)
+                    logging.error(f"[ConcurrentMonitor] 🚨 Session timeout: {chat_id} after {response_time:.2f}s (stage: {session.stage})")
                 except Exception as e:
                     logging.error(f"[ConcurrentMonitor] Failed to send timeout alert: {e}")
             
@@ -364,26 +369,29 @@ class ConcurrentMonitor:
     
     async def _cleanup_stale_sessions(self):
         """
-        🧹 ניקוי אוטומטי של סשנים תקועים (כל 15 שניות)
+        🧹 ניקוי אוטומטי של סשנים תקועים (כל 10 שניות)
         ⚠️  מנגנון בטיחות קריטי למניעת memory leaks וסשנים תקועים
         🚨 בלי הפונקציה הזו - סשנים יישארו תקועים לנצח ויגרמו לקריסה!
         """
         while True:
             try:
                 stale_sessions = []
+                current_time = time.time()
                 
                 # יצירת עותק של הרשימה כדי למנוע שגיאות בזמן איטרציה
                 active_sessions_copy = dict(self.active_sessions)
                 
                 for chat_id, session in active_sessions_copy.items():
+                    session_duration = current_time - session.start_time
                     if session.is_timeout():
-                        stale_sessions.append(chat_id)
+                        stale_sessions.append((chat_id, session_duration))
+                        logging.warning(f"[ConcurrentMonitor] 🚨 Session timeout detected: {chat_id} after {session_duration:.2f}s (stage: {session.stage})")
                 
                 # ניקוי סשנים תקועים
-                for chat_id in stale_sessions:
+                for chat_id, duration in stale_sessions:
                     try:
                         await self.end_user_session(chat_id, success=False)
-                        logging.warning(f"[ConcurrentMonitor] 🧹 Cleaned stale session: {chat_id}")
+                        logging.warning(f"[ConcurrentMonitor] 🧹 Cleaned stale session: {chat_id} (duration: {duration:.2f}s)")
                     except Exception as e:
                         logging.error(f"[ConcurrentMonitor] Error cleaning stale session {chat_id}: {e}")
                         # הסרה ידנית אם end_user_session נכשל
@@ -397,18 +405,20 @@ class ConcurrentMonitor:
                 if stale_sessions:
                     try:
                         # 🔧 תיקון: הוספת פרטים ספציפיים יותר למניעת "Unknown error"
+                        session_details = [f"{chat_id}({duration:.2f}s)" for chat_id, duration in stale_sessions]
                         self._send_error_alert("stale_sessions_cleaned", {
                             "error": f"Cleaned {len(stale_sessions)} stale sessions",
                             "chat_id": "System",  # זה ניקוי מערכת, לא משתמש ספציפי
                             "count": len(stale_sessions),
-                            "sessions": stale_sessions,
-                            "duration": "30s timeout exceeded"
+                            "sessions": session_details,
+                            "duration": "45s timeout exceeded",
+                            "details": f"Sessions: {', '.join(session_details)}"
                         })
                     except Exception as e:
                         logging.error(f"[ConcurrentMonitor] Failed to send cleanup alert: {e}")
                 
                 # 🔧 תיקון: בדיקה תכופה יותר למניעת תקיעות
-                await asyncio.sleep(15)  # בדיקה כל 15 שניות במקום 30
+                await asyncio.sleep(10)  # בדיקה כל 10 שניות במקום 15
                 
             except asyncio.CancelledError:
                 # Task בוטל - יציאה נקייה
@@ -615,6 +625,18 @@ class ConcurrentMonitor:
             for key, value in details.items():
                 if key not in ["component", "error", "chat_id"]:
                     error_details[key] = value
+            
+            # 🔧 תיקון: הוספת פרטים ספציפיים ל-session timeout
+            if alert_type == "session_timeout":
+                error_details.update({
+                    "component": "session_timeout",
+                    "error": f"Session timeout after {details.get('duration', 0):.2f}s",
+                    "chat_id": details.get("chat_id", "Unknown"),
+                    "duration": details.get("duration", 0),
+                    "stage": details.get("stage", "Unknown"),
+                    "message_id": details.get("message_id", "Unknown"),
+                    "timestamp": get_israel_time().strftime('%d/%m/%Y %H:%M:%S')
+                })
             
             send_concurrent_alert("concurrent_error", error_details)
         except Exception as e:

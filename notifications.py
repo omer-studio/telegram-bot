@@ -715,7 +715,7 @@ def send_admin_notification(message, urgent=False):
         print(f"💥 שגיאה בשליחת הודעה: {e}")
 
 def send_admin_notification_raw(message):
-    """שולח הודעה לאדמין בלי הכותרת האוטומטית - רק עם זמן בסוף."""
+    """שולח הודעה לאדמין בלי הכותרת האוטומטית - רק עם זמן בסוף. מחזיר message_id ואם זו הודעת הרצת מעבדי פרופיל - מוחק אותה אוטומטית."""
     try:
         notification_text = f"{message}\n\n⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
 
@@ -729,11 +729,30 @@ def send_admin_notification_raw(message):
         response = requests.post(url, data=data, timeout=10)
         if response.status_code == 200:
             print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=sent")
+            try:
+                msg_id = response.json().get("result", {}).get("message_id")
+                # אם זו הודעת הרצת מעבדי פרופיל - מחק מיד
+                if message.strip().startswith("🛠️ הרצת מעבדי פרופיל") and msg_id:
+                    del_url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/deleteMessage"
+                    del_data = {
+                        "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
+                        "message_id": msg_id
+                    }
+                    del_resp = requests.post(del_url, data=del_data, timeout=10)
+                    if del_resp.status_code == 200:
+                        print(f"[DEBUG] הודעת הרצת מעבדי פרופיל נמחקה אוטומטית (message_id={msg_id})")
+                    else:
+                        print(f"[DEBUG] מחיקת הודעה נכשלה: {del_resp.status_code}")
+                return msg_id
+            except Exception as e:
+                print(f"[DEBUG] שגיאה בשליפת/מחיקת message_id: {e}")
+                return None
         else:
             print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=fail | code={response.status_code}")
-
+            return None
     except Exception as e:
         print(f"💥 שגיאה בשליחת הודעה: {e}")
+        return None
 
 # === הוספה: שליחת התראת קוד סודי לאדמין ===
 def send_admin_secret_command_notification(message: str):
@@ -916,13 +935,28 @@ def send_concurrent_alert(alert_type: str, details: dict):
                 f"🚨 יש לבדוק אם Google Sheets מגיב כראוי"
             )
         elif alert_type == "concurrent_error":
-            message = (
-                f"❌ **שגיאה במערכת Concurrent**\n"
-                f"🔧 רכיב: {details.get('component', 'לא ידוע')}\n"
-                f"📝 שגיאה: {details.get('error', 'לא ידוע')}\n"
-                f"👤 משתמש: {details.get('chat_id', 'לא ידוע')}\n"
-                f"⏰ זמן: {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
-            )
+            # 🔧 תיקון: הוספת פרטים ספציפיים ל-session timeout
+            if details.get('component') == 'session_timeout':
+                message = (
+                    f"🚨 **Session Timeout - שגיאה קריטית**\n"
+                    f"🔧 רכיב: {details.get('component', 'לא ידוע')}\n"
+                    f"📝 שגיאה: {details.get('error', 'לא ידוע')}\n"
+                    f"👤 משתמש: {details.get('chat_id', 'לא ידוע')}\n"
+                    f"⏱️ משך: {details.get('duration', 0):.2f} שניות\n"
+                    f"📊 שלב: {details.get('stage', 'לא ידוע')}\n"
+                    f"🆔 הודעה: {details.get('message_id', 'לא ידוע')}\n"
+                    f"🎯 מיקום בתור: {details.get('queue_position', 'לא ידוע')}\n"
+                    f"⏰ זמן מקסימלי: {details.get('max_allowed_time', 45)} שניות\n"
+                    f"🕐 זמן: {details.get('timestamp', get_israel_time().strftime('%d/%m/%Y %H:%M:%S'))}"
+                )
+            else:
+                message = (
+                    f"❌ **שגיאה במערכת Concurrent**\n"
+                    f"🔧 רכיב: {details.get('component', 'לא ידוע')}\n"
+                    f"📝 שגיאה: {details.get('error', 'לא ידוע')}\n"
+                    f"👤 משתמש: {details.get('chat_id', 'לא ידוע')}\n"
+                    f"⏰ זמן: {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
+                )
         elif alert_type == "queue_failure":
             message = (
                 f"🔥 **כשל בתור Google Sheets**\n"
@@ -1642,45 +1676,55 @@ def diagnose_critical_users_system():
             except Exception as e:
                 data_dir_status["error"] = str(e)
         
-        # דוח מלא
+        # בדיקת תקינות המערכת
+        system_ok = True
+        issues = []
+        
+        # בדיקה 1: תיקיית DATA
+        if not data_dir_status['exists']:
+            system_ok = False
+            issues.append("❌ תיקיית DATA לא קיימת")
+        elif not data_dir_status['writable']:
+            system_ok = False
+            issues.append("❌ תיקיית DATA לא ניתנת לכתיבה")
+        
+        # בדיקה 2: קובץ ראשי
+        if not main_file_status['exists']:
+            system_ok = False
+            issues.append("❌ קובץ משתמשים קריטיים לא קיים")
+        elif not main_file_status['readable']:
+            system_ok = False
+            issues.append("❌ קובץ משתמשים קריטיים לא ניתן לקריאה")
+        
+        # בדיקה 3: משתמשים לא מטופלים
+        unrecovered_count = main_file_status.get('unrecovered_count', 0)
+        if unrecovered_count > 5:
+            system_ok = False
+            issues.append(f"⚠️ {unrecovered_count} משתמשים מחכים להתאוששות (יותר מדי)")
+        
+        # דוח קצר וברור
+        status_emoji = "✅" if system_ok else "❌"
+        status_text = "תקין" if system_ok else "לא תקין"
+        
         report = f"""
 🔍 דוח אבחון מערכת משתמשים קריטיים:
 
-📁 תיקיית DATA:
-   קיימת: {data_dir_status['exists']}
-   ניתנת לכתיבה: {data_dir_status['writable']}
-   {f"שגיאה: {data_dir_status.get('error', '')}" if 'error' in data_dir_status else ""}
+{status_emoji} סטטוס: {status_text}
 
-📄 קובץ ראשי ({CRITICAL_ERROR_USERS_FILE}):
-   קיים: {main_file_status['exists']}
-   גודל: {main_file_status['size']} bytes
-   ניתן לקריאה: {main_file_status['readable']}
-   משתמשים: {main_file_status['users_count']}
-   לא התאוששו: {main_file_status.get('unrecovered_count', 0)}
-   {f"שינוי אחרון: {main_file_status.get('last_modified', 'לא ידוע')}" if main_file_status['exists'] else ""}
-   {f"שגיאה: {main_file_status.get('error', '')}" if 'error' in main_file_status else ""}
+📊 סיכום:
+   • משתמשים קריטיים: {main_file_status['users_count']}
+   • מחכים להתאוששות: {unrecovered_count}
+   • קבצים זמניים: {len(temp_files)}"""
 
-🔄 קובץ Backup:
-   קיים: {backup_status['exists']}
-   גודל: {backup_status['size']} bytes
-   ניתן לקריאה: {backup_status['readable']}
-   משתמשים: {backup_status['users_count']}
-   {f"שגיאה: {backup_status.get('error', '')}" if 'error' in backup_status else ""}
-
-⏳ קבצים זמניים:
-   נמצאו: {len(temp_files)}"""
-        
-        for temp_file in temp_files:
-            report += f"""
-   - {temp_file['filename']}: {temp_file['users_count']} משתמשים, {temp_file['size']} bytes"""
-            if 'error' in temp_file:
-                report += f" (שגיאה: {temp_file['error']})"
-        
-        if main_file_status.get('unrecovered_users'):
+        if not system_ok:
             report += f"""
 
-👥 משתמשים שמחכים להתאוששות:
-   {', '.join(main_file_status['unrecovered_users'])}"""
+🚨 בעיות שצריך לתקן:
+{chr(10).join(issues)}"""
+        else:
+            report += f"""
+
+✅ הכל תקין - המערכת מוכנה!"""
         
         print(report)
         
