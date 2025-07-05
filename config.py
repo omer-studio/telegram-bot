@@ -44,9 +44,10 @@ if not IS_CI_ENVIRONMENT:
     try:
         import gspread
         from oauth2client.service_account import ServiceAccountCredentials
-        from litellm import completion
+        from lazy_litellm import completion
         from fields_dict import FIELDS_DICT
-        from prompts import SYSTEM_PROMPT  # ייבוא ישיר של הפרומט הראשי
+        # ייבוא ישיר של הפרומט הראשי - רק בסביבת ייצור
+        from prompts import SYSTEM_PROMPT
     except ImportError as e:
         print(f"⚠️ Warning: Failed to import dependency: {e}")
         # בסביבת ייצור זה קריטי, אבל ממשיכים לפיתוח
@@ -66,6 +67,7 @@ else:
     _lazy.completion = lambda *args, **kwargs: None  # type: ignore[attr-defined]
     _lazy.embedding = lambda *args, **kwargs: None  # type: ignore[attr-defined]
     _sys.modules.setdefault("lazy_litellm", _lazy)
+    # הגדרות dummy לסביבת CI
     FIELDS_DICT = {"dummy": "dummy"}
     SYSTEM_PROMPT = "dummy system prompt"
 
@@ -378,7 +380,6 @@ def setup_google_sheets():
 # ⚠️ יש להשתמש אך ורק במפתחות מתוך FIELDS_DICT! אין להכניס שמות שדה קשיחים חדשים כאן או בקוד אחר.
 # שדות פרופיל משתמש - שימוש בפונקציה מה-fields_dict
 def get_profile_fields():
-    from fields_dict import FIELDS_DICT
     core_fields = ["age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"]
     return [key for key in core_fields if key in FIELDS_DICT]
 

@@ -21,7 +21,7 @@ import pytz
 # ייבוא פונקציות עזר
 from utils import get_chat_history_messages, get_israel_time
 from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
-from prompts import build_profile_extraction_enhanced_prompt
+from prompts import build_profile_extraction_enhanced_prompt, JSON_RESPONSE_INSTRUCTION, JSON_EXAMPLE
 from gpt_utils import normalize_usage_dict, safe_get_usage_value, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from config import GPT_MODELS, GPT_PARAMS
 
@@ -58,12 +58,10 @@ def should_run_gpt_e(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: O
 
 def build_fields_list():
     """בונה רשימת שדות מותרים מfields_dict.py"""
-    from fields_dict import get_fields_with_prompt_text
+    from prompts import _get_filtered_profile_fields
     
-    profile_fields = get_fields_with_prompt_text()
     # סינון שדות לא רלוונטיים לgpt_e
-    relevant_fields = [field for field in profile_fields 
-                      if field not in ["last_update", "summary", "date_first_seen"]]
+    relevant_fields = _get_filtered_profile_fields()
     
     # יצירת רשימה בפורמט קריא
     fields_list = []
@@ -119,8 +117,8 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
 
 דגש מיוחד: השדה "primary_conflict" צריך לשקף במדויק את מה שהמשתמש מתמודד איתו כרגע על בסיס ההיסטוריה האחרונה.
 
-החזר JSON נקי בשורה אחת בלבד, ללא ``` וללא טקסט נוסף.
-דוגמה: {{"age": 30, "self_religious_affiliation": "יהודי"}}
+{JSON_RESPONSE_INSTRUCTION}
+{JSON_EXAMPLE}
 """
 
     return user_prompt

@@ -310,14 +310,24 @@ BOT_REPLY_SUMMARY_PROMPT = (
 # --- 5. פרומט gpt_c - חילוץ ועדכון משופר (gpt_c) ---
 # משמש ל-gpt_c שמחלץ מידע חדש ועדכן את הפרופיל הקיים בסיכום קריא ומדויק
 
+# קבועים משותפים למניעת כפילות
+NON_EXTRACTABLE_FIELDS = ["last_update", "summary", "date_first_seen"]
+JSON_RESPONSE_INSTRUCTION = "החזר JSON נקי בשורה אחת, ללא ``` וללא טקסט נוסף."
+JSON_EXAMPLE = 'דוגמה: {"age": "XX", "self_religious_affiliation": "יהודי"}'
+
+def _get_filtered_profile_fields():
+    """פונקציה פנימית לקבלת שדות פרופיל מסוננים"""
+    from fields_dict import get_fields_with_prompt_text
+    profile_fields = get_fields_with_prompt_text()
+    return [field for field in profile_fields if field not in NON_EXTRACTABLE_FIELDS]
+
 def build_profile_extraction_enhanced_prompt():
     """בונה את הפרומט גpt_c דינמית עם השדות מ-fields_dict.py"""
-    from fields_dict import get_fields_with_prompt_text, get_field_prompt_text
+    from fields_dict import get_field_prompt_text
     
     # בניית רשימת השדות המותרים
-    profile_fields = get_fields_with_prompt_text()
-    fields_list = "\n".join([f"- {field}: {get_field_prompt_text(field)}" for field in profile_fields 
-                           if field not in ["last_update", "summary", "date_first_seen"]])  # השדות האלה לא רלוונטיים לחילוץ
+    profile_fields = _get_filtered_profile_fields()
+    fields_list = "\n".join([f"- {field}: {get_field_prompt_text(field)}" for field in profile_fields])
     
     return f"""
 ROLE:
@@ -326,8 +336,8 @@ ROLE:
 החזר JSON עם רק השדות שנאמרו במפורש בהודעה
 אם לא נאמר כלום — החזר {{}} בלבד
 
-חשוב: החזר JSON נקי בשורה אחת, ללא ``` וללא טקסט נוסף.
-דוגמה: {{"age": "XX", "self_religious_affiliation": "יהודי"}}
+חשוב: {JSON_RESPONSE_INSTRUCTION}
+{JSON_EXAMPLE}
 
 שדות מותרים:
 {fields_list}
@@ -335,13 +345,10 @@ ROLE:
 
 def build_profile_merge_prompt():
     """בונה את הפרומט gpt_d דינמית עם השדות מ-fields_dict.py"""
-    from fields_dict import get_fields_with_prompt_text
     
     # בניית רשימת השדות המותרים (רק שמות השדות)
-    profile_fields = get_fields_with_prompt_text()
-    fields_names = [field for field in profile_fields 
-                   if field not in ["last_update", "summary", "date_first_seen"]]  # השדות האלה לא רלוונטיים למיזוג
-    fields_list = ", ".join(fields_names)
+    profile_fields = _get_filtered_profile_fields()
+    fields_list = ", ".join(profile_fields)
     
     return f"""
 אתה מקבל פרופיל קיים ושדות חדשים שחולצו מהודעת משתמש
@@ -359,10 +366,9 @@ def build_profile_merge_prompt():
 שדות מותרים:
 {fields_list}
 
-החזר רק JSON תקין בשורה אחת, ללא ``` וללא טקסט נוסף.
-דוגמה: {{"age": "XX", "self_religious_affiliation": "יהודי"}}
+החזר רק JSON תקין בשורה אחת, {JSON_RESPONSE_INSTRUCTION[8:]}  # הסרת "חשוב: " מתחילת המחרוזת
+{JSON_EXAMPLE}
     """
 
-# לתאימות לאחור - שימוש בפונקציות הדינמיות
-PROFILE_EXTRACTION_ENHANCED_PROMPT = build_profile_extraction_enhanced_prompt()
-PROFILE_MERGE_PROMPT = build_profile_merge_prompt()
+# הפונקציות build_profile_extraction_enhanced_prompt ו-build_profile_merge_prompt
+# משמשות ישירות בקוד במקום המשתנים הקבועים

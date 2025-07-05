@@ -626,11 +626,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # מונע מצב הודעה כפולה לפני שמירת תשובת GPT,
             # וכך נמנע שליחת ברכת "בוקר/לילה טוב" כפולה (Race-condition).
             history_entry_created = False
-            try:
-                update_chat_history(chat_id, user_msg, "")
-                history_entry_created = True
-            except Exception as hist_err:
-                logging.warning(f"[HISTORY] לא הצלחתי ליצור רשומת היסטוריה מוקדמת: {hist_err}")
+            # try:
+            #     update_chat_history(chat_id, user_msg, "")
+            #     history_entry_created = True
+            # except Exception as hist_err:
+            #     logging.warning(f"[HISTORY] לא הצלחתי ליצור רשומת היסטוריה מוקדמת: {hist_err}")
 
             # שלב 1: איסוף הנתונים הנדרשים לתשובה טובה (מהיר)
             current_summary = get_user_summary(chat_id) or ""
