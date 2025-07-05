@@ -241,7 +241,15 @@ async def send_recovery_messages_to_affected_users():
         
         recovery_message = "👋  היי, חזרתי! הבעיה נפתרה והכל עובד שוב כרגיל. 😊\n\nאפשר לשלוח לי הודעה ואענה כרגיל!"
         
-        bot = telegram.Bot(token=BOT_TOKEN)
+        # שימוש ב-instance קיים במקום יצירת חדש
+        try:
+            from main import get_bot_app
+            app = get_bot_app()
+            bot = app.bot
+        except Exception:
+            # fallback ליצירת instance חדש רק אם אין זמין
+            bot = telegram.Bot(token=BOT_TOKEN)
+        
         recovered_users = []
         failed_users = []
         processed_lost_messages = []

@@ -63,10 +63,10 @@ jobs:
           # זה ייכשל את ה־CI, כפי שנרצה. לכן אין יותר התעלמות משגיאות.
           python -m pytest -v --tb=short
 
-      # 7. בדיקת pre-deploy הקריטית – חייבת לעבור לפני deploy
-      - name: 🔒 Pre-deploy critical check
+      # 7. בדיקת pre-deploy מקיפה – חייבת לעבור לפני deploy
+      - name: 🔒 Comprehensive pre-deploy check
         run: |
-          python pre_deploy_critical_check.py
+          python comprehensive_deploy_check.py
 
   # שלב 2: Deploy ל-Render (רק אחרי שהבדיקות עברו בהצלחה)
   deploy:

@@ -73,12 +73,12 @@ def run_post_deploy_check():
             )
             
             if is_new_deploy:
-                print("🚨 זוהה deploy חדש - מריץ בדיקת post-deploy קלה...")
+                print("[DEPLOY] 🚨 זוהה deploy חדש - מריץ בדיקת post-deploy קלה...")
                 
                 # 🔧 MEMORY OPTIMIZATION: lightweight check instead of subprocess
                 try:
                     # Basic health check without spawning subprocess
-                    print("🔍 מבצע בדיקת תקינות בסיסית...")
+                    print("[DEPLOY] 🔍 מבצע בדיקת תקינות בסיסית...")
                     
                     # Quick syntax/import validation
                     try:
@@ -86,32 +86,32 @@ def run_post_deploy_check():
                         import bot_setup
                         import message_handler
                         health_passed = True
-                        print("✅ בדיקת imports בסיסית עברה")
+                        print("[DEPLOY] ✅ בדיקת imports בסיסית עברה")
                     except Exception as e:
-                        print(f"❌ בדיקת imports נכשלה: {e}")
+                        print(f"[DEPLOY] ❌ בדיקת imports נכשלה: {e}")
                         health_passed = False
                     
                     if health_passed:
-                        print("✅ בדיקת post-deploy קלה עברה - הבוט אושר להפעלה!")
+                        print("[DEPLOY] ✅ בדיקת post-deploy קלה עברה - הבוט אושר להפעלה!")
                         # יצירת flag שהverification עבר
                         os.makedirs("data", exist_ok=True)
                         with open("data/deploy_verified.flag", "w", encoding="utf-8") as f:
                             f.write(f"verified_at_{os.getenv('RENDER_GIT_COMMIT', 'unknown')}")
                     else:
-                        print("⚠️ בדיקת תקינות קלה נכשלה אבל ממשיך (memory-safe mode)")
+                        print("[DEPLOY] ⚠️ בדיקת תקינות קלה נכשלה אבל ממשיך (memory-safe mode)")
                         
                 except Exception as e:
-                    print(f"⚠️ שגיאה בבדיקת post-deploy קלה: {e} - ממשיך בכל מקרה")
+                    print(f"[DEPLOY] ⚠️ שגיאה בבדיקת post-deploy קלה: {e} - ממשיך בכל מקרה")
                     
             else:
-                print("ℹ️ Deploy קיים מאומת - ממשיך להפעלת הבוט")
+                print("[DEPLOY] ℹ️ Deploy קיים מאומת - ממשיך להפעלת הבוט")
         else:
-            print("ℹ️ סביבת פיתוח - דולג על בדיקת post-deploy")
+            print("[DEPLOY] ℹ️ סביבת פיתוח - דולג על בדיקת post-deploy")
             
     except Exception as e:
-        print(f"⚠️ שגיאה בבדיקת post-deploy: {e}")
+        print(f"[DEPLOY] ⚠️ שגיאה בבדיקת post-deploy: {e}")
         # 🔧 MEMORY OPTIMIZATION: don't exit on verification failure in production
-        print("⚠️ ממשיך להפעלת הבוט למרות שגיאת verification (memory-safe mode)")
+        print("[DEPLOY] ⚠️ ממשיך להפעלת הבוט למרות שגיאת verification (memory-safe mode)")
 
 # הפעלת הבדיקה מיד כשהקובץ נטען
 run_post_deploy_check()
@@ -126,7 +126,7 @@ def get_bot_app():
     
     # 🔧 תיקון: בדיקה משופרת למניעת setup כפול
     if _bot_setup_completed and _app_instance is not None:
-        print("ℹ️  הבוט כבר הוגדר, מחזיר instance קיים")
+        print("[BOT] ℹ️  הבוט כבר הוגדר, מחזיר instance קיים")
         return _app_instance
     
     # בדיקה נוספת: אם זה בsandbox mode או עם uvicorn (אבל לא בסביבת production)
@@ -136,22 +136,22 @@ def get_bot_app():
     is_local_uvicorn = any(arg in sys.argv[0].lower() for arg in ["uvicorn"]) and not is_production
     
     if is_sandbox_mode or is_local_uvicorn:
-        print("⚠️  זוהה sandbox/uvicorn mode - עובד בסביבת פיתוח")
+        print("[BOT] ⚠️  זוהה sandbox/uvicorn mode - עובד בסביבת פיתוח")
         # המשיכים כרגיל - אין צורך לעצור את הבוט
     
     # בדיקה נוספת: אם זה deploy חדש ברנדר
     if os.getenv("RENDER") and os.getenv("IS_PULL_REQUEST"):
-        print("ℹ️  זוהה deploy חדש ברנדר - ממתין להשלמת deployment...")
+        print("[BOT] ℹ️  זוהה deploy חדש ברנדר - ממתין להשלמת deployment...")
         time.sleep(5)  # ממתין קצת שהdeployment יסתיים
     
     # 🔧 תיקון: תמיד עושה setup אם אין instance תקין, לא תלוי בflag
     if _app_instance is None:
-        print("🚀 מבצע setup ראשוני של הבוט...")
+        print("[BOT] 🚀 מבצע setup ראשוני של הבוט...")
         _app_instance = setup_bot()
         _bot_setup_completed = True
-        print("✅ Setup הבוט הושלם!")
+        print("[BOT] ✅ Setup הבוט הושלם!")
     elif not _bot_setup_completed:
-        print("ℹ️  יש instance אבל הsetup לא הושלם, מסמן כהושלם")
+        print("[BOT] ℹ️  יש instance אבל הsetup לא הושלם, מסמן כהושלם")
         _bot_setup_completed = True
     
     return _app_instance
@@ -183,25 +183,25 @@ async def lifespan(app: FastAPI):
     
     # 🔍 אבחון מערכת משתמשים קריטיים
     try:
-        print("🔍 מבצע אבחון מערכת משתמשים קריטיים...")
+        print("[STARTUP] 🔍 מבצע אבחון מערכת משתמשים קריטיים...")
         diagnosis = diagnose_critical_users_system()
         if diagnosis.get("error"):
-            print(f"⚠️ נמצאה בעיה במערכת משתמשים קריטיים: {diagnosis['error']}")
+            print(f"[STARTUP] ⚠️ נמצאה בעיה במערכת משתמשים קריטיים: {diagnosis['error']}")
         else:
-            print("✅ אבחון מערכת משתמשים קריטיים הושלם")
+            print("[STARTUP] ✅ אבחון מערכת משתמשים קריטיים הושלם")
     except Exception as e:
-        print(f"⚠️ שגיאה באבחון מערכת משתמשים קריטיים: {e}")
+        print(f"[STARTUP] ⚠️ שגיאה באבחון מערכת משתמשים קריטיים: {e}")
     
     # --- שליחת הודעות התאוששות אוטומטית ---
     try:
-        print("🔄 בודק אם יש משתמשים שמחכים להודעות התאוששות...")
+        print("[STARTUP] 🔄 בודק אם יש משתמשים שמחכים להודעות התאוששות...")
         recovered_count = await send_recovery_messages_to_affected_users()
         if recovered_count > 0:
-            print(f"✅ נשלחו הודעות התאוששות ל-{recovered_count} משתמשים!")
+            print(f"[STARTUP] ✅ נשלחו הודעות התאוששות ל-{recovered_count} משתמשים!")
         else:
-            print("ℹ️  אין משתמשים שמחכים להודעות התאוששות")
+            print("[STARTUP] ℹ️  אין משתמשים שמחכים להודעות התאוששות")
     except Exception as e:
-        print(f"⚠️ שגיאה בשליחת הודעות התאוששות: {e}")
+        print(f"[STARTUP] ⚠️ שגיאה בשליחת הודעות התאוששות: {e}")
         # לא עוצרים את ההפעלה בגלל זה
     
     # --- הגדרת webhook בטלגרם ---
@@ -243,32 +243,40 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[STARTUP] שגיאה בהגדרת webhook בטלגרם: {e}")
     
-    # 🚨 בדיקת תפקוד קריטית אחרי הפעלה מלאה
-    try:
-        print("🔍 מבצע בדיקת תפקוד קריטית אחרי הפעלה...")
-        from auto_rollback import emergency_rollback_if_broken
-        
-        # נותן לכל המערכות רגע להיות מוכנות
-        time.sleep(3)
-        
-        rollback_result = emergency_rollback_if_broken()
-        if rollback_result:
-            print("✅ בדיקת תפקוד קריטית עברה בהצלחה!")
-        else:
-            print("🚨 בדיקת תפקוד זיהתה בעיות - בדוק התראות אדמין!")
-    except Exception as health_check_error:
-        print(f"⚠️ בדיקת תפקוד קריטית נכשלה: {health_check_error}")
-        # נשלח התראה לאדמין
+            # 🚨 בדיקת תפקוד קריטית אחרי הפעלה מלאה
         try:
-            from notifications import send_admin_notification
-            send_admin_notification(
-                f"🚨 בדיקת תפקוד קריטית נכשלה בהפעלה!\n\n"
-                f"❌ שגיאה: {health_check_error}\n"
-                f"⚠️ ייתכן שהבוט לא עובד תקין!",
-                urgent=True
-            )
-        except Exception:
-            pass
+            print("🔍 מבצע בדיקת תפקוד קריטית אחרי הפעלה...")
+            
+            # נותן לכל המערכות רגע להיות מוכנות
+            time.sleep(3)
+            
+            # בדיקה בטוחה של auto_rollback
+            try:
+                from auto_rollback import emergency_rollback_if_broken
+                rollback_result = emergency_rollback_if_broken()
+                if rollback_result:
+                    print("✅ בדיקת תפקוד קריטית עברה בהצלחה!")
+                else:
+                    print("🚨 בדיקת תפקוד זיהתה בעיות - בדוק התראות אדמין!")
+            except ImportError as import_error:
+                print(f"⚠️ auto_rollback לא זמין: {import_error}")
+                print("✅ ממשיך ללא בדיקת rollback")
+            except Exception as rollback_error:
+                print(f"⚠️ שגיאה בבדיקת rollback: {rollback_error}")
+                print("✅ ממשיך ללא בדיקת rollback")
+        except Exception as health_check_error:
+            print(f"⚠️ בדיקת תפקוד קריטית נכשלה: {health_check_error}")
+            # נשלח התראה לאדמין
+            try:
+                from notifications import send_admin_notification
+                send_admin_notification(
+                    f"🚨 בדיקת תפקוד קריטית נכשלה בהפעלה!\n\n"
+                    f"❌ שגיאה: {health_check_error}\n"
+                    f"⚠️ ייתכן שהבוט לא עובד תקין!",
+                    urgent=True
+                )
+            except Exception:
+                pass
     
     # הודעת הצלחה ברורה כשהכל מוכן
     print('\n' + '='*80)

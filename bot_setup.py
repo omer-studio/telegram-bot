@@ -135,7 +135,6 @@ def setup_single_critical_file(file_path):
     """יוצר קובץ קריטי יחיד עם מדידת זמן"""
     start_time = time.time()
     file_name = os.path.basename(file_path)
-    print(f"⏱️  בודק/יוצר קובץ {file_name}...")
     
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     if not os.path.exists(file_path):
@@ -150,7 +149,7 @@ def setup_single_critical_file(file_path):
     
     elapsed_time = time.time() - start_time
     execution_times[f"קובץ {file_name}"] = elapsed_time
-    print(f"✅ קובץ {file_name} ({status}) - {elapsed_time:.3f} שניות")
+    return status
 
 @time_operation("בדיקת קיום קבצים קריטיים - סה״כ")
 def setup_critical_files():
@@ -161,25 +160,31 @@ def setup_critical_files():
         "data/bot_errors.jsonl"
     ]
     
-    print(f"🔍 בודק {len(critical_files)} קבצים קריטיים...")
+    print(f"[SETUP] 🔍 בודק {len(critical_files)} קבצים קריטיים...")
+    
+    # איחוד הדפסות של קבצים קריטיים
+    file_statuses = []
     for file_path in critical_files:
-        setup_single_critical_file(file_path)
+        status = setup_single_critical_file(file_path)
+        file_statuses.append(f"{os.path.basename(file_path)} ({status})")
+    
+    print(f"[SETUP] 📁 קבצים קריטיים: {', '.join(file_statuses)}")
 
 @time_operation("בדיקת והכנת סביבה וירטואלית")
 def setup_virtual_environment():
     """בודק ויוצר venv במידת הצורך (Windows בלבד)"""
     # 🔧 תיקון: בסביבת production לא צריך venv
     if os.getenv("RENDER"):  # אם רץ ברנדר
-        print("ℹ️  רץ בסביבת production - מדלג על יצירת venv")
+        print("[SETUP] ℹ️  רץ בסביבת production - מדלג על יצירת venv")
         return
         
     if os.name == 'nt':
         venv_path = os.path.join(os.getcwd(), 'venv')
         if not os.path.exists(venv_path):
-            print('🔧 יוצר venv חדש...')
+            print('[SETUP] 🔧 יוצר venv חדש...')
             subprocess.run([sys.executable, '-m', 'venv', 'venv'])
         else:
-            print('✅ venv קיים')
+            print('[SETUP] ✅ venv קיים')
 
 def install_single_dependency(pip_command, description):
     """מתקין dependency יחיד עם מדידת זמן"""
@@ -208,21 +213,21 @@ def install_dependencies():
     מתקין תלויות Python (רק בסביבת פיתוח מקומי)
     בסביבת production (רנדר) או בsandbox mode - מדלג על התקנה
     """
-    print("📦 בודק התקנת תלויות...")
+    print("[SETUP] 📦 בודק התקנת תלויות...")
     
     # 🔧 תיקון חשוב: מניעת התקנות בsandbox ובproduction
     if os.getenv("RENDER"):
-        print("ℹ️  רץ בסביבת production (רנדר) - מדלג על התקנת תלויות")
-        print("    (התלויות כבר אמורות להיות מותקנות מה-requirements.txt)")
+        print("[SETUP] ℹ️  רץ בסביבת production (רנדר) - מדלג על התקנת תלויות")
+        print("[SETUP]    (התלויות כבר אמורות להיות מותקנות מה-requirements.txt)")
         return
     
     # בדיקה נוספת: אם זה sandbox mode
     if any(arg in sys.argv[0].lower() for arg in ["sandbox", "uvicorn"]):
-        print("ℹ️  רץ במצב sandbox - מדלג על התקנת תלויות")
+        print("[SETUP] ℹ️  רץ במצב sandbox - מדלג על התקנת תלויות")
         return
     
     # רק בסביבת פיתוח מקומי (Windows בדרך כלל)
-    print("🔧 סביבת פיתוח מקומי - בודק תלויות...")
+    print("[SETUP] 🔧 סביבת פיתוח מקומי - בודק תלויות...")
     
     pip_commands = [
         ([sys.executable, "-m", "pip", "install", "--upgrade", "pip"], "עדכון pip"),
@@ -374,12 +379,17 @@ def time_scheduler_step(step_name, func):
     print(f"✅ {step_name} הושלם תוך {elapsed_time:.2f} שניות")
     return result
 
+# מתזמן גלובלי לשמירה
+_admin_scheduler = None
+
 @time_operation("הגדרת תזמון דוחות אוטומטיים - סה״כ")
 def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר
     """
     מתזמן דוחות אוטומטיים לאדמין (שגיאות ו-usage) לשעה 8:00 בבוקר.
     פלט: אין (מתזמן דוחות)
     """
+    global _admin_scheduler
+    
     # הגדרת אזור זמן
     def setup_timezone():
         return pytz.timezone("Asia/Jerusalem")
@@ -388,7 +398,10 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
     
     # יצירת מתזמן
     def create_scheduler():
-        return BackgroundScheduler(timezone=tz)
+        global _admin_scheduler
+        scheduler = BackgroundScheduler(timezone=tz)
+        _admin_scheduler = scheduler  # שמירה גלובלית
+        return scheduler
     
     scheduler = time_scheduler_step("יצירת מתזמן רקע", create_scheduler)
     
@@ -429,6 +442,15 @@ def setup_admin_reports(): # מתזמן דוחות אוטומטיים לאדמי
     time_scheduler_step("הפעלת המתזמן", start_scheduler)
     
     print("✅ תזמון דוחות אדמין הופעל (8:00 יומי)")
+    
+    # הדפסת סטטוס המתזמן
+    if _admin_scheduler:
+        print(f"📅 מתזמן פעיל: {_admin_scheduler.running}")
+        print(f"📋 משימות מתוזמנות: {len(_admin_scheduler.get_jobs())}")
+        for job in _admin_scheduler.get_jobs():
+            print(f"   - {job.name}: {job.next_run_time}")
+    else:
+        print("⚠️ מתזמן לא נוצר!")
 
 @time_operation("הגדרת מערכת תזכורות עדינות")
 def setup_gentle_reminders():
@@ -513,10 +535,45 @@ def setup_bot(): # מבצע את כל ההתקנה הראשונית של הבו�
     setup_message_handlers()
     send_startup_notification_timed()
     
+    # שליחת דוח כספי יומי באתחול (ב-thread נפרד, לא מעכב את הבוט)
+    def _send_daily_summary_startup():
+        import asyncio
+        print("🔥 [STARTUP] שולח דוח כספי יומי באתחול...")
+        try:
+            # יצירת event loop חדש בתוך ה-thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(send_daily_summary(days_back=1))
+            loop.close()
+            print("✅ [STARTUP] דוח כספי יומי נשלח בהצלחה באתחול!")
+        except Exception as e:
+            print(f"❌ [STARTUP] שגיאה בשליחת דוח כספי באתחול: {e}")
+    import threading
+    threading.Thread(target=_send_daily_summary_startup, daemon=True).start()
+    
     # הדפסת סיכום זמני הביצוע
     print_execution_summary()
     
     print("🎉 ההתקנה הושלמה בהצלחה!")
     
     _setup_completed = True
-    return app 
+    return app
+
+def get_scheduler_status():
+    """מחזיר סטטוס המתזמן הנוכחי"""
+    global _admin_scheduler
+    if not _admin_scheduler:
+        return {"status": "לא נוצר", "running": False, "jobs": 0}
+    
+    return {
+        "status": "פעיל" if _admin_scheduler.running else "לא פעיל",
+        "running": _admin_scheduler.running,
+        "jobs": len(_admin_scheduler.get_jobs()),
+        "job_details": [
+            {
+                "name": job.name or "ללא שם",
+                "next_run": str(job.next_run_time) if job.next_run_time else "לא מתוזמן"
+            }
+            for job in _admin_scheduler.get_jobs()
+        ]
+    } 
