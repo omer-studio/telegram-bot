@@ -328,6 +328,27 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
         logging.error(f"❌ [DELETE_MSG] כשל בשליחה: {send_err}")
         return False
 
+def _execute_gpt_call(completion_params, full_messages):
+    """הפעלת קריאה ל-GPT באופן סינכרוני"""
+    try:
+        response = litellm.completion(**completion_params)
+        
+        # חילוץ התשובה
+        bot_reply = response.choices[0].message.content
+        
+        # חילוץ נתוני שימוש
+        usage = normalize_usage_dict(response.usage) if hasattr(response, 'usage') else {}
+        
+        return {
+            "bot_reply": bot_reply,
+            "usage": usage,
+            "model": completion_params["model"],
+            "model_dump": response
+        }
+    except Exception as e:
+        logging.error(f"[gpt_a] שגיאה במודל {completion_params['model']}: {e}")
+        raise e
+
 def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_extra_emotion=True, filter_reason="", match_type="unknown"):
     """
     💎 מנוע gpt_a הראשי - גרסה סינכרונית
@@ -409,18 +430,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         # 🚨 הגדלת timeout ל-45 שניות (במקום 30) לטיפול ב-latency גבוה
         GPT_TIMEOUT_SECONDS = 45
         
-        # הרצת GPT ב-thread עם timeout מתקדם
-        loop = asyncio.get_event_loop()
-        gpt_result = loop.run_in_executor(
-            None, 
-            get_main_response_sync, 
-            full_messages, 
-            chat_id, 
-            message_id, 
-            use_extra_emotion, 
-            filter_reason,
-            match_type
-        )
+        # הרצת GPT ישירות (ללא רקורסיה)
+        gpt_result = _execute_gpt_call(completion_params, full_messages)
         
         gpt_duration = time.time() - gpt_start_time
         log_memory_usage("after_gpt_call")
