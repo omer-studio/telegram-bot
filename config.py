@@ -259,6 +259,26 @@ if GEMINI_API_KEY:
 else:
     print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
 
+# 🚀 הגדרות Render לשחזור לוגים
+RENDER_CONFIG = {
+    "API_KEY": config.get("RENDER_API_KEY", ""),
+    "SERVICE_ID": config.get("RENDER_SERVICE_ID", ""),
+    "BASE_URL": "https://api.render.com/v1"
+}
+
+# בדיקת תקינות פרטי Render
+if RENDER_CONFIG["API_KEY"]:
+    print(f"✅ [CONFIG] Render API Key configured")
+    print(f"   Key prefix: {_mask_sensitive(RENDER_CONFIG['API_KEY'], 5)}")
+else:
+    print("⚠️ [CONFIG] אזהרה: RENDER_API_KEY לא נמצא בקונפיגורציה.")
+
+if RENDER_CONFIG["SERVICE_ID"]:
+    print(f"✅ [CONFIG] Render Service ID configured")
+    print(f"   Service ID: {_mask_sensitive(RENDER_CONFIG['SERVICE_ID'], 8)}")
+else:
+    print("⚠️ [CONFIG] אזהרה: RENDER_SERVICE_ID לא נמצא בקונפיגורציה.")
+
 # 🎯 הגדרות מודלים
 FREE_MODELS = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
 PAID_MODELS = ["gpt-4o-mini", "gpt-4o", "gemini/gemini-2.5-flash"]

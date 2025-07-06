@@ -57,3 +57,10 @@ gpt_d_performance.jsonl
 
 # Allow tests directory (needed for CI) – previously ignored
 # /tests/
+
+# Ignore migration directory from SHELL
+/מיגרציה מSHALL/
+
+# Ignore temporary render logs files
+render_logs.txt
+render_logs*.txt
