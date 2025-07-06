@@ -3,6 +3,14 @@ from config import config
 from datetime import datetime
 import json
 
+# ייבוא פונקציית debug logging
+try:
+    from config import should_log_debug_prints
+except ImportError:
+    # ברירת מחדל אם הפונקציה לא קיימת
+    def should_log_debug_prints():
+        return False
+
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 
 # === יצירת טבלאות (אם לא קיימות) ===
@@ -791,3 +799,84 @@ def save_gpt_usage_log(chat_id, model, usage, cost_agorot, timestamp=None):
     except Exception as e:
         if should_log_debug_prints():
             print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
+
+def increment_user_message_count(chat_id):
+    """
+    מעדכן את מונה ההודעות הכולל של המשתמש ב-+1
+    אם המשתמש לא קיים בטבלה, יוצר רשומה חדשה עם מונה 1
+    """
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # בדיקה אם המשתמש כבר קיים
+        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
+        result = cur.fetchone()
+        
+        if result:
+            # משתמש קיים - מעדכן את המונה
+            current_count = result[0] if result[0] is not None else 0
+            new_count = current_count + 1
+            cur.execute(
+                "UPDATE user_profiles SET total_messages_count = %s, updated_at = %s WHERE chat_id = %s",
+                (new_count, datetime.utcnow(), chat_id)
+            )
+            if should_log_debug_prints():
+                print(f"📊 [DB] Updated message count for {chat_id}: {current_count} → {new_count}")
+        else:
+            # משתמש חדש - יוצר רשומה עם מונה 1
+            from fields_dict import get_user_profile_fields
+            
+            # יצירת dict עם כל השדות (ברירת מחדל)
+            insert_data = {'chat_id': chat_id, 'total_messages_count': 1}
+            for field in get_user_profile_fields():
+                if field != 'total_messages_count':  # כבר הוספנו אותו
+                    insert_data[field] = None
+            
+            # הוספת timestamp
+            insert_data['updated_at'] = datetime.utcnow()
+            
+            # יצירת SQL דינמי
+            fields = list(insert_data.keys())
+            placeholders = ', '.join(['%s'] * len(fields))
+            values = list(insert_data.values())
+            
+            insert_sql = f"""
+            INSERT INTO user_profiles ({', '.join(fields)})
+            VALUES ({placeholders})
+            """
+            
+            cur.execute(insert_sql, values)
+            if should_log_debug_prints():
+                print(f"📊 [DB] Created new user profile with message count 1 for {chat_id}")
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ שגיאה בעדכון מונה הודעות עבור {chat_id}: {e}")
+        return False
+
+def get_user_message_count(chat_id):
+    """
+    מחזיר את מספר ההודעות הכולל של המשתמש
+    """
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
+        result = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        return result[0] if result and result[0] is not None else 0
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ שגיאה בקריאת מונה הודעות עבור {chat_id}: {e}")
+        return 0

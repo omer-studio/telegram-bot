@@ -16,8 +16,7 @@ from config import (
     ADMIN_BOT_TELEGRAM_TOKEN,
     MAX_MESSAGE_LENGTH,
     ADMIN_CHAT_ID,
-    MAX_CODE_TRIES,
-    SYSTEM_PROMPT
+    MAX_CODE_TRIES
 )
 from utils import get_israel_time
 from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, update_last_bot_message
@@ -29,8 +28,9 @@ from utils import handle_secret_command, log_event_to_file
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state
+from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state, clear_user_cache_force
 from gpt_a_handler import get_main_response
+from prompts import SYSTEM_PROMPT
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d, smart_update_profile_with_gpt_d_async
@@ -380,7 +380,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     פלט: אין (מטפלת בכל הלוגיקה של הודעה)
     # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב gpt, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
-    from prompts import SYSTEM_PROMPT  # העברתי לכאן כדי למנוע circular import
+
     
     # 🔧 מניעת כפילות - בדיקה אם ההודעה כבר טופלה
     try:
@@ -583,6 +583,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update_user_processing_stage(str(chat_id), "permission_check")
             logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
             print("🔍 בודק הרשאות משתמש מול הגיליון...")
+            
+            # 🔨 ניקוי cache לפני בדיקת הרשאות (למקרה שהcache תקוע)
+            try:
+                clear_result = clear_user_cache_force(chat_id)
+                if clear_result.get("success") and clear_result.get("cleared_count", 0) > 0:
+                    print(f"🔨 נוקו {clear_result.get('cleared_count', 0)} cache keys לפני בדיקת הרשאות")
+            except Exception as cache_err:
+                print(f"⚠️ שגיאה בניקוי cache: {cache_err}")
             
             # בדיקה מלאה של הרשאות במקום בדיקה רק של קיום
             access_result = check_user_access(context.bot_data["sheet"], chat_id)
@@ -847,8 +855,19 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
     try:
         if user_msg.strip() == APPROVE_BUTTON_TEXT():
             # אישור תנאים
+            # 🔨 ניקוי cache לפני האישור
+            from sheets_handler import clear_user_cache_force
+            clear_result = clear_user_cache_force(chat_id)
+            if clear_result.get("success"):
+                print(f"🔨 נוקו {clear_result.get('cleared_count', 0)} cache keys לפני אישור")
+            
             approval_result = approve_user(chat_id)
             if approval_result.get("success"):
+                # 🔨 ניקוי cache נוסף אחרי האישור
+                clear_result2 = clear_user_cache_force(chat_id)
+                if clear_result2.get("success"):
+                    print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
+                
                 await send_system_message(update, chat_id, full_access_message())
                 await send_system_message(
                     update,
