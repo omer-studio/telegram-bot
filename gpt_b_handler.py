@@ -19,6 +19,9 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
     משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
     """
     try:
+        import time
+        start_time = time.time()
+        
         metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "message_id": message_id}
         params = GPT_PARAMS["gpt_b"]
         model = GPT_MODELS["gpt_b"]
@@ -44,6 +47,29 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             response = litellm.completion(**completion_params)
         summary = response.choices[0].message.content.strip()
         usage = normalize_usage_dict(response.usage, response.model)
+        
+        # חישוב זמן עיבוד טהור
+        gpt_duration = time.time() - start_time
+        
+        # 💾 שמירת מטריקות זמן GPT-B למסד הנתונים
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="gpt_timing",
+                chat_id=str(chat_id) if chat_id else None,
+                gpt_latency_seconds=gpt_duration,
+                additional_data={
+                    "message_id": message_id,
+                    "gpt_type": "B",
+                    "model": response.model,
+                    "tokens_used": usage.get("total_tokens", 0),
+                    "cost_usd": usage.get("cost_total", 0),
+                    "operation": "summary"
+                }
+            )
+        except Exception as save_err:
+            logging.warning(f"Could not save GPT-B timing metrics: {save_err}")
+        
         # הוספת חישוב עלות ל-usage
         try:
             cost_info = calculate_gpt_cost(
@@ -73,13 +99,19 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
                 "usage": usage,
                 "model": response.model
             }
+            gpt_duration = time.time() - start_time
             GPTJSONLLogger.log_gpt_call(
                 log_path="data/openai_calls.jsonl",
                 gpt_type="B",
                 request=completion_params,
                 response=response_data,
                 cost_usd=usage.get("cost_total", 0),
-                extra={"chat_id": chat_id, "message_id": message_id}
+                extra={
+                    "chat_id": chat_id, 
+                    "message_id": message_id,
+                    "gpt_pure_latency": gpt_duration,
+                    "processing_time_seconds": gpt_duration
+                }
             )
         except Exception as log_exc:
             print(f"[LOGGING_ERROR] Failed to log GPT-B call: {log_exc}")

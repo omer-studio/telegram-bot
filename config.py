@@ -50,11 +50,28 @@ if not IS_CI_ENVIRONMENT:
         except ImportError:
             FIELDS_DICT = {"dummy": "dummy"}
         # ייבוא ישיר של הפרומט הראשי - רק בסביבת ייצור
-        from prompts import SYSTEM_PROMPT
+        try:
+            from prompts import SYSTEM_PROMPT
+        except ImportError:
+            SYSTEM_PROMPT = "dummy system prompt"
     except ImportError as e:
         print(f"⚠️ Warning: Failed to import dependency: {e}")
-        # בסביבת ייצור זה קריטי, אבל ממשיכים לפיתוח
-        pass
+        # יצירת dummy modules כדי שהקוד לא יקרוס
+        class DummyModule:
+            def __getattr__(self, name):
+                return lambda *args, **kwargs: None
+        
+        gspread = DummyModule()
+        ServiceAccountCredentials = DummyModule()
+        completion = DummyModule()
+        try:
+            from fields_dict import FIELDS_DICT
+        except ImportError:
+            FIELDS_DICT = {"dummy": "dummy"}
+        try:
+            from prompts import SYSTEM_PROMPT
+        except ImportError:
+            SYSTEM_PROMPT = "dummy system prompt"
 else:
     # סביבת CI - dummy imports
     print("🔧 CI environment detected - using dummy modules")
@@ -413,11 +430,23 @@ def setup_google_sheets():
 # ⚠️ יש להשתמש אך ורק במפתחות מתוך FIELDS_DICT! אין להכניס שמות שדה קשיחים חדשים כאן או בקוד אחר.
 # שדות פרופיל משתמש - שימוש בפונקציה מה-fields_dict
 def get_profile_fields():
-    core_fields = ["age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"]
-    return [key for key in core_fields if key in FIELDS_DICT]
+    try:
+        from fields_dict import FIELDS_DICT
+        core_fields = ["age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"]
+        return [key for key in core_fields if key in FIELDS_DICT]
+    except ImportError:
+        # fallback אם fields_dict לא זמין
+        return ["age", "closet_status", "relationship_type", "self_religiosity_level", "occupation_or_role", "attracted_to"]
+
+def get_summary_field():
+    try:
+        from fields_dict import FIELDS_DICT
+        return "summary" if "summary" in FIELDS_DICT else list(FIELDS_DICT.keys())[-1]
+    except ImportError:
+        return "summary"
 
 PROFILE_FIELDS = get_profile_fields()
-SUMMARY_FIELD = "summary" if "summary" in FIELDS_DICT else list(FIELDS_DICT.keys())[-1]
+SUMMARY_FIELD = get_summary_field()
 
 # הגדרות לוגים
 BOT_TRACE_LOG_FILENAME = "bot_trace_log.jsonl"

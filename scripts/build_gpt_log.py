@@ -31,7 +31,9 @@ SCOPES = [
 # -----------------------------------------------------------------------------
 
 def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
-    """קריאת נתוני GPT מ-SQL במקום מקבצים (מיגרציה משלמה)."""
+    """קריאת נתוני GPT מ-SQL או מקבצי JSONL (fallback)."""
+    
+    # ניסיון קריאה מ-SQL
     try:
         from config import DATABASE_URL
         import os
@@ -40,24 +42,20 @@ def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
         connection = psycopg2.connect(DATABASE_URL)
         cursor = connection.cursor(cursor_factory=RealDictCursor)
         
-        # שאילתה לקריאת הנתונים האחרונים
+        # שאילתה לקריאת הנתונים האחרונים מטבלה gpt_calls_log
         query = """
         SELECT 
-            created_at,
-            gpt_type,
-            model,
-            prompt_text,
-            response_text,
-            input_tokens,
-            output_tokens,
-            total_tokens,
-            cost_usd,
-            user_id,
-            chat_id,
+            timestamp as created_at,
+            call_type as gpt_type,
             request_data,
-            response_data
-        FROM gpt_calls
-        ORDER BY created_at DESC
+            response_data,
+            tokens_input,
+            tokens_output,
+            cost_usd,
+            chat_id,
+            processing_time_seconds
+        FROM gpt_calls_log
+        ORDER BY timestamp DESC
         LIMIT %s
         """
         
@@ -71,35 +69,82 @@ def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
             request_data = row.get('request_data', {})
             response_data = row.get('response_data', {})
             
+            # חילוץ מודל מ-request_data
+            model = request_data.get('model', 'unknown-model') if isinstance(request_data, dict) else 'unknown-model'
+            
+            # חילוץ הודעות מ-request_data
+            messages = request_data.get('messages', []) if isinstance(request_data, dict) else []
+            
+            # חילוץ תוכן התשובה
+            response_content = ""
+            if isinstance(response_data, dict):
+                choices = response_data.get('choices', [])
+                if choices and len(choices) > 0:
+                    message = choices[0].get('message', {})
+                    response_content = message.get('content', '')
+            
             # בניית המבנה הנדרש
             entry = {
                 "ts": row['created_at'].isoformat() + "Z",
                 "gpt_type": row['gpt_type'],
                 "cost_usd": float(row['cost_usd']) if row['cost_usd'] else 0.0,
                 "request": {
-                    "model": row['model'],
-                    "messages": request_data.get('messages', [])
+                    "model": model,
+                    "messages": messages
                 },
                 "response": {
-                    "id": response_data.get('id', 'unknown'),
-                    "choices": [{"message": {"content": row['response_text']}}],
+                    "id": response_data.get('id', 'unknown') if isinstance(response_data, dict) else 'unknown',
+                    "choices": [{"message": {"content": response_content}}],
                     "usage": {
-                        "prompt_tokens": int(row['input_tokens']) if row['input_tokens'] else 0,
-                        "completion_tokens": int(row['output_tokens']) if row['output_tokens'] else 0,
-                        "total_tokens": int(row['total_tokens']) if row['total_tokens'] else 0
+                        "prompt_tokens": int(row['tokens_input']) if row['tokens_input'] else 0,
+                        "completion_tokens": int(row['tokens_output']) if row['tokens_output'] else 0,
+                        "total_tokens": int(row['tokens_input'] or 0) + int(row['tokens_output'] or 0)
                     }
                 },
-                "formatted_message": row['response_text']
+                "formatted_message": response_content
             }
             results.append(entry)
         
         cursor.close()
         connection.close()
         
+        print(f"✅ קרא {len(results)} רשומות מ-SQL")
         return results
         
     except Exception as e:
         print(f"⚠️  שגיאה בקריאה מ-SQL: {e}")
+        print("🔄 מנסה לקרוא מקבצי JSONL...")
+        
+        # Fallback לקבצי JSONL
+        try:
+            jsonl_paths = [
+                "data/openai_calls.jsonl",
+                "server_data/openai_calls.jsonl",
+                "openai_calls.jsonl"
+            ]
+            
+            results = []
+            for path in jsonl_paths:
+                if os.path.exists(path):
+                    print(f"📂 נמצא קובץ JSONL: {path}")
+                    lines = tail_lines(path, limit)
+                    for line in lines:
+                        try:
+                            entry = json.loads(line.strip())
+                            results.append(entry)
+                        except json.JSONDecodeError:
+                            continue
+                    break
+            
+            if results:
+                print(f"✅ קרא {len(results)} רשומות מקבצי JSONL")
+                return results[:limit]
+            else:
+                print("⚠️ לא נמצאו קבצי JSONL")
+                
+        except Exception as jsonl_e:
+            print(f"⚠️ שגיאה בקריאת JSONL: {jsonl_e}")
+        
         print("🔄 יצירת נתוני דוגמה...")
         return []
 

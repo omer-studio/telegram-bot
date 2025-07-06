@@ -30,7 +30,6 @@ from messages import get_welcome_messages, get_retry_message_by_attempt, approva
 from notifications import handle_critical_error
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state, clear_user_cache_force
 from gpt_a_handler import get_main_response
-from prompts import SYSTEM_PROMPT
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d, smart_update_profile_with_gpt_d_async
@@ -43,6 +42,7 @@ from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active
 from chat_utils import should_send_time_greeting, get_time_greeting_instruction
+from prompts import SYSTEM_PROMPT
 import profile_utils as _pu
 import traceback
 
@@ -380,7 +380,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     פלט: אין (מטפלת בכל הלוגיקה של הודעה)
     # מהלך מעניין: טיפול מלא ב-onboarding, הרשאות, לוגים, שילוב gpt, עדכון היסטוריה, והכל בצורה אסינכרונית.
     """
-
     
     # 🔧 מניעת כפילות - בדיקה אם ההודעה כבר טופלה
     try:
@@ -633,6 +632,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update_user_processing_stage(str(chat_id), "gpt_a")
         logging.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
+
+        # 📊 עדכון מונה הודעות למשתמש
+        try:
+            from db_manager import increment_user_message_count
+            increment_user_message_count(chat_id)
+        except Exception as count_err:
+            logging.warning(f"⚠️ שגיאה בעדכון מונה הודעות: {count_err}")
 
         try:
             # 🔧 תיקון קריטי: שליחת הודעת ביניים מהירה אחרי 3 שניות
@@ -923,12 +929,32 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
     try:
         # חישוב זמן מענה
         response_time = time.time() - user_request_start_time
-        log_payload = {
-            "chat_id": chat_id,
+        
+        # 💾 שמירת זמן תגובה כולל למסד הנתונים
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="response_time",
+                chat_id=str(chat_id),
+                response_time_seconds=response_time,
+                additional_data={
+                    "message_id": message_id,
+                    "user_msg_length": len(user_msg),
+                    "bot_msg_length": len(bot_reply) if bot_reply else 0,
+                    "background_processing": True
+                }
+            )
+        except Exception as save_err:
+            logging.warning(f"Could not save response time metrics: {save_err}")
+        
+        background_data = {
+            "chat_id": str(chat_id),
             "message_id": message_id,
+            "user_msg": user_msg,
+            "bot_reply": bot_reply,
             "response_time": response_time,
-            "timestamp_end": get_israel_time().isoformat(),
-            "bot_reply": bot_reply
+            "timestamp": datetime.utcnow().isoformat(),
+            "processing_stage": "background"
         }
         
         logging.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={chat_id} | זמן תגובה: {response_time:.2f}s")

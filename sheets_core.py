@@ -63,12 +63,31 @@ def _increment_api_call():
         _api_calls_per_minute[minute_key] = 0
     _api_calls_per_minute[minute_key] += 1
     
-    # ניקוי דקות ישנות (שמור רק 5 דקות אחרונות)
-    old_minutes = [k for k in _api_calls_per_minute.keys() if k < minute_key - 5]
-    for old_minute in old_minutes:
-        del _api_calls_per_minute[old_minute]
+    # ניקוי דקות ישנות (רק הדקה הנוכחית והקודמת)
+    current_minute = int(time.time() / 60)
+    keys_to_remove = [key for key in _api_calls_per_minute.keys() if key < current_minute - 1]
+    for key in keys_to_remove:
+        del _api_calls_per_minute[key]
     
-    debug_log(f"🔍 API call #{_api_calls_count} (this minute: {_api_calls_per_minute[minute_key]})")
+    # 💾 שמירת מטריקות API למסד הנתונים
+    try:
+        from db_manager import save_system_metrics
+        current_calls = _api_calls_per_minute.get(minute_key, 0)
+        save_system_metrics(
+            metric_type="api_calls",
+            api_calls_count=1,
+            api_calls_per_minute=current_calls,
+            additional_data={
+                "api_endpoint": "google_sheets",
+                "minute_key": minute_key,
+                "total_calls_this_minute": current_calls
+            }
+        )
+    except Exception as save_err:
+        pass  # לא נכשיל בגלל שגיאה בשמירת מטריקות
+    
+    if should_log_sheets_debug():
+        debug_log(f"🔍 API call #{_api_calls_per_minute[minute_key]} (this minute: {current_calls})")
 
 def get_api_stats():
     """מחזיר סטטיסטיקות של קריאות API"""
@@ -129,6 +148,7 @@ def _clear_user_cache(chat_id: str):
     for key in keys_to_remove:
         if key in _user_data_cache:
             del _user_data_cache[key]
+            debug_log(f"🗑️ DELETED from regular cache: {key}")
         if key in _cache_timestamps:
             del _cache_timestamps[key]
     
@@ -137,10 +157,47 @@ def _clear_user_cache(chat_id: str):
     for key in critical_keys_to_remove:
         if key in _critical_data_cache:
             del _critical_data_cache[key]
+            debug_log(f"🗑️ DELETED from critical cache: {key}")
         if key in _critical_cache_timestamps:
             del _critical_cache_timestamps[key]
     
-    debug_log(f"🗑️ Cache CLEARED for user {chat_id}")
+    total_cleared = len(keys_to_remove) + len(critical_keys_to_remove)
+    debug_log(f"🗑️ Cache CLEARED for user {chat_id} - {total_cleared} keys removed")
+
+def force_clear_user_cache(chat_id: str):
+    """מנקה cache של משתמש בכוח - לשימוש בבעיות cache"""
+    try:
+        chat_id = validate_chat_id(chat_id)
+        debug_log(f"🔨 FORCE CLEARING cache for user {chat_id}")
+        
+        # מחיקת כל הkeys שקשורים למשתמש
+        all_keys = []
+        all_keys.extend(list(_user_data_cache.keys()))
+        all_keys.extend(list(_critical_data_cache.keys()))
+        
+        cleared_keys = []
+        for key in all_keys:
+            if chat_id in key:
+                if key in _user_data_cache:
+                    del _user_data_cache[key]
+                    cleared_keys.append(key)
+                if key in _critical_data_cache:
+                    del _critical_data_cache[key]
+                    cleared_keys.append(key)
+                if key in _cache_timestamps:
+                    del _cache_timestamps[key]
+                if key in _critical_cache_timestamps:
+                    del _critical_cache_timestamps[key]
+        
+        debug_log(f"🔨 FORCE CLEARED {len(cleared_keys)} cache keys for user {chat_id}")
+        for key in cleared_keys:
+            debug_log(f"   - {key}")
+        
+        return len(cleared_keys)
+        
+    except Exception as e:
+        debug_log(f"❌ Error in force_clear_user_cache for {chat_id}: {e}")
+        return 0
 
 def _cleanup_expired_cache():
     """ניקוי cache מיותר (נקרא מדי פעם)"""

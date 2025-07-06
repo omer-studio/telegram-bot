@@ -128,7 +128,7 @@ class GPTJSONLLogger:
         :param request: פרטי הבקשה (messages, model וכו')
         :param response: פרטי התשובה (כולל usage)
         :param cost_usd: עלות (אם ידועה)
-        :param extra: שדות נוספים (chat_id, message_id וכו')
+        :param extra: שדות נוספים (chat_id, message_id, gpt_pure_latency וכו')
         """
         print(f"[DEBUG][log_gpt_call] called! gpt_type={gpt_type}")
         print(f"[DEBUG][log_gpt_call] request: {json.dumps(request, ensure_ascii=False)[:500]}")
@@ -141,7 +141,19 @@ class GPTJSONLLogger:
             usage = response.get("usage", {})
             tokens_input = usage.get("prompt_tokens", 0)
             tokens_output = usage.get("completion_tokens", 0)
-            processing_time = 0  # לא זמין ב-response
+            
+            # 🔥 תיקון: שמירת זמן עיבוד טהור מ-extra
+            processing_time = 0
+            if extra:
+                processing_time = extra.get("gpt_pure_latency", 0)
+                if processing_time == 0:
+                    processing_time = extra.get("processing_time_seconds", 0)
+                if processing_time == 0:
+                    processing_time = extra.get("total_time", 0)
+            
+            # הדפסת המידע החשוב על זמן העיבוד
+            if processing_time > 0:
+                print(f"⏱️ [DEBUG][log_gpt_call] Processing time: {processing_time:.3f}s")
             
             # שמירה ל-SQL באמצעות db_manager
             save_gpt_call_log(

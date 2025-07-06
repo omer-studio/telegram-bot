@@ -74,7 +74,7 @@ jobs:
       # 1. Deploy ל-Render דרך Deploy Hook
       - name: 🚀 Trigger Render Deploy
         env:
-          # GitHub Actions secret - VS Code אזהרה שקרית, זה עובד מצוין בפועל
+          # ✅ GitHub Actions secret - IDE warning is false positive, works perfectly in GitHub Actions
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           echo "🔄 מתחיל deployment ל-Render..."

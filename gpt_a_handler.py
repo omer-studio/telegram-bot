@@ -511,6 +511,31 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         total_time = time.time() - total_start_time
         print(f"📊 [TIMING_SUMMARY] Total: {total_time:.3f}s | GPT: {gpt_duration:.3f}s | Prep: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
         
+        # 💾 שמירת מטריקות זמן מפורטות למסד הנתונים
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="gpt_timing",
+                chat_id=str(chat_id) if chat_id else None,
+                gpt_latency_seconds=gpt_duration,
+                prep_time_seconds=prep_time,
+                processing_time_seconds=processing_time,
+                billing_time_seconds=billing_time,
+                response_time_seconds=total_time,
+                additional_data={
+                    "message_id": message_id,
+                    "gpt_type": "A",
+                    "model": gpt_result["model"],
+                    "extra_emotion": use_extra_emotion,
+                    "filter_reason": filter_reason,
+                    "match_type": match_type,
+                    "tokens_used": usage.get("total_tokens", 0),
+                    "cost_usd": usage.get("cost_total", 0)
+                }
+            )
+        except Exception as save_err:
+            logging.warning(f"Could not save GPT timing metrics: {save_err}")
+        
         # 🆕 בדיקה אם התשובה מכילה שאלת פרופיל והתחלת פסק זמן
         if chat_id and detect_profile_question_in_response(bot_reply):
             start_profile_question_cooldown(chat_id)
@@ -551,7 +576,15 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
                 request=completion_params,
                 response=response_data,
                 cost_usd=usage.get("cost_total", 0),
-                extra={"chat_id": chat_id, "message_id": message_id}
+                extra={
+                    "chat_id": chat_id, 
+                    "message_id": message_id,
+                    "gpt_pure_latency": gpt_duration,
+                    "total_time": total_time,
+                    "prep_time": prep_time,
+                    "processing_time": processing_time,
+                    "billing_time": billing_time
+                }
             )
         except Exception as log_exc:
             print(f"[LOGGING_ERROR] Failed to log GPT-A call: {log_exc}")
@@ -683,7 +716,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         )
         
         return {
-            "bot_reply": "מצטער, אני עסוק כרגע. נסה שוב בעוד כמה שניות 🔄", 
+            "bot_reply": "מצטער, אני עסוק כרגע. נסה שוב בעוד כמה דקות 🔄", 
             "usage": {}, 
             "model": "timeout",
             "used_extra_emotion": use_extra_emotion,
@@ -853,5 +886,18 @@ def log_memory_usage(stage: str):
         process = psutil.Process(os.getpid())
         memory_mb = process.memory_info().rss / 1024 / 1024
         logging.info(f"[MEMORY] GPT-A {stage}: {memory_mb:.1f} MB")
+        
+        # 💾 שמירת מדידת זיכרון למסד הנתונים
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="memory",
+                memory_mb=memory_mb,
+                memory_stage=f"gpt_a_{stage}",
+                additional_data={"component": "gpt_a", "stage": stage}
+            )
+        except Exception as save_err:
+            logging.warning(f"Could not save memory metrics: {save_err}")
+            
     except Exception as e:
         logging.warning(f"Could not log memory usage: {e}")

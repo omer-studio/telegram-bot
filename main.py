@@ -70,20 +70,50 @@ from bot_setup import setup_bot, migrate_data_to_sql_with_safety
 from message_handler import handle_message
 import os
 import requests
-from gpt_c_logger import clear_gpt_c_html_log
+# from gpt_c_logger import clear_gpt_c_html_log  # זמנית מושבת - הפונקציה לא קיימת
+
+def clear_gpt_c_html_log():
+    """פונקציה זמנית - יש ליצור את clear_gpt_c_html_log בעתיד"""
+    print("📝 [GPT_C_LOGGER] זמנית מושבת - צריך ליצור clear_gpt_c_html_log")
+    return True
 from config import DATA_DIR, PRODUCTION_PORT
+
+# 🚀 יבוא מערכת הלוגים החדשה
+try:
+    from deployment_logger import deployment_logger, log_info, log_error, log_warning
+    DEPLOYMENT_LOGGER_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Deployment Logger לא זמין: {e}")
+    DEPLOYMENT_LOGGER_AVAILABLE = False
+    # Dummy functions
+    def log_info(msg, **kwargs): print(f"[INFO] {msg}")
+    def log_error(msg, **kwargs): print(f"[ERROR] {msg}")
+    def log_warning(msg, **kwargs): print(f"[WARNING] {msg}")
 
 # 🧠 Memory logging helper
 def log_memory_usage(stage: str):
     """Log current memory usage"""
     try:
         import psutil
+        import os
         process = psutil.Process(os.getpid())
         memory_mb = process.memory_info().rss / 1024 / 1024
-        print(f"📊 Memory usage at {stage}: {memory_mb:.1f} MB")
         logging.info(f"[MEMORY] {stage}: {memory_mb:.1f} MB")
+        
+        # 💾 שמירת מדידת זיכרון למסד הנתונים
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="memory",
+                memory_mb=memory_mb,
+                memory_stage=f"main_{stage}",
+                additional_data={"component": "main", "stage": stage}
+            )
+        except Exception as save_err:
+            logging.warning(f"Could not save memory metrics: {save_err}")
+            
     except Exception as e:
-        print(f"⚠️ Could not log memory usage: {e}")
+        logging.warning(f"Could not log memory usage: {e}")
 
 # 🚨 בדיקת post-deploy אוטומטית - הפעלת מערכת rollback
 def run_post_deploy_check():
@@ -154,6 +184,7 @@ def get_bot_app():
     # 🔧 תיקון: בדיקה משופרת למניעת setup כפול
     if _bot_setup_completed and _app_instance is not None:
         print("[BOT] ℹ️  הבוט כבר הוגדר, מחזיר instance קיים")
+        log_info("Bot already configured, returning existing instance")
         return _app_instance
     
     # בדיקה נוספת: אם זה בsandbox mode או עם uvicorn (אבל לא בסביבת production)
@@ -174,11 +205,24 @@ def get_bot_app():
     # 🔧 תיקון: תמיד עושה setup אם אין instance תקין, לא תלוי בflag
     if _app_instance is None:
         print("[BOT] 🚀 מבצע setup ראשוני של הבוט...")
+        log_info("Starting bot initial setup")
         _app_instance = setup_bot()
         _bot_setup_completed = True
         print("[BOT] ✅ Setup הבוט הושלם!")
+        log_info("Bot setup completed successfully")
+        
+        # 🚀 הפעלת worker thread למטריקות ברקע
+        try:
+            from db_manager import start_metrics_worker
+            start_metrics_worker()
+            print("[BOT] 🚀 [METRICS] Background worker started")
+            log_info("Metrics background worker started")
+        except Exception as metrics_err:
+            print(f"[BOT] ⚠️ [METRICS] Could not start background worker: {metrics_err}")
+            log_warning(f"Could not start metrics background worker: {metrics_err}")
     elif not _bot_setup_completed:
         print("[BOT] ℹ️  יש instance אבל הsetup לא הושלם, מסמן כהושלם")
+        log_info("Bot instance exists but setup not marked complete")
         _bot_setup_completed = True
     
     return _app_instance
@@ -281,14 +325,15 @@ async def lifespan(app: FastAPI):
         
         # בדיקה בטוחה של auto_rollback
         try:
-            from auto_rollback import emergency_rollback_if_broken
-            rollback_result = emergency_rollback_if_broken()
+            # Try to import auto_rollback module
+            import auto_rollback
+            rollback_result = auto_rollback.emergency_rollback_if_broken()
             if rollback_result:
                 print("✅ בדיקת תפקוד קריטית עברה בהצלחה!")
             else:
                 print("🚨 בדיקת תפקוד זיהתה בעיות - בדוק התראות אדמין!")
         except ImportError as import_error:
-            print(f"⚠️ auto_rollback לא זמין: {import_error}")
+            print(f"⚠️ auto_rollback module לא זמין: {import_error}")
             print("✅ ממשיך ללא בדיקת rollback")
         except Exception as rollback_error:
             print(f"⚠️ שגיאה בבדיקת rollback: {rollback_error}")
@@ -356,16 +401,31 @@ async def webhook(request: Request):
             chat_id = update.message.chat_id
             user_msg = getattr(update.message, 'text', '[הודעה לא טקסטואלית]')
             
+            # לוג הודעת משתמש
+            log_info(f"Received message from user {chat_id}", 
+                    user_id=str(chat_id), 
+                    metadata={"message_preview": user_msg[:100] if user_msg else ""})
+            
             # ℹ️  מנגנון deduplication כבר קיים ב-message_handler.py
             await handle_message(update, context)
         else:
             print("קיבלתי עדכון לא מוכר ב-webhook, מתעלם...")
+            log_warning("Received unknown update type in webhook")
         return {"ok": True}
     except Exception as ex:
         import traceback
         error_details = traceback.format_exc()
         print(f"❌ שגיאה ב-webhook: {ex}")
         print(f"📊 Traceback מלא: {error_details}")
+        
+        # לוג השגיאה למערכת הלוגים
+        log_error(f"Webhook error: {str(ex)}", 
+                 user_id=str(chat_id) if chat_id else None,
+                 metadata={
+                     "error_type": type(ex).__name__,
+                     "user_message": user_msg[:100] if user_msg else "",
+                     "traceback": error_details
+                 })
         
         # 🚨 הוספה: רישום בטוח למשתמש לרשימת התאוששות לפני כל טיפול אחר
         try:
@@ -381,6 +441,7 @@ async def webhook(request: Request):
             await handle_critical_error(ex, chat_id, user_msg, update if 'update' in locals() else None)
         except Exception as notification_error:
             print(f"❌ שגיאה בשליחת התראה: {notification_error}")
+            log_error(f"Failed to send error notification: {notification_error}")
         
         # ✅ תמיד מחזיר HTTP 200 לטלגרם!
         return {"ok": False, "error": str(ex)}

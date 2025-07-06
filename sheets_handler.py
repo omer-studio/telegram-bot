@@ -8,7 +8,7 @@ from sheets_core import (
     ensure_user_state_row, register_user as _core_register_user, approve_user as _core_approve_user,
     delete_row_by_chat_id, get_user_state, update_user_state, increment_code_try_sync,
     get_user_summary, update_user_profile_data, find_chat_id_in_sheet, increment_gpt_c_run_count,
-    reset_gpt_c_run_count
+    reset_gpt_c_run_count, force_clear_user_cache
 )
 from sheets_advanced import (
     SheetsQueueManager, sheets_queue_manager, log_to_sheets_sync, 
@@ -100,4 +100,15 @@ def approve_user(chat_id):
             send_error_notification(error_message=f"approve_user wrapper error: {e}", chat_id=str(chat_id))
         except Exception as notify_err:
             logging.warning(f"[SheetsHandler] שגיאה בשליחת התראה לאדמין: {notify_err}")
+        return {"success": False, "error": str(e)}
+
+def clear_user_cache_force(chat_id):
+    """
+    מנקה cache של משתמש בכוח - לפתרון בעיות cache
+    """
+    try:
+        cleared_count = force_clear_user_cache(str(chat_id))
+        return {"success": True, "cleared_count": cleared_count}
+    except Exception as e:
+        logging.error(f"[SheetsHandler] clear_user_cache_force failed for {chat_id}: {e}")
         return {"success": False, "error": str(e)}

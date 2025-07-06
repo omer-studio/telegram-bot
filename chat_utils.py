@@ -722,6 +722,17 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
             # אין טיימסטמפ תקין - לא שולח ברכה (מוסר תנאי 2)
             return False
 
+        # וידוא שlast_timestamp הוא datetime object
+        if not isinstance(last_timestamp, datetime):
+            try:
+                if isinstance(last_timestamp, str):
+                    last_timestamp = datetime.fromisoformat(last_timestamp)
+                else:
+                    # אם זה לא string וגם לא datetime, לא שולח ברכה
+                    return False
+            except Exception:
+                return False
+        
         hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
         
         # שולח ברכה רק אם עברו יותר מ-2 שעות

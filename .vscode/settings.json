@@ -1,0 +1,87 @@
+{
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none",
+        "reportMissingModuleSource": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportOptionalSubscript": "none",
+        "reportOptionalCall": "none",
+        "reportGeneralTypeIssues": "none",
+        "reportUnknownMemberType": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUnknownParameterType": "none",
+        "reportUndefinedVariable": "error",
+        "reportUnboundVariable": "error",
+        "reportAttributeAccessIssue": "none",
+        "reportOperatorIssue": "none",
+        "reportReturnType": "none",
+        "reportAssignmentType": "none",
+        "reportArgumentType": "none",
+        "reportCallIssue": "none",
+        "reportIndexIssue": "none",
+        "reportRedeclaration": "none",
+        "reportUnusedCoroutine": "none",
+        "reportUnsupportedDunderAll": "none"
+    },
+    "python.analysis.exclude": [
+        "**/__pycache__",
+        "**/node_modules",
+        "**/.venv",
+        "**/venv",
+        "**/env",
+        "**/temp_files",
+        "**/logs",
+        "**/backups",
+        "**/debug_files"
+    ],
+    "python.analysis.ignore": [
+        "**/__pycache__",
+        "**/node_modules",
+        "**/.venv",
+        "**/venv",
+        "**/env"
+    ],
+    "python.defaultInterpreterPath": "python",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.pylintPath": "pylint",
+    "python.linting.pycodestyleEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.linting.mypyEnabled": false,
+    "python.linting.banditEnabled": false,
+    "python.linting.prospectorEnabled": false,
+    "python.linting.pydocstyleEnabled": false,
+    "python.linting.pylintArgs": [
+        "--rcfile=.pylintrc"
+    ],
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-workflow.json": [
+            ".github/workflows/*.yml",
+            ".github/workflows/*.yaml"
+        ]
+    },
+    "yaml.validate": true,
+    "yaml.completion": true,
+    "yaml.hover": true,
+    "files.associations": {
+        "*.yml": "yaml",
+        "*.yaml": "yaml"
+    },
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "never"
+    },
+    "python.formatting.provider": "none",
+    "python.sortImports.args": [],
+    "python.analysis.stubPath": "",
+    "python.analysis.packageIndexDepths": [
+        {
+            "name": "",
+            "depth": 2,
+            "includeAllSymbols": false
+        }
+    ]
+} 

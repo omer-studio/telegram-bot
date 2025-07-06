@@ -7,6 +7,7 @@ gpt_c_handler.py
 import logging
 from datetime import datetime
 import json
+import time
 import lazy_litellm as litellm
 import re
 from prompts import build_profile_extraction_enhanced_prompt
@@ -18,6 +19,8 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     מחלץ מידע רלוונטי מהודעת המשתמש לעדכון הפרופיל שלו
     כולל מערכת fallback למקרה של rate limit ב-Gemini.
     """
+    start_time = time.time()  # מדידת זמן התחלה
+    
     # בדיקה קריטית - אם אין chat_id תקין, לא מפעילים GPT-C
     if not chat_id:
         logging.error("[GPT_C] chat_id is None - skipping GPT-C execution")
@@ -88,6 +91,29 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
         except Exception as _cost_e:
             logging.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
         
+        # חישוב זמן עיבוד טהור
+        gpt_duration = time.time() - start_time
+        
+        # 💾 שמירת מטריקות זמן GPT-C למסד הנתונים
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="gpt_timing",
+                chat_id=str(chat_id) if chat_id else None,
+                gpt_latency_seconds=gpt_duration,
+                additional_data={
+                    "message_id": message_id,
+                    "gpt_type": "C",
+                    "model": response.model,
+                    "tokens_used": usage.get("total_tokens", 0),
+                    "cost_usd": usage.get("cost_total", 0),
+                    "operation": "extract_user_info",
+                    "extracted_fields_count": len(extracted_fields)
+                }
+            )
+        except Exception as save_err:
+            logging.warning(f"Could not save GPT-C timing metrics: {save_err}")
+        
         result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
         try:
             from gpt_jsonl_logger import GPTJSONLLogger
@@ -111,7 +137,12 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 request=completion_params,
                 response=response_data,
                 cost_usd=usage.get("cost_total", 0),
-                extra={"chat_id": chat_id, "message_id": message_id}
+                extra={
+                    "chat_id": chat_id, 
+                    "message_id": message_id,
+                    "gpt_pure_latency": time.time() - start_time,
+                    "processing_time_seconds": time.time() - start_time
+                }
             )
         except Exception as log_exc:
             print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
@@ -202,7 +233,12 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                         request=completion_params,
                         response=response_data,
                         cost_usd=usage.get("cost_total", 0),
-                        extra={"chat_id": chat_id, "message_id": message_id}
+                                                 extra={
+                             "chat_id": chat_id, 
+                             "message_id": message_id,
+                             "gpt_pure_latency": time.time() - start_time,
+                             "processing_time_seconds": time.time() - start_time
+                         }
                     )
                 except Exception as log_exc:
                     print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
@@ -234,7 +270,12 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                         request=completion_params,
                         response=response_data,
                         cost_usd=0,
-                        extra={"chat_id": chat_id, "message_id": message_id}
+                        extra={
+                            "chat_id": chat_id, 
+                            "message_id": message_id,
+                            "gpt_pure_latency": 0,
+                            "processing_time_seconds": 0
+                        }
                     )
                 except Exception as log_exc:
                     print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
@@ -265,7 +306,12 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                     request=completion_params,
                     response=response_data,
                     cost_usd=0,
-                    extra={"chat_id": chat_id, "message_id": message_id}
+                    extra={
+                        "chat_id": chat_id, 
+                        "message_id": message_id,
+                        "gpt_pure_latency": 0,
+                        "processing_time_seconds": 0
+                    }
                 )
             except Exception as log_exc:
                 print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")

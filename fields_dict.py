@@ -41,6 +41,7 @@ FIELDS_DICT = {
     "fears_concerns": {"label": "פחדים וחששות", "type": str, "show_in_summary": "פחדים:", "show_in_prompt": "פחדים או חששות", "missing_question": "מה הפחד הכי גדול שלך?", "include_in_summary": True},
     "future_vision": {"label": "מה החזון לעתיד", "type": str, "show_in_summary": "חזון לעתיד: ", "show_in_prompt": "איך היה רוצה לראות את עצמו בעתיד", "missing_question": "איך אתה רואה את עצמך בעתיד?", "include_in_summary": True},
     "other_insights": {"label": "מידע אישי נוסף", "type": str, "show_in_summary": "", "show_in_prompt": "מידע אישי נוסף", "missing_question": "מה עוד בא לך לספר על עצמך?", "include_in_summary": True},
+    "total_messages_count": {"label": "סך כל ההודעות שנשלחו", "type": int, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
     "last_update": {"label": "מתי עודכנה השורה לאחרונה (מתעדכן אוטומטית)", "type": str, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
     "summary": {"label": "ת.ז רגשית בסיסית שנשלחת בכל הודעה לgpt כרקע חשוב על המשתתף", "type": str, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
 
@@ -100,7 +101,7 @@ def get_user_profile_fields():
         "parental_status", "self_religious_affiliation", "self_religiosity_level", "family_religiosity", 
         "closet_status", "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", 
         "trauma_history", "goal_in_course", "language_of_strength", "date_first_seen", 
-        "coping_strategies", "fears_concerns", "future_vision", "other_insights", "last_update", "summary"
+        "coping_strategies", "fears_concerns", "future_vision", "other_insights", "total_messages_count", "last_update", "summary"
     ]
     return [field for field in user_fields if field in FIELDS_DICT]
 

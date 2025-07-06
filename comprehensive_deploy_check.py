@@ -390,6 +390,8 @@ class ComprehensiveDeployChecker:
                     warnings.append(f"⚠️ צריכת זיכרון גבוהה: {total_memory}MB (מעל 921MB)")
                 
                 return True, warnings
+            else:
+                return False, [f"❌ שגיאה בהרצת pip list: {result.stderr}"]
                 
         except Exception as e:
             return False, [f"❌ שגיאה בבדיקת זיכרון: {e}"]
