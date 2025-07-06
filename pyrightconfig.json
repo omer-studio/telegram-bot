@@ -1,0 +1,38 @@
+{
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "warning", 
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownParameterType": false,
+  "reportUnnecessaryTypeIgnoreComment": false,
+  "pythonVersion": "3.11",
+  "pythonPlatform": "All",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.11",
+      "extraPaths": [
+        "."
+      ]
+    }
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.git",
+    "**/node_modules",
+    "**/.venv",
+    "**/venv",
+    "**/env"
+  ],
+  "ignore": [
+    "temp_files/**",
+    "backups/**",
+    "data/**/*.json",
+    "data/**/*.jsonl"
+  ],
+  "stubPath": "",
+  "venvPath": "",
+  "venv": ""
+} 

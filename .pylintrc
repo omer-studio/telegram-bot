@@ -1,0 +1,33 @@
+[MESSAGES CONTROL]
+# השתקת אזהרות של חבילות חיצוניות שלא מותקנות בסביבת הפיתוח המקומית
+disable=
+    import-error,
+    no-name-in-module,
+    missing-module-docstring,
+    missing-function-docstring,
+    missing-class-docstring
+
+[MASTER]
+# חבילות שיש להתעלם מהן (חבילות שמותקנות בפריסה אבל לא מקומית)
+ignored-modules=
+    psycopg2,
+    telegram,
+    fastapi,
+    uvicorn,
+    psutil,
+    requests,
+    gspread,
+    oauth2client,
+    apscheduler,
+    pytz
+
+[TYPECHECK]
+# התעלמות מחבילות חסרות
+ignored-classes=
+    psycopg2,
+    telegram,
+    fastapi,
+    uvicorn
+
+[FORMAT]
+max-line-length=120 
