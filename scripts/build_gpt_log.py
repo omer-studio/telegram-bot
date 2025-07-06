@@ -4,11 +4,17 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List
 from argparse import ArgumentParser
+import sys
+import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+# הוספת נתיב לקובץ הקונפיגורציה
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # -----------------------------------------------------------------------------
 # Configuration – single source of truth (avoids duplication across the script)
 # -----------------------------------------------------------------------------
-JSONL_PATH = os.path.join("data", "openai_calls.jsonl")
 HTML_OUT_PATH = os.path.join("data", "gpt_log.html")
 MAX_LINES = 100  # number of recent calls to display
 USD_TO_ILS = 3.7  # rough conversion; update in a single place if needed
@@ -23,6 +29,79 @@ SCOPES = [
 # -----------------------------------------------------------------------------
 # Helper utilities (isolated, side-effect free)
 # -----------------------------------------------------------------------------
+
+def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
+    """קריאת נתוני GPT מ-SQL במקום מקבצים (מיגרציה משלמה)."""
+    try:
+        from config import DATABASE_URL
+        import os
+        
+        # חיבור למסד הנתונים
+        connection = psycopg2.connect(DATABASE_URL)
+        cursor = connection.cursor(cursor_factory=RealDictCursor)
+        
+        # שאילתה לקריאת הנתונים האחרונים
+        query = """
+        SELECT 
+            created_at,
+            gpt_type,
+            model,
+            prompt_text,
+            response_text,
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            cost_usd,
+            user_id,
+            chat_id,
+            request_data,
+            response_data
+        FROM gpt_calls
+        ORDER BY created_at DESC
+        LIMIT %s
+        """
+        
+        cursor.execute(query, (limit,))
+        rows = cursor.fetchall()
+        
+        # המרת התוצאות למבנה הנדרש
+        results = []
+        for row in rows:
+            # פירוק נתוני request/response JSON
+            request_data = row.get('request_data', {})
+            response_data = row.get('response_data', {})
+            
+            # בניית המבנה הנדרש
+            entry = {
+                "ts": row['created_at'].isoformat() + "Z",
+                "gpt_type": row['gpt_type'],
+                "cost_usd": float(row['cost_usd']) if row['cost_usd'] else 0.0,
+                "request": {
+                    "model": row['model'],
+                    "messages": request_data.get('messages', [])
+                },
+                "response": {
+                    "id": response_data.get('id', 'unknown'),
+                    "choices": [{"message": {"content": row['response_text']}}],
+                    "usage": {
+                        "prompt_tokens": int(row['input_tokens']) if row['input_tokens'] else 0,
+                        "completion_tokens": int(row['output_tokens']) if row['output_tokens'] else 0,
+                        "total_tokens": int(row['total_tokens']) if row['total_tokens'] else 0
+                    }
+                },
+                "formatted_message": row['response_text']
+            }
+            results.append(entry)
+        
+        cursor.close()
+        connection.close()
+        
+        return results
+        
+    except Exception as e:
+        print(f"⚠️  שגיאה בקריאה מ-SQL: {e}")
+        print("🔄 יצירת נתוני דוגמה...")
+        return []
 
 def tail_lines(path: str, n: int) -> List[str]:
     """Return up to *n* last lines from *path* efficiently (without full read)."""
@@ -177,23 +256,16 @@ def render_entry(idx: int, rec: Dict[str, Any]) -> str:
 # -----------------------------------------------------------------------------
 
 def build_html() -> None:
-    # Ensure output directory exists (also for JSONL path)
+    # Ensure output directory exists
     os.makedirs(os.path.dirname(HTML_OUT_PATH) or ".", exist_ok=True)
 
-    lines = tail_lines(JSONL_PATH, MAX_LINES)
-    if not lines:
-        print("No log entries found; output HTML will contain placeholder message.")
-        
-    # אם אין הודעות אמיתיות, נוסיף כמה הודעות לדוגמה
-    has_real_messages = False
-    for line in lines[:3]:
-        if "בדיקה עברה" not in line:
-            has_real_messages = True
-            break
+    # קריאת נתונים מ-SQL במקום מקבצים 🚀
+    print("📊 קריאת נתוני GPT מ-SQL...")
+    sql_records = get_gpt_calls_from_sql(MAX_LINES)
     
-    if not lines or not has_real_messages:
-        print("Adding sample messages for demonstration...")
-        sample_messages = [
+    if not sql_records:
+        print("⚠️  לא נמצאו נתונים ב-SQL, יצירת נתוני דוגמה...")
+        sql_records = [
             {
                 "ts": "2025-07-05T10:00:00.000000Z",
                 "gpt_type": "A",
@@ -249,22 +321,9 @@ def build_html() -> None:
                 "formatted_message": "במסכים זוהרים\nמילים מתעופפות\nהעתיד כבר כאן\nבכל לחיצה מתחדשת"
             }
         ]
-        
-        # הוסף את ההודעות לדוגמה לקובץ
-        with open(JSONL_PATH, "a", encoding="utf-8") as f:
-            for msg in sample_messages:
-                f.write(json.dumps(msg, ensure_ascii=False) + "\n")
-        
-        # קרא שוב את הקובץ עם ההודעות החדשות
-        lines = tail_lines(JSONL_PATH, MAX_LINES)
-
+    
     entries_html: List[str] = []
-    for idx, raw in enumerate(reversed(lines)):
-        try:
-            rec: Dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError:
-            continue  # skip invalid lines
-
+    for idx, rec in enumerate(sql_records):
         # Validation – mandatory fields
         mandatory_paths = [
             "ts",
@@ -433,12 +492,6 @@ def build_html() -> None:
         upload_to_sheets(HTML_OUT_PATH)
     except Exception as e:
         print(f"⚠️  Auto-upload to Sheets failed: {e}")
-    
-    # העלאה אוטומטית של JSONL ל-Drive
-    try:
-        upload_jsonl_to_drive(JSONL_PATH)
-    except Exception as e:
-        print(f"⚠️  Auto-upload JSONL to Drive failed: {e}")
 
 
 # -----------------------------------------------------------------------------
@@ -608,10 +661,9 @@ def upload_jsonl_to_drive(jsonl_path: str, folder_id: str = DRIVE_FOLDER_ID) -> 
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Build GPT HTML log (and optionally upload to Drive/Sheets)")
+    parser = ArgumentParser(description="Build GPT HTML log from SQL database (and optionally upload to Drive/Sheets)")
     parser.add_argument("--upload", action="store_true", help="Also upload/update the HTML file on Google Drive")
     parser.add_argument("--sheets", action="store_true", help="Also upload HTML content to Google Sheets")
-    parser.add_argument("--upload-jsonl", action="store_true", help="Also upload/update the JSONL file on Google Drive")
     args = parser.parse_args()
 
     build_html()
@@ -619,5 +671,3 @@ if __name__ == "__main__":
         upload_to_drive(HTML_OUT_PATH)
     if args.sheets:
         upload_to_sheets(HTML_OUT_PATH)
-    if args.upload_jsonl:
-        upload_jsonl_to_drive(JSONL_PATH)

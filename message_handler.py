@@ -304,7 +304,8 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             logging.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
         return
     if is_bot_message:
-        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", formatted_text)
+        # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
+        update_chat_history(chat_id, "", formatted_text)  # הודעת מערכת - אין הודעת משתמש
     log_event_to_file({
         "chat_id": chat_id,
         "bot_message": formatted_text,
@@ -329,8 +330,8 @@ async def send_approval_message(update, chat_id):
             reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
         )
         
-        # עדכון היסטוריה ולוגים
-        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", approval_msg)
+        # 🔧 תיקון: עדכון היסטוריה נכון - הבוט שלח, לא המשתמש
+        update_chat_history(chat_id, "", approval_msg)  # הודעת מערכת - אין הודעת משתמש
         log_event_to_file({
             "chat_id": chat_id,
             "bot_message": approval_msg,
@@ -883,8 +884,8 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
         else:
             await update.message.reply_text(text, parse_mode="HTML")
             
-        # עדכון היסטוריה ולוגים
-        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", text)
+        # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
+        update_chat_history(chat_id, "", text)  # הודעת מערכת - אין הודעת משתמש
         log_event_to_file({
             "chat_id": chat_id,
             "bot_message": text,

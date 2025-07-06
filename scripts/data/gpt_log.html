@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="he"><head><meta charset="UTF-8"><title>GPT Log Viewer</title>
+<style>
+        body { font-family: sans-serif; direction: rtl; padding: 20px; background: #f9f9f9 }
+        .entry { border: 1px solid #ccc; margin-bottom: 15px; border-radius: 6px; }
+        .entry.gptA { background: #fff9f5; }
+        .entry.gptB { background: #f8fbff; }
+        .entry.gptC { background: #faf8ff; }
+        .entry.gptD { background: #f8fff8; }
+        .entry-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .entry-table td { vertical-align: middle; }
+        .content-cell { padding: 10px; width: calc(100% - 25px); }
+        .gpt-cell { width: 25px; text-align: center; font-size: 0.6em; font-weight: bold; padding: 15px 5px; border-left: 2px solid #ccc; line-height: 1.3; vertical-align: middle; }
+        .gpt-cell.gptA { background: #fff0e6; color: #8b5a2b; border-left-color: #d4a574; }
+        .gpt-cell.gptB { background: #eef7ff; color: #4682b4; border-left-color: #87ceeb; }
+        .gpt-cell.gptC { background: #f3eeff; color: #8a2be2; border-left-color: #dda0dd; }
+        .gpt-cell.gptD { background: #efffef; color: #228b22; border-left-color: #90ee90; }
+        .meta { font-size: 0.9em; color: #666 }
+        .button { cursor: pointer; color: blue; text-decoration: underline; border: none; background: none; font-size: 0.9em; margin: 2px; }
+        .copy-button { cursor: pointer; color: #0066cc; text-decoration: underline; border: none; background: none; font-size: 0.85em; margin: 2px; padding: 2px 6px; border-radius: 3px; }
+        .copy-button:hover { background: #e6f3ff; }
+        .cost { color: #0066cc; font-weight: bold; }
+        .content-table { border-collapse: collapse; width: 100%; margin-top: 10px; background: #fff; }
+        .content-table th, .content-table td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+        .content-table th { background: #f5f5f5; font-weight: bold; width: 120px; }
+        .content-table td { word-break: break-word; }
+        .messages-table { border-collapse: collapse; width: 100%; margin: 5px 0; table-layout: fixed; }
+        .messages-table th, .messages-table td { border: 1px solid #ddd; padding: 6px; text-align: right; font-size: 0.85em; }
+        .messages-table th { background: #f9f9f9; }
+        .messages-table th:first-child, .messages-table td:first-child { width: 60px; max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .messages-table th:last-child, .messages-table td:last-child { width: calc(100% - 60px); }
+        .messages-table tr:nth-child(even) { background: #fafafa; }
+        .messages-table tr:nth-child(odd) { background: #fff; }
+        .legend { margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 6px; border: 1px solid #ddd; }
+        .legend h3 { margin-top: 0; color: #333; }
+        .legend-item { display: inline-block; margin: 5px 10px; }
+        .legend-color { width: 20px; height: 15px; display: inline-block; margin-left: 5px; vertical-align: middle; border-radius: 3px; }
+        .telegram-message { background: #dcf8c6; border-radius: 12px 12px 4px 12px; padding: 8px 12px; margin: 5px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.35; max-width: 100%; word-wrap: break-word; color: #303030; position: relative; white-space: pre-line; }
+        .telegram-message::after { content: ''; position: absolute; bottom: 0; right: -2px; width: 0; height: 0; border: 6px solid transparent; border-top-color: #dcf8c6; border-right: 0; transform: rotate(45deg); }
+        .json-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .json-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 800px; max-height: 80%; overflow-y: auto; border-radius: 8px; }
+        .json-text { background: #f5f5f5; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; word-break: break-all; font-size: 12px; max-height: 400px; overflow-y: auto; }
+        .close { color: #aaa; float: left; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #000; }
+        .copy-success { color: green; font-size: 12px; margin-left: 10px; }
+    </style>
+    <script>
+        function toggle(id){var e=document.getElementById(id);e.style.display=e.style.display==='none'?'block':'none';}
+        
+        function showJsonModal(title, jsonData) {
+            var modal = document.getElementById('jsonModal');
+            var modalTitle = document.getElementById('jsonModalTitle');
+            var jsonText = document.getElementById('jsonText');
+            
+            modalTitle.textContent = title;
+            jsonText.textContent = JSON.stringify(jsonData, null, 2);
+            modal.style.display = 'block';
+        }
+        
+        function closeJsonModal() {
+            document.getElementById('jsonModal').style.display = 'none';
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // הצג הודעת הצלחה
+                var copyBtn = event.target;
+                var originalText = copyBtn.textContent;
+                copyBtn.textContent = '✓ הועתק!';
+                copyBtn.style.color = 'green';
+                setTimeout(function() {
+                    copyBtn.textContent = originalText;
+                    copyBtn.style.color = '#0066cc';
+                }, 2000);
+            }).catch(function(err) {
+                console.error('שגיאה בהעתקה: ', err);
+                // נסה שיטה חלופית
+                var textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    var copyBtn = event.target;
+                    var originalText = copyBtn.textContent;
+                    copyBtn.textContent = '✓ הועתק!';
+                    copyBtn.style.color = 'green';
+                    setTimeout(function() {
+                        copyBtn.textContent = originalText;
+                        copyBtn.style.color = '#0066cc';
+                    }, 2000);
+                } catch (err) {
+                    alert('שגיאה בהעתקה. נסה שוב.');
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+        
+        function copyJsonData(jsonData) {
+            copyToClipboard(JSON.stringify(jsonData, null, 2));
+        }
+        
+        // סגירת modal בלחיצה מחוץ לתוכן
+        window.onclick = function(event) {
+            var modal = document.getElementById('jsonModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</head><body>
+<h2>100 הקריאות האחרונות ל־GPT</h2>
+
+<!-- JSON Modal -->
+<div id="jsonModal" class="json-modal">
+    <div class="json-content">
+        <span class="close" onclick="closeJsonModal()">&times;</span>
+        <h3 id="jsonModalTitle">JSON גולמי</h3>
+        <button class="copy-button" onclick="copyToClipboard(document.getElementById('jsonText').textContent)">📋 העתק JSON</button>
+        <div id="jsonText" class="json-text"></div>
+    </div>
+</div>
+<div class="entry gptA">
+  <table class="entry-table"> <tr>
+    <td class="content-cell">
+      <div class="meta">
+        <b>זמן:</b> 05/07/25 10:00 |
+        <b>עלות:</b> <span class="cost">0 אגורות</span> |
+        <b>מודל:</b> gpt-4o-2024-08-06 |
+        <b>טוקנים:</b> 40 (prompt: 25, completion: 15, cached: 0)
+      </div>
+      <button class="button" onclick="toggle('req0')">▶ בקשה</button>
+      <button class="copy-button" onclick="showJsonModal('JSON גולמי - בקשה', {"model": "gpt-4o-2024-08-06", "messages": [{"role": "system", "content": "אתה עוזר אישי ידידותי ומועיל."}, {"role": "user", "content": "מה השעה עכשיו?"}]})">📋 העתק JSON גולמי</button>
+      <div id="req0" style="display:none;">
+    <table class="content-table">
+      <tr><th>מודל</th><td>gpt-4o-2024-08-06</td></tr>
+      <tr><th colspan="2">הודעות</th></tr>
+      <tr><td colspan="2"><table class="messages-table"><tr><th>תפקיד</th><th>תוכן</th></tr>
+<tr><td>system</td><td>אתה עוזר אישי ידידותי ומועיל.</td></tr>
+<tr><td>user</td><td>מה השעה עכשיו?</td></tr></table></td></tr>
+    </table></div>
+      <button class="button" onclick="toggle('res0')">▶ תשובה</button>
+      <button class="copy-button" onclick="showJsonModal('JSON גולמי - תשובה', {"id": "sample-1", "choices": [{"message": {"content": "אני לא יכול לראות את השעה הנוכחית, אבל אני יכול לעזור לך עם שאלות אחרות! 😊"}}], "usage": {"prompt_tokens": 25, "completion_tokens": 15, "total_tokens": 40}})">📋 העתק JSON גולמי</button>
+      <div id="res0" style="display:none;"><table class="content-table"><tr><th>מזהה</th><td>sample-1</td></tr>
+<tr><th>מודל</th><td>gpt-4o-2024-08-06</td></tr>
+<tr><th>טוקני בקשה</th><td>25</td></tr>
+<tr><th>טוקני תשובה</th><td>15</td></tr>
+<tr><th>טוקני cache</th><td>0</td></tr>
+<tr><th>סך טוקנים</th><td>40</td></tr><tr><th>הודעה מעוצבת</th><td><div class="telegram-message">אני לא יכול לראות את השעה הנוכחית, אבל אני יכול לעזור לך עם שאלות אחרות! 😊</div></td></tr></table></div>
+    </td>
+    <td class="gpt-cell gptA">G<br>P<br>T<br>A</td>
+  </tr></table>
+</div>
+
+<div class="entry gptB">
+  <table class="entry-table"> <tr>
+    <td class="content-cell">
+      <div class="meta">
+        <b>זמן:</b> 05/07/25 10:01 |
+        <b>עלות:</b> <span class="cost">1 אגורות</span> |
+        <b>מודל:</b> gpt-4o-2024-08-06 |
+        <b>טוקנים:</b> 75 (prompt: 30, completion: 45, cached: 0)
+      </div>
+      <button class="button" onclick="toggle('req1')">▶ בקשה</button>
+      <button class="copy-button" onclick="showJsonModal('JSON גולמי - בקשה', {"model": "gpt-4o-2024-08-06", "messages": [{"role": "system", "content": "אתה מומחה טכני."}, {"role": "user", "content": "איך אני מתקין Python?"}]})">📋 העתק JSON גולמי</button>
+      <div id="req1" style="display:none;">
+    <table class="content-table">
+      <tr><th>מודל</th><td>gpt-4o-2024-08-06</td></tr>
+      <tr><th colspan="2">הודעות</th></tr>
+      <tr><td colspan="2"><table class="messages-table"><tr><th>תפקיד</th><th>תוכן</th></tr>
+<tr><td>system</td><td>אתה מומחה טכני.</td></tr>
+<tr><td>user</td><td>איך אני מתקין Python?</td></tr></table></td></tr>
+    </table></div>
+      <button class="button" onclick="toggle('res1')">▶ תשובה</button>
+      <button class="copy-button" onclick="showJsonModal('JSON גולמי - תשובה', {"id": "sample-2", "choices": [{"message": {"content": "כדי להתקין Python:\n1. הורד מהאתר הרשמי python.org\n2. הרץ את הקובץ המותקן\n3. סמן 'Add Python to PATH'\n4. לחץ Install"}}], "usage": {"prompt_tokens": 30, "completion_tokens": 45, "total_tokens": 75}})">📋 העתק JSON גולמי</button>
+      <div id="res1" style="display:none;"><table class="content-table"><tr><th>מזהה</th><td>sample-2</td></tr>
+<tr><th>מודל</th><td>gpt-4o-2024-08-06</td></tr>
+<tr><th>טוקני בקשה</th><td>30</td></tr>
+<tr><th>טוקני תשובה</th><td>45</td></tr>
+<tr><th>טוקני cache</th><td>0</td></tr>
+<tr><th>סך טוקנים</th><td>75</td></tr><tr><th>הודעה מעוצבת</th><td><div class="telegram-message">כדי להתקין Python:
+1. הורד מהאתר הרשמי python.org
+2. הרץ את הקובץ המותקן
+3. סמן 'Add Python to PATH'
+4. לחץ Install</div></td></tr></table></div>
+    </td>
+    <td class="gpt-cell gptB">G<br>P<br>T<br>B</td>
+  </tr></table>
+</div>
+
+<div class="entry gptC">
+  <table class="entry-table"> <tr>
+    <td class="content-cell">
+      <div class="meta">
+        <b>זמן:</b> 05/07/25 10:02 |
+        <b>עלות:</b> <span class="cost">1 אגורות</span> |
+        <b>מודל:</b> gpt-4o-2024-08-06 |
+        <b>טוקנים:</b> 60 (prompt: 35, completion: 25, cached: 0)
+      </div>
+      <button class="button" onclick="toggle('req2')">▶ בקשה</button>
+      <button class="copy-button" onclick="showJsonModal('JSON גולמי - בקשה', {"model": "gpt-4o-2024-08-06", "messages": [{"role": "system", "content": "אתה עוזר יצירתי."}, {"role": "user", "content": "כתוב לי שיר קצר על הטכנולוגיה"}]})">📋 העתק JSON גולמי</button>
+      <div id="req2" style="display:none;">
+    <table class="content-table">
+      <tr><th>מודל</th><td>gpt-4o-2024-08-06</td></tr>
+      <tr><th colspan="2">הודעות</th></tr>
+      <tr><td colspan="2"><table class="messages-table"><tr><th>תפקיד</th><th>תוכן</th></tr>
+<tr><td>system</td><td>אתה עוזר יצירתי.</td></tr>
+<tr><td>user</td><td>כתוב לי שיר קצר על הטכנולוגיה</td></tr></table></td></tr>
+    </table></div>
+      <button class="button" onclick="toggle('res2')">▶ תשובה</button>
+      <button class="copy-button" onclick="showJsonModal('JSON גולמי - תשובה', {"id": "sample-3", "choices": [{"message": {"content": "במסכים זוהרים\nמילים מתעופפות\nהעתיד כבר כאן\nבכל לחיצה מתחדשת"}}], "usage": {"prompt_tokens": 35, "completion_tokens": 25, "total_tokens": 60}})">📋 העתק JSON גולמי</button>
+      <div id="res2" style="display:none;"><table class="content-table"><tr><th>מזהה</th><td>sample-3</td></tr>
+<tr><th>מודל</th><td>gpt-4o-2024-08-06</td></tr>
+<tr><th>טוקני בקשה</th><td>35</td></tr>
+<tr><th>טוקני תשובה</th><td>25</td></tr>
+<tr><th>טוקני cache</th><td>0</td></tr>
+<tr><th>סך טוקנים</th><td>60</td></tr><tr><th>הודעה מעוצבת</th><td><div class="telegram-message">במסכים זוהרים
+מילים מתעופפות
+העתיד כבר כאן
+בכל לחיצה מתחדשת</div></td></tr></table></div>
+    </td>
+    <td class="gpt-cell gptC">G<br>P<br>T<br>C</td>
+  </tr></table>
+</div>
+<div class="legend">
+  <h3>מקרא וצבעי GPT</h3>
+  <div class="legend-item">GPTA <span class="legend-color" style="background: #fff0e6; border: 1px solid #d4a574;"></span></div>
+  <div class="legend-item">GPTB <span class="legend-color" style="background: #eef7ff; border: 1px solid #87ceeb;"></span></div>
+  <div class="legend-item">GPTC <span class="legend-color" style="background: #f3eeff; border: 1px solid #dda0dd;"></span></div>
+  <div class="legend-item">GPTD <span class="legend-color" style="background: #efffef; border: 1px solid #90ee90;"></span></div>
+</div></body></html>

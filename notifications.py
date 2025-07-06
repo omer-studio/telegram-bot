@@ -1212,7 +1212,8 @@ def _log_to_chat_history(chat_id: str) -> None:
     """מתעד הודעת תזכורת בהיסטוריית הצ'אט."""
     try:
         from utils import update_chat_history
-        update_chat_history(chat_id, "[הודעה אוטומטית מהבוט]", GENTLE_REMINDER_MESSAGE)
+        # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
+        update_chat_history(chat_id, "", GENTLE_REMINDER_MESSAGE)  # הודעת מערכת - אין הודעת משתמש
     except Exception as e:
         logging.error(f"[REMINDER] Failed to log reminder to chat history: {e}")
 

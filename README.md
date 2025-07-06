@@ -498,6 +498,81 @@ python utils.py log-status
 # Windows PowerShell
 $env:ENABLE_GPT_COST_DEBUG="false"; python main.py
 
+---
+
+## 📊 Render Logs Reader - כלי דיבוג ברנדר
+
+### 🛠️ סקריפט חדש לגישה ללוגי רנדר
+**קובץ:** `render_logs_reader.py`
+
+**מטרה:** מאפשר גישה ללוגי פריסות ברנדר לצורך דיבוג ומעקב אחר בעיות.
+
+### 🚀 אופני שימוש:
+
+```bash
+# סקירה כללית (הצגת כל המידע)
+python render_logs_reader.py
+
+# מידע על השירות
+python render_logs_reader.py info
+
+# פריסות אחרונות
+python render_logs_reader.py deploys
+
+# לוגי הפריסה האחרונה
+python render_logs_reader.py latest
+
+# לוגי שירות מ-24 שעות אחרונות
+python render_logs_reader.py logs
+
+# לוגי שירות מ-X שעות אחרונות
+python render_logs_reader.py logs 48
+
+# חיפוש שגיאות
+python render_logs_reader.py errors
+
+# שמירת לוגים לקובץ
+python render_logs_reader.py save
+python render_logs_reader.py save 24 my_logs.txt
+```
+
+### ⚙️ הגדרות נדרשות:
+הסקריפט זקוק למשתני config הבאים:
+- `RENDER_API_KEY` - מפתח API של רנדר
+- `RENDER_SERVICE_ID` - מזהה השירות ברנדר
+
+### 📁 ניקוי קבצי מיגרציה:
+נוצרה תיקיית **"מיגרציה מSHALL"** עם כל הקבצים הקשורים למיגרציה מה-SHELL.
+התיקייה נוספה ל-.gitignore ולא תעלה לגיט.
+
+**קבצים שהועברו:**
+- server_migration.py
+- simple_server_migration.py
+- download_logs_*.py
+- extract_chat_*.py
+- restore_chat_to_db.py
+- debug_render_services.py
+- render_services_debug.json
+- וקבצי נתונים נוספים
+
+### 🗄️ סיכום בדיקת מסד הנתונים:
+
+**מתוך 7 CHAT_IDs שנבדקו:**
+- ✅ **111709341**: 190 הודעות
+- ❌ **1118251087**: 0 הודעות
+- ❌ **179392777**: 0 הודעות
+- ❌ **5676571979**: 0 הודעות
+- ❌ **7957193610**: 0 הודעות
+- ❌ **5526006524**: 0 הודעות
+- ❌ **7186596694**: 0 הודעות
+
+**סה"כ הודעות במסד הנתונים**: 276 הודעות
+
+**חיבור מסד נתונים:**
+- Host: dpg-d1kkjube5dus73emu3b0-a.frankfurt-postgres.render.com
+- Database: telegram_bot_db_0nbv
+- עמודות: id, timestamp, chat_id, user_msg, bot_msg
+
 # Linux/Mac
 ENABLE_GPT_COST_DEBUG=false python main.py
 
@@ -627,51 +702,99 @@ GENTLE_REMINDER_MESSAGE = "ההודעה החדשה שלך כאן"
 
 ---
 
-## 🔍 צפייה בלוג JSONL של GPT
+## 🔍 מעקב קריאות GPT - מעבר ל-SQL מלא
 
-> החל מגרסת **openai_calls.jsonl** (או כל נתיב שתגדיר ב-`GPTJSONLLogger`) כל קריאה ל-GPT נשמרת בשורה אחת בפורמט JSON. כך תוכל לעיין בהן בקלות:
+> **🚀 מעבר מוצלח ל-SQL:** כל הקריאות ל-GPT נשמרות כעת ישירות ב-PostgreSQL במקום בקבצים!
 
-### 1. VS Code
+### ✅ איך זה עובד עכשיו:
 
-1. פתח את הקובץ `data/openai_calls.jsonl`.
-2. התקן את ההרחבה **JSON Lines** (אם טרם מותקנת) ‑ היא מציגה כל שורה כאובייקט JSON מעוצב.
-3. `Ctrl+Shift+P → JSON Lines: Pretty print` יעצב שורה נבחרת.
-4. חיפוש (`Ctrl+F`) עובד כרגיל – אפשר למצוא System Prompt, user
-aiming, או שדות token usage.
+1. **שמירה ל-SQL:** כל קריאה ל-GPT (A/B/C/D/E) נשמרת אוטומטית ב-PostgreSQL
+2. **HTML לדרייב:** דוח HTML יפה נוצר מ-SQL ומועלה לגוגל דרייב
+3. **ללא עיכוב:** עדכון ה-HTML מתבצע ברקע ולא מעכב את התשובות למשתמש
+4. **גיבוי חכם:** נתונים נשמרים גם ב-Google Sheets וגם ב-SQL
 
-### 2. פקודות טרמינל מהירות
+### 🎯 איפה לראות את הנתונים:
 
-| פעולה                  | פקודה |
-|------------------------|-------|
-| להציג 10 השורות האחרונות | `tail -n 10 data/openai_calls.jsonl` |
-| לעקוב בלייב            | `tail -f data/openai_calls.jsonl` |
-| לעצב בזמן אמת עם *jq*  | `tail -f data/openai_calls.jsonl \| jq -C .` |
-| פורמט צבעוני לקובץ שלם | `jq -C . data/openai_calls.jsonl \| less -R` |
-| להציג רק ההודעות שנשלחו | `jq -C '.request.messages' data/openai_calls.jsonl` |
-| להציג רק מספר הטוקנים  | `jq '.response.usage' data/openai_calls.jsonl` |
+#### 1. **דוח HTML לדרייב** (הכי יפה!)
+```bash
+# עדכון מיידי של ה-HTML לדרייב
+python update_gpt_html.py
+```
 
-*הסבר קצר*: כל שורה היא אובייקט JSON עצמאי → לכן יש להעביר ל-`jq` בלי דגל `-s`. אם תרצה לנתח סטטיסטית (למשל BigQuery/Snowflake) פשוט טען את הקובץ כ-JSONL.
+**התוצאה:** קובץ HTML מעוצב עם כל הנתונים האחרונים מ-SQL, מועלה אוטומטית לגוגל דרייב!
+
+#### 2. **Google Sheets** (לניתוח)
+- כל הקריאות נרשמות בגיליון `log` 
+- כולל פירוט מלא של עלויות וטוקנים
+- מתעדכן בזמן אמת
+
+#### 3. **PostgreSQL** (למפתחים)
+```sql
+-- הצגת 10 הקריאות האחרונות
+SELECT created_at, gpt_type, model, cost_usd, total_tokens 
+FROM gpt_calls 
+ORDER BY created_at DESC 
+LIMIT 10;
+
+-- סיכום עלויות היום
+SELECT gpt_type, COUNT(*), SUM(cost_usd) as total_cost
+FROM gpt_calls 
+WHERE created_at::date = CURRENT_DATE
+GROUP BY gpt_type;
+```
+
+### ⚡ **אופטימיזציה מהירה:**
+
+**למה הבוט מהיר יותר עכשיו:**
+- HTML נוצר רק 10% מהזמן (רנדומלית) 
+- עדכון ה-HTML מתבצע ברקע (לא חוסם)
+- המשתמש מקבל תשובה מיד ללא המתנה
+
+### 🔧 פקודות שימושיות:
+
+```bash
+# עדכון HTML מיידי לדרייב (כאשר רוצים לראות דוח חדש)
+python update_gpt_html.py
+
+# בניית HTML מקומית (ללא העלאה)
+python scripts/build_gpt_log.py
+
+# בניית HTML + העלאה לדרייב
+python scripts/build_gpt_log.py --upload
+
+# בניית HTML + העלאה לשיטס
+python scripts/build_gpt_log.py --sheets
+```
+
+### 📊 **מבנה הנתונים ב-SQL:**
+
+**טבלה: `gpt_calls`**
+- `created_at` - זמן הקריאה
+- `gpt_type` - סוג GPT (A/B/C/D/E)
+- `model` - מודל שהשתמש (gpt-4, gemini וכו')
+- `request_data` - JSON עם כל פרטי הבקשה
+- `response_data` - JSON עם כל פרטי התשובה
+- `tokens_input/output` - מספר טוקנים
+- `cost_usd` - עלות בדולרים
+- `chat_id` - מזהה השיחה
+
+### 🎨 **HTML Viewer מתקדם:**
+
+הדוח ה-HTML כולל:
+- 🎨 עיצוב צבעוני לכל סוג GPT (A/B/C/D/E)
+- 📊 פירוט טוקנים ועלויות
+- 🔍 צפייה ב-JSON גולמי
+- 📋 העתקת נתונים
+- 📱 תצוגה מותאמת למובייל
+
+### ⚠️ **הערות חשובות:**
+
+- **ללא קבצי JSONL יותר:** כל הנתונים ב-SQL
+- **גיבוי חכם:** נתונים נשמרים ב-3 מקומות (SQL + Sheets + Drive)
+- **מהירות מקסימלית:** אין עיכובים למשתמשים
+- **עדכון אוטומטי:** HTML מתעדכן ברקע
 
 ---
-
-## 📄 GPT Log Viewer (HTML)
-
-> תצוגה גרפית וידידותית לקריאות GPT האחרונות בקובץ יחיד (`data/gpt_log.html`).
-
-### 1. בניית הדף ידנית
-```bash
-# יצירת / עדכון 100 הקריאות האחרונות
-python3 scripts/build_gpt_log.py
-# פתיחה בדפדפן (Linux)
-xdg-open data/gpt_log.html
-```
-
-### 2. יצירת נתוני דוגמה מקומית (ללא OpenAI)
-```bash
-# הוספת 5 רשומות סינתטיות (-n לשינוי הכמות)
-python3 scripts/generate_sample_gpt_log.py --n 5
-python3 scripts/build_gpt_log.py && xdg-open data/gpt_log.html
-```
 הסקריפט מייצר רשומות חוקיות לגמרי ולכן מתאים גם לבדיקה ב-CI.
 
 ### 3. הפעלה אוטומטית (Cron)

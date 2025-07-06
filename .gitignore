@@ -64,3 +64,41 @@ gpt_d_performance.jsonl
 # Ignore temporary render logs files
 render_logs.txt
 render_logs*.txt
+
+# 🗂️ תיקיות חדשות לארגון קבצים
+/temp_files/
+/logs/
+/backups/
+/debug_files/
+/test_outputs/
+
+# 🖥️ קבצי IDE ומערכת
+.cursor/
+venv/
+
+# 📊 קבצי נתונים זמניים
+restored_chat_history.json
+user_messages_stats.json
+extracted_all_messages.json
+chat_history_v*.json
+
+# 🔧 סקריפטים זמניים
+restore_chat_history.py
+analyze_chat_history_versions.py
+cleanup_data_folder.py
+restore_without_duplicates.py
+render_logs_reader.py
+quick_memory_fix.py
+patch_imports.py
+auto_rollback.py
+daily_summary.py
+daily_bot_health_check.py
+
+# 📋 דוחות וסיכומים
+*report*.md
+*summary*.md
+*fix*.md
+*SAFETY*.md
+*GUIDE*.md
+*analysis*.md
+*optimization*.md

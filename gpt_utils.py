@@ -287,27 +287,23 @@ class BillingProtection:
         self.daily_limit_usd = daily_limit_usd      # מגבלה יומית: $5
         self.monthly_limit_usd = monthly_limit_usd  # מגבלה חודשית: $50
         
-        self.usage_file = "data/billing_usage.json"
-        self._ensure_data_dir()
+        # הסרת הצורך בתיקיית data - כל הנתונים במסד הנתונים
         self.usage_data = self._load_usage()
     
     def _ensure_data_dir(self):
-        """וודא שתיקיית data קיימת"""
-        import os
-        os.makedirs("data", exist_ok=True)
+        """ודא שתיקיית data קיימת - לא נדרש יותר"""
+        pass  # לא נדרש יותר - מסד הנתונים
     
     def _load_usage(self):
-        """טען נתוני שימוש מקובץ"""
-        import os
-        import json
-        if os.path.exists(self.usage_file):
-            try:
-                with open(self.usage_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
-                if should_log_debug_prints():
-                    print(f"[WARNING] Error loading billing usage file: {e}")
-                pass
+        """טען נתוני שימוש ממסד הנתונים"""
+        try:
+            from db_manager import get_billing_usage_data
+            data = get_billing_usage_data()
+            if data:
+                return data
+        except Exception as e:
+            if should_log_debug_prints():
+                print(f"[WARNING] Error loading billing usage from DB: {e}")
         
         # ברירת מחדל
         return {
@@ -317,14 +313,13 @@ class BillingProtection:
         }
     
     def _save_usage(self):
-        """שמור נתוני שימוש לקובץ"""
-        import json
+        """שמור נתוני שימוש למסד הנתונים"""
         try:
-            with open(self.usage_file, 'w', encoding='utf-8') as f:
-                json.dump(self.usage_data, f, indent=2, ensure_ascii=False)
+            from db_manager import save_billing_usage_data
+            save_billing_usage_data(self.usage_data)
         except Exception as e:
             if should_log_debug_prints():
-                print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
+                print(f"⚠️ שגיאה בשמירת נתוני שימוש למסד הנתונים: {e}")
     
     def _get_current_keys(self):
         """מחזיר מפתחות תאריך נוכחיים"""
@@ -464,25 +459,32 @@ billing_guard = BillingProtection(
 )
 
 def _load_daily_limits():
-    """טוען מגבלות יומיות ומאפס אם יום חדש."""
+    """טוען מגבלות יומיות ממסד הנתונים ומאפס אם יום חדש."""
     from utils import get_israel_time
     today_str = get_israel_time().strftime("%Y-%m-%d")
-    limits_file = os.path.join(DATA_DIR, "free_model_limits.json")
     
     try:
-        with open(limits_file, 'r') as f:
-            daily_limits = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        from db_manager import get_free_model_limits_data
+        daily_limits = get_free_model_limits_data()
+        if not daily_limits:
+            daily_limits = {}
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"[WARNING] Error loading limits from DB: {e}")
         daily_limits = {}
     
     if daily_limits.get("date") != today_str:
         daily_limits = {"date": today_str}
-        with open(limits_file, 'w') as f:
-            json.dump(daily_limits, f)
+        try:
+            from db_manager import save_free_model_limits_data
+            save_free_model_limits_data(daily_limits)
+        except Exception as e:
+            if should_log_debug_prints():
+                print(f"⚠️ שגיאה בשמירת מגבלות למסד הנתונים: {e}")
         if should_log_debug_prints():
             print(f"🔄 יום חדש! מאפס מגבלות חינמיות ({today_str})")
     
-    return daily_limits, limits_file
+    return daily_limits
 
 def _try_single_model(model, full_messages, completion_params, is_paid=False):
     """מנסה מודל יחיד ומחזיר תגובה או None אם נכשל."""
@@ -510,7 +512,7 @@ def try_free_models_first(full_messages, **completion_params):
     """מנסה קודם מודלים חינמיים, אחר כך עובר לבתשלום - גרסה רזה."""
     free_models = config.get("FREE_MODELS", [])
     paid_models = config.get("PAID_MODELS", [])
-    daily_limits, limits_file = _load_daily_limits()
+    daily_limits = _load_daily_limits()
     
     # ניסיון עם מודלים חינמיים
     for free_model in free_models:
@@ -521,16 +523,24 @@ def try_free_models_first(full_messages, **completion_params):
         if response:
             # עדכון מונה השימוש
             daily_limits[free_model] = daily_limits.get(free_model, 0) + 1
-            with open(limits_file, 'w') as f:
-                json.dump(daily_limits, f)
+            try:
+                from db_manager import save_free_model_limits_data
+                save_free_model_limits_data(daily_limits)
+            except Exception as e:
+                if should_log_debug_prints():
+                    print(f"⚠️ שגיאה בשמירת מגבלות למסד הנתונים: {e}")
             return response
         
         # טיפול בשגיאות מודל חינמי
         error_msg = str(error).lower()
         if "quota" in error_msg or "rate limit" in error_msg:
             daily_limits[free_model] = config.get("FREE_MODEL_DAILY_LIMIT", 100)
-            with open(limits_file, 'w') as f:
-                json.dump(daily_limits, f)
+            try:
+                from db_manager import save_free_model_limits_data
+                save_free_model_limits_data(daily_limits)
+            except Exception as e:
+                if should_log_debug_prints():
+                    print(f"⚠️ שגיאה בשמירת מגבלות למסד הנתונים: {e}")
     
     # מעבר למודלים בתשלום
     if should_log_debug_prints():

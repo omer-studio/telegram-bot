@@ -422,28 +422,15 @@ def update_user_profile_sync(chat_id, field_values):
         return False
 
 def log_gpt_usage_to_file(message_id, chat_id, main_usage, summary_usage, extract_usage, gpt_d_usage, gpt_e_usage, total_cost_ils):
+    """🔄 מעבר ל-SQL: כל הנתונים נשמרים כבר ב-SQL דרך db_manager.py
+    
+    הפונקציה הזו קיימת רק לתאימות עם הקוד הקיים - אין צורך לכתוב לקובץ יותר.
+    """
     try:
-        from utils import get_israel_time
-        log_entry = {
-            "timestamp": get_israel_time().isoformat(),
-            "interaction_id": message_id,  # שם שהדוח מחפש
-            "chat_id": chat_id,
-            "type": "gpt_a",  # סוג שהדוח מחפש
-            "cost_total_ils": total_cost_ils,  # שם שהדוח מחפש
-            "main_usage": main_usage,
-            "summary_usage": summary_usage,
-            "extract_usage": extract_usage,
-            "gpt_d_usage": gpt_d_usage,
-            "gpt_e_usage": gpt_e_usage
-        }
-        
-        with open(gpt_log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-            
-        debug_log(f"Logged GPT usage to file for message {message_id}", "SheetsLogger")
+        debug_log(f"GPT usage data already saved to SQL for message {message_id}", "SheetsLogger")
         
     except Exception as e:
-        debug_log(f"Error logging GPT usage to file: {e}", "SheetsLogger")
+        debug_log(f"Error in log_gpt_usage_to_file: {e}", "SheetsLogger")
 
 # ================================
 # 🔄 Async Wrapper Functions

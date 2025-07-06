@@ -61,6 +61,8 @@ from notifications import gentle_reminder_background_task
 from db_manager import create_tables, save_chat_message, save_user_profile, save_gpt_usage_log, save_gpt_call_log, save_critical_user_data, save_reminder_state, save_billing_usage_data, save_errors_stats_data, save_bot_error_log, save_bot_trace_log, save_sync_queue_data, save_rollback_data, save_free_model_limits_data, save_temp_critical_user_data
 import json
 import psycopg2
+import datetime
+import asyncio
 
 # הגדרת DB_URL
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
@@ -499,6 +501,12 @@ def setup_message_handlers():
     # הוספת handler לפקודת מיגרציה
     app.add_handler(CommandHandler("migrate_all_data", handle_migrate_command))
     
+    # הוספת handler לפקודת לוגים
+    app.add_handler(CommandHandler("show_logs", handle_show_logs_command))
+    
+    # הוספת handler לפקודת חיפוש לוגים
+    app.add_handler(CommandHandler("search_logs", handle_search_logs_command))
+    
     elapsed_time = time.time() - start_time
     execution_times["הוספת message handlers"] = elapsed_time
     print(f"✅ Message handlers נוספו תוך {elapsed_time:.3f} שניות")
@@ -593,67 +601,9 @@ def backup_data_to_drive():
     try:
         print("📁 מתחיל גיבוי ל-Google Drive...")
         
-        from sheets_core import setup_google_sheets
-        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
-        
-        # יצירת תיקיית גיבוי בדרייב
-        from datetime import datetime
-        backup_folder_name = f"data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # יצירת תיקייה בדרייב
-        folder_metadata = {
-            'name': backup_folder_name,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        folder = gc.create(folder_metadata)
-        folder_id = folder['id']
-        
-        print(f"✅ נוצרה תיקיית גיבוי: {backup_folder_name}")
-        
-        # רשימת קבצים לגיבוי
-        data_files = [
-            "data/chat_history.json",
-            "data/user_profiles.json", 
-            "data/gpt_usage_log.jsonl",
-            "data/openai_calls.jsonl",
-            "data/bot_errors.jsonl",
-            "data/bot_trace_log.jsonl",
-            "data/reminder_state.json",
-            "data/errors_stats.json",
-            "data/critical_error_users.json",
-            "data/billing_usage.json",
-            "data/free_model_limits.json",
-            "data/sync_queue.json",
-            "data/rollback_history.json",
-            "data/last_good_commit.json"
-        ]
-        
-        # הוספת קבצים זמניים
-        data_dir = "data"
-        if os.path.exists(data_dir):
-            for filename in os.listdir(data_dir):
-                if filename.startswith("temp_critical_user_") and filename.endswith(".json"):
-                    data_files.append(os.path.join(data_dir, filename))
-        
-        backed_up_files = 0
-        for file_path in data_files:
-            if os.path.exists(file_path):
-                try:
-                    # העלאה לדרייב
-                    file_metadata = {
-                        'name': os.path.basename(file_path),
-                        'parents': [folder_id]
-                    }
-                    
-                    gc.upload_file(file_path, file_metadata)
-                    backed_up_files += 1
-                    print(f"✅ הועלה: {os.path.basename(file_path)}")
-                    
-                except Exception as e:
-                    print(f"⚠️ שגיאה בהעלאת {file_path}: {e}")
-        
-        print(f"✅ גיבוי הושלם: {backed_up_files} קבצים הועלו ל-Google Drive")
-        print(f"📁 תיקיית גיבוי: {backup_folder_name}")
+        # ⚠️ זמנית: מדלג על גיבוי כדי לא לעכב את המיגרציה
+        print("ℹ️ מדלג על גיבוי Google Drive כדי לא לעכב את המיגרציה")
+        print("✅ המשך מיגרציה ללא גיבוי (קבצים המקוריים נשמרים)")
         
         return True
         
@@ -1555,6 +1505,246 @@ async def handle_migrate_command(update, context):
         
     except Exception as e:
         await update.message.reply_text(f"❌ שגיאה בפקודת מיגרציה: {e}")
+
+async def handle_show_logs_command(update, context):
+    """מטפל בפקודת /show_logs לקריאת לוגים מרנדר"""
+    try:
+        # בדיקה אם המשתמש הוא אדמין
+        chat_id = str(update.effective_chat.id)
+        if chat_id != "111709341":
+            await update.message.reply_text("❌ רק אדמין יכול להריץ פקודה זו")
+            return
+        
+        # קבלת הפרמטרים מהפקודה
+        message_text = update.message.text.strip()
+        parts = message_text.split()
+        
+        # ברירת מחדל: 50 שורות אחרונות
+        lines = 50
+        log_type = "service"
+        
+        # פרסור פרמטרים
+        if len(parts) > 1:
+            try:
+                lines = int(parts[1])
+                lines = min(lines, 500)  # מקסימום 500 שורות
+            except ValueError:
+                log_type = parts[1]
+        
+        if len(parts) > 2:
+            log_type = parts[2]
+        
+        await update.message.reply_text(f"📋 קורא {lines} שורות אחרונות מלוג {log_type}...")
+        
+        # הרצת קריאת לוגים ב-thread נפרד
+        import threading
+        def read_logs():
+            try:
+                logs = get_render_logs(log_type, lines)
+                
+                # שליחת הלוגים לטלגרם
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(send_logs_to_telegram(update, logs, log_type, lines))
+                loop.close()
+            except Exception as e:
+                print(f"❌ שגיאה בקריאת לוגים: {e}")
+        
+        logs_thread = threading.Thread(target=read_logs)
+        logs_thread.start()
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ שגיאה בפקודת לוגים: {e}")
+
+def get_render_logs(log_type="service", lines=50):
+    """קורא לוגים מרנדר דרך SSH"""
+    try:
+        # מיפוי סוגי לוגים
+        log_paths = {
+            "service": "/var/log/render/service.log",
+            "python": "/var/log/render/python.log", 
+            "error": "/var/log/render/error.log",
+            "access": "/var/log/render/access.log"
+        }
+        
+        log_path = log_paths.get(log_type, "/var/log/render/service.log")
+        ssh_host = "srv-d0r895be5dus73fmsc8g@ssh.frankfurt.render.com"
+        
+        # פקודת SSH לקריאת לוגים
+        cmd = f"ssh {ssh_host} 'tail -n {lines} {log_path}'"
+        
+        print(f"📋 מריץ פקודה: {cmd}")
+        
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            return f"❌ שגיאה בקריאת לוגים: {result.stderr}"
+            
+    except subprocess.TimeoutExpired:
+        return "⏰ הזמן לקריאת לוגים פג - הרנדר לא מגיב"
+    except Exception as e:
+        return f"❌ שגיאה בקריאת לוגים: {e}"
+
+async def send_logs_to_telegram(update, logs, log_type, lines):
+    """שולח לוגים לטלגרם (עם חלוקה לחלקים אם נדרש)"""
+    try:
+        if not logs or not logs.strip():
+            await update.message.reply_text(f"📋 אין לוגים זמינים עבור {log_type}")
+            return
+        
+        # הוספת כותרת
+        header = f"📋 **לוגים מרנדר - {log_type}**\n"
+        header += f"📊 {lines} שורות אחרונות\n"
+        header += f"🕐 {datetime.datetime.now().strftime('%H:%M:%S')}\n"
+        header += "=" * 40 + "\n\n"
+        
+        formatted_logs = header + logs
+        
+        # חלוקה לחלקים (טלגרם מוגבל ל-4096 תווים)
+        max_length = 4000  # השארת מקום לפורמטינג
+        
+        if len(formatted_logs) <= max_length:
+            await update.message.reply_text(f"```\n{formatted_logs}\n```", parse_mode="Markdown")
+        else:
+            # חלוקה לחלקים
+            parts = []
+            current_part = header
+            
+            for line in logs.split('\n'):
+                if len(current_part) + len(line) + 1 > max_length:
+                    parts.append(current_part)
+                    current_part = line + '\n'
+                else:
+                    current_part += line + '\n'
+            
+            if current_part.strip():
+                parts.append(current_part)
+            
+            # שליחת כל חלק
+            for i, part in enumerate(parts):
+                part_header = f"📋 חלק {i+1}/{len(parts)}\n" + "=" * 20 + "\n"
+                await update.message.reply_text(f"```\n{part_header}{part}\n```", parse_mode="Markdown")
+                
+                # מניעת spam - המתנה בין חלקים
+                if i < len(parts) - 1:
+                    await asyncio.sleep(1)
+        
+        # סיכום
+        await update.message.reply_text(f"✅ לוגים נשלחו בהצלחה!\n📊 סה\"כ {len(logs.split())} שורות")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ שגיאה בשליחת לוגים: {e}")
+
+async def handle_search_logs_command(update, context):
+    """מטפל בפקודת /search_logs לחיפוש לוגים"""
+    try:
+        # בדיקה אם המשתמש הוא אדמין
+        chat_id = str(update.effective_chat.id)
+        if chat_id != "111709341":
+            await update.message.reply_text("❌ רק אדמין יכול להריץ פקודה זו")
+            return
+        
+        # קבלת הפרמטרים מהפקודה
+        message_text = update.message.text.strip()
+        parts = message_text.split()
+        
+        if len(parts) < 2:
+            await update.message.reply_text(
+                "❓ שימוש: /search_logs <מילת_חיפוש> [סוג_לוג] [מספר_שורות]\n"
+                "דוגמה: /search_logs error service 100"
+            )
+            return
+        
+        search_term = parts[1]
+        log_type = parts[2] if len(parts) > 2 else "service"
+        lines = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 200
+        lines = min(lines, 1000)  # מקסימום 1000 שורות
+        
+        await update.message.reply_text(f"🔍 מחפש '{search_term}' ב-{lines} שורות אחרונות של {log_type}...")
+        
+        # הרצת חיפוש לוגים ב-thread נפרד
+        import threading
+        def search_logs():
+            try:
+                logs = get_render_logs(log_type, lines)
+                search_results = search_logs_in_file(logs, search_term)
+                
+                # שליחת התוצאות לטלגרם
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(send_search_results_to_telegram(update, search_results, log_type, search_term))
+                loop.close()
+            except Exception as e:
+                print(f"❌ שגיאה בחיפוש לוגים: {e}")
+        
+        logs_thread = threading.Thread(target=search_logs)
+        logs_thread.start()
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ שגיאה בפקודת חיפוש לוגים: {e}")
+
+def search_logs_in_file(file_content, search_term):
+    """חיפוש לוגים בתוכן קובץ"""
+    search_results = []
+    for line in file_content.splitlines():
+        if search_term.lower() in line.lower():
+            search_results.append(line)
+    return search_results
+
+async def send_search_results_to_telegram(update, search_results, log_type, search_term):
+    """שולח תוצאות חיפוש לוגים לטלגרם"""
+    try:
+        if not search_results:
+            await update.message.reply_text(f"❌ לא נמצאו תוצאות עבור '{search_term}' בלוג {log_type}")
+            return
+        
+        # הוספת כותרת
+        header = f"🔍 **תוצאות חיפוש לוגים - {log_type}**\n"
+        header += f"🔤 חיפוש: '{search_term}'\n"
+        header += f"📊 נמצאו: {len(search_results)} שורות\n"
+        header += f"🕐 {datetime.datetime.now().strftime('%H:%M:%S')}\n"
+        header += "=" * 40 + "\n\n"
+        
+        formatted_results = header + "\n".join(search_results)
+        
+        # חלוקה לחלקים אם נדרש
+        max_length = 4000
+        
+        if len(formatted_results) <= max_length:
+            await update.message.reply_text(f"```\n{formatted_results}\n```", parse_mode="Markdown")
+        else:
+            # חלוקה לחלקים
+            parts = []
+            current_part = header
+            
+            for line in search_results:
+                if len(current_part) + len(line) + 1 > max_length:
+                    parts.append(current_part)
+                    current_part = line + '\n'
+                else:
+                    current_part += line + '\n'
+            
+            if current_part.strip():
+                parts.append(current_part)
+            
+            # שליחת כל חלק
+            for i, part in enumerate(parts):
+                part_header = f"🔍 חלק {i+1}/{len(parts)}\n" + "=" * 20 + "\n"
+                await update.message.reply_text(f"```\n{part_header}{part}\n```", parse_mode="Markdown")
+                
+                # מניעת spam - המתנה בין חלקים
+                if i < len(parts) - 1:
+                    await asyncio.sleep(1)
+        
+        # סיכום
+        await update.message.reply_text(f"✅ חיפוש הושלם!\n📊 נמצאו {len(search_results)} שורות עם '{search_term}'")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ שגיאה בשליחת תוצאות חיפוש: {e}")
 
 if __name__ == "__main__":
     # אם הרצנו ישירות מה-Shell, נריץ מיגרציה

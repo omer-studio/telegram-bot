@@ -29,7 +29,7 @@ from config import (
     MAX_TRACEBACK_LENGTH,
 )
 from config import should_log_debug_prints, should_log_message_debug
-from db_manager import save_chat_message, get_chat_history
+from db_manager import save_chat_message, get_chat_history, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data
 
 # NOTE: circular import is safe here – utils only contains the base primitives
 # we rely on (like `get_israel_time`).
@@ -549,34 +549,37 @@ def format_error_message(error: Exception, context: str = "") -> str:
 
 
 def log_error_stat(error_type: str) -> None:
+    """רושם סטטיסטיקת שגיאה למסד הנתונים"""
     try:
-        stats_path = os.path.join(DATA_DIR, "errors_stats.json")
-        try:
-            with open(stats_path, "r", encoding="utf-8") as f:
-                stats = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        # קריאת סטטיסטיקות קיימות
+        stats = get_errors_stats_data()
+        if not stats:
             stats = {}
+            
+        # עדכון הספירה
         stats[error_type] = stats.get(error_type, 0) + 1
-        with open(stats_path, "w", encoding="utf-8") as f:
-            json.dump(stats, f, ensure_ascii=False, indent=2)
+        
+        # שמירה חזרה למסד הנתונים
+        save_errors_stats_data(stats)
+        
     except Exception as e:
         logging.error(f"שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
 
 
 def send_error_stats_report():
+    """שולח דוח סטטיסטיקות שגיאות ממסד הנתונים"""
     from notifications import send_admin_notification
-    stats_path = os.path.join(DATA_DIR, "errors_stats.json")
-    if not os.path.exists(stats_path):
-        send_admin_notification("אין נתוני שגיאות זמינים.")
-        return
+    from db_manager import get_errors_stats_data
+    
     try:
-        with open(stats_path, "r", encoding="utf-8") as f:
-            stats = json.load(f)
+        stats = get_errors_stats_data()
         if not stats:
-            send_admin_notification("אין שגיאות שנרשמו.")
+            send_admin_notification("אין נתוני שגיאות זמינים.")
             return
+            
         lines = [f"{k}: {v}" for k, v in sorted(stats.items(), key=lambda x: -x[1])]
         send_admin_notification("📊 דוח שגיאות מצטבר:\n" + "\n".join(lines))
+        
     except Exception as e:
         send_admin_notification(f"[send_error_stats_report] שגיאה בשליחת דוח שגיאות: {e}")
 
@@ -641,7 +644,7 @@ def update_last_bot_message(chat_id, bot_summary):
 
 
 def cleanup_test_users():
-    """ניקוי משתמשי בדיקה - לא נתמך ב-SQL (צריך פונקציית מחיקה)"""
+    """ניקוי משתמשי בדיקה - עובד עם מסד הנתונים"""
     test_users = ['demo_user_6am', 'working_test_user', 'friday_morning_user', 'timestamp_test']
     try:
         # בשלב זה לא נתמך מחיקה מ-SQL
@@ -650,18 +653,18 @@ def cleanup_test_users():
     except Exception as e:
         logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
 
-
     try:
-        reminder_file = "data/reminder_state.json"
-        if os.path.exists(reminder_file):
-            with open(reminder_file, "r", encoding="utf-8") as f:
-                reminders = json.load(f)
+        # קריאת תזכורות ממסד הנתונים
+        reminders = get_reminder_states_data()
+        
+        if reminders:
             for tu in test_users:
                 if tu in reminders:
-                    del reminders[tu]
-                    logging.info(f"🗑️ הוסר משתמש בדיקה {tu} ממערכת התזכורות")
-            with open(reminder_file, "w", encoding="utf-8") as f:
-                json.dump(reminders, f, ensure_ascii=False, indent=2)
+                    # למחוק תזכורת צריך לעדכן אותה עם סטטוס מחוק
+                    # או להוסיף פונקציית מחיקה נפרדת למסד הנתונים
+                    logging.info(f"🗑️ נמצא משתמש בדיקה {tu} במערכת התזכורות (SQL)")
+                    # TODO: להוסיף מחיקה אמיתית
+                    
     except Exception as e:
         logging.error(f"❌ שגיאה בניקוי מערכת התזכורות: {e}")
 

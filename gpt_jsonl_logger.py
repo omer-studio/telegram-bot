@@ -108,20 +108,9 @@ class GPTJSONLLogger:
         endpoint_name: str,
         cost_usd: Any = None,
     ) -> None:
-        """Append a single JSONL line atomically (thread-safe)."""
-        entry = {
-            "ts": datetime.utcnow().isoformat() + "Z",
-            "endpoint": endpoint_name,
-            "request": request_body,
-            "response": response_body,
-        }
-        if cost_usd is not None:
-            entry["cost_usd"] = cost_usd
-
-        line = json.dumps(entry, ensure_ascii=False)
-        with self._lock:
-            with open(self.log_path, "a", encoding="utf-8") as file:
-                file.write(line + "\n")
+        """Save to SQL database instead of file (SHELL migration complete)."""
+        # כל הנתונים נשמרים ל-SQL דרך log_gpt_call - לא צריך קובץ יותר
+        pass
 
     @staticmethod
     def log_gpt_call(
@@ -171,23 +160,30 @@ class GPTJSONLLogger:
         except Exception as sql_exc:
             print(f"[LOGGING_ERROR] Failed to save to SQL: {sql_exc}")
             
-        # הפעלת build_gpt_log.py --upload לעדכון ה-HTML בדרייב
+        # 🚀 HTML מעודכן ברקע - לא מעכב את הבוט!
+        # רק כל 10 קריאות כדי לא לעכב את המשתמש
         try:
-            # במקום subprocess - הפעלה ישירה של הפונקציות
-            import sys
-            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            import threading
+            import random
             
-            # ייבוא הפונקציות ישירות
-            from scripts.build_gpt_log import build_html, upload_to_drive
-            
-            # בניית ה-HTML
-            build_html()
-            print(f"[DEBUG][log_gpt_call] Successfully built HTML")
-            
-            # העלאה לדרייב
-            upload_to_drive("data/gpt_log.html")
-            print(f"[DEBUG][log_gpt_call] Successfully uploaded to Drive")
-            
-        except Exception as html_exc:
-            print(f"[LOGGING_ERROR] Failed to update HTML log: {html_exc}")
-            print(f"[LOGGING_ERROR] Full error: {str(html_exc)}")
+            # עדכון HTML רק מדי פעם כדי לא לעכב את המשתמש
+            if random.randint(1, 10) == 1:  # 10% מהזמן
+                def update_html_background():
+                    try:
+                        import sys
+                        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                        
+                        from scripts.build_gpt_log import build_html, upload_to_drive
+                        
+                        build_html()
+                        upload_to_drive("data/gpt_log.html")
+                        print(f"[DEBUG][log_gpt_call] HTML updated in background")
+                        
+                    except Exception as html_exc:
+                        print(f"[LOGGING_ERROR] Background HTML update failed: {html_exc}")
+                
+                # הפעלה ברקע - לא חוסמת את הבוט
+                threading.Thread(target=update_html_background, daemon=True).start()
+                
+        except Exception as thread_exc:
+            print(f"[LOGGING_ERROR] Failed to start background HTML update: {thread_exc}")

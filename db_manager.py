@@ -65,18 +65,72 @@ def create_tables():
     conn.close()
 
 # === שמירת הודעת צ'אט ===
-def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None):
+# === שמירת הודעת צ'אט מורחבת ===
+def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
+    """
+    שומר הודעת צ'אט עם נתונים מורחבים
+    kwargs יכול להכיל:
+    - message_type: סוג ההודעה (user/bot/pair/system)
+    - telegram_message_id: מזהה ההודעה בטלגרם
+    - source_file: קובץ המקור
+    - gpt_type: סוג GPT (A/B/C/D)
+    - gpt_model: שם המודל
+    - gpt_cost_usd: עלות בדולרים
+    - gpt_tokens_input/output: מספר טוקנים
+    - gpt_request/response: בקשה ותגובה מלאה
+    - metadata: מטה-דאטה כללי
+    """
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO chat_messages (chat_id, user_msg, bot_msg, timestamp) VALUES (%s, %s, %s, %s)",
-        (chat_id, user_msg, bot_msg, timestamp or datetime.utcnow())
+    
+    # הכנת הנתונים המורחבים
+    insert_sql = """
+    INSERT INTO chat_messages (
+        chat_id, user_msg, bot_msg, timestamp,
+        message_type, telegram_message_id, source_file, source_line_number,
+        gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
+        gpt_request, gpt_response, user_data, bot_data, metadata
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
     )
+    """
+    
+    # חילוץ נתונים מ-kwargs
+    message_type = kwargs.get('message_type', 'pair' if user_msg and bot_msg else ('user' if user_msg else 'bot'))
+    telegram_message_id = kwargs.get('telegram_message_id')
+    source_file = kwargs.get('source_file', 'live_chat')
+    source_line_number = kwargs.get('source_line_number')
+    gpt_type = kwargs.get('gpt_type')
+    gpt_model = kwargs.get('gpt_model')
+    gpt_cost_usd = kwargs.get('gpt_cost_usd')
+    gpt_tokens_input = kwargs.get('gpt_tokens_input')
+    gpt_tokens_output = kwargs.get('gpt_tokens_output')
+    gpt_request = kwargs.get('gpt_request')
+    gpt_response = kwargs.get('gpt_response')
+    user_data = kwargs.get('user_data')
+    bot_data = kwargs.get('bot_data')
+    metadata = kwargs.get('metadata')
+    
+    # המרת JSON objects לstrings
+    import json
+    gpt_request_json = json.dumps(gpt_request) if gpt_request else None
+    gpt_response_json = json.dumps(gpt_response) if gpt_response else None
+    user_data_json = json.dumps(user_data) if user_data else None
+    bot_data_json = json.dumps(bot_data) if bot_data else None
+    metadata_json = json.dumps(metadata) if metadata else None
+    
+    cur.execute(insert_sql, (
+        chat_id, user_msg, bot_msg, timestamp or datetime.utcnow(),
+        message_type, telegram_message_id, source_file, source_line_number,
+        gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
+        gpt_request_json, gpt_response_json, user_data_json, bot_data_json, metadata_json
+    ))
+    
     conn.commit()
     cur.close()
     conn.close()
 
-# === שליפת היסטוריית צ'אט ===
+
 def get_chat_history(chat_id, limit=100):
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
@@ -505,3 +559,253 @@ def save_temp_critical_user_data(filename, temp_data):
     except Exception as e:
         print(f"שגיאה בשמירת קובץ זמני {filename}: {e}")
         raise 
+
+# === פונקציות עזר מורחבות ===
+def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=None):
+    """
+    שומר הודעת צ'אט עם נתוני GPT מלאים
+    gpt_data יכול להכיל:
+    - type: A/B/C/D
+    - model: שם המודל
+    - cost_usd: עלות
+    - tokens_input/output: טוקנים
+    - request/response: בקשה ותגובה מלאה
+    """
+    kwargs = {'source_file': 'live_chat'}
+    
+    if gpt_data:
+        kwargs.update({
+            'gpt_type': gpt_data.get('type'),
+            'gpt_model': gpt_data.get('model'),
+            'gpt_cost_usd': gpt_data.get('cost_usd'),
+            'gpt_tokens_input': gpt_data.get('tokens_input'),
+            'gpt_tokens_output': gpt_data.get('tokens_output'),
+            'gpt_request': gpt_data.get('request'),
+            'gpt_response': gpt_data.get('response'),
+            'metadata': {
+                'gpt_latency': gpt_data.get('latency'),
+                'gpt_timestamp': gpt_data.get('timestamp'),
+                'usage': gpt_data.get('usage', {})
+            }
+        })
+    
+    return save_chat_message(chat_id, user_msg, bot_msg, timestamp, **kwargs)
+
+def get_chat_statistics():
+    """מחזיר סטטיסטיקות מורחבות על השיחות"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    stats = {}
+    
+    # סטטיסטיקות בסיסיות
+    cur.execute("SELECT COUNT(*) FROM chat_messages")
+    stats['total_messages'] = cur.fetchone()[0]
+    
+    cur.execute("SELECT COUNT(DISTINCT chat_id) FROM chat_messages")
+    stats['unique_chats'] = cur.fetchone()[0]
+    
+    # סטטיסטיקות GPT
+    cur.execute("SELECT COUNT(*) FROM chat_messages WHERE gpt_type IS NOT NULL")
+    stats['gpt_messages'] = cur.fetchone()[0]
+    
+    cur.execute("SELECT SUM(gpt_cost_usd) FROM chat_messages WHERE gpt_cost_usd IS NOT NULL")
+    result = cur.fetchone()[0]
+    stats['total_cost_usd'] = float(result) if result else 0.0
+    
+    cur.execute("SELECT gpt_type, COUNT(*) FROM chat_messages WHERE gpt_type IS NOT NULL GROUP BY gpt_type")
+    stats['gpt_by_type'] = dict(cur.fetchall())
+    
+    # סטטיסטיקות לפי סוג הודעה
+    cur.execute("SELECT message_type, COUNT(*) FROM chat_messages WHERE message_type IS NOT NULL GROUP BY message_type")
+    stats['by_message_type'] = dict(cur.fetchall())
+    
+    # צ'אטים פעילים (בשבוע האחרון)
+    cur.execute("""
+        SELECT COUNT(DISTINCT chat_id) 
+        FROM chat_messages 
+        WHERE created_at > NOW() - INTERVAL '7 days'
+    """)
+    stats['active_chats_week'] = cur.fetchone()[0]
+    
+    cur.close()
+    conn.close()
+    
+    return stats
+
+def get_chat_history_enhanced(chat_id, limit=50):
+    """מחזיר היסטוריית צ'אט עם נתונים מורחבים"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT 
+            id, user_msg, bot_msg, timestamp, message_type,
+            gpt_type, gpt_model, gpt_cost_usd, source_file, metadata
+        FROM chat_messages 
+        WHERE chat_id = %s 
+        ORDER BY timestamp DESC 
+        LIMIT %s
+    """, (chat_id, limit))
+    
+    results = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    history = []
+    for row in results:
+        history.append({
+            'id': row[0],
+            'user_msg': row[1],
+            'bot_msg': row[2],
+            'timestamp': row[3],
+            'message_type': row[4],
+            'gpt_type': row[5],
+            'gpt_model': row[6],
+            'gpt_cost_usd': row[7],
+            'source_file': row[8],
+            'metadata': row[9]
+        })
+    
+    return history
+
+def get_billing_usage_data():
+    """מחזיר נתוני חיוב אחרונים ממסד הנתונים"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT daily_data, monthly_data, alerts_sent 
+            FROM billing_usage 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """)
+        
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if result:
+            return {
+                'daily': result[0] or {},
+                'monthly': result[1] or {},
+                'alerts_sent': result[2] or {}
+            }
+        return None
+        
+    except Exception as e:
+        print(f"שגיאה בקריאת נתוני חיוב: {e}")
+        return None
+
+def get_free_model_limits_data():
+    """מחזיר מגבלות מודל חינמי אחרונות ממסד הנתונים"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT limits_data 
+            FROM free_model_limits 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """)
+        
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if result:
+            return result[0] or {}
+        return None
+        
+    except Exception as e:
+        print(f"שגיאה בקריאת מגבלות מודל חינמי: {e}")
+        return None
+
+def get_errors_stats_data():
+    """מחזיר סטטיסטיקות שגיאות ממסד הנתונים"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT error_type, count 
+            FROM errors_stats 
+            ORDER BY created_at DESC
+        """)
+        
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if results:
+            return {error_type: count for error_type, count in results}
+        return {}
+        
+    except Exception as e:
+        print(f"שגיאה בקריאת סטטיסטיקות שגיאות: {e}")
+        return {}
+
+def get_critical_users_data():
+    """מחזיר נתוני משתמשים קריטיים ממסד הנתונים"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT chat_id, error_context, original_message, timestamp, recovered 
+            FROM critical_users 
+            WHERE recovered = FALSE
+            ORDER BY timestamp DESC
+        """)
+        
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if results:
+            return {
+                str(chat_id): {
+                    'error_message': error_context,
+                    'original_message': original_message,
+                    'timestamp': timestamp.isoformat() if timestamp else None,
+                    'recovered': recovered
+                } for chat_id, error_context, original_message, timestamp, recovered in results
+            }
+        return {}
+        
+    except Exception as e:
+        print(f"שגיאה בקריאת משתמשים קריטיים: {e}")
+        return {}
+
+def get_reminder_states_data():
+    """מחזיר מצבי תזכורות ממסד הנתונים"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT chat_id, last_activity, reminder_sent, reminder_count, state_data 
+            FROM reminder_states 
+            ORDER BY created_at DESC
+        """)
+        
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if results:
+            return {
+                str(chat_id): {
+                    'last_activity': last_activity,
+                    'reminder_sent': reminder_sent,
+                    'reminder_count': reminder_count,
+                    **state_data
+                } for chat_id, last_activity, reminder_sent, reminder_count, state_data in results
+            }
+        return {}
+        
+    except Exception as e:
+        print(f"שגיאה בקריאת מצבי תזכורות: {e}")
+        return {}
