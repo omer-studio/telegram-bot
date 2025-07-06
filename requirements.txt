@@ -25,6 +25,7 @@ APScheduler
 pytz>=2024.1
 pytest
 pyluach>=2.2.0
+psycopg2-binary>=2.9.0  # 🔧 נדרש לחיבור PostgreSQL
 # 🔧 תיקון זמני: מבוטל עד פתרון בעיית ffmpeg בסביבת הענן
 # faster-whisper>=1.1.0  
 # openai-whisper

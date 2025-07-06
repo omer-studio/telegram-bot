@@ -281,6 +281,73 @@ class ComprehensiveDeployChecker:
         else:
             return False, errors
     
+    def check_requirements_completeness(self) -> Tuple[bool, List[str]]:
+        """בדיקת שלמות requirements.txt - וידוא שכל החבילות הנדרשות קיימות"""
+        errors = []
+        
+        try:
+            # קריאת requirements.txt
+            with open('requirements.txt', 'r', encoding='utf-8') as f:
+                requirements_content = f.read()
+            
+            # חבילות קריטיות שחייבות להיות ב-requirements.txt
+            critical_packages = [
+                'psycopg2-binary',  # 🔧 נדרש לחיבור PostgreSQL
+                'python-telegram-bot',  # נדרש לבוט
+                'openai',  # נדרש ל-GPT
+                'litellm',  # נדרש ל-LiteLLM
+                'gspread',  # נדרש לגיליונות Google
+                'fastapi',  # נדרש לשרת
+                'uvicorn',  # נדרש לשרת
+                'python-dotenv',  # נדרש להגדרות
+                'requests',  # נדרש לבקשות HTTP
+                'Flask',  # נדרש לשרת
+                'psutil',  # נדרש לניטור מערכת
+                'APScheduler',  # נדרש לתזמון
+                'pytz',  # נדרש לזמן
+                'pytest',  # נדרש לבדיקות
+                'pyluach',  # נדרש ללוח עברי
+                'python-dateutil',  # נדרש לעיבוד תאריכים
+                'asyncio',  # נדרש לאסינכרוניות
+                'anthropic',  # נדרש ל-Anthropic
+                'google-generativeai',  # נדרש ל-Gemini
+            ]
+            
+            missing_packages = []
+            for package in critical_packages:
+                # בדיקה אם החבילה קיימת ב-requirements.txt
+                if package not in requirements_content:
+                    missing_packages.append(package)
+                else:
+                    print(f"✅ {package} - קיים ב-requirements.txt")
+            
+            if missing_packages:
+                errors.append(f"❌ חבילות חסרות ב-requirements.txt: {', '.join(missing_packages)}")
+                return False, errors
+            
+            print(f"✅ כל {len(critical_packages)} החבילות הקריטיות קיימות ב-requirements.txt")
+            
+            # בדיקה נוספת - וידוא שהקובץ לא מכיל שגיאות syntax
+            lines = requirements_content.split('\n')
+            for i, line in enumerate(lines, 1):
+                line = line.strip()
+                if line and not line.startswith('#') and '==' not in line and '>=' not in line and '<=' not in line:
+                    if not re.match(r'^[a-zA-Z0-9_-]+(\[.*\])?$', line):
+                        errors.append(f"❌ שורה {i}: פורמט לא תקין - '{line}'")
+            
+            if errors:
+                return False, errors
+            
+            print("✅ פורמט requirements.txt תקין")
+            return True, []
+            
+        except FileNotFoundError:
+            errors.append("❌ קובץ requirements.txt לא נמצא")
+            return False, errors
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת requirements.txt: {e}")
+            return False, errors
+    
     def check_memory_usage(self) -> Tuple[bool, List[str]]:
         """בדיקת צריכת זיכרון"""
         warnings = []
@@ -537,6 +604,7 @@ class ComprehensiveDeployChecker:
             ("תאימות ממשקי ליבה", self.check_interface_compatibility),
             ("רישום לוגים לגיליונות", self.check_sheets_logging),
             ("מערכת Concurrent Handling", self.check_concurrent_system),
+            ("שלמות requirements.txt", self.check_requirements_completeness),
         ]
         
         # הרצת כל הבדיקות
