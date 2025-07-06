@@ -579,3 +579,6 @@ for engine, routes in MODEL_ROUTES.items():
 # --------------------------------------------------------------------------
 # סוף SECTION – From here downwards אין שינויי מודלים נוספים.
 # --------------------------------------------------------------------------
+
+# === Database URL from config ===
+DATABASE_URL = config.get("DATABASE_INTERNAL_URL") or config.get("DATABASE_URL")

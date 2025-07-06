@@ -29,6 +29,7 @@ from config import (
     MAX_TRACEBACK_LENGTH,
 )
 from config import should_log_debug_prints, should_log_message_debug
+from db_manager import save_chat_message, get_chat_history
 
 # NOTE: circular import is safe here – utils only contains the base primitives
 # we rely on (like `get_israel_time`).
@@ -64,170 +65,124 @@ __all__: List[str] = [
 # ---------------------------------------------------------------------------
 
 def update_chat_history(chat_id, user_msg, bot_summary):
-    """Update the persistent chat-history JSON file with backup and corruption protection."""
+    """Update the persistent chat-history using SQL database."""
     try:
-        file_path = CHAT_HISTORY_PATH
-        # נסה לטעון את הקובץ
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                history_data = json.load(f)
-        except FileNotFoundError:
-            history_data = {}
-        except json.JSONDecodeError as e:
-            logging.critical(f"⚠️ קובץ היסטוריה פגום! לא מאפסים אוטומטית – יש לתקן ידנית או לשחזר מגיבוי. שגיאה: {e}")
-            # לא לאפס! לא לדרוס! להתריע חזק ולעצור
-            raise RuntimeError("קובץ היסטוריה פגום – יש לתקן ידנית או לשחזר מגיבוי!")
-
         chat_id = str(chat_id)
-        if chat_id not in history_data:
-            history_data[chat_id] = {"am_context": "", "history": []}
-
+        
+        # שמירה ל-SQL באמצעות db_manager
         if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
-            now = utils.get_israel_time()
-            simple_timestamp = f"{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}"
-            history_data[chat_id]["history"].append(
-                {
-                    "user": user_msg,
-                    "bot": bot_summary,
-                    "timestamp": now.isoformat(),
-                    "time": simple_timestamp,
-                }
-            )
-
-        # Keep only the last N messages
-        history_data[chat_id]["history"] = history_data[chat_id]["history"][-MAX_CHAT_HISTORY_MESSAGES:]
-
-        # שמור גיבוי לפני כתיבה
-        if os.path.exists(file_path):
-            shutil.copyfile(file_path, file_path + ".bak")
-
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(history_data, f, ensure_ascii=False, indent=2)
-
+            save_chat_message(chat_id, user_msg or "", bot_summary or "")
+            
         if should_log_message_debug():
-            logging.info(f"היסטוריה עודכנה למשתמש {chat_id}")
+            logging.info(f"היסטוריה עודכנה למשתמש {chat_id} (SQL)")
     except Exception as e:
         logging.error(f"שגיאה בעדכון היסטוריה: {e}")
 
 
 def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list:
     """Return the last `limit` messages from the chat history in a GPT-friendly
-    messages array."""
+    messages array using SQL database."""
     try:
-        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-            history_data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        # שליפה מ-SQL באמצעות db_manager
+        rows = get_chat_history(chat_id, limit or 30)
+        
+        messages: List[Dict[str, str]] = []
+        user_count = 0
+        assistant_count = 0
+        
+        for row in rows:
+            user_content = row[0] or ""  # user_msg
+            bot_content = row[1] or ""   # bot_msg
+            timestamp = row[2]           # timestamp
+            
+            # 🚨 SECURITY: מנע הודעות פנימיות מלהישלח ל-GPT
+            if bot_content and ("[עדכון פרופיל]" in bot_content or bot_content.startswith("[") and "]" in bot_content):
+                if should_log_message_debug():
+                    print(f"[SECURITY] מסנן הודעה פנימית: {bot_content[:50]}...")
+                continue
+            
+            # 🚨 SECURITY: מנע הודעות מערכת מלהישלח ל-GPT
+            if user_content and user_content.startswith("[הודעה"):
+                if should_log_message_debug():
+                    print(f"[SECURITY] מסנן הודעת מערכת מהמשתמש: {user_content[:50]}...")
+                continue
+            
+            # 🚨 SECURITY: מנע הודעות מערכת מהבוט מלהישלח ל-GPT
+            if bot_content and ("[הודעה אוטומטית מהבוט]" in bot_content or "[הודעה מערכת]" in bot_content):
+                if should_log_message_debug():
+                    print(f"[SECURITY] מסנן הודעת מערכת מהבוט: {bot_content[:50]}...")
+                continue
+            
+            # 🚨 SECURITY: מנע הודעות תשובה פנימיות מלהישלח ל-GPT
+            if bot_content and "[תשובת GPT-A]" in bot_content:
+                if should_log_message_debug():
+                    print(f"[SECURITY] מסנן הודעת תשובה פנימית: {bot_content[:50]}...")
+                continue
+            
+            # הוספת טיימסטמפ לכל הודעה בפורמט [01/07 18:03]
+            formatted_timestamp = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+            
+            # הוספת הודעות עם טיימסטמפ
+            if user_content.strip():
+                user_content_with_time = f"{formatted_timestamp} {user_content}" if formatted_timestamp else user_content
+                messages.append({"role": "user", "content": user_content_with_time})
+                user_count += 1
+            
+            if bot_content.strip():
+                bot_content_with_time = f"{formatted_timestamp} {bot_content}" if formatted_timestamp else bot_content
+                messages.append({"role": "assistant", "content": bot_content_with_time})
+                assistant_count += 1
+            
+            # 🔧 הגבלה על מספר ההודעות הכולל
+            if limit and len(messages) >= limit:
+                break
+
         if should_log_message_debug():
-            print(f"[HISTORY_DEBUG] לא נמצא קובץ היסטוריה: {CHAT_HISTORY_PATH}")
+            print(f"[HISTORY_DEBUG] נשלחה היסטוריה מ-SQL | chat_id={chat_id} | סה\"כ הודעות={len(messages)} | user={user_count} | assistant={assistant_count}")
+        return messages
+        
+    except Exception as e:
+        logging.error(f"שגיאה בשליפת היסטוריה: {e}")
         return []
-
-    chat_id = str(chat_id)
-    if chat_id not in history_data or "history" not in history_data[chat_id]:
-        if should_log_message_debug():
-            print(f"[HISTORY_DEBUG] אין היסטוריה עבור chat_id={chat_id} בקובץ {CHAT_HISTORY_PATH}")
-        return []
-
-    history = history_data[chat_id]["history"]
-    max_entries = limit * 2 if limit is not None else 30  # 🔧 כפול כי כל רשומה יכולה להכיל 2 הודעות
-    last_entries = history if len(history) < max_entries else history[-max_entries:]
-
-    messages: List[Dict[str, str]] = []
-    user_count = 0
-    assistant_count = 0
-    for entry in last_entries:
-        user_content = entry["user"]
-        bot_content = entry["bot"]
-        
-        # 🚨 SECURITY: מנע הודעות פנימיות מלהישלח ל-GPT
-        if bot_content and ("[עדכון פרופיל]" in bot_content or bot_content.startswith("[") and "]" in bot_content):
-            if should_log_message_debug():
-                print(f"[SECURITY] מסנן הודעה פנימית: {bot_content[:50]}...")
-            continue
-        
-        # 🚨 SECURITY: מנע הודעות מערכת מלהישלח ל-GPT
-        if user_content and user_content.startswith("[הודעה"):
-            if should_log_message_debug():
-                print(f"[SECURITY] מסנן הודעת מערכת מהמשתמש: {user_content[:50]}...")
-            continue
-        
-        # 🚨 SECURITY: מנע הודעות מערכת מהבוט מלהישלח ל-GPT
-        if bot_content and ("[הודעה אוטומטית מהבוט]" in bot_content or "[הודעה מערכת]" in bot_content):
-            if should_log_message_debug():
-                print(f"[SECURITY] מסנן הודעת מערכת מהבוט: {bot_content[:50]}...")
-            continue
-        
-        # 🚨 SECURITY: מנע הודעות תשובה פנימיות מלהישלח ל-GPT
-        if bot_content and "[תשובת GPT-A]" in bot_content:
-            if should_log_message_debug():
-                print(f"[SECURITY] מסנן הודעת תשובה פנימית: {bot_content[:50]}...")
-            continue
-        
-        # הוספת טיימסטמפ לכל הודעה בפורמט [01/07 18:03]
-        formatted_timestamp = _format_timestamp_for_history(entry.get("timestamp", ""))
-        
-        # הוספת הודעות עם טיימסטמפ
-        if user_content.strip():
-            user_content_with_time = f"{formatted_timestamp} {user_content}" if formatted_timestamp else user_content
-            messages.append({"role": "user", "content": user_content_with_time})
-            user_count += 1
-        
-        if bot_content.strip():
-            bot_content_with_time = f"{formatted_timestamp} {bot_content}" if formatted_timestamp else bot_content
-            messages.append({"role": "assistant", "content": bot_content_with_time})
-            assistant_count += 1
-        
-        # 🔧 הגבלה על מספר ההודעות הכולל
-        if limit and len(messages) >= limit:
-            break
-
-    if should_log_message_debug():
-        print(f"[HISTORY_DEBUG] נשלחה היסטוריה מ-{CHAT_HISTORY_PATH} | chat_id={chat_id} | סה\"כ הודעות={len(messages)} | user={user_count} | assistant={assistant_count}")
-    return messages
 
 
 def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) -> list:
     """
-    🔧 פונקציה מהירה לקריאת היסטוריה מקובץ מקומי בלבד
+    🔧 פונקציה מהירה לקריאת היסטוריה מ-SQL בלבד
     זו גרסה מהירה יותר של get_chat_history_messages - בלי Google Sheets
     """
     try:
-        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-            history_data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []  # מחזיר רשימה ריקה אם אין קובץ
+        # שליפה מ-SQL באמצעות db_manager
+        rows = get_chat_history(chat_id, limit or 20)
+        
+        messages: List[Dict[str, str]] = []
+        for row in rows:
+            user_content = row[0] or ""  # user_msg
+            bot_content = row[1] or ""   # bot_msg
+            
+            # 🚨 SECURITY: סינון הודעות פנימיות
+            if bot_content and any(marker in bot_content for marker in ["[עדכון פרופיל]", "[הודעה אוטומטית", "[תשובת GPT-A]"]):
+                continue
+            
+            if user_content and user_content.startswith("[הודעה"):
+                continue
+            
+            # הוספת הודעות
+            if user_content.strip():
+                messages.append({"role": "user", "content": user_content})
+            
+            if bot_content.strip():
+                messages.append({"role": "assistant", "content": bot_content})
+            
+            # הגבלה
+            if limit and len(messages) >= limit:
+                break
 
-    chat_id = str(chat_id)
-    if chat_id not in history_data or "history" not in history_data[chat_id]:
+        return messages
+        
+    except Exception as e:
+        logging.error(f"שגיאה בשליפת היסטוריה מהירה: {e}")
         return []
-
-    history = history_data[chat_id]["history"]
-    max_entries = limit * 2 if limit is not None else 20  # 🔧 הקטנה ל-20 במקום 30
-    last_entries = history if len(history) < max_entries else history[-max_entries:]
-
-    messages: List[Dict[str, str]] = []
-    for entry in last_entries:
-        user_content = entry.get("user", "").strip()
-        bot_content = entry.get("bot", "").strip()
-        
-        # 🚨 SECURITY: סינון הודעות פנימיות
-        if bot_content and any(marker in bot_content for marker in ["[עדכון פרופיל]", "[הודעה אוטומטית", "[תשובת GPT-A]"]):
-            continue
-        
-        if user_content and user_content.startswith("[הודעה"):
-            continue
-        
-        # הוספת הודעות
-        if user_content:
-            messages.append({"role": "user", "content": user_content})
-        
-        if bot_content:
-            messages.append({"role": "assistant", "content": bot_content})
-        
-        # הגבלה
-        if limit and len(messages) >= limit:
-            break
-
-    return messages
 
 
 # ---------------------------------------------------------------------------
@@ -323,12 +278,20 @@ def _calculate_user_stats_from_history(history: list) -> dict:
 
 def get_user_stats_and_history(chat_id: str) -> Tuple[dict, list]:
     try:
-        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-            history_data = json.load(f)
-        chat_id = str(chat_id)
-        if chat_id not in history_data:
+        # שליפה מ-SQL באמצעות db_manager
+        rows = get_chat_history(chat_id, 100)  # הגדלה ל-100 לקבלת יותר היסטוריה
+        if not rows:
             return {"total_messages": 0, "first_contact": None, "last_contact": None}, []
-        history = history_data[chat_id]["history"]
+        
+        # המרה לפורמט הישן לתאימות
+        history = []
+        for row in rows:
+            history.append({
+                "user": row[0] or "",
+                "bot": row[1] or "",
+                "timestamp": row[2].isoformat() if row[2] else ""
+            })
+        
         stats = _calculate_user_stats_from_history(history)
         return stats, history
     except Exception as e:
@@ -410,10 +373,10 @@ def get_weekday_context_instruction(chat_id: Optional[str] = None, user_msg: Opt
             else:
                 # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
                 try:
-                    with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-                        history_data = json.load(f)
-                    history = history_data.get(str(chat_id), {}).get("history", [])
-                except (FileNotFoundError, json.JSONDecodeError):
+                    # שליפה מ-SQL באמצעות db_manager
+                    rows = get_chat_history(chat_id, 30)
+                    history = [{"user": row[0], "bot": row[1], "timestamp": row[2]} for row in rows]
+                except Exception:
                     history = []
 
                 # בדיקה מתחילת היום הנוכחי (05:00)
@@ -664,31 +627,26 @@ def send_usage_report(days_back: int = 1):
 # ---------------------------------------------------------------------------
 
 def update_last_bot_message(chat_id, bot_summary):
+    """עדכון הודעת הבוט האחרונה - לא נתמך ב-SQL (הודעות נשמרות בנפרד)"""
     try:
-        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-            history_data = json.load(f)
-        chat_id = str(chat_id)
-        if chat_id in history_data and history_data[chat_id]["history"]:
-            history_data[chat_id]["history"][-1]["bot"] = bot_summary
-            with open(CHAT_HISTORY_PATH, "w", encoding="utf-8") as f:
-                json.dump(history_data, f, ensure_ascii=False, indent=2)
+        # ב-SQL כל הודעה נשמרת בנפרד, אין צורך בעדכון
+        # רק נוסיף הודעה חדשה אם יש תוכן
+        if bot_summary and bot_summary.strip():
+            save_chat_message(chat_id, "", bot_summary)
+            
+        if should_log_message_debug():
+            logging.info(f"הודעת בוט עודכנה למשתמש {chat_id} (SQL)")
     except Exception as e:
         logging.error(f"❌ שגיאה בעדכון תשובת בוט: {e}")
 
 
 def cleanup_test_users():
+    """ניקוי משתמשי בדיקה - לא נתמך ב-SQL (צריך פונקציית מחיקה)"""
     test_users = ['demo_user_6am', 'working_test_user', 'friday_morning_user', 'timestamp_test']
     try:
-        history_file = "data/chat_history.json"
-        if os.path.exists(history_file):
-            with open(history_file, "r", encoding="utf-8") as f:
-                history = json.load(f)
-            for tu in test_users:
-                if tu in history:
-                    del history[tu]
-                    logging.info(f"🗑️ הוסר משתמש בדיקה {tu} מהיסטוריית הצ'אט")
-            with open(history_file, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
+        # בשלב זה לא נתמך מחיקה מ-SQL
+        # TODO: להוסיף פונקציית מחיקה ל-db_manager
+        logging.info(f"🗑️ ניקוי משתמשי בדיקה - לא נתמך ב-SQL בשלב זה")
     except Exception as e:
         logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
 
@@ -713,7 +671,28 @@ def cleanup_test_users():
 # ---------------------------------------------------------------------------
 
 def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> bool:
+    """בדיקה אם יש לשלוח ברכה לפי זמן"""
     try:
+        # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
+        try:
+            # שליפה מ-SQL באמצעות db_manager
+            rows = get_chat_history(chat_id, 30)
+            if not rows:
+                return False
+        except Exception:
+            return False
+
+        chat_id_str = str(chat_id)
+        last_timestamp = None
+        
+        # בדיקת ההודעה האחרונה
+        if rows:
+            last_entry = rows[-1]
+            try:
+                last_timestamp = last_entry[2]  # timestamp
+            except Exception:
+                last_timestamp = None
+
         # תנאי 1: אם זה הודעת ברכה בסיסית - תמיד שולח
         if user_msg:
             basic_greeting_pattern = r'^(היי|שלום|אהלן|הי|שלום לך|אהלן לך).{0,2}$'
@@ -723,22 +702,6 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
 
         # תנאי 3: בדיקה אם עברו יותר מ-2 שעות מההודעה האחרונה
         effective_now = utils.get_effective_time("datetime")
-
-        try:
-            with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-                history_data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            # אין היסטוריה - לא שולח ברכה (מוסר תנאי 2)
-            return False
-
-        chat_id_str = str(chat_id)
-        last_timestamp = None
-        if chat_id_str in history_data and history_data[chat_id_str].get("history"):
-            last_entry = history_data[chat_id_str]["history"][-1]
-            try:
-                last_timestamp = datetime.fromisoformat(last_entry.get("timestamp"))
-            except Exception:
-                last_timestamp = None
 
         if last_timestamp is None:
             # אין טיימסטמפ תקין - לא שולח ברכה (מוסר תנאי 2)

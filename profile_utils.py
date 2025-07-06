@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Tuple
 import utils  # time helpers + log_event_to_file live there
 from config import CHAT_HISTORY_PATH, DATA_DIR, USER_PROFILES_PATH
 from config import should_log_debug_prints, should_log_message_debug
+from db_manager import save_user_profile, get_user_profile
 
 __all__: List[str] = [
     # Main fast-path helpers
@@ -48,22 +49,19 @@ from utils import _disable_auto_admin_profile_notification  # type: ignore
 # ---------------------------------------------------------------------------
 
 def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
-    """טוען במהירות את הפרופיל מקובץ JSON המקומי."""
+    """טוען במהירות את הפרופיל מ-SQL database."""
     try:
-        with open(USER_PROFILES_PATH, "r", encoding="utf-8") as f:
-            raw = f.read()
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as json_err:
-            logging.error(f"[profile_utils] JSON parsing error: {json_err} | raw: {raw}")
-            data = {}
-        return data.get(str(chat_id), {})
-    except Exception:
+        profile_json = get_user_profile(chat_id)
+        if profile_json:
+            return profile_json
+        return {}
+    except Exception as e:
+        logging.error(f"שגיאה בשליפת פרופיל: {e}")
         return {}
 
 
 def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
-    """Writes *updates* into user_profiles.json (minimal logic only)."""
+    """Writes *updates* into SQL database (minimal logic only)."""
     try:
         # 🚦 Mini-sanity: convert numeric strings like "35" in the *age* field to int 35
         if "age" in updates and isinstance(updates["age"], str) and updates["age"].isdigit():
@@ -71,19 +69,19 @@ def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
 
         # Load existing data (if any)
         try:
-            with open(USER_PROFILES_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            existing_profile = get_user_profile(chat_id) or {}
         except Exception:
-            data = {}
+            existing_profile = {}
 
-        cid = str(chat_id)
-        data.setdefault(cid, {}).update(updates)
-        data[cid]["last_update"] = utils.get_israel_time().isoformat()
+        # Merge updates
+        updated_profile = {**existing_profile, **updates}
+        updated_profile["last_update"] = utils.get_israel_time().isoformat()
 
-        with open(USER_PROFILES_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        # Save to SQL
+        save_user_profile(chat_id, updated_profile)
+        
     except Exception as exc:
-        logging.error(f"שגיאה בעדכון קובץ פרופילים: {exc}")
+        logging.error(f"שגיאה בעדכון פרופיל: {exc}")
 
 
 # ---------------------------------------------------------------------------

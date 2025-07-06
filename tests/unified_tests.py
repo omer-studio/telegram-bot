@@ -37,6 +37,8 @@ telegram_ext_mock.ContextTypes = Mock(name="ContextTypes")
 sys.modules["telegram"] = telegram_mock
 sys.modules["telegram.ext"] = telegram_ext_mock
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 def _reload_module(mod_name):
     """Reload helper to avoid stale references between patches."""
     import sys
@@ -61,6 +63,13 @@ def get_function_signature(module_name: str, function_name: str) -> str:
 
 def check_function_signatures() -> Dict[str, List[str]]:
     """בודק סנכרון בין פונקציות בקוד לבדיקות"""
+    
+    # ייבוא המודולים לפני הבדיקה
+    try:
+        import message_handler
+        import notifications
+    except ImportError as e:
+        return {"issues": [f"❌ לא ניתן לייבא מודול: {e}"]}
     
     critical_functions = {
         "message_handler": {

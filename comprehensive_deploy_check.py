@@ -251,18 +251,18 @@ class ComprehensiveDeployChecker:
             # תיקון encoding ב-Windows
             if platform.system() == "Windows":
                 result = subprocess.run(
-                    [sys.executable, "-m", "pytest", "-v", "--tb=short"],
+                    [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"],
                     capture_output=True,
                     encoding='utf-8',
                     errors='ignore',
-                    timeout=60
+                    timeout=30
                 )
             else:
                 result = subprocess.run(
-                    [sys.executable, "-m", "pytest", "-v", "--tb=short"],
+                    [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"],
                     capture_output=True,
                     text=True,
-                    timeout=60
+                    timeout=30
                 )
             
             if result.returncode == 0:

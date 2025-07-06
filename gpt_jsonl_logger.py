@@ -3,6 +3,7 @@ import os
 import threading
 from datetime import datetime
 from typing import Any, Dict
+from db_manager import save_gpt_call_log
 
 
 class GPTJSONLLogger:
@@ -132,42 +133,44 @@ class GPTJSONLLogger:
         extra: dict = None,
     ) -> None:
         """
-        רושם קריאה ל־openai_calls.jsonl בפורמט אחיד, ללא תלות ב-client.
-        :param log_path: נתיב הקובץ
+        רושם קריאה ל-SQL database בפורמט אחיד, ללא תלות ב-client.
+        :param log_path: נתיב הקובץ (לא בשימוש ב-SQL)
         :param gpt_type: סוג ה־GPT (A/B/C/D/E)
         :param request: פרטי הבקשה (messages, model וכו')
         :param response: פרטי התשובה (כולל usage)
         :param cost_usd: עלות (אם ידועה)
         :param extra: שדות נוספים (chat_id, message_id וכו')
         """
-        print(f"[DEBUG][log_gpt_call] called! log_path={log_path} gpt_type={gpt_type}")
+        print(f"[DEBUG][log_gpt_call] called! gpt_type={gpt_type}")
         print(f"[DEBUG][log_gpt_call] request: {json.dumps(request, ensure_ascii=False)[:500]}")
         print(f"[DEBUG][log_gpt_call] response: {str(response)[:500]}")
         print(f"[DEBUG][log_gpt_call] cost_usd: {cost_usd} extra: {extra}")
-        entry = {
-            "ts": datetime.utcnow().isoformat() + "Z",
-            "gpt_type": gpt_type,
-            "request": request,
-            "response": response,
-        }
-        if cost_usd is not None:
-            entry["cost_usd"] = cost_usd
-        if extra:
-            entry.update(extra)
-        # יצירת התיקייה אם צריך
+        
         try:
-            os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
-        except Exception as e:
-            print(f"[LOGGING_ERROR] Failed to create log dir: {e}")
-        # כתיבה לקובץ (thread-safe)
-        lock = threading.Lock()
-        try:
-            with lock:
-                with open(log_path, "a", encoding="utf-8") as file:
-                    file.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            print(f"[DEBUG][log_gpt_call] Successfully wrote to {log_path}")
-        except Exception as write_exc:
-            print(f"[LOGGING_ERROR] Failed to write log: {write_exc}")
+            # חילוץ פרטים מהתגובה
+            chat_id = extra.get("chat_id") if extra else None
+            usage = response.get("usage", {})
+            tokens_input = usage.get("prompt_tokens", 0)
+            tokens_output = usage.get("completion_tokens", 0)
+            processing_time = 0  # לא זמין ב-response
+            
+            # שמירה ל-SQL באמצעות db_manager
+            save_gpt_call_log(
+                chat_id=chat_id,
+                call_type=gpt_type,
+                request_data=request,
+                response_data=response,
+                tokens_input=tokens_input,
+                tokens_output=tokens_output,
+                cost_usd=cost_usd or 0,
+                processing_time_seconds=processing_time
+            )
+            
+            print(f"[DEBUG][log_gpt_call] Successfully saved to SQL")
+            
+        except Exception as sql_exc:
+            print(f"[LOGGING_ERROR] Failed to save to SQL: {sql_exc}")
+            
         # הפעלת build_gpt_log.py --upload לעדכון ה-HTML בדרייב
         try:
             # במקום subprocess - הפעלה ישירה של הפונקציות

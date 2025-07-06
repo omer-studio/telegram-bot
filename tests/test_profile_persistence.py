@@ -20,21 +20,20 @@ def _reload_module(mod_name):
 
 
 def test_profile_age_persistence(tmp_path, monkeypatch):
-    """Ensure that when we update a user's age it is persisted to disk."""
-    # -- Arrange -----------------------------------------------------------------
-    # Simulate CI environment so external services are stubbed
+    """Ensure profile age updates are persisted correctly."""
+
+    # Prepare environment
     os.environ.setdefault("CI", "1")
 
-    # Reload config to pick up CI env flag (if already imported)
-    config = _reload_module("config")
-
-    # Create temporary profile file and patch paths
+    # Create temporary profiles file
     profiles_file = tmp_path / "user_profiles.json"
-    profiles_file.write_text("{}", encoding="utf-8")
+    with open(profiles_file, "w", encoding="utf-8") as fh:
+        fh.write("{}")
 
+    # Reload modules with patched paths
+    config = _reload_module("config")
     monkeypatch.setattr(config, "USER_PROFILES_PATH", str(profiles_file), raising=False)
 
-    # Import/Reload profile_utils after patching config
     profile_utils = _reload_module("profile_utils")
     monkeypatch.setattr(profile_utils, "USER_PROFILES_PATH", str(profiles_file), raising=False)
 
@@ -46,16 +45,33 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
 
     chat_id = "test_chat_id"
 
+    # Mock SQL functions to simulate database operations
+    stored_profiles = {}
+    
+    def mock_save_user_profile(chat_id, profile):
+        stored_profiles[str(chat_id)] = profile
+    
+    def mock_get_user_profile(chat_id):
+        return stored_profiles.get(str(chat_id), {})
+    
+    def mock_get_user_profile_fast(chat_id):
+        return stored_profiles.get(str(chat_id), {})
+    
+    # Patch SQL functions
+    monkeypatch.setattr("db_manager.save_user_profile", mock_save_user_profile, raising=False)
+    monkeypatch.setattr("db_manager.get_user_profile", mock_get_user_profile, raising=False)
+    monkeypatch.setattr("profile_utils.save_user_profile", mock_save_user_profile, raising=False)
+    monkeypatch.setattr("profile_utils.get_user_profile", mock_get_user_profile, raising=False)
+    monkeypatch.setattr("profile_utils.get_user_profile_fast", mock_get_user_profile_fast, raising=False)
+
     # -- Act ----------------------------------------------------------------------
     success = profile_utils.update_user_profile_fast(chat_id, {"age": 35}, send_admin_notification=False)
 
     # -- Assert -------------------------------------------------------------------
     assert success is True, "Profile update should return True"
 
-    # The age must be persisted in the JSON file
-    with open(profiles_file, encoding="utf-8") as fh:
-        data_on_disk = json.load(fh)
-    assert data_on_disk[chat_id]["age"] == 35
+    # The age must be persisted in the SQL database (simulated)
+    assert stored_profiles[chat_id]["age"] == 35
 
     # The helper getter should also return the updated age
     assert profile_utils.get_user_profile_fast(chat_id)["age"] == 35

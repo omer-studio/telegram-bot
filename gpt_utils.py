@@ -7,6 +7,7 @@ import traceback
 from contextlib import contextmanager
 from datetime import datetime
 from config import GEMINI_API_KEY, DATA_DIR, config, should_log_gpt_cost_debug, should_log_debug_prints, GPT_MODELS
+from db_manager import save_gpt_usage_log
 
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
 
@@ -564,23 +565,21 @@ def normalize_usage_data(usage_data):
         return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
 def save_usage_data(usage_data, model_name, cost_agorot=None, chat_id=None, user_message=None, bot_response=None):
-    """שומר נתוני שימוש לקובץ לוג מרכזי"""
+    """שומר נתוני שימוש ל-SQL database"""
     try:
-        usage_log_path = os.path.join(DATA_DIR, "gpt_usage_log.jsonl")
-        
         from utils import get_israel_time
-        log_entry = {
-            "timestamp": get_israel_time().isoformat(),
-            "model": model_name,
-            "usage": normalize_usage_data(usage_data),
-            "cost_agorot": cost_agorot,
-            "chat_id": str(chat_id) if chat_id else None,
-            "user_message_length": len(user_message) if user_message else 0,
-            "bot_response_length": len(bot_response) if bot_response else 0
-        }
         
-        with open(usage_log_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+        # נירמול נתוני השימוש
+        normalized_usage = normalize_usage_data(usage_data)
+        
+        # שמירה ל-SQL באמצעות db_manager
+        save_gpt_usage_log(
+            chat_id=str(chat_id) if chat_id else None,
+            model=model_name,
+            usage=normalized_usage,
+            cost_agorot=cost_agorot or 0,
+            timestamp=get_israel_time()
+        )
             
     except Exception as e:
         if should_log_debug_prints():

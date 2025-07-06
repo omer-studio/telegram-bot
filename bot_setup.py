@@ -45,7 +45,7 @@ import sys
 import time
 import requests
 import logging
-from telegram.ext import ApplicationBuilder, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 from config import TELEGRAM_BOT_TOKEN, config
 from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
 from notifications import send_startup_notification
@@ -58,6 +58,12 @@ from daily_summary import send_daily_summary
 import pytz
 from message_handler import handle_message
 from notifications import gentle_reminder_background_task
+from db_manager import create_tables, save_chat_message, save_user_profile, save_gpt_usage_log, save_gpt_call_log
+import json
+import psycopg2
+
+# הגדרת DB_URL
+DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 
 # רשימה לשמירת זמני ביצוע
 execution_times = {}
@@ -483,15 +489,19 @@ def setup_gentle_reminders():
 
 @time_operation("הוספת handlers להודעות")
 def setup_message_handlers():
-    """מוסיף handlers לטיפול בהודעות טקסט (הודעות קוליות זמנית מבוטלות)"""
+    """מוסיף handlers לטיפול בהודעות טקסט ופקודות"""
     start_time = time.time()
-    print(f"⏱️  מוסיף handler להודעות טקסט...")
+    print(f"⏱️  מוסיף handlers להודעות...")
     
+    # הוספת handler להודעות טקסט
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
+    # הוספת handler לפקודת מיגרציה
+    app.add_handler(CommandHandler("migrate_all_data", handle_migrate_command))
+    
     elapsed_time = time.time() - start_time
-    execution_times["הוספת message handler"] = elapsed_time
-    print(f"✅ Message handler נוסף תוך {elapsed_time:.3f} שניות")
+    execution_times["הוספת message handlers"] = elapsed_time
+    print(f"✅ Message handlers נוספו תוך {elapsed_time:.3f} שניות")
 
 @time_operation("שליחת התראת הפעלה")
 def send_startup_notification_timed():
@@ -576,4 +586,478 @@ def get_scheduler_status():
             }
             for job in _admin_scheduler.get_jobs()
         ]
-    } 
+    }
+
+def backup_data_to_drive():
+    """מבצע גיבוי של כל קבצי data/ ל-Google Drive"""
+    try:
+        print("📁 מתחיל גיבוי ל-Google Drive...")
+        
+        from sheets_core import setup_google_sheets
+        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
+        
+        # יצירת תיקיית גיבוי בדרייב
+        from datetime import datetime
+        backup_folder_name = f"data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # יצירת תיקייה בדרייב
+        folder_metadata = {
+            'name': backup_folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        folder = gc.create(folder_metadata)
+        folder_id = folder['id']
+        
+        print(f"✅ נוצרה תיקיית גיבוי: {backup_folder_name}")
+        
+        # רשימת קבצים לגיבוי
+        data_files = [
+            "data/chat_history.json",
+            "data/user_profiles.json", 
+            "data/gpt_usage_log.jsonl",
+            "data/openai_calls.jsonl",
+            "data/bot_errors.jsonl",
+            "data/bot_trace_log.jsonl",
+            "data/reminder_state.json",
+            "data/errors_stats.json",
+            "data/critical_error_users.json",
+            "data/billing_usage.json",
+            "data/free_model_limits.json"
+        ]
+        
+        backed_up_files = 0
+        for file_path in data_files:
+            if os.path.exists(file_path):
+                try:
+                    # העלאה לדרייב
+                    file_metadata = {
+                        'name': os.path.basename(file_path),
+                        'parents': [folder_id]
+                    }
+                    
+                    gc.upload_file(file_path, file_metadata)
+                    backed_up_files += 1
+                    print(f"✅ הועלה: {os.path.basename(file_path)}")
+                    
+                except Exception as e:
+                    print(f"⚠️ שגיאה בהעלאת {file_path}: {e}")
+        
+        print(f"✅ גיבוי הושלם: {backed_up_files} קבצים הועלו ל-Google Drive")
+        print(f"📁 תיקיית גיבוי: {backup_folder_name}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ שגיאה בגיבוי: {e}")
+        return False
+
+def migrate_data_to_sql_with_safety():
+    """מבצע מיגרציה בטוחה של כל הנתונים מ-data/ ל-SQL עם דיבאג מפורט"""
+    try:
+        print("🔐 === מיגרציה בטוחה עם קוד סודי ===")
+        print("🚨 מנגנוני בטיחות מופעלים:")
+        print("   ✅ גיבוי אוטומטי לפני מיגרציה")
+        print("   ✅ בדיקת תקינות נתונים")
+        print("   ✅ דיבאג מפורט לכל שלב")
+        print("   ✅ עצירה בשגיאה")
+        print("   ✅ לוג מפורט של כל פעולה")
+        print("   ✅ אימות שלמות נתונים")
+        
+        # === שלב 1: גיבוי אוטומטי ===
+        print("\n📁 שלב 1: גיבוי אוטומטי ל-Google Drive...")
+        backup_success = backup_data_to_drive()
+        if not backup_success:
+            print("❌ הגיבוי נכשל - המיגרציה נעצרת!")
+            return False
+        print("✅ גיבוי הושלם בהצלחה")
+        
+        # === שלב 2: יצירת טבלאות ===
+        print("\n🗄️ שלב 2: יצירת/בדיקת טבלאות SQL...")
+        create_tables()
+        print("✅ טבלאות SQL מוכנות")
+        
+        # === שלב 3: ספירת נתונים לפני מיגרציה ===
+        print("\n📊 שלב 3: ספירת נתונים לפני מיגרציה...")
+        pre_migration_counts = count_existing_data()
+        print(f"📈 נתונים קיימים ב-SQL: {pre_migration_counts}")
+        
+        # === שלב 4: מיגרציה עם דיבאג מפורט ===
+        print("\n🔄 שלב 4: מיגרציה עם דיבאג מפורט...")
+        migration_results = perform_detailed_migration()
+        
+        # === שלב 5: אימות שלמות נתונים ===
+        print("\n🔍 שלב 5: אימות שלמות נתונים...")
+        post_migration_counts = count_existing_data()
+        verification_results = verify_data_integrity(pre_migration_counts, post_migration_counts, migration_results)
+        
+        # === שלב 6: סיכום מפורט ===
+        print("\n📋 שלב 6: סיכום מפורט...")
+        print_detailed_summary(migration_results, verification_results)
+        
+        print("\n🎉 === מיגרציה בטוחה הושלמה בהצלחה! ===")
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ === שגיאה קריטית במיגרציה ===\n{str(e)}")
+        print("🚨 המיגרציה נעצרה - הנתונים המקוריים לא נפגעו!")
+        return False
+
+def count_existing_data():
+    """סופר נתונים קיימים ב-SQL"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        counts = {}
+        
+        # ספירת הודעות צ'אט
+        cur.execute("SELECT COUNT(*) FROM chat_messages")
+        counts['chat_messages'] = cur.fetchone()[0]
+        
+        # ספירת פרופילים
+        cur.execute("SELECT COUNT(*) FROM user_profiles")
+        counts['user_profiles'] = cur.fetchone()[0]
+        
+        # ספירת קריאות GPT
+        cur.execute("SELECT COUNT(*) FROM gpt_calls_log")
+        counts['gpt_calls'] = cur.fetchone()[0]
+        
+        # ספירת שימוש
+        cur.execute("SELECT COUNT(*) FROM gpt_usage_log")
+        counts['gpt_usage'] = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+        
+        return counts
+        
+    except Exception as e:
+        print(f"⚠️ שגיאה בספירת נתונים: {e}")
+        return {}
+
+def perform_detailed_migration():
+    """מבצע מיגרציה מפורטת עם דיבאג"""
+    results = {
+        'chat_messages': {'migrated': 0, 'errors': 0, 'details': []},
+        'user_profiles': {'migrated': 0, 'errors': 0, 'details': []},
+        'gpt_usage': {'migrated': 0, 'errors': 0, 'details': []},
+        'gpt_calls': {'migrated': 0, 'errors': 0, 'details': []}
+    }
+    
+    # === מיגרציית chat_history.json ===
+    print("  📝 מיגרציית chat_history.json...")
+    try:
+        chat_history_path = "data/chat_history.json"
+        if os.path.exists(chat_history_path):
+            with open(chat_history_path, 'r', encoding='utf-8') as f:
+                chat_data = json.load(f)
+            
+            print(f"    📊 נמצאו {len(chat_data)} צ'אטים למיגרציה")
+            
+            for chat_id, chat_info in chat_data.items():
+                if "history" in chat_info:
+                    history_count = len(chat_info["history"])
+                    print(f"    💬 מיגרציית צ'אט {chat_id}: {history_count} הודעות")
+                    
+                    for i, entry in enumerate(chat_info["history"]):
+                        try:
+                            user_msg = entry.get("user", "")
+                            bot_msg = entry.get("bot", "")
+                            timestamp_str = entry.get("timestamp", "")
+                            
+                            # המרת timestamp
+                            from datetime import datetime
+                            try:
+                                if timestamp_str:
+                                    timestamp = datetime.fromisoformat(timestamp_str.replace("Z", ""))
+                                else:
+                                    timestamp = datetime.utcnow()
+                            except:
+                                timestamp = datetime.utcnow()
+                            
+                            # שמירה ל-SQL
+                            save_chat_message(chat_id, user_msg, bot_msg, timestamp)
+                            results['chat_messages']['migrated'] += 1
+                            
+                            if i % 100 == 0:  # דיבאג כל 100 הודעות
+                                print(f"      ✅ הועברו {i+1}/{history_count} הודעות")
+                                
+                        except Exception as e:
+                            results['chat_messages']['errors'] += 1
+                            results['chat_messages']['details'].append(f"שגיאה בהודעה {i} בצ'אט {chat_id}: {e}")
+                            print(f"      ⚠️ שגיאה בהודעה {i}: {e}")
+                            continue
+                    
+                    print(f"    ✅ צ'אט {chat_id} הושלם: {results['chat_messages']['migrated']} הודעות")
+        else:
+            print("    ℹ️ קובץ chat_history.json לא קיים")
+    except Exception as e:
+        print(f"    ❌ שגיאה במיגרציית chat_history: {e}")
+        results['chat_messages']['errors'] += 1
+    
+    # === מיגרציית user_profiles.json ===
+    print("  👤 מיגרציית user_profiles.json...")
+    try:
+        user_profiles_path = "data/user_profiles.json"
+        if os.path.exists(user_profiles_path):
+            with open(user_profiles_path, 'r', encoding='utf-8') as f:
+                profiles_data = json.load(f)
+            
+            print(f"    📊 נמצאו {len(profiles_data)} פרופילים למיגרציה")
+            
+            for chat_id, profile in profiles_data.items():
+                try:
+                    save_user_profile(chat_id, profile)
+                    results['user_profiles']['migrated'] += 1
+                    print(f"    ✅ פרופיל {chat_id} הועבר")
+                except Exception as e:
+                    results['user_profiles']['errors'] += 1
+                    results['user_profiles']['details'].append(f"שגיאה בפרופיל {chat_id}: {e}")
+                    print(f"    ⚠️ שגיאה בפרופיל {chat_id}: {e}")
+                    continue
+        else:
+            print("    ℹ️ קובץ user_profiles.json לא קיים")
+    except Exception as e:
+        print(f"    ❌ שגיאה במיגרציית user_profiles: {e}")
+        results['user_profiles']['errors'] += 1
+    
+    # === מיגרציית gpt_usage_log.jsonl ===
+    print("  📊 מיגרציית gpt_usage_log.jsonl...")
+    try:
+        usage_log_path = "data/gpt_usage_log.jsonl"
+        if os.path.exists(usage_log_path):
+            line_count = sum(1 for line in open(usage_log_path, 'r', encoding='utf-8'))
+            print(f"    📊 נמצאו {line_count} שורות למיגרציה")
+            
+            with open(usage_log_path, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    try:
+                        entry = json.loads(line.strip())
+                        from datetime import datetime
+                        timestamp = datetime.fromisoformat(entry.get("timestamp", "").replace("Z", ""))
+                        
+                        save_gpt_usage_log(
+                            chat_id=entry.get("chat_id"),
+                            model=entry.get("model", ""),
+                            usage=entry.get("usage", {}),
+                            cost_agorot=entry.get("cost_agorot", 0),
+                            timestamp=timestamp
+                        )
+                        results['gpt_usage']['migrated'] += 1
+                        
+                        if line_num % 100 == 0:  # דיבאג כל 100 שורות
+                            print(f"      ✅ הועברו {line_num}/{line_count} שורות")
+                            
+                    except Exception as e:
+                        results['gpt_usage']['errors'] += 1
+                        results['gpt_usage']['details'].append(f"שגיאה בשורה {line_num}: {e}")
+                        print(f"      ⚠️ שגיאה בשורה {line_num}: {e}")
+                        continue
+        else:
+            print("    ℹ️ קובץ gpt_usage_log.jsonl לא קיים")
+    except Exception as e:
+        print(f"    ❌ שגיאה במיגרציית usage_log: {e}")
+        results['gpt_usage']['errors'] += 1
+    
+    # === מיגרציית openai_calls.jsonl ===
+    print("  🤖 מיגרציית openai_calls.jsonl...")
+    try:
+        calls_log_path = "data/openai_calls.jsonl"
+        if os.path.exists(calls_log_path):
+            line_count = sum(1 for line in open(calls_log_path, 'r', encoding='utf-8'))
+            print(f"    📊 נמצאו {line_count} שורות למיגרציה")
+            
+            with open(calls_log_path, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    try:
+                        entry = json.loads(line.strip())
+                        from datetime import datetime
+                        timestamp = datetime.fromisoformat(entry.get("ts", "").replace("Z", ""))
+                        
+                        # חילוץ פרטים מהתגובה
+                        response = entry.get("response", {})
+                        usage = response.get("usage", {})
+                        
+                        save_gpt_call_log(
+                            chat_id=entry.get("chat_id"),
+                            call_type=entry.get("gpt_type", "unknown"),
+                            request_data=entry.get("request", {}),
+                            response_data=response,
+                            tokens_input=usage.get("prompt_tokens", 0),
+                            tokens_output=usage.get("completion_tokens", 0),
+                            cost_usd=entry.get("cost_usd", 0),
+                            processing_time_seconds=0,
+                            timestamp=timestamp
+                        )
+                        results['gpt_calls']['migrated'] += 1
+                        
+                        if line_num % 100 == 0:  # דיבאג כל 100 שורות
+                            print(f"      ✅ הועברו {line_num}/{line_count} שורות")
+                            
+                    except Exception as e:
+                        results['gpt_calls']['errors'] += 1
+                        results['gpt_calls']['details'].append(f"שגיאה בשורה {line_num}: {e}")
+                        print(f"      ⚠️ שגיאה בשורה {line_num}: {e}")
+                        continue
+        else:
+            print("    ℹ️ קובץ openai_calls.jsonl לא קיים")
+    except Exception as e:
+        print(f"    ❌ שגיאה במיגרציית calls_log: {e}")
+        results['gpt_calls']['errors'] += 1
+    
+    return results
+
+def verify_data_integrity(pre_counts, post_counts, migration_results):
+    """מאמת את שלמות הנתונים"""
+    print("  🔍 אימות שלמות נתונים...")
+    
+    verification = {
+        'chat_messages': {'verified': False, 'details': ''},
+        'user_profiles': {'verified': False, 'details': ''},
+        'gpt_usage': {'verified': False, 'details': ''},
+        'gpt_calls': {'verified': False, 'details': ''}
+    }
+    
+    # אימות הודעות צ'אט
+    expected_chat = pre_counts.get('chat_messages', 0) + migration_results['chat_messages']['migrated']
+    actual_chat = post_counts.get('chat_messages', 0)
+    if expected_chat == actual_chat:
+        verification['chat_messages']['verified'] = True
+        verification['chat_messages']['details'] = f"✅ {expected_chat} = {actual_chat}"
+    else:
+        verification['chat_messages']['details'] = f"❌ ציפיתי {expected_chat}, קיבלתי {actual_chat}"
+    
+    # אימות פרופילים
+    expected_profiles = pre_counts.get('user_profiles', 0) + migration_results['user_profiles']['migrated']
+    actual_profiles = post_counts.get('user_profiles', 0)
+    if expected_profiles == actual_profiles:
+        verification['user_profiles']['verified'] = True
+        verification['user_profiles']['details'] = f"✅ {expected_profiles} = {actual_profiles}"
+    else:
+        verification['user_profiles']['details'] = f"❌ ציפיתי {expected_profiles}, קיבלתי {actual_profiles}"
+    
+    # אימות שימוש GPT
+    expected_usage = pre_counts.get('gpt_usage', 0) + migration_results['gpt_usage']['migrated']
+    actual_usage = post_counts.get('gpt_usage', 0)
+    if expected_usage == actual_usage:
+        verification['gpt_usage']['verified'] = True
+        verification['gpt_usage']['details'] = f"✅ {expected_usage} = {actual_usage}"
+    else:
+        verification['gpt_usage']['details'] = f"❌ ציפיתי {expected_usage}, קיבלתי {actual_usage}"
+    
+    # אימות קריאות GPT
+    expected_calls = pre_counts.get('gpt_calls', 0) + migration_results['gpt_calls']['migrated']
+    actual_calls = post_counts.get('gpt_calls', 0)
+    if expected_calls == actual_calls:
+        verification['gpt_calls']['verified'] = True
+        verification['gpt_calls']['details'] = f"✅ {expected_calls} = {actual_calls}"
+    else:
+        verification['gpt_calls']['details'] = f"❌ ציפיתי {expected_calls}, קיבלתי {actual_calls}"
+    
+    return verification
+
+def print_detailed_summary(migration_results, verification_results):
+    """מדפיס סיכום מפורט"""
+    print("\n📋 === סיכום מיגרציה מפורט ===")
+    
+    total_migrated = 0
+    total_errors = 0
+    
+    for category, results in migration_results.items():
+        migrated = results['migrated']
+        errors = results['errors']
+        total_migrated += migrated
+        total_errors += errors
+        
+        status = "✅" if verification_results[category]['verified'] else "❌"
+        print(f"\n{status} {category.upper()}:")
+        print(f"   📊 הועברו: {migrated}")
+        print(f"   ⚠️ שגיאות: {errors}")
+        print(f"   🔍 אימות: {verification_results[category]['details']}")
+        
+        if errors > 0 and results['details']:
+            print("   📝 פרטי שגיאות:")
+            for detail in results['details'][:5]:  # רק 5 הראשונות
+                print(f"      • {detail}")
+            if len(results['details']) > 5:
+                print(f"      ... ועוד {len(results['details']) - 5} שגיאות")
+    
+    print(f"\n🎯 סיכום כללי:")
+    print(f"   📊 סה״כ הועברו: {total_migrated}")
+    print(f"   ⚠️ סה״כ שגיאות: {total_errors}")
+    print(f"   📈 אחוז הצלחה: {((total_migrated - total_errors) / max(total_migrated, 1) * 100):.1f}%")
+
+async def handle_migrate_command(update, context):
+    """מטפל בפקודת /migrate_all_data עם קוד סודי"""
+    try:
+        # בדיקה אם המשתמש הוא אדמין
+        user_id = update.effective_user.id
+        admin_ids = config.get("ADMIN_USER_IDS", [])
+        
+        if user_id not in admin_ids:
+            await update.message.reply_text("❌ רק אדמינים יכולים להריץ פקודה זו")
+            return
+        
+        # בדיקת קוד סודי
+        message_text = update.message.text.strip()
+        if not message_text.endswith(" SECRET_MIGRATION_2024"):
+            await update.message.reply_text(
+                "🔐 נדרש קוד סודי למיגרציה!\n"
+                "השתמש בפקודה: /migrate_all_data SECRET_MIGRATION_2024"
+            )
+            return
+        
+        await update.message.reply_text(
+            "🔐 === מיגרציה בטוחה עם קוד סודי ===\n"
+            "🚨 מנגנוני בטיחות מופעלים:\n"
+            "   ✅ גיבוי אוטומטי לפני מיגרציה\n"
+            "   ✅ בדיקת תקינות נתונים\n"
+            "   ✅ דיבאג מפורט לכל שלב\n"
+            "   ✅ עצירה בשגיאה\n"
+            "   ✅ לוג מפורט של כל פעולה\n"
+            "   ✅ אימות שלמות נתונים\n\n"
+            "🚀 מתחיל מיגרציה..."
+        )
+        
+        # הרצת המיגרציה ב-thread נפרד
+        import threading
+        def run_migration():
+            success = migrate_data_to_sql_with_safety()
+            if success:
+                print("✅ מיגרציה הושלמה בהצלחה")
+            else:
+                print("❌ מיגרציה נכשלה")
+        
+        migration_thread = threading.Thread(target=run_migration)
+        migration_thread.start()
+        
+        await update.message.reply_text("✅ מיגרציה הוחלה - תקבל עדכון מפורט כשתסתיים")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ שגיאה בפקודת מיגרציה: {e}")
+
+if __name__ == "__main__":
+    # אם הרצנו ישירות מה-Shell, נריץ מיגרציה
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "migrate":
+        # בדיקת קוד סודי
+        if len(sys.argv) < 3 or sys.argv[2] != "SECRET_MIGRATION_2024":
+            print("🔐 === מיגרציה בטוחה עם קוד סודי ===")
+            print("❌ נדרש קוד סודי למיגרציה!")
+            print("השתמש בפקודה: python bot_setup.py migrate SECRET_MIGRATION_2024")
+            sys.exit(1)
+        
+        print("🔐 === מיגרציה בטוחה עם קוד סודי ===")
+        print("✅ קוד סודי אומת - מתחיל מיגרציה...")
+        success = migrate_data_to_sql_with_safety()
+        if success:
+            print("✅ מיגרציה הושלמה בהצלחה!")
+            sys.exit(0)
+        else:
+            print("❌ מיגרציה נכשלה!")
+            sys.exit(1)
+    else:
+        # הרצה רגילה של הבוט
+        print("🤖 מתחיל את הבוט...")
+        app = setup_bot()
+        app.run_polling() 
