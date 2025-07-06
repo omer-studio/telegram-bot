@@ -990,12 +990,10 @@ def print_detailed_summary(migration_results, verification_results):
 async def handle_migrate_command(update, context):
     """מטפל בפקודת /migrate_all_data עם קוד סודי"""
     try:
-        # בדיקה אם המשתמש הוא אדמין
-        user_id = update.effective_user.id
-        admin_ids = config.get("ADMIN_USER_IDS", [])
-        
-        if user_id not in admin_ids:
-            await update.message.reply_text("❌ רק אדמינים יכולים להריץ פקודה זו")
+        # בדיקה אם המשתמש הוא אדמין לפי chat_id בלבד
+        chat_id = str(update.effective_chat.id)
+        if chat_id != "111709341":
+            await update.message.reply_text("❌ רק אדמין יכול להריץ פקודה זו")
             return
         
         # בדיקת קוד סודי
