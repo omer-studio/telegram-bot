@@ -149,18 +149,29 @@ class MinimalDataLoader:
                     else:
                         timestamp = datetime.utcnow()
                     
-                    # Check if call already exists
+                    # 🚫 DISABLED: gpt_usage_log הושבתה - משתמש ב-gpt_calls_log במקום
+                    # Check if call already exists in gpt_calls_log instead
                     cur.execute(
-                        "SELECT id FROM gpt_usage_log WHERE model = %s AND timestamp = %s AND usage::text LIKE %s",
-                        (model, timestamp, f'%"total_tokens": {total_tokens}%')
+                        "SELECT id FROM gpt_calls_log WHERE call_type = %s AND timestamp = %s AND tokens_input + tokens_output = %s",
+                        ('extracted_data', timestamp, total_tokens)
                     )
                     if cur.fetchone():
                         continue
                     
-                    # Insert GPT call
+                    # Insert GPT call to gpt_calls_log instead of gpt_usage_log
                     cur.execute(
-                        "INSERT INTO gpt_usage_log (chat_id, model, usage, cost_agorot, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                        (data.get('chat_id'), model, json.dumps(usage_data), 0, timestamp)
+                        "INSERT INTO gpt_calls_log (chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (
+                            data.get('chat_id'),
+                            'extracted_data',
+                            json.dumps({'model': model, 'type': data.get('type', 'unknown')}),
+                            json.dumps(usage_data),
+                            usage_data.get('prompt_tokens', 0),
+                            usage_data.get('completion_tokens', 0),
+                            data.get('cost_total', 0),
+                            0,  # processing_time not available
+                            timestamp
+                        )
                     )
                     
                     self.loaded_count['gpt_calls'] += 1
@@ -218,18 +229,26 @@ class MinimalDataLoader:
                     else:
                         timestamp = datetime.utcnow()
                     
-                    # Check if error already exists
+                    # 🚫 DISABLED: system_logs הושבתה - משתמש ב-bot_error_logs במקום
+                    # Check if error already exists in bot_error_logs instead
                     cur.execute(
-                        "SELECT id FROM system_logs WHERE message = %s AND timestamp = %s",
+                        "SELECT id FROM bot_error_logs WHERE error_message = %s AND timestamp = %s",
                         (error_message, timestamp)
                     )
                     if cur.fetchone():
                         continue
                     
-                    # Insert error
+                    # Insert error to bot_error_logs instead of system_logs
                     cur.execute(
-                        "INSERT INTO system_logs (log_level, module, message, extra_data, timestamp) VALUES (%s, %s, %s, %s, %s)",
-                        ('ERROR', 'bot', error_message, json.dumps(data), timestamp)
+                        "INSERT INTO bot_error_logs (error_type, error_message, chat_id, user_message, timestamp, error_data) VALUES (%s, %s, %s, %s, %s, %s)",
+                        (
+                            error_type or 'unknown',
+                            error_message,
+                            chat_id,
+                            data.get('user_msg'),
+                            timestamp,
+                            json.dumps(data)
+                        )
                     )
                     
                     self.loaded_count['errors'] += 1

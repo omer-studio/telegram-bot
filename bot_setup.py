@@ -54,7 +54,12 @@ from utils import log_event_to_file, update_chat_history, get_chat_history_messa
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from apscheduler.schedulers.background import BackgroundScheduler
-from daily_summary import send_daily_summary
+# from daily_summary import send_daily_summary  # זמנית מושבת - הקובץ לא קיים
+
+async def send_daily_summary(days_back=1):
+    """פונקציה זמנית - יש ליצור את daily_summary.py בעתיד"""
+    print(f"📊 [DAILY_SUMMARY] זמנית מושבת - צריך ליצור daily_summary.py")
+    return True
 import pytz
 from message_handler import handle_message
 from notifications import gentle_reminder_background_task
@@ -328,9 +333,29 @@ def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליו�
         
         # שלב 1: טעינת ספריות
         def load_libraries():
-            import gspread
-            from oauth2client.service_account import ServiceAccountCredentials
-            return gspread, ServiceAccountCredentials
+            try:
+                import gspread
+                from oauth2client.service_account import ServiceAccountCredentials
+                return gspread, ServiceAccountCredentials
+            except ImportError as e:
+                print(f"⚠️ Warning: Failed to import Google Sheets libraries: {e}")
+                # יצירת dummy classes
+                class DummyGspread:
+                    def authorize(self, creds):
+                        return self
+                    def open_by_key(self, key):
+                        return self
+                    def worksheet(self, name):
+                        return self
+                    def get_all_values(self):
+                        return []
+                
+                class DummyServiceAccountCredentials:
+                    @staticmethod
+                    def from_json_keyfile_dict(data, scope):
+                        return DummyServiceAccountCredentials()
+                
+                return DummyGspread(), DummyServiceAccountCredentials
         
         gspread, ServiceAccountCredentials = time_google_sheets_step("טעינת ספריות Google Sheets", load_libraries)
         
@@ -1077,11 +1102,10 @@ def perform_detailed_migration():
             with open(errors_stats_path, 'r', encoding='utf-8') as f:
                 errors_data = json.load(f)
             
-            print(f"    📊 נמצאו סטטיסטיקות שגיאות למיגרציה")
-            
-            save_errors_stats_data(errors_data)
-            results['errors_stats']['migrated'] += 1
-            print(f"    ✅ סטטיסטיקות שגיאות הועברו")
+            print(f"    🚫 [DISABLED] errors_stats table disabled - skipping migration")
+            print(f"    ℹ️ Error statistics will be calculated from bot_error_logs when needed")
+            results['errors_stats']['migrated'] = 0
+            results['errors_stats']['skipped'] = len(errors_data)
         else:
             print("    ℹ️ קובץ errors_stats.json לא קיים")
     except Exception as e:
@@ -1745,6 +1769,60 @@ async def send_search_results_to_telegram(update, search_results, log_type, sear
         
     except Exception as e:
         await update.message.reply_text(f"❌ שגיאה בשליחת תוצאות חיפוש: {e}")
+
+def count_table_rows():
+    """ספירת שורות בטבלאות הקריטיות בלבד"""
+    counts = {}
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # 🟢 טבלאות קריטיות בלבד
+        critical_tables = [
+            'chat_messages',
+            'user_profiles', 
+            'gpt_calls_log',
+            'reminder_states',
+            'bot_error_logs',
+            'bot_trace_logs'
+        ]
+        
+        for table in critical_tables:
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {table}")
+                counts[table] = cur.fetchone()[0]
+            except Exception as e:
+                print(f"    ⚠️ טבלה {table} לא קיימת או שגיאה: {e}")
+                counts[table] = 0
+        
+        # 🚫 טבלאות מיותרות - לא נספרות יותר
+        disabled_tables = [
+            'gpt_usage_log',
+            'system_logs', 
+            'critical_users',
+            'billing_usage',
+            'errors_stats',
+            'free_model_limits'
+        ]
+        
+        for table in disabled_tables:
+            counts[table] = "DISABLED"
+        
+        cur.close()
+        conn.close()
+        
+        print("📊 מספר השורות בטבלאות:")
+        for table, count in counts.items():
+            if count == "DISABLED":
+                print(f"    🚫 {table}: הושבתה")
+            else:
+                print(f"    📋 {table}: {count}")
+        
+        return counts
+        
+    except Exception as e:
+        print(f"❌ שגיאה בספירת שורות: {e}")
+        return {}
 
 if __name__ == "__main__":
     # אם הרצנו ישירות מה-Shell, נריץ מיגרציה

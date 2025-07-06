@@ -549,36 +549,48 @@ def format_error_message(error: Exception, context: str = "") -> str:
 
 
 def log_error_stat(error_type: str) -> None:
-    """רושם סטטיסטיקת שגיאה למסד הנתונים"""
+    """
+    🚫 DISABLED: טבלת errors_stats הושבתה - סטטיסטיקות שגיאות לא נשמרות
+    כל השגיאות נשמרות ב-system_logs או bot_error_logs לפי הצורך
+    """
     try:
-        # קריאת סטטיסטיקות קיימות
-        stats = get_errors_stats_data()
-        if not stats:
-            stats = {}
-            
-        # עדכון הספירה
-        stats[error_type] = stats.get(error_type, 0) + 1
+        # סטטיסטיקות שגיאות לא נשמרות - השגיאות עצמן נשמרות בלוגים הרגילים
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] errors_stats disabled - error '{error_type}' logged to regular logs")
+        return  # לא שומר סטטיסטיקות
         
-        # שמירה חזרה למסד הנתונים
-        save_errors_stats_data(stats)
+        # הקוד הישן הושבת:
+        # stats = get_errors_stats_data()
+        # if not stats:
+        #     stats = {}
+        # stats[error_type] = stats.get(error_type, 0) + 1
+        # save_errors_stats_data(stats)
         
     except Exception as e:
         logging.error(f"שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
 
 
 def send_error_stats_report():
-    """שולח דוח סטטיסטיקות שגיאות ממסד הנתונים"""
+    """
+    🚫 DISABLED: טבלת errors_stats הושבתה - אין דוח סטטיסטיקות שגיאות
+    """
     from notifications import send_admin_notification
-    from db_manager import get_errors_stats_data
     
     try:
-        stats = get_errors_stats_data()
-        if not stats:
-            send_admin_notification("אין נתוני שגיאות זמינים.")
-            return
-            
-        lines = [f"{k}: {v}" for k, v in sorted(stats.items(), key=lambda x: -x[1])]
-        send_admin_notification("📊 דוח שגיאות מצטבר:\n" + "\n".join(lines))
+        # אין יותר סטטיסטיקות שגיאות - הטבלה הושבתה
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] errors_stats disabled - no error stats report available")
+        
+        send_admin_notification("🚫 דוח שגיאות הושבת - הטבלה צומצמה לטובת ביצועים")
+        return
+        
+        # הקוד הישן הושבת:
+        # stats = get_errors_stats_data()
+        # if not stats:
+        #     send_admin_notification("אין נתוני שגיאות זמינים.")
+        #     return
+        # lines = [f"{k}: {v}" for k, v in sorted(stats.items(), key=lambda x: -x[1])]
+        # send_admin_notification("📊 דוח שגיאות מצטבר:\n" + "\n".join(lines))
         
     except Exception as e:
         send_admin_notification(f"[send_error_stats_report] שגיאה בשליחת דוח שגיאות: {e}")

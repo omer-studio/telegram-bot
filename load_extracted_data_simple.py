@@ -112,12 +112,17 @@ class SimpleDataLoader:
                     except:
                         timestamp = datetime.utcnow()
                 
-                # Load to database using existing function
-                db_manager.save_gpt_usage_log(
+                # 🚫 DISABLED: gpt_usage_log הושבתה - משתמש ב-gpt_calls_log במקום
+                # Load to gpt_calls_log instead of gpt_usage_log
+                db_manager.save_gpt_call_log(
                     chat_id=data.get('chat_id'),
-                    model=model,
-                    usage=usage_data,
-                    cost_agorot=0,  # We don't have cost data in the extracted data
+                    call_type='extracted_data',
+                    request_data={'model': model, 'type': data.get('type', 'unknown')},
+                    response_data=usage_data,
+                    tokens_input=prompt_tokens,
+                    tokens_output=completion_tokens,
+                    cost_usd=data.get('cost_total', 0),
+                    processing_time_seconds=0,  # not available
                     timestamp=timestamp
                 )
                 
@@ -159,7 +164,8 @@ class SimpleDataLoader:
                     except:
                         timestamp = datetime.utcnow()
                 
-                # Load to database using existing function
+                # 🚫 DISABLED: system_logs הושבתה - משתמש ב-bot_error_logs במקום
+                # Load to bot_error_logs instead of system_logs
                 db_manager.save_bot_error_log({
                     'error_type': error_type or 'unknown',
                     'error': error_message,

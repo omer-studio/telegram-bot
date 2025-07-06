@@ -297,10 +297,21 @@ class BillingProtection:
     def _load_usage(self):
         """טען נתוני שימוש ממסד הנתונים"""
         try:
-            from db_manager import get_billing_usage_data
-            data = get_billing_usage_data()
-            if data:
-                return data
+            # 🚫 DISABLED: billing_usage table הושבתה - נתוני חיוב מ-gpt_calls_log
+            if should_log_debug_prints():
+                print(f"🔄 [DISABLED] billing_usage disabled - using default billing data structure")
+            
+            # ברירת מחדל - נתוני חיוב ריקים (יתמלאו מ-gpt_calls_log בעתיד)
+            return {
+                "daily": {},    # {"2025-01-20": 1.25}
+                "monthly": {},  # {"2025-01": 15.30}
+                "alerts_sent": {}
+            }
+            
+            # הקוד הישן הושבת:
+            # from db_manager import get_billing_usage_data
+            # data = get_billing_usage_data()
+            
         except Exception as e:
             if should_log_debug_prints():
                 print(f"[WARNING] Error loading billing usage from DB: {e}")
@@ -315,8 +326,15 @@ class BillingProtection:
     def _save_usage(self):
         """שמור נתוני שימוש למסד הנתונים"""
         try:
-            from db_manager import save_billing_usage_data
-            save_billing_usage_data(self.usage_data)
+            # 🚫 DISABLED: billing_usage table הושבתה - נתוני חיוב נשמרים ב-gpt_calls_log
+            if should_log_debug_prints():
+                print(f"🔄 [DISABLED] billing_usage disabled - billing data saved in gpt_calls_log")
+            return  # לא שומר לטבלה המיותרת
+            
+            # הקוד הישן הושבת:
+            # from db_manager import save_billing_usage_data
+            # save_billing_usage_data(self.usage_data)
+            
         except Exception as e:
             if should_log_debug_prints():
                 print(f"⚠️ שגיאה בשמירת נתוני שימוש למסד הנתונים: {e}")
@@ -464,10 +482,16 @@ def _load_daily_limits():
     today_str = get_israel_time().strftime("%Y-%m-%d")
     
     try:
-        from db_manager import get_free_model_limits_data
-        daily_limits = get_free_model_limits_data()
-        if not daily_limits:
-            daily_limits = {}
+        # 🚫 DISABLED: free_model_limits table הושבתה - מגבלות מנוהלות בקונפיג
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] free_model_limits disabled - using config-based limits")
+        
+        daily_limits = {"date": today_str}  # ברירת מחדל
+        
+        # הקוד הישן הושבת:
+        # from db_manager import get_free_model_limits_data
+        # daily_limits = get_free_model_limits_data()
+        
     except Exception as e:
         if should_log_debug_prints():
             print(f"[WARNING] Error loading limits from DB: {e}")
@@ -476,8 +500,14 @@ def _load_daily_limits():
     if daily_limits.get("date") != today_str:
         daily_limits = {"date": today_str}
         try:
-            from db_manager import save_free_model_limits_data
-            save_free_model_limits_data(daily_limits)
+            # 🚫 DISABLED: free_model_limits table הושבתה
+            if should_log_debug_prints():
+                print(f"🔄 [DISABLED] free_model_limits disabled - limits managed in config")
+            
+            # הקוד הישן הושבת:
+            # from db_manager import save_free_model_limits_data
+            # save_free_model_limits_data(daily_limits)
+            
         except Exception as e:
             if should_log_debug_prints():
                 print(f"⚠️ שגיאה בשמירת מגבלות למסד הנתונים: {e}")
@@ -524,8 +554,14 @@ def try_free_models_first(full_messages, **completion_params):
             # עדכון מונה השימוש
             daily_limits[free_model] = daily_limits.get(free_model, 0) + 1
             try:
-                from db_manager import save_free_model_limits_data
-                save_free_model_limits_data(daily_limits)
+                # 🚫 DISABLED: free_model_limits table הושבתה
+                if should_log_debug_prints():
+                    print(f"🔄 [DISABLED] free_model_limits disabled - limits managed in memory")
+                
+                # הקוד הישן הושבת:
+                # from db_manager import save_free_model_limits_data
+                # save_free_model_limits_data(daily_limits)
+                
             except Exception as e:
                 if should_log_debug_prints():
                     print(f"⚠️ שגיאה בשמירת מגבלות למסד הנתונים: {e}")
@@ -536,8 +572,14 @@ def try_free_models_first(full_messages, **completion_params):
         if "quota" in error_msg or "rate limit" in error_msg:
             daily_limits[free_model] = config.get("FREE_MODEL_DAILY_LIMIT", 100)
             try:
-                from db_manager import save_free_model_limits_data
-                save_free_model_limits_data(daily_limits)
+                # 🚫 DISABLED: free_model_limits table הושבתה
+                if should_log_debug_prints():
+                    print(f"🔄 [DISABLED] free_model_limits disabled - limits managed in memory")
+                
+                # הקוד הישן הושבת:
+                # from db_manager import save_free_model_limits_data
+                # save_free_model_limits_data(daily_limits)
+                
             except Exception as e:
                 if should_log_debug_prints():
                     print(f"⚠️ שגיאה בשמירת מגבלות למסד הנתונים: {e}")

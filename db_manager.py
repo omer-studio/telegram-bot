@@ -9,6 +9,8 @@ DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 def create_tables():
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
+    
+    # 🟢 טבלאות קריטיות - נשארות
     cur.execute('''
     CREATE TABLE IF NOT EXISTS chat_messages (
         id SERIAL PRIMARY KEY,
@@ -18,14 +20,39 @@ def create_tables():
         timestamp TIMESTAMP
     );
     ''')
-    cur.execute('''
+    
+    # יצירת טבלת user_profiles עם עמודות נפרדות
+    from fields_dict import get_user_profile_fields, FIELDS_DICT
+    
+    columns = []
+    for field in get_user_profile_fields():
+        field_info = FIELDS_DICT[field]
+        field_type = field_info['type']
+        
+        # המרת טיפוסי Python לטיפוסי PostgreSQL
+        if field_type == int:
+            pg_type = 'INTEGER'
+        elif field_type == float:
+            pg_type = 'REAL'
+        elif field_type == bool:
+            pg_type = 'BOOLEAN'
+        else:
+            pg_type = 'TEXT'
+        
+        columns.append(f"{field} {pg_type}")
+    
+    create_user_profiles_sql = f'''
     CREATE TABLE IF NOT EXISTS user_profiles (
         id SERIAL PRIMARY KEY,
-        chat_id TEXT UNIQUE,
-        profile_json JSONB,
-        updated_at TIMESTAMP
+        chat_id TEXT UNIQUE NOT NULL,
+        {', '.join(columns)},
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-    ''')
+    '''
+    
+    cur.execute(create_user_profiles_sql)
+    
+    # 🟢 טבלת gpt_calls_log - קריטית (מכילה את כל נתוני הקריאות והעלויות)
     cur.execute('''
     CREATE TABLE IF NOT EXISTS gpt_calls_log (
         id SERIAL PRIMARY KEY,
@@ -40,26 +67,19 @@ def create_tables():
         timestamp TIMESTAMP
     );
     ''')
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS gpt_usage_log (
-        id SERIAL PRIMARY KEY,
-        chat_id TEXT,
-        model TEXT,
-        usage JSONB,
-        cost_agorot INTEGER,
-        timestamp TIMESTAMP
-    );
-    ''')
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS system_logs (
-        id SERIAL PRIMARY KEY,
-        log_level TEXT,
-        module TEXT,
-        message TEXT,
-        extra_data JSONB,
-        timestamp TIMESTAMP
-    );
-    ''')
+    
+    # 🚫 DISABLED: טבלאות מיותרות לא נוצרות יותר
+    # gpt_usage_log - כפול ל-gpt_calls_log
+    # system_logs - יש לוגים ספציפיים יותר
+    # critical_users - VIP מנוהל בקונפיג
+    # billing_usage - נתונים ב-gpt_calls_log
+    # errors_stats - לא קריטי
+    # free_model_limits - מנוהל בקונפיג
+    
+    if should_log_debug_prints():
+        print("✅ [DB] Created only critical tables: chat_messages, user_profiles, gpt_calls_log")
+        print("🚫 [DB] Skipped unused tables: gpt_usage_log, system_logs, critical_users, billing_usage, errors_stats, free_model_limits")
+    
     conn.commit()
     cur.close()
     conn.close()
@@ -144,26 +164,79 @@ def get_chat_history(chat_id, limit=100):
     return rows[::-1]  # מהישן לחדש
 
 # === שמירת פרופיל משתמש ===
-def save_user_profile(chat_id, profile_json):
+def save_user_profile(chat_id, profile_data):
+    """
+    שומר פרופיל משתמש במבנה החדש עם עמודות נפרדות
+    profile_data יכול להיות dict או JSON string
+    """
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO user_profiles (chat_id, profile_json, updated_at) VALUES (%s, %s, %s) ON CONFLICT (chat_id) DO UPDATE SET profile_json=EXCLUDED.profile_json, updated_at=EXCLUDED.updated_at",
-        (chat_id, profile_json, datetime.utcnow())
-    )
+    
+    # המרת JSON string ל-dict אם צריך
+    if isinstance(profile_data, str):
+        try:
+            profile_data = json.loads(profile_data)
+        except:
+            profile_data = {}
+    
+    # הכנת נתונים להכנסה
+    from fields_dict import get_user_profile_fields
+    
+    # יצירת dict עם כל השדות
+    insert_data = {'chat_id': chat_id}
+    for field in get_user_profile_fields():
+        if field in profile_data:
+            insert_data[field] = profile_data[field]
+        else:
+            insert_data[field] = None
+    
+    # הוספת timestamp
+    insert_data['updated_at'] = datetime.utcnow()
+    
+    # יצירת SQL דינמי
+    fields = list(insert_data.keys())
+    placeholders = ', '.join(['%s'] * len(fields))
+    values = list(insert_data.values())
+    
+    insert_sql = f"""
+    INSERT INTO user_profiles ({', '.join(fields)})
+    VALUES ({placeholders})
+    ON CONFLICT (chat_id) DO UPDATE SET
+    {', '.join([f"{field} = EXCLUDED.{field}" for field in fields if field != 'chat_id'])}
+    """
+    
+    cur.execute(insert_sql, values)
     conn.commit()
     cur.close()
     conn.close()
 
 # === שליפת פרופיל משתמש ===
 def get_user_profile(chat_id):
+    """
+    מחזיר פרופיל משתמשdict עם כל השדות
+    """
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
-    cur.execute("SELECT profile_json FROM user_profiles WHERE chat_id=%s", (chat_id,))
+    
+    from fields_dict import get_user_profile_fields
+    
+    # יצירת SQL עם כל השדות
+    fields = ['chat_id'] + get_user_profile_fields()
+    select_sql = f"SELECT {', '.join(fields)} FROM user_profiles WHERE chat_id=%s"
+    
+    cur.execute(select_sql, (chat_id,))
     row = cur.fetchone()
     cur.close()
     conn.close()
-    return row[0] if row else None
+    
+    if row:
+        # המרת השורה ל-dict
+        profile_dict = {}
+        for i, field in enumerate(fields):
+            profile_dict[field] = row[i]
+        return profile_dict
+    
+    return None
 
 # === שמירת לוג GPT ===
 def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp=None):
@@ -182,71 +255,42 @@ def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_in
     cur.close()
     conn.close()
 
-# === שמירת לוג שימוש ===
-def save_gpt_usage_log(chat_id, model, usage, cost_agorot, timestamp=None):
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # המרת dict ל-JSON string
-    usage_json = json.dumps(usage) if isinstance(usage, dict) else str(usage)
-    
-    cur.execute(
-        "INSERT INTO gpt_usage_log (chat_id, model, usage, cost_agorot, timestamp) VALUES (%s, %s, %s, %s, %s)",
-        (chat_id, model, usage_json, cost_agorot, timestamp or datetime.utcnow())
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-
 # === שמירת לוג מערכת ===
 def save_system_log(log_level, module, message, extra_data, timestamp=None):
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # המרת dict ל-JSON string
-    extra_json = json.dumps(extra_data) if isinstance(extra_data, dict) else str(extra_data)
-    
-    cur.execute(
-        "INSERT INTO system_logs (log_level, module, message, extra_data, timestamp) VALUES (%s, %s, %s, %s, %s)",
-        (log_level, module, message, extra_json, timestamp or datetime.utcnow())
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    """
+    🚫 DISABLED: טבלת system_logs הושבתה - לוגים נשמרים ב-bot_error_logs/bot_trace_logs
+    יש לוגים ספציפיים יותר לכל סוג שגיאה/אירוע
+    """
+    try:
+        # לוגים נשמרים בטבלאות ספציפיות - לא צריך טבלה כללית
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] system_logs table disabled - logs saved in specific tables")
+        return  # לא שומר לטבלה המיותרת
+        
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # cur = conn.cursor()
+        # ... system_logs table operations disabled
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"⚠️ שגיאה בשמירת לוג מערכת: {e}")
 
 def save_critical_user_data(chat_id, user_info):
-    """שומר נתוני משתמש קריטי ל-SQL"""
+    """
+    🚫 DISABLED: טבלת critical_users הושבתה - כל המידע הקריטי נשמר ב-user_profiles
+    הפונקציה הזו לא פעילה יותר - המשתמש הקריטי היחיד (VIP) מוגדר בקונפיג
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        # שמירת המידע הקריטי ב-user_profiles במקום
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] critical_users table disabled - VIP user data managed via config for chat_id: {chat_id}")
+        return  # לא שומר לטבלה המיותרת
         
-        # יצירת טבלה אם לא קיימת
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS critical_users (
-                id SERIAL PRIMARY KEY,
-                chat_id VARCHAR(50) NOT NULL,
-                error_context TEXT,
-                original_message TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                recovered BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # הכנסת נתונים
-        cur.execute("""
-            INSERT INTO critical_users (chat_id, error_context, original_message, recovered)
-            VALUES (%s, %s, %s, %s)
-        """, (
-            str(chat_id),
-            user_info.get('error_context', ''),
-            user_info.get('original_message', ''),
-            user_info.get('recovered', False)
-        ))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # cur = conn.cursor()
+        # ... critical_users table operations disabled
         
     except Exception as e:
         print(f"שגיאה בשמירת משתמש קריטי {chat_id}: {e}")
@@ -292,72 +336,40 @@ def save_reminder_state(chat_id, reminder_info):
         raise
 
 def save_billing_usage_data(billing_data):
-    """שומר נתוני חיוב ל-SQL"""
+    """
+    🚫 DISABLED: טבלת billing_usage הושבתה - כל נתוני החיוב נשמרים ב-gpt_calls_log
+    כל עלות של קריאה נשמרת ב-gpt_calls_log עם cost_usd מלא
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        # כל נתוני החיוב כבר נשמרים ב-gpt_calls_log - לא צריך טבלה נפרדת
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] billing_usage table disabled - all billing data saved in gpt_calls_log")
+        return  # לא שומר לטבלה המיותרת
         
-        # יצירת טבלה אם לא קיימת
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS billing_usage (
-                id SERIAL PRIMARY KEY,
-                daily_data JSONB,
-                monthly_data JSONB,
-                alerts_sent JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # הכנסת נתונים
-        cur.execute("""
-            INSERT INTO billing_usage (daily_data, monthly_data, alerts_sent)
-            VALUES (%s, %s, %s)
-        """, (
-            json.dumps(billing_data.get('daily', {})),
-            json.dumps(billing_data.get('monthly', {})),
-            json.dumps(billing_data.get('alerts_sent', {}))
-        ))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # cur = conn.cursor()
+        # ... billing_usage table operations disabled
         
     except Exception as e:
         print(f"שגיאה בשמירת נתוני חיוב: {e}")
         raise
 
 def save_errors_stats_data(errors_data):
-    """שומר סטטיסטיקות שגיאות ל-SQL"""
+    """
+    🚫 DISABLED: טבלת errors_stats הושבתה - כל השגיאות נשמרות ב-system_logs
+    סטטיסטיקות שגיאות ניתן להפיק מ-system_logs לפי הצורך
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        # כל השגיאות כבר נשמרות ב-system_logs - לא צריך טבלה נפרדת
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] errors_stats table disabled - all errors saved in system_logs")
+        return  # לא שומר לטבלה המיותרת
         
-        # יצירת טבלה אם לא קיימת
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS errors_stats (
-                id SERIAL PRIMARY KEY,
-                error_type VARCHAR(100),
-                count INTEGER DEFAULT 0,
-                last_occurrence TIMESTAMP,
-                stats_data JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # הכנסת נתונים
-        for error_type, count in errors_data.items():
-            cur.execute("""
-                INSERT INTO errors_stats (error_type, count, stats_data)
-                VALUES (%s, %s, %s)
-            """, (
-                str(error_type),
-                int(count) if isinstance(count, (int, float)) else 0,
-                json.dumps({error_type: count})
-            ))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # cur = conn.cursor()
+        # ... errors_stats table operations disabled
         
     except Exception as e:
         print(f"שגיאה בשמירת סטטיסטיקות שגיאות: {e}")
@@ -502,29 +514,20 @@ def save_rollback_data(filename, rollback_data):
         raise
 
 def save_free_model_limits_data(limits_data):
-    """שומר מגבלות מודל חינמי ל-SQL"""
+    """
+    🚫 DISABLED: טבלת free_model_limits הושבתה - מגבלות מודלים מנוהלות בקונפיג
+    אין צורך בטבלה נפרדת למגבלות - הכל מנוהל בקוד ובקונפיג
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        # מגבלות מודלים מנוהלות בקונפיג - לא צריך טבלה נפרדת
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] free_model_limits table disabled - limits managed via config")
+        return  # לא שומר לטבלה המיותרת
         
-        # יצירת טבלה אם לא קיימת
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS free_model_limits (
-                id SERIAL PRIMARY KEY,
-                limits_data JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # הכנסת נתונים
-        cur.execute("""
-            INSERT INTO free_model_limits (limits_data)
-            VALUES (%s)
-        """, (json.dumps(limits_data),))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # cur = conn.cursor()
+        # ... free_model_limits table operations disabled
         
     except Exception as e:
         print(f"שגיאה בשמירת מגבלות מודל חינמי: {e}")
@@ -670,110 +673,68 @@ def get_chat_history_enhanced(chat_id, limit=50):
     return history
 
 def get_billing_usage_data():
-    """מחזיר נתוני חיוב אחרונים ממסד הנתונים"""
+    """
+    🚫 DISABLED: טבלת billing_usage הושבתה - נתוני חיוב נשלפים מ-gpt_calls_log
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] billing_usage table disabled - billing data available in gpt_calls_log")
+        return None  # לא קורא מהטבלה המיותרת
         
-        cur.execute("""
-            SELECT daily_data, monthly_data, alerts_sent 
-            FROM billing_usage 
-            ORDER BY created_at DESC 
-            LIMIT 1
-        """)
-        
-        result = cur.fetchone()
-        cur.close()
-        conn.close()
-        
-        if result:
-            return {
-                'daily': result[0] or {},
-                'monthly': result[1] or {},
-                'alerts_sent': result[2] or {}
-            }
-        return None
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # ... billing_usage table operations disabled
         
     except Exception as e:
         print(f"שגיאה בקריאת נתוני חיוב: {e}")
         return None
 
 def get_free_model_limits_data():
-    """מחזיר מגבלות מודל חינמי אחרונות ממסד הנתונים"""
+    """
+    🚫 DISABLED: טבלת free_model_limits הושבתה - מגבלות מנוהלות בקונפיג
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] free_model_limits table disabled - limits managed via config")
+        return None  # לא קורא מהטבלה המיותרת
         
-        cur.execute("""
-            SELECT limits_data 
-            FROM free_model_limits 
-            ORDER BY created_at DESC 
-            LIMIT 1
-        """)
-        
-        result = cur.fetchone()
-        cur.close()
-        conn.close()
-        
-        if result:
-            return result[0] or {}
-        return None
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # ... free_model_limits table operations disabled
         
     except Exception as e:
         print(f"שגיאה בקריאת מגבלות מודל חינמי: {e}")
         return None
 
 def get_errors_stats_data():
-    """מחזיר סטטיסטיקות שגיאות ממסד הנתונים"""
+    """
+    🚫 DISABLED: טבלת errors_stats הושבתה - סטטיסטיקות שגיאות מ-system_logs
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] errors_stats table disabled - error stats available from system_logs")
+        return {}  # לא קורא מהטבלה המיותרת
         
-        cur.execute("""
-            SELECT error_type, count 
-            FROM errors_stats 
-            ORDER BY created_at DESC
-        """)
-        
-        results = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        if results:
-            return {error_type: count for error_type, count in results}
-        return {}
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # ... errors_stats table operations disabled
         
     except Exception as e:
         print(f"שגיאה בקריאת סטטיסטיקות שגיאות: {e}")
         return {}
 
 def get_critical_users_data():
-    """מחזיר נתוני משתמשים קריטיים ממסד הנתונים"""
+    """
+    🚫 DISABLED: טבלת critical_users הושבתה - משתמש VIP מוגדר בקונפיג
+    """
     try:
-        conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] critical_users table disabled - VIP user managed via config")
+        return {}  # לא קורא מהטבלה המיותרת
         
-        cur.execute("""
-            SELECT chat_id, error_context, original_message, timestamp, recovered 
-            FROM critical_users 
-            WHERE recovered = FALSE
-            ORDER BY timestamp DESC
-        """)
-        
-        results = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        if results:
-            return {
-                str(chat_id): {
-                    'error_message': error_context,
-                    'original_message': original_message,
-                    'timestamp': timestamp.isoformat() if timestamp else None,
-                    'recovered': recovered
-                } for chat_id, error_context, original_message, timestamp, recovered in results
-            }
-        return {}
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # ... critical_users table operations disabled
         
     except Exception as e:
         print(f"שגיאה בקריאת משתמשים קריטיים: {e}")
@@ -809,3 +770,24 @@ def get_reminder_states_data():
     except Exception as e:
         print(f"שגיאה בקריאת מצבי תזכורות: {e}")
         return {}
+
+# === שמירת לוג שימוש ===
+def save_gpt_usage_log(chat_id, model, usage, cost_agorot, timestamp=None):
+    """
+    🚫 DISABLED: טבלת gpt_usage_log הושבתה - כל נתוני השימוש נשמרים ב-gpt_calls_log
+    gpt_calls_log מכיל את כל המידע הנדרש: עלויות, טוקנים, מודלים, זמנים
+    """
+    try:
+        # כל נתוני השימוש כבר נשמרים ב-gpt_calls_log - לא צריך טבלה נפרדת
+        if should_log_debug_prints():
+            print(f"🔄 [DISABLED] gpt_usage_log table disabled - all usage data saved in gpt_calls_log")
+        return  # לא שומר לטבלה המיותרת
+        
+        # הקוד הישן הושבת:
+        # conn = psycopg2.connect(DB_URL)
+        # cur = conn.cursor()
+        # ... gpt_usage_log table operations disabled
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"⚠️ שגיאה בשמירת נתוני שימוש: {e}")
