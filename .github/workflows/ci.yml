@@ -73,34 +73,17 @@ jobs:
     steps:
       # 1. Deploy ל-Render דרך Deploy Hook
       - name: 🚀 Trigger Render Deploy
+        env:
+          # הערה: VS Code מציג אזהרה שקרית על secrets - הם עובדים מצוין ב-GitHub Actions
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           echo "🔄 מתחיל deployment ל-Render..."
-          
-          # בדיקה שה-Deploy Hook קיים
-          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            echo "❌ שגיאה: RENDER_DEPLOY_HOOK_URL לא מוגדר ב-GitHub Secrets!"
-            echo "📝 הוראות:"
-            echo "1. לך ל-GitHub repository settings"
-            echo "2. בחר Secrets and variables > Actions"
-            echo "3. הוסף secret חדש בשם: RENDER_DEPLOY_HOOK_URL"
-            echo "4. הכנס את ה-URL של Deploy Hook מRender"
-            exit 1
-          fi
           
           # שליחת POST request ל-Render Deploy Hook
           echo "🔄 שולח Deploy Hook ל-Render..."
           
-          # ביצוע הקריאה עם טיפול בשגיאות - לפי התיעוד הרשמי של Render
-          DEPLOY_URL="${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-          echo "🔗 Deploy Hook URL (מוסתר): ${DEPLOY_URL:0:50}..."
-          
-          # שליחת הקריאה עם verbose logging לדיבאג
-          if curl -v \
-            --max-time 30 \
-            --retry 3 \
-            --retry-delay 2 \
-            --fail-with-body \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"; then
+          # שליחת הקריאה
+          if curl -v --max-time 30 --retry 3 --retry-delay 2 --fail-with-body "$RENDER_DEPLOY_HOOK_URL"; then
             echo ""
             echo "✅ Deploy Hook נשלח בהצלחה ל-Render!"
             echo "🎉 הdeployment החל - תוכל לעקוב אחר ההתקדמות ב-Render Dashboard"
@@ -108,11 +91,6 @@ jobs:
             CURL_EXIT_CODE=$?
             echo ""
             echo "❌ שגיאה בשליחת Deploy Hook (Exit Code: $CURL_EXIT_CODE)"
-            echo "🔍 בדיקות אפשריות:"
-            echo "  - ודא שה-RENDER_DEPLOY_HOOK_URL נכון ב-GitHub Secrets"
-            echo "  - בדוק שה-Deploy Hook עדיין פעיל ב-Render Dashboard"
-            echo "  - ודא שאין בעיות רשת זמניות"
-            echo "  - בדוק אם יש הודעת שגיאה בפלט הverbose למעלה"
             exit 1
           fi
           

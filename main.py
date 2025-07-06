@@ -66,7 +66,7 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
-from bot_setup import setup_bot
+from bot_setup import setup_bot, migrate_data_to_sql_with_safety
 from message_handler import handle_message
 import os
 import requests
@@ -233,7 +233,8 @@ async def lifespan(app: FastAPI):
     # --- הגדרת webhook בטלגרם ---
     try:
         from config import TELEGRAM_BOT_TOKEN
-        webhook_url = os.getenv("WEBHOOK_URL")
+        webhook_url = os.getenv("WEBHOOK_URL") or "https://telegram-bot-b1na.onrender.com/webhook"
+        
         if webhook_url:
             # 🔧 תיקון: retry mechanism למניעת "Too Many Requests"
             max_retries = 3
@@ -448,6 +449,43 @@ async def main():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+    from bot_setup import migrate_data_to_sql_with_safety
+    
+    # דגל למניעת כפילות (קובץ זמני)
+    MIGRATION_FLAG = "migration_completed.flag"
+    
+    def log_to_file(msg):
+        with open("migration_log.txt", "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    
+    # נריץ מיגרציה רק אם לא בוצעה
+    if os.environ.get("ENV", "production") == "production" and not os.path.exists(MIGRATION_FLAG):
+        print("\n🚀 מבצע מיגרציה אוטומטית (startup)...\n")
+        log_to_file("🚀 התחלת מיגרציה אוטומטית (startup)...")
+        try:
+            success = migrate_data_to_sql_with_safety()
+            if success:
+                print("✅ מיגרציה אוטומטית הושלמה בהצלחה!")
+                log_to_file("✅ מיגרציה אוטומטית הושלמה בהצלחה!")
+                with open(MIGRATION_FLAG, "w") as f: f.write("done")
+                # שלח התראה לאדמין
+                try:
+                    from notifications import send_admin_notification
+                    send_admin_notification("✅ מיגרציה אוטומטית הושלמה בהצלחה! ראה קובץ migration_log.txt לסיכום מלא.")
+                except Exception as e:
+                    print(f"⚠️ שגיאה בשליחת התראה לאדמין: {e}")
+            else:
+                print("❌ מיגרציה אוטומטית נכשלה!")
+                log_to_file("❌ מיגרציה אוטומטית נכשלה!")
+                try:
+                    from notifications import send_admin_notification
+                    send_admin_notification("❌ מיגרציה אוטומטית נכשלה! בדוק קונסול/קובץ לוג.")
+                except Exception as e:
+                    print(f"⚠️ שגיאה בשליחת התראה לאדמין: {e}")
+        except Exception as e:
+            print(f"❌ שגיאה קריטית במיגרציה: {e}")
+            log_to_file(f"❌ שגיאה קריטית במיגרציה: {e}")
     
     # הוספת endpoint ל-gpt_c log במסגרת FastAPI
     @app_fastapi.get("/data/gpt_c_results.html")
