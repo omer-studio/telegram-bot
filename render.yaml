@@ -1,8 +1,8 @@
-# Render Blueprint – minimal worker definition
+# Render Blueprint – web service for HTTP endpoints
 # Note: Overlapping Deploy Policy is a workspace-level toggle in the dashboard;
 # it cannot be set here, so follow the manual steps described separately.
 services:
-  - type: worker
+  - type: web
     name: telegram-bot
     runtime: python
     buildCommand: "pip install -r requirements.txt"
