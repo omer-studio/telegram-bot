@@ -1066,3 +1066,514 @@ def get_user_message_count(chat_id):
         if should_log_debug_prints():
             print(f"❌ שגיאה בקריאת מונה הודעות עבור {chat_id}: {e}")
         return 0
+
+# ================================
+# 🔥 פונקציות חדשות למסד נתונים - מחליפות Google Sheets!
+# ================================
+
+def save_user_state(chat_id, state_data):
+    """שומר מצב משתמש במסד נתונים (מחליף Google Sheets)"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    # יצירת טבלה אם לא קיימת
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_states (
+            id SERIAL PRIMARY KEY,
+            chat_id VARCHAR(50) UNIQUE NOT NULL,
+            code_try INTEGER DEFAULT 0,
+            summary TEXT,
+            profile_data JSONB,
+            gpt_c_run_count INTEGER DEFAULT 0,
+            name VARCHAR(255),
+            approved BOOLEAN DEFAULT FALSE,
+            code_approve VARCHAR(100),
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # המרת state_data ל-fields
+    fields = {'chat_id': chat_id, 'updated_at': datetime.utcnow()}
+    
+    if isinstance(state_data, dict):
+        for key, value in state_data.items():
+            if key == 'profile_data' and isinstance(value, dict):
+                fields[key] = json.dumps(value)
+            else:
+                fields[key] = value
+    
+    # יצירת SQL דינמי
+    field_names = list(fields.keys())
+    placeholders = ', '.join(['%s'] * len(field_names))
+    values = list(fields.values())
+    
+    insert_sql = f"""
+    INSERT INTO user_states ({', '.join(field_names)})
+    VALUES ({placeholders})
+    ON CONFLICT (chat_id) DO UPDATE SET
+    {', '.join([f"{field} = EXCLUDED.{field}" for field in field_names if field != 'chat_id'])}
+    """
+    
+    cur.execute(insert_sql, values)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def get_user_state(chat_id):
+    """מחזיר מצב משתמש מהמסד נתונים (מחליף Google Sheets)"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT chat_id, code_try, summary, profile_data, gpt_c_run_count, 
+               name, approved, code_approve, last_updated, created_at
+        FROM user_states 
+        WHERE chat_id = %s
+    """, (chat_id,))
+    
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if row:
+        state = {
+            'chat_id': row[0],
+            'code_try': row[1] or 0,
+            'summary': row[2] or '',
+            'profile_data': json.loads(row[3]) if row[3] else {},
+            'gpt_c_run_count': row[4] or 0,
+            'name': row[5] or '',
+            'approved': row[6] or False,
+            'code_approve': row[7] or '',
+            'last_updated': row[8].isoformat() if row[8] else '',
+            'created_at': row[9].isoformat() if row[9] else ''
+        }
+        return state
+    
+    return {}
+
+def update_user_state_db(chat_id, updates):
+    """מעדכן מצב משתמש במסד נתונים (מחליף Google Sheets)"""
+    if not updates:
+        return False
+        
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    # וידוא שהמשתמש קיים
+    cur.execute("SELECT chat_id FROM user_states WHERE chat_id = %s", (chat_id,))
+    if not cur.fetchone():
+        # יצירת רשומה חדשה
+        save_user_state(chat_id, updates)
+        cur.close()
+        conn.close()
+        return True
+    
+    # עדכון שדות קיימים
+    set_clauses = []
+    values = []
+    
+    for field, value in updates.items():
+        if field == 'profile_data' and isinstance(value, dict):
+            value = json.dumps(value)
+        set_clauses.append(f"{field} = %s")
+        values.append(value)
+    
+    # הוספת timestamp אוטומטי
+    set_clauses.append("updated_at = %s")
+    values.append(datetime.utcnow())
+    values.append(chat_id)
+    
+    update_sql = f"UPDATE user_states SET {', '.join(set_clauses)} WHERE chat_id = %s"
+    cur.execute(update_sql, values)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    return True
+
+def increment_code_try_db(chat_id):
+    """מגדיל מונה ניסיונות קוד במסד נתונים (מחליף Google Sheets)"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    # בדיקה אם המשתמש קיים
+    cur.execute("SELECT code_try FROM user_states WHERE chat_id = %s", (chat_id,))
+    row = cur.fetchone()
+    
+    if row:
+        new_val = (row[0] or 0) + 1
+        cur.execute("UPDATE user_states SET code_try = %s, updated_at = %s WHERE chat_id = %s", 
+                   (new_val, datetime.utcnow(), chat_id))
+    else:
+        # יצירת רשומה חדשה
+        cur.execute("""
+            INSERT INTO user_states (chat_id, code_try, created_at, updated_at)
+            VALUES (%s, 1, %s, %s)
+        """, (chat_id, datetime.utcnow(), datetime.utcnow()))
+        new_val = 1
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    return new_val
+
+def register_user_db(chat_id, code_input):
+    """רושם משתמש במסד נתונים (מחליף Google Sheets)"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    # בדיקה אם הקוד קיים ולא בשימוש
+    cur.execute("SELECT chat_id FROM user_states WHERE code_approve = %s", (code_input,))
+    existing = cur.fetchone()
+    
+    if existing and existing[0] != chat_id:
+        # הקוד כבר בשימוש
+        cur.close()
+        conn.close()
+        return False
+    
+    # עדכון או יצירת רשומה
+    cur.execute("""
+        INSERT INTO user_states (chat_id, code_approve, created_at, updated_at)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (chat_id) DO UPDATE SET
+        code_approve = EXCLUDED.code_approve,
+        updated_at = EXCLUDED.updated_at
+    """, (chat_id, code_input, datetime.utcnow(), datetime.utcnow()))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    return True
+
+def approve_user_db(chat_id):
+    """מאשר משתמש במסד נתונים (מחליף Google Sheets)"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    cur.execute("UPDATE user_states SET approved = TRUE, updated_at = %s WHERE chat_id = %s", 
+               (datetime.utcnow(), chat_id))
+    
+    success = cur.rowcount > 0
+    conn.commit()
+    cur.close()
+    conn.close()
+    return success
+
+def check_user_access_db(chat_id):
+    """בודק הרשאות משתמש במסד נתונים (מחליף Google Sheets)"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    cur.execute("SELECT approved FROM user_states WHERE chat_id = %s", (chat_id,))
+    row = cur.fetchone()
+    
+    cur.close()
+    conn.close()
+    
+    return row[0] if row else False
+
+def increment_gpt_c_run_count_db(chat_id):
+    """מגדיל מונה הרצות GPT-C במסד נתונים"""
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    cur.execute("""
+        INSERT INTO user_states (chat_id, gpt_c_run_count, created_at, updated_at)
+        VALUES (%s, 1, %s, %s)
+        ON CONFLICT (chat_id) DO UPDATE SET
+        gpt_c_run_count = COALESCE(user_states.gpt_c_run_count, 0) + 1,
+        updated_at = EXCLUDED.updated_at
+    """, (chat_id, datetime.utcnow(), datetime.utcnow()))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def reset_gpt_c_run_count_db(chat_id):
+    """מאפס מונה הרצות GPT-C במסד נתונים"""
+    return update_user_state_db(chat_id, {'gpt_c_run_count': 0})
+
+# ================================
+# 📋 פונקציות לוגיקת קודי אישור חדשה - לפי המדריך!
+# ================================
+
+def register_user_with_code_db(chat_id, code_input=None):
+    """
+    רישום משתמש עם קוד אישור לפי הלוגיקה של המדריך
+    
+    🔄 אם code_input הוא None: יוצר שורה זמנית למשתמש חדש
+    🔄 אם code_input ניתן: מנסה לבצע מיזוג עם קוד קיים
+    
+    :param chat_id: מזהה צ'אט
+    :param code_input: קוד אישור (או None למשתמש חדש)
+    :return: {"success": bool, "message": str, "attempt_num": int}
+    """
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        if should_log_debug_prints():
+            print(f"🔍 [DB] register_user_with_code_db: chat_id={chat_id}, code_input={code_input}")
+        
+        if code_input is None:
+            # שלב 1: משתמש חדש - יצירת שורה זמנית
+            cur.execute("SELECT chat_id FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            existing = cur.fetchone()
+            
+            if existing:
+                # משתמש כבר קיים
+                if should_log_debug_prints():
+                    print(f"🔍 [DB] משתמש {chat_id} כבר קיים")
+                return {"success": True, "message": "משתמש כבר קיים", "attempt_num": 0}
+            
+            # יצירת שורה זמנית חדשה
+            cur.execute("""
+                INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
+                VALUES (%s, 0, FALSE, %s)
+            """, (str(chat_id), datetime.utcnow()))
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            if should_log_debug_prints():
+                print(f"✅ [DB] נוצרה שורה זמנית עבור {chat_id}")
+            
+            return {"success": True, "message": "נוצרה שורה זמנית", "attempt_num": 0}
+        
+        else:
+            # שלב 3: בדיקת קוד ומיזוג שורות
+            code_input = str(code_input).strip()
+            
+            # BEGIN TRANSACTION לאטומיות
+            cur.execute("BEGIN")
+            
+            # בדיקה אם הקוד קיים ופנוי (FOR UPDATE למניעת race conditions)
+            cur.execute("""
+                SELECT chat_id, code_try 
+                FROM user_profiles 
+                WHERE code_approve = %s 
+                FOR UPDATE
+            """, (code_input,))
+            
+            code_row = cur.fetchone()
+            
+            if not code_row:
+                # קוד לא קיים
+                # הגדלת code_try למשתמש
+                cur.execute("""
+                    UPDATE user_profiles 
+                    SET code_try = code_try + 1, updated_at = %s 
+                    WHERE chat_id = %s
+                """, (datetime.utcnow(), str(chat_id)))
+                
+                # קבלת מספר הניסיון החדש
+                cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+                attempt_result = cur.fetchone()
+                attempt_num = attempt_result[0] if attempt_result else 1
+                
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                if should_log_debug_prints():
+                    print(f"❌ [DB] קוד {code_input} לא קיים - attempt_num={attempt_num}")
+                
+                return {"success": False, "message": "קוד לא קיים", "attempt_num": attempt_num}
+            
+            existing_chat_id, existing_code_try = code_row
+            
+            if existing_chat_id and existing_chat_id != str(chat_id):
+                # קוד כבר תפוס על ידי משתמש אחר
+                # הגדלת code_try למשתמש הנוכחי
+                cur.execute("""
+                    UPDATE user_profiles 
+                    SET code_try = code_try + 1, updated_at = %s 
+                    WHERE chat_id = %s
+                """, (datetime.utcnow(), str(chat_id)))
+                
+                # קבלת מספר הניסיון החדש
+                cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+                attempt_result = cur.fetchone()
+                attempt_num = attempt_result[0] if attempt_result else 1
+                
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                if should_log_debug_prints():
+                    print(f"❌ [DB] קוד {code_input} תפוס על ידי {existing_chat_id} - attempt_num={attempt_num}")
+                
+                return {"success": False, "message": "קוד כבר בשימוש", "attempt_num": attempt_num}
+            
+            # קוד תקין ופנוי - מיזוג השורות!
+            
+            # 1. שמירת code_try מהשורה הזמנית
+            cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            temp_row = cur.fetchone()
+            user_code_try = temp_row[0] if temp_row else 0
+            
+            # 2. מחיקת השורה הזמנית
+            cur.execute("DELETE FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            
+            # 3. עדכון השורה עם הקוד
+            cur.execute("""
+                UPDATE user_profiles 
+                SET chat_id = %s, code_try = %s, approved = FALSE, updated_at = %s
+                WHERE code_approve = %s AND chat_id IS NULL
+            """, (str(chat_id), user_code_try, datetime.utcnow(), code_input))
+            
+            # בדיקה שהעדכון הצליח
+            if cur.rowcount == 0:
+                conn.rollback()
+                cur.close()
+                conn.close()
+                
+                if should_log_debug_prints():
+                    print(f"❌ [DB] עדכון נכשל עבור קוד {code_input}")
+                
+                return {"success": False, "message": "עדכון נכשל", "attempt_num": user_code_try}
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            if should_log_debug_prints():
+                print(f"✅ [DB] מיזוג הצליח: {chat_id} <-> {code_input}, code_try={user_code_try}")
+            
+            return {"success": True, "message": "קוד אושר", "attempt_num": user_code_try}
+            
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ [DB] שגיאה ב-register_user_with_code_db: {e}")
+        
+        try:
+            conn.rollback()
+            cur.close()
+            conn.close()
+        except:
+            pass
+            
+        return {"success": False, "message": f"שגיאה: {e}", "attempt_num": 0}
+
+def check_user_approved_status_db(chat_id):
+    """
+    בדיקת סטטוס אישור משתמש במסד נתונים
+    
+    :param chat_id: מזהה צ'אט
+    :return: {"status": "approved"/"pending"/"not_found"}
+    """
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT code_approve, approved 
+            FROM user_profiles 
+            WHERE chat_id = %s
+        """, (str(chat_id),))
+        
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not row:
+            return {"status": "not_found"}
+        
+        code_approve, approved = row
+        
+        if not code_approve:
+            # משתמש קיים אבל אין לו קוד (שורה זמנית)
+            return {"status": "pending"}
+        
+        if approved:
+            return {"status": "approved"}
+        else:
+            return {"status": "pending"}
+            
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ [DB] שגיאה ב-check_user_approved_status_db: {e}")
+        return {"status": "error"}
+
+def increment_code_try_db_new(chat_id):
+    """
+    מגדיל מונה ניסיונות קוד במסד נתונים (לפי הלוגיקה החדשה)
+    
+    :param chat_id: מזהה צ'אט
+    :return: int (מספר הניסיון החדש)
+    """
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            UPDATE user_profiles 
+            SET code_try = code_try + 1, updated_at = %s 
+            WHERE chat_id = %s
+        """, (datetime.utcnow(), str(chat_id)))
+        
+        if cur.rowcount == 0:
+            # אין שורה כזאת - יוצר שורה זמנית עם code_try=1
+            cur.execute("""
+                INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
+                VALUES (%s, 1, FALSE, %s)
+            """, (str(chat_id), datetime.utcnow()))
+            new_attempt = 1
+        else:
+            # קבלת הערך החדש
+            cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            result = cur.fetchone()
+            new_attempt = result[0] if result else 1
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if should_log_debug_prints():
+            print(f"🔢 [DB] increment_code_try_db_new: {chat_id} -> {new_attempt}")
+        
+        return new_attempt
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ [DB] שגיאה ב-increment_code_try_db_new: {e}")
+        return 1
+
+def approve_user_db_new(chat_id):
+    """
+    מאשר משתמש במסד נתונים (עדכון approved=TRUE) - הגרסה החדשה
+    
+    :param chat_id: מזהה צ'אט
+    :return: {"success": bool}
+    """
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        cur.execute("""
+            UPDATE user_profiles 
+            SET approved = TRUE, updated_at = %s 
+            WHERE chat_id = %s AND code_approve IS NOT NULL
+        """, (datetime.utcnow(), str(chat_id)))
+        
+        success = cur.rowcount > 0
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if should_log_debug_prints():
+            print(f"✅ [DB] approve_user_db_new: {chat_id} -> success={success}")
+        
+        return {"success": success}
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ [DB] שגיאה ב-approve_user_db_new: {e}")
+        return {"success": False}
+
+# === נקודת הכניסה לפונקציות המדריך ===

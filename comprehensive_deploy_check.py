@@ -558,10 +558,10 @@ class ComprehensiveDeployChecker:
                 queue_position=1
             )
             
-            if test_session.max_allowed_time != 45.0:
-                errors.append(f"❌ timeout לא נכון: {test_session.max_allowed_time} (צריך להיות 45.0)")
+            if test_session.max_allowed_time != 50.0:
+                errors.append(f"❌ timeout לא נכון: {test_session.max_allowed_time} (צריך להיות 50.0)")
             else:
-                print("✅ timeout מוגדר נכון: 45.0 שניות")
+                print("✅ timeout מוגדר נכון: 50.0 שניות")
             
             # בדיקת is_timeout
             if test_session.is_timeout():

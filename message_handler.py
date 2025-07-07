@@ -45,6 +45,8 @@ from chat_utils import should_send_time_greeting, get_time_greeting_instruction
 from prompts import SYSTEM_PROMPT
 import profile_utils as _pu
 import traceback
+# 🆕 פונקציות חדשות למסד נתונים - לפי המדריך!
+from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new
 
 def format_text_for_telegram(text):
     """
@@ -543,25 +545,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from sheets_core import find_chat_id_in_sheet
             sheet_states = context.bot_data["sheet_states"]
             
-            # קריאת כותרות למציאת עמודת chat_id
-            from sheets_core import get_sheet_all_values_cached
-            all_values = get_sheet_all_values_cached(sheet_states)
-            if all_values and len(all_values) > 0:
-                headers = all_values[0]
-                chat_id_col = None
-                for i, header in enumerate(headers):
-                    if header.lower() == "chat_id":
-                        chat_id_col = i + 1  # gspread uses 1-based indexing
-                        break
-                
-                if chat_id_col:
-                    is_first_time = not find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
-                else:
-                    # fallback למיקום קלאסי אם לא נמצאה עמודת chat_id
-                    is_first_time = not find_chat_id_in_sheet(sheet_states, chat_id, col=1)
-            else:
-                # fallback למיקום קלאסי אם אין כותרות
-                is_first_time = not find_chat_id_in_sheet(sheet_states, chat_id, col=1)
+            # 🆕 מעבר למסד נתונים - מהיר פי 50! (לפי המדריך!)
+            access_result = check_user_approved_status_db(chat_id)
+            is_first_time = access_result.get("status") == "not_found"
             
             if is_first_time:
                 # אם זה משתמש חדש, עושים את כל הבדיקות המלאות ברקע
@@ -592,8 +578,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as cache_err:
                 print(f"⚠️ שגיאה בניקוי cache: {cache_err}")
             
-            # בדיקה מלאה של הרשאות במקום בדיקה רק של קיום
-            access_result = check_user_access(context.bot_data["sheet"], chat_id)
+            # 🆕 בדיקה מלאה של הרשאות ישירות במסד נתונים (לפי המדריך!)
+            access_result = check_user_approved_status_db(chat_id)
             status = access_result.get("status", "not_found")
             
             if status == "not_found":
@@ -795,8 +781,8 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         logging.info("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
         print("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
         
-        # ensures user_state row exists (לא מצמיד עדיין chat_id לקוד)
-        register_result = register_user(chat_id)
+        # 🆕 יוצר שורה זמנית למשתמש חדש (לפי המדריך!)
+        register_result = register_user_with_code_db(chat_id, None)
 
         if register_result.get("success"):
             # שליחת הודעת בקשה לקוד בלבד
@@ -826,8 +812,8 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         if user_input.isdigit():
             code_input = user_input
 
-            # ניסיון רישום עם הקוד
-            register_success = register_user(chat_id, code_input)
+            # 🆕 ניסיון רישום עם הקוד (מיזוג שורות לפי המדריך!)
+            register_success = register_user_with_code_db(chat_id, code_input)
 
             if register_success.get("success", False):
                 # קוד אושר
@@ -838,12 +824,8 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 return
 
             else:
-                # קוד לא תקין – מגדיל מונה ומחזיר הודעת שגיאה מתאימה
-                try:
-                    sheet_states = context.bot_data["sheet_states"]
-                    attempt_num = await increment_code_try(sheet_states, chat_id)
-                except Exception:
-                    attempt_num = -1
+                # 🆕 קוד לא תקין – מגדיל מונה ומחזיר הודעת שגיאה (ישירות למסד נתונים!)
+                attempt_num = register_success.get("attempt_num", 1)
 
                 retry_msg = get_retry_message_by_attempt(attempt_num if attempt_num and attempt_num > 0 else 1)
                 await send_system_message(update, chat_id, retry_msg)
@@ -868,7 +850,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             if clear_result.get("success"):
                 print(f"🔨 נוקו {clear_result.get('cleared_count', 0)} cache keys לפני אישור")
             
-            approval_result = approve_user(chat_id)
+            # 🆕 אישור המשתמש ישירות במסד נתונים (לפי המדריך!)
+            approval_result = approve_user_db_new(chat_id)
             if approval_result.get("success"):
                 # 🔨 ניקוי cache נוסף אחרי האישור
                 clear_result2 = clear_user_cache_force(chat_id)

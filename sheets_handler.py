@@ -19,7 +19,7 @@ from sheets_advanced import (
 # ייבואים נוספים נדרשים
 import asyncio
 import logging
-from config import SUMMARY_FIELD, setup_google_sheets, should_log_sheets_debug
+from config import SUMMARY_FIELD, setup_google_sheets, should_log_sheets_debug, safe_print
 from messages import new_user_admin_message
 from notifications import send_error_notification
 try:
@@ -46,7 +46,7 @@ sheet_users = sheet_users
 sheet_log = sheet_log
 sheet_states = sheet_states
 
-print("✅ sheets_handler.py טען בהצלחה עם אריכטקטורה חדשה!")
+safe_print("✅ sheets_handler.py טען בהצלחה עם אריכטקטורה חדשה!")
 
 # -----------------------------------------------------
 # עטיפות תאימות (Backward-compatibility wrappers)

@@ -31,6 +31,24 @@ import time
 import logging
 from typing import Optional
 
+# Helper function to handle encoding issues in Windows/CI environments
+def safe_print(message, fallback_prefix="[CONFIG]"):
+    """
+    Print message safely, handling encoding issues in Windows/CI environments.
+    If encoding fails, prints a simplified ASCII version.
+    """
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        # Fallback for Windows with cp1255 or other problematic encodings
+        # Remove emojis and problematic Unicode characters
+        import re
+        clean_message = re.sub(r'[^\x00-\x7F]+', '', str(message))
+        print(f"{fallback_prefix} {clean_message}")
+    except Exception:
+        # Ultimate fallback
+        print(f"{fallback_prefix} <message with encoding issues>")
+
 # זיהוי סביבת CI/CD לפני imports חיצוניים
 IS_CI_ENVIRONMENT = any([
     os.getenv("GITHUB_ACTIONS"),
@@ -74,7 +92,7 @@ if not IS_CI_ENVIRONMENT:
             SYSTEM_PROMPT = "dummy system prompt"
 else:
     # סביבת CI - dummy imports
-    print("🔧 CI environment detected - using dummy modules")
+    print("[CI] CI environment detected - using dummy modules")
     class DummyModule:
         def __getattr__(self, name):
             return lambda *args, **kwargs: None
@@ -271,10 +289,10 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 GEMINI_API_KEY = config.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
-    print(f"✅ [CONFIG] Google AI Studio (Gemini) API Key configured")
+    safe_print(f"✅ [CONFIG] Google AI Studio (Gemini) API Key configured")
     print(f"   Key prefix: {_mask_sensitive(GEMINI_API_KEY, 5)}")  # 🔒 הפחתה ל-5 תווים לבטיחות
 else:
-    print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
+    safe_print("⚠️ [CONFIG] אזהרה: GEMINI_API_KEY לא נמצא בקונפיגורציה.")
 
 # 🚀 הגדרות Render לשחזור לוגים
 RENDER_CONFIG = {
@@ -285,16 +303,16 @@ RENDER_CONFIG = {
 
 # בדיקת תקינות פרטי Render
 if RENDER_CONFIG["API_KEY"]:
-    print(f"✅ [CONFIG] Render API Key configured")
+    safe_print(f"✅ [CONFIG] Render API Key configured")
     print(f"   Key prefix: {_mask_sensitive(RENDER_CONFIG['API_KEY'], 5)}")
 else:
-    print("⚠️ [CONFIG] אזהרה: RENDER_API_KEY לא נמצא בקונפיגורציה.")
+    safe_print("⚠️ [CONFIG] אזהרה: RENDER_API_KEY לא נמצא בקונפיגורציה.")
 
 if RENDER_CONFIG["SERVICE_ID"]:
-    print(f"✅ [CONFIG] Render Service ID configured")
+    safe_print(f"✅ [CONFIG] Render Service ID configured")
     print(f"   Service ID: {_mask_sensitive(RENDER_CONFIG['SERVICE_ID'], 8)}")
 else:
-    print("⚠️ [CONFIG] אזהרה: RENDER_SERVICE_ID לא נמצא בקונפיגורציה.")
+    safe_print("⚠️ [CONFIG] אזהרה: RENDER_SERVICE_ID לא נמצא בקונפיגורציה.")
 
 # 🎯 הגדרות מודלים
 FREE_MODELS = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
@@ -408,9 +426,9 @@ def setup_google_sheets():
                 from sheets_core import ensure_name_column_exists
                 ensure_name_column_exists(sheet_users)
                 ensure_name_column_exists(sheet_states)
-                print(f"[DEBUG] ✅ Ensured 'name' column exists in sheets")
+                safe_print(f"[DEBUG] ✅ Ensured 'name' column exists in sheets")
             except Exception as e:
-                print(f"[DEBUG] ⚠️ Warning: Could not ensure 'name' column: {e}")
+                safe_print(f"[DEBUG] ⚠️ Warning: Could not ensure 'name' column: {e}")
             
             # שמירה ב-cache עם timestamp
             _sheets_cache = (gs_client, sheet_users, sheet_log, sheet_states)
@@ -488,9 +506,9 @@ def check_config_sanity():
         if not val or (isinstance(val, str) and not val.strip()):
             missing.append(key)
     if missing:
-        print(f"❌ [CONFIG] חסרים משתני קונפיגורציה קריטיים: {missing}")
+        safe_print(f"❌ [CONFIG] חסרים משתני קונפיגורציה קריטיים: {missing}")
     else:
-        print("✅ [CONFIG] כל משתני הקונפיגורציה הקריטיים קיימים.")
+        safe_print("✅ [CONFIG] כל משתני הקונפיגורציה הקריטיים קיימים.")
 
 def get_config_snapshot():
     """
@@ -567,7 +585,7 @@ MAX_TRACEBACK_LENGTH = 500   # אורך מקסימלי של traceback בהודע
 PRODUCTION_PORT = int(os.getenv("PORT", 8000))     # פורט דינמי מהפלטפורמה או 8000
 DEVELOPMENT_PORT = 10000     # פורט לסביבת פיתוח
 
-print(f"🔧 [CONFIG] פורט שרת: {PRODUCTION_PORT} (מקור: {'משתנה סביבה PORT' if os.getenv('PORT') else 'ברירת מחדל 8000'})")
+safe_print(f"🔧 [CONFIG] פורט שרת: {PRODUCTION_PORT} (מקור: {'משתנה סביבה PORT' if os.getenv('PORT') else 'ברירת מחדל 8000'})")
 
 MODEL_ROUTES = {
     # ========= מקרא =========

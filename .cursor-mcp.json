@@ -1,0 +1,55 @@
+{
+  "tools": [
+    {
+      "name": "run_query",
+      "path": "db_tool.py",
+      "description": "Execute read-only SQL SELECT queries on the production PostgreSQL database. Returns results as JSON. Only SELECT statements are allowed for security. Use this to analyze real user data, check database contents, and perform live data exploration.",
+      "parameters": {
+        "query": {
+          "type": "string", 
+          "description": "SQL SELECT query to execute. Must start with SELECT. No INSERT/UPDATE/DELETE allowed."
+        }
+      }
+    },
+    {
+      "name": "query_user_profiles", 
+      "path": "db_tool.py",
+      "description": "Quick query to get recent user profiles from the database",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "Number of records to return (default: 10)",
+          "default": 10
+        }
+      }
+    },
+    {
+      "name": "query_recent_messages",
+      "path": "db_tool.py", 
+      "description": "Quick query to get recent chat messages from the database",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "Number of messages to return (default: 10)", 
+          "default": 10
+        }
+      }
+    },
+    {
+      "name": "query_table_info",
+      "path": "db_tool.py",
+      "description": "Get information about table structure and columns",
+      "parameters": {
+        "table_name": {
+          "type": "string",
+          "description": "Name of the table to inspect"
+        }
+      }
+    },
+    {
+      "name": "test_connection",
+      "path": "db_tool.py", 
+      "description": "Test database connection and return current time + PostgreSQL version"
+    }
+  ]
+} 
