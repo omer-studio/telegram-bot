@@ -45,6 +45,18 @@ _critical_data_cache = {}  # Cache לנתונים קריטיים (פרופיל �
 _critical_cache_timestamps = {}
 CRITICAL_CACHE_DURATION_SECONDS = 3600  # שעה cache לנתונים קריטיים (הוגדל מ-30 דקות לטיפול בניקוי תכוף)
 
+# ================================
+# 🎯 Cache מתקדם לגיליונות (פתרון מכסת API)
+# ================================
+
+_sheets_data_cache = {}  # Cache לכל הנתונים של הגיליונות 
+_sheets_cache_timestamps = {}  # זמני יצירת Cache לגיליונות
+SHEETS_CACHE_DURATION = 300  # 5 דקות cache לנתוני גיליונות (אגרסיבי לחיסכון במכסת API)
+
+# Rate Limiting לקריאות API
+_api_rate_limit = 50  # מקסימום 50 קריאות לדקה (פחות מ-60 לבטיחות)
+_rate_limit_warnings_sent = set()  # למניעת התראות כפולות
+
 # ===================================
 # 📊 מונה קריאות Google Sheets API
 # ===================================
@@ -52,9 +64,32 @@ CRITICAL_CACHE_DURATION_SECONDS = 3600  # שעה cache לנתונים קריטי
 _api_calls_count = 0  # מונה קריאות כולל
 _api_calls_per_minute = {}  # מונה קריאות לפי דקה
 
+def _check_rate_limit():
+    """בודק את מכסת הקריאות ומחזיר True אם ניתן לבצע קריאה נוספת"""
+    current_minute = int(time.time() / 60)
+    calls_this_minute = _api_calls_per_minute.get(current_minute, 0)
+    
+    if calls_this_minute >= _api_rate_limit:
+        # התראה על חריגה מהמכסה
+        minute_key = str(current_minute)
+        if minute_key not in _rate_limit_warnings_sent:
+            from notifications import send_error_notification
+            send_error_notification(f"🚨 Google Sheets API Rate Limit: {calls_this_minute}/{_api_rate_limit} calls this minute")
+            _rate_limit_warnings_sent.add(minute_key)
+            debug_log(f"🚨 RATE LIMIT HIT: {calls_this_minute}/{_api_rate_limit} calls this minute")
+        return False
+    
+    return True
+
 def _increment_api_call():
-    """מספר קריאה ל-Google Sheets API"""
+    """מספר קריאה ל-Google Sheets API עם בדיקת rate limiting"""
     global _api_calls_count
+    
+    # בדיקת rate limit לפני ביצוע הקריאה
+    if not _check_rate_limit():
+        # מעדיף לא לכשל הקריאה, אבל מתרה
+        debug_log("🚨 Rate limit exceeded - continuing but should be careful")
+    
     _api_calls_count += 1
     
     # מונה לפי דקה
@@ -69,6 +104,11 @@ def _increment_api_call():
     for key in keys_to_remove:
         del _api_calls_per_minute[key]
     
+    # ניקוי התראות ישנות
+    rate_limit_keys_to_remove = [key for key in _rate_limit_warnings_sent if int(key) < current_minute - 1]
+    for key in rate_limit_keys_to_remove:
+        _rate_limit_warnings_sent.discard(key)
+    
     # 💾 שמירת מטריקות API למסד הנתונים
     try:
         from db_manager import save_system_metrics
@@ -80,14 +120,16 @@ def _increment_api_call():
             additional_data={
                 "api_endpoint": "google_sheets",
                 "minute_key": minute_key,
-                "total_calls_this_minute": current_calls
+                "total_calls_this_minute": current_calls,
+                "rate_limit": _api_rate_limit,
+                "rate_limit_hit": current_calls >= _api_rate_limit
             }
         )
     except Exception as save_err:
         pass  # לא נכשיל בגלל שגיאה בשמירת מטריקות
     
     if should_log_sheets_debug():
-        debug_log(f"🔍 API call #{_api_calls_per_minute[minute_key]} (this minute: {current_calls})")
+        debug_log(f"🔍 API call #{current_calls}/{_api_rate_limit} (this minute)")
 
 def get_api_stats():
     """מחזיר סטטיסטיקות של קריאות API"""
@@ -141,6 +183,81 @@ def _set_critical_cache(cache_key: str, data):
     _critical_data_cache[cache_key] = data
     _critical_cache_timestamps[cache_key] = time.time()
     debug_log(f"📤 Critical Cache SET: {cache_key}")
+
+# ================================
+# 🎯 Cache מתקדם לנתוני גיליונות (פתרון מכסת API)
+# ================================
+
+def _get_sheet_cache_key(sheet_title: str, operation: str = "all_values"):
+    """יוצר מפתח cache לגיליון"""
+    return f"sheet_data:{sheet_title}:{operation}"
+
+def _is_sheets_cache_valid(cache_key: str) -> bool:
+    """בודק אם cache הגיליון עדיין תקף"""
+    if cache_key not in _sheets_cache_timestamps:
+        return False
+    
+    age = time.time() - _sheets_cache_timestamps[cache_key]
+    return age < SHEETS_CACHE_DURATION
+
+def _get_from_sheets_cache(cache_key: str):
+    """מחזיר נתוני גיליון מ-cache אם תקפים"""
+    if _is_sheets_cache_valid(cache_key):
+        debug_log(f"📥 Sheets Cache HIT: {cache_key}")
+        return _sheets_data_cache.get(cache_key)
+    debug_log(f"📥 Sheets Cache MISS: {cache_key}")
+    return None
+
+def _set_sheets_cache(cache_key: str, data):
+    """שומר נתוני גיליון ב-cache"""
+    _sheets_data_cache[cache_key] = data
+    _sheets_cache_timestamps[cache_key] = time.time()
+    debug_log(f"📤 Sheets Cache SET: {cache_key} ({len(data) if isinstance(data, list) else 'data'} items)")
+
+def get_sheet_all_values_cached(sheet) -> List[List[str]]:
+    """
+    מחליף את get_all_values() עם cache מתקדם
+    זה הפתרון המרכזי לבעיית מכסת ה-API!
+    """
+    if not sheet:
+        return []
+        
+    cache_key = _get_sheet_cache_key(sheet.title, "all_values")
+    
+    # בדיקת cache קודם
+    cached_data = _get_from_sheets_cache(cache_key)
+    if cached_data is not None:
+        return cached_data
+    
+    # אם אין ב-cache - קריאה מהשיטס (רק אם מותר לפי rate limit)
+    if not _check_rate_limit():
+        # אם חרגנו מהמכסה - מחזירים cache ישן או ריק
+        debug_log(f"🚨 Rate limit hit - returning empty data for {sheet.title}")
+        return []
+    
+    try:
+        _increment_api_call()
+        all_values = sheet.get_all_values()
+        
+        # שמירה ב-cache
+        _set_sheets_cache(cache_key, all_values)
+        return all_values
+        
+    except Exception as e:
+        debug_log(f"❌ Error reading sheet {sheet.title}: {e}")
+        if "quota" in str(e).lower() or "limit" in str(e).lower():
+            from notifications import send_error_notification
+            send_error_notification(f"🚨 Google Sheets API Quota Error: {e}")
+        return []
+
+def invalidate_sheet_cache(sheet_title: str):
+    """מבטל cache של גיליון ספציפי (לשימוש אחרי עדכונים)"""
+    cache_key = _get_sheet_cache_key(sheet_title, "all_values")
+    if cache_key in _sheets_data_cache:
+        del _sheets_data_cache[cache_key]
+        debug_log(f"🗑️ Invalidated sheet cache: {sheet_title}")
+    if cache_key in _sheets_cache_timestamps:
+        del _sheets_cache_timestamps[cache_key]
 
 def _clear_user_cache(chat_id: str):
     """מנקה cache של משתמש ספציפי (למשל אחרי עדכון)"""
@@ -359,9 +476,8 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         if cached_access is not None:
             return cached_access
         
-        # קריאת כל הנתונים מהגיליון
-        _increment_api_call()
-        all_values = sheet.get_all_values()
+        # קריאת כל הנתונים מהגיליון (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet)
         
         if not all_values or len(all_values) < 2:
             result = {"status": "not_found", "code": None}
@@ -428,9 +544,8 @@ def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
         
-        # קריאת כל הנתונים כולל כותרות
-        _increment_api_call()
-        all_values = sheet_states.get_all_values()
+        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet_states)
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")
@@ -503,9 +618,8 @@ def register_user(sheet, chat_id: str, code_input: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
         
-        # קריאת כל הנתונים מהגיליון
-        _increment_api_call()
-        all_values = sheet.get_all_values()
+        # קריאת כל הנתונים מהגיליון (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet)
         
         if not all_values or len(all_values) < 2:
             debug_log(f"Sheet is empty or has no data rows")
@@ -563,9 +677,8 @@ def approve_user(sheet, chat_id: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
         
-        # קריאת כל הנתונים מהגיליון
-        _increment_api_call()
-        all_values = sheet.get_all_values()
+        # קריאת כל הנתונים מהגיליון (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet)
         
         if not all_values or len(all_values) < 2:
             debug_log(f"Sheet is empty or has no data rows")
@@ -631,9 +744,8 @@ def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
             debug_log(f"Unknown sheet name: {sheet_name}")
             return False
         
-        # קריאת כל הנתונים כולל כותרות
-        _increment_api_call()
-        all_values = sheet.get_all_values()
+        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet)
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")
@@ -688,9 +800,8 @@ def get_user_state(chat_id: str) -> Dict[str, Any]:
             debug_log("sheet_states is None", chat_id=chat_id)
             return {}
         
-        # קריאת כל הנתונים כולל כותרות
-        _increment_api_call()
-        all_values = sheet_states.get_all_values()
+        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet_states)
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")
@@ -784,9 +895,8 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
             debug_log("sheet_states is None", chat_id=chat_id)
             return False
         
-        # קריאת כל הנתונים כולל כותרות
-        _increment_api_call()
-        all_values = sheet_states.get_all_values()
+        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet_states)
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")
@@ -849,6 +959,10 @@ def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
         # מחיקת cache אחרי עדכון
         _clear_user_cache(chat_id)
         
+        # ביטול cache הגיליון כי היו עדכונים
+        if updated_fields:
+            invalidate_sheet_cache(sheet_states.title)
+        
         debug_log(f"Updated {len(updated_fields)} fields for user {chat_id}: {updated_fields}")
         return len(updated_fields) > 0
         
@@ -865,9 +979,8 @@ def increment_code_try_sync(sheet_states, chat_id: str) -> int:
     try:
         chat_id = validate_chat_id(chat_id)
 
-        # קריאת כל הנתונים כולל כותרות
-        _increment_api_call()
-        all_values = sheet_states.get_all_values()
+        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet_states)
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")
@@ -1166,9 +1279,8 @@ def ensure_column_exists(sheet, column_name: str) -> bool:
     מחזיר True אם העמודה קיימת או נוספה בהצלחה
     """
     try:
-        # קריאת הכותרות
-        _increment_api_call()
-        all_values = sheet.get_all_values()
+        # קריאת הכותרות (עם cache מתקדם)
+        all_values = get_sheet_all_values_cached(sheet)
         
         if not all_values or len(all_values) < 1:
             debug_log("Sheet is empty or has no headers")

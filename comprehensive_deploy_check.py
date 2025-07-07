@@ -482,7 +482,8 @@ class ComprehensiveDeployChecker:
             
             # בדיקת קריאה מהגיליון
             print("🔍 בודק קריאה מהגיליון...")
-            all_values = sheet_log.get_all_values()
+            from sheets_core import get_sheet_all_values_cached
+            all_values = get_sheet_all_values_cached(sheet_log)
             # מציאת אינדקסים של העמודות
             msgid_col = headers.index("message_id")
             chatid_col = headers.index("chat_id")

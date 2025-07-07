@@ -55,7 +55,7 @@ class UserSession:
     message_id: str
     stage: str  # "queued", "processing", "gpt_a", "background", "completed"
     queue_position: int  # FIFO position
-    max_allowed_time: float = 45.0  # 🔧 תיקון: הגדלה ל-45 שניות במקום 30
+    max_allowed_time: float = 50.0  # 🔧 תיקון: הגדלה ל-50 שניות (5 שניות יותר מ-GPT timeout)
     
     def is_timeout(self) -> bool:
         """בדיקה אם הסשן עבר timeout"""
@@ -155,7 +155,7 @@ class ConcurrentMonitor:
     
     עקרונות פעולה:
     1. FIFO: כל משתמש מקבל מספר בתור לפי סדר הגעה
-    2. Timeout Protection: סשנים לא יכולים לרוץ יותר מ-30 שניות
+    2. Timeout Protection: סשנים לא יכולים לרוץ יותר מ-50 שניות (GPT timeout + 5s buffer)
     3. Circuit Breaker: בעומס גבוה - דחיית בקשות חדשות
     4. Auto Recovery: ניקוי אוטומטי של סשנים תקועים
     5. Memory Protection: מגבלות על שמירת היסטוריה
@@ -430,7 +430,7 @@ class ConcurrentMonitor:
                             "chat_id": "System",  # זה ניקוי מערכת, לא משתמש ספציפי
                             "count": len(stale_sessions),
                             "sessions": session_details,
-                            "duration": "45s timeout exceeded",
+                            "duration": "50s timeout exceeded",  # 🔧 עדכון לזמן החדש
                             "details": f"Sessions: {', '.join(session_details)}"
                         })
                     except Exception as e:

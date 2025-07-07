@@ -91,7 +91,8 @@ def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
 async def _sync_to_sheet_by_headers(sheet, chat_id: str, local_profile: Dict[str, Any]):
     """Synchronise fields by header names (not by fixed column indices)."""
     try:
-        all_values = sheet.get_all_values()
+        from sheets_core import get_sheet_all_values_cached
+        all_values = get_sheet_all_values_cached(sheet)
         if not all_values:
             logging.warning("גיליון ריק או ללא כותרות")
             return
@@ -159,7 +160,8 @@ def _sync_local_to_sheets_sync(chat_id: str):
 def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str, Any]):
     """Synchronous version of _sync_to_sheet_by_headers."""
     try:
-        all_values = sheet.get_all_values()
+        from sheets_core import get_sheet_all_values_cached
+        all_values = get_sheet_all_values_cached(sheet)
         if not all_values:
             logging.warning("גיליון ריק או ללא כותרות")
             return

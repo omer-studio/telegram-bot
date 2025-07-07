@@ -652,16 +652,17 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
     
     use_extra_emotion, filter_reason, match_type = should_use_extra_emotion_model(user_message, chat_history_length)
     
-    # שלב 2: הפעלת GPT ב-thread נפרד
+    # שלב 2: הפעלת GPT ב-thread נפרד עם timeout אמיתי
     gpt_start_time = time.time()
     
     try:
         # 🚨 הגדלת timeout ל-45 שניות (במקום 30) לטיפול ב-latency גבוה
         GPT_TIMEOUT_SECONDS = 45
         
+        # 🔧 תיקון קריטי: יישום timeout אמיתי במקום רק הגדרה
         # הרצת GPT ב-thread עם timeout מתקדם
         loop = asyncio.get_event_loop()
-        gpt_result = loop.run_in_executor(
+        gpt_task = loop.run_in_executor(
             None, 
             get_main_response_sync, 
             full_messages, 
@@ -671,6 +672,9 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
             filter_reason,
             match_type
         )
+        
+        # יישום timeout אמיתי עם asyncio.wait_for
+        gpt_result = await asyncio.wait_for(gpt_task, timeout=GPT_TIMEOUT_SECONDS)
         
         gpt_duration = time.time() - gpt_start_time
         logging.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")

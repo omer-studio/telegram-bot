@@ -544,7 +544,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sheet_states = context.bot_data["sheet_states"]
             
             # קריאת כותרות למציאת עמודת chat_id
-            all_values = sheet_states.get_all_values()
+            from sheets_core import get_sheet_all_values_cached
+            all_values = get_sheet_all_values_cached(sheet_states)
             if all_values and len(all_values) > 0:
                 headers = all_values[0]
                 chat_id_col = None
