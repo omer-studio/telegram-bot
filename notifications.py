@@ -653,6 +653,11 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         if git_commit_msg not in ["🤷🏼", None, "None"]:
             fields.append(f"📝 שם קומיט: {git_commit_msg}")
         fields.append("\nלפרטים נוספים בדוק את הלוגים ב-Render.")
+        
+        # הוספת מידע על מסד הנתונים
+        db_info = get_database_table_counts()
+        fields.append(f"\n{db_info}")
+        
         text = "אדמין יקר - ✅פריסה הצליחה והבוט שלך רץ !! איזה כיף !! 🚀\n\n" + "\n".join(fields)
         if debug_env:
             text += debug_env
@@ -1768,5 +1773,123 @@ def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition
         print(error_msg)
         send_admin_notification(error_msg, urgent=True)
         return False
+
+def get_database_table_counts():
+    """מקבל מידע על מספר השורות בכל טבלה במסד הנתונים עם השוואה לפריסה הקודמת"""
+    try:
+        import psycopg2
+        import json
+        import os
+        from config import config
+        
+        db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+        if not db_url:
+            return "❌ לא נמצא חיבור למסד הנתונים"
+        
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        
+        # קבלת רשימת כל הטבלאות
+        cur.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name;
+        """)
+        
+        tables = [row[0] for row in cur.fetchall()]
+        
+        # קבלת מספר השורות בכל טבלה
+        table_counts = {}
+        for table in tables:
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {table}")
+                count = cur.fetchone()[0]
+                table_counts[table] = count
+            except Exception as e:
+                table_counts[table] = f"שגיאה: {str(e)[:50]}"
+        
+        cur.close()
+        conn.close()
+        
+        # טעינת נתונים מהפריסה הקודמת
+        previous_counts = {}
+        try:
+            db_stats_file = "data/last_db_stats.json"
+            if os.path.exists(db_stats_file):
+                with open(db_stats_file, 'r', encoding='utf-8') as f:
+                    previous_counts = json.load(f)
+        except Exception:
+            pass
+        
+        # חישוב השינויים
+        changes = {}
+        for table, current_count in table_counts.items():
+            if isinstance(current_count, int) and table in previous_counts:
+                previous_count = previous_counts[table]
+                change = current_count - previous_count
+                if change != 0:  # רק שינויים
+                    changes[table] = {
+                        'current': current_count,
+                        'previous': previous_count,
+                        'change': change,
+                        'change_percent': (change / previous_count * 100) if previous_count > 0 else 0
+                    }
+        
+        # שמירת הנתונים הנוכחיים לפריסה הבאה
+        try:
+            os.makedirs(os.path.dirname(db_stats_file), exist_ok=True)
+            with open(db_stats_file, 'w', encoding='utf-8') as f:
+                json.dump(table_counts, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        
+        # יצירת הודעה מפורמטת
+        if not table_counts:
+            return "❌ לא נמצאו טבלאות במסד הנתונים"
+        
+        message = "📊 **סטטוס מסד הנתונים:**\n"
+        total_rows = 0
+        
+        # מיון לפי שינוי (הכי גדול קודם)
+        sorted_tables = []
+        for table, count in table_counts.items():
+            if isinstance(count, int):
+                total_rows += count
+                change_info = ""
+                if table in changes:
+                    change = changes[table]
+                    change_sign = "+" if change['change'] > 0 else ""
+                    change_info = f" ({change_sign}{change['change']:+d})"
+                sorted_tables.append((table, count, change_info, abs(changes.get(table, {}).get('change', 0))))
+            else:
+                sorted_tables.append((table, count, "", 0))
+        
+        # מיון לפי גודל השינוי (הכי גדול קודם)
+        sorted_tables.sort(key=lambda x: x[3], reverse=True)
+        
+        for table, count, change_info, _ in sorted_tables:
+            if isinstance(count, int):
+                message += f"• {table}: {count:,} שורות{change_info}\n"
+            else:
+                message += f"• {table}: {count}\n"
+        
+        # חישוב שינוי כללי
+        total_change = 0
+        if previous_counts:
+            previous_total = sum(count for count in previous_counts.values() if isinstance(count, int))
+            total_change = total_rows - previous_total
+            if total_change != 0:
+                change_sign = "+" if total_change > 0 else ""
+                message += f"\n📈 **סה״כ שורות:** {total_rows:,} ({change_sign}{total_change:+d})"
+            else:
+                message += f"\n📈 **סה״כ שורות:** {total_rows:,} (ללא שינוי)"
+        else:
+            message += f"\n📈 **סה״כ שורות:** {total_rows:,} (פריסה ראשונה)"
+        
+        return message
+        
+    except Exception as e:
+        return f"❌ שגיאה בקבלת מידע מסד הנתונים: {str(e)[:100]}"
 
 

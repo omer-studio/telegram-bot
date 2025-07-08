@@ -1,0 +1,9 @@
+{
+  "chat_id": "123456789",
+  "check_timestamp": "2025-07-07T23:52:53.187035",
+  "access_result": {
+    "status": "not_found",
+    "code": null
+  },
+  "cache_cleared": 0
+}

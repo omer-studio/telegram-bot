@@ -535,40 +535,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await end_monitoring_user(str(chat_id) if 'chat_id' in locals() else "unknown", False)
             return
 
-        # שלב 1: בדיקה מהירה אם זה משתמש חדש (רק ב-user_states)
-        try:
-            await update_user_processing_stage(str(chat_id), "onboarding_check")
-            logging.info("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
-            print("[Onboarding] בודק האם המשתמש פונה בפעם הראשונה בחייו...")
-            
-            # בדיקה מהירה רק ב-user_states - לפי כותרות
-            from sheets_core import find_chat_id_in_sheet
-            sheet_states = context.bot_data["sheet_states"]
-            
-            # 🆕 מעבר למסד נתונים - מהיר פי 50! (לפי המדריך!)
-            access_result = check_user_approved_status_db(chat_id)
-            is_first_time = access_result.get("status") == "not_found"
-            
-            if is_first_time:
-                # אם זה משתמש חדש, עושים את כל הבדיקות המלאות ברקע
-                asyncio.create_task(handle_new_user_background(update, context, chat_id, user_msg))
-                await end_monitoring_user(str(chat_id), True)
-                return
-            else:
-                logging.info("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
-                print("[Onboarding] המשתמש כבר התחיל או עבר תהליך רישום קודם.")
-        except Exception as ex:
-            logging.error(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
-            print(f"[Onboarding] ❌ שגיאה באתחול משתמש חדש: {ex}")
-            await handle_critical_error(ex, chat_id, user_msg, update)
-            await end_monitoring_user(str(chat_id), False)
-            return
-
-        # שלב 2: בדיקה מהירה של הרשאות - בדיקת קיום והרשאה
+        # שלב 1: בדיקה מהירה של הרשאות משתמש - לפי המדריך!
         try:
             await update_user_processing_stage(str(chat_id), "permission_check")
-            logging.info("🔍 בודק הרשאות משתמש מול הגיליון...")
-            print("🔍 בודק הרשאות משתמש מול הגיליון...")
+            logging.info("🔍 בודק הרשאות משתמש במסד נתונים...")
+            print("🔍 בודק הרשאות משתמש במסד נתונים...")
             
             # 🔨 ניקוי cache לפני בדיקת הרשאות (למקרה שהcache תקוע)
             try:
@@ -583,20 +554,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             status = access_result.get("status", "not_found")
             
             if status == "not_found":
-                # משתמש לא קיים - טיפול ברקע
+                # משתמש חדש לגמרי - שליחת 3 הודעות קבלת פנים
+                logging.info("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
+                print("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
+                asyncio.create_task(handle_new_user_background(update, context, chat_id, user_msg))
+                await end_monitoring_user(str(chat_id), True)
+                return
+                
+            elif status == "pending_code":
+                # משתמש קיים עם שורה זמנית - צריך קוד
+                logging.info("[Permissions] משתמש עם שורה זמנית - בקשת קוד")
+                print("[Permissions] משתמש עם שורה זמנית - בקשת קוד")
                 asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
                 await end_monitoring_user(str(chat_id), True)
                 return
                 
-            elif status == "pending":
-                # משתמש קיים אבל לא אישר תנאים - טיפול באישור
+            elif status == "pending_approval":
+                # משתמש קיים עם קוד אבל לא אישר תנאים - טיפול באישור
+                logging.info("[Permissions] משתמש ממתין לאישור תנאים")
+                print("[Permissions] משתמש ממתין לאישור תנאים")
                 asyncio.create_task(handle_pending_user_background(update, context, chat_id, user_msg))
                 await end_monitoring_user(str(chat_id), True)
                 return
                 
         except Exception as ex:
-            logging.error(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
-            print(f"❌ שגיאה בגישה לטבלת משתמשים: {ex}")
+            logging.error(f"❌ שגיאה בבדיקת הרשאות משתמש: {ex}")
+            print(f"❌ שגיאה בבדיקת הרשאות משתמש: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
             await end_monitoring_user(str(chat_id), False)
             return
@@ -775,20 +758,25 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
 
 async def handle_new_user_background(update, context, chat_id, user_msg):
     """
-    טיפול במשתמש חדש לגמרי ברקע
+    טיפול במשתמש חדש לגמרי ברקע - שליחת 3 הודעות קבלת פנים
     """
     try:
-        logging.info("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
-        print("[Onboarding] משתמש חדש - מתחיל תהליך רישום מלא")
+        logging.info("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
+        print("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
         
         # 🆕 יוצר שורה זמנית למשתמש חדש (לפי המדריך!)
         register_result = register_user_with_code_db(chat_id, None)
 
         if register_result.get("success"):
-            # שליחת הודעת בקשה לקוד בלבד
-            for msg in get_welcome_messages():
+            # שליחת 3 הודעות קבלת פנים למשתמש חדש
+            welcome_messages = get_welcome_messages()
+            for i, msg in enumerate(welcome_messages):
                 await send_system_message(update, chat_id, msg)
-                await asyncio.sleep(0.5)
+                if i < len(welcome_messages) - 1:  # לא לחכות אחרי ההודעה האחרונה
+                    await asyncio.sleep(0.5)
+            
+            logging.info(f"[Onboarding] נשלחו {len(welcome_messages)} הודעות קבלת פנים למשתמש {chat_id}")
+            print(f"[Onboarding] נשלחו {len(welcome_messages)} הודעות קבלת פנים למשתמש {chat_id}")
 
         else:
             error_msg = "מצטער, הייתה בעיה ברישום. אנא נסה שוב."
@@ -800,11 +788,12 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
 
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
     """
-    טיפול במשתמש לא רשום. מבקש קוד אישור, מוודא אותו ורק לאחר מכן שולח בקשת אישור תנאים.
+    טיפול במשתמש שיש לו שורה זמנית אבל לא נתן קוד נכון עדיין.
+    מבקש קוד אישור, מוודא אותו ורק לאחר מכן שולח בקשת אישור תנאים.
     """
     try:
-        logging.info("[Permissions] משתמש לא רשום - תהליך קבלת קוד")
-        print("[Permissions] משתמש לא רשום - תהליך קבלת קוד")
+        logging.info("[Permissions] משתמש עם שורה זמנית - תהליך קבלת קוד")
+        print("[Permissions] משתמש עם שורה זמנית - תהליך קבלת קוד")
 
         user_input = user_msg.strip()
 
@@ -816,7 +805,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
             register_success = register_user_with_code_db(chat_id, code_input)
 
             if register_success.get("success", False):
-                # קוד אושר
+                # קוד אושר - מיזוג השורות הצליח
                 await send_system_message(update, chat_id, code_approved_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
 
                 # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
@@ -859,11 +848,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                     print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
                 
                 await send_system_message(update, chat_id, full_access_message())
+                # שליחת מקלדת "אהלן" עם one_time_keyboard כדי שתיעלם מיד
+                from telegram import ReplyKeyboardMarkup
                 await send_system_message(
                     update,
                     chat_id,
                     nice_keyboard_message(),
-                    reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True)
+                    reply_markup=ReplyKeyboardMarkup(
+                        [["אהלן"]],
+                        one_time_keyboard=True,
+                        resize_keyboard=True
+                    )
                 )
             else:
                 await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
@@ -1089,7 +1084,18 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 # בניית מידע על השינויים
                 gpt_c_info = f"GPT-C: {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: אין שינויים"
                 gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות" if gpt_d_changes else "GPT-D: אין שינויים"
-                gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות" if gpt_e_changes else "GPT-E: אין שינויים"
+                
+                # ✅ הוספת קאונטר ל-GPT-E לפי הלוגיקה החדשה
+                try:
+                    from chat_utils import get_user_stats_and_history
+                    from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                    stats, _ = get_user_stats_and_history(chat_id)
+                    total_messages = stats.get("total_messages", 0)
+                    gpt_e_counter = f" ({total_messages}/{GPT_E_RUN_EVERY_MESSAGES})"
+                except:
+                    gpt_e_counter = ""
+                
+                gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות{gpt_e_counter}" if gpt_e_changes else f"GPT-E: אין שינויים{gpt_e_counter}"
                 
                 # יצירת סיכום מהיר
                 current_summary = get_user_summary_fast(chat_id) or ""

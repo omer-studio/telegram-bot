@@ -4,11 +4,16 @@ gpt_e_handler.py
 מנוע gpt_e: חידוד, תיקון והשלמת פרופיל רגשי על בסיס היסטוריה ופרופיל קיים.
 משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 
-- מופעל כל 25 ריצות gpt_c, או מעל 15 ריצות gpt_c אם עברו 24 שעות מאז הריצה האחרונה.
+- מופעל כל X הודעות משתמש (ניתן לשינוי בקלות).
+- סורק Y הודעות אחרונות (ניתן לשינוי בקלות).
 - מתמקד בעדכון הקונפליקט המרכזי (primary_conflict) ושדות נוספים לפי הצורך.
 - שולח ל-GPT את ההיסטוריה והפרופיל, מקבל שדות חדשים/מתוקנים בלבד.
 - מעדכן Google Sheets, user_state, ולוגים.
 """
+
+# ✅ קבועים נוחים לשינוי
+GPT_E_RUN_EVERY_MESSAGES = 10  # כל כמה הודעות להפעיל GPT-E
+GPT_E_SCAN_LAST_MESSAGES = 15  # כמה הודעות אחרונות לסרוק
 
 import logging
 import asyncio
@@ -28,31 +33,18 @@ from config import GPT_MODELS, GPT_PARAMS
 # הגדרת לוגר
 logger = logging.getLogger(__name__)
 
-def should_run_gpt_e(chat_id: str, gpt_c_run_count: int, last_gpt_e_timestamp: Optional[str]) -> bool:
+def should_run_gpt_e(chat_id: str, total_messages: int) -> bool:
     """
-    בודק האם צריך להפעיל את gpt_e לפי התנאים שהוגדרו.
+    בודק האם צריך להפעיל את gpt_e לפי מספר ההודעות.
     
     :param chat_id: מזהה המשתמש
-    :param gpt_c_run_count: מספר ריצות gpt_c מאז הפעם האחרונה ש-gpt_e רץ
-    :param last_gpt_e_timestamp: טיימסטמפ של הריצה האחרונה של gpt_e
+    :param total_messages: מספר ההודעות הכולל של המשתמש
     :return: True אם צריך להפעיל gpt_e, False אחרת
     """
-    # תנאי 1: הגענו ל-25 ריצות gpt_c
-    if gpt_c_run_count >= 25:
-        logger.info(f"[gpt_e] Triggering run - gpt_c_run_count >= 25 ({gpt_c_run_count})")
+    # ✅ לוגיקה פשוטה: כל X הודעות
+    if total_messages > 0 and total_messages % GPT_E_RUN_EVERY_MESSAGES == 0:
+        logger.info(f"[gpt_e] Triggering run - {total_messages} messages (every {GPT_E_RUN_EVERY_MESSAGES})")
         return True
-    
-    # תנאי 2: מעל 15 ריצות gpt_c ועברו 24 שעות מאז הריצה האחרונה
-    if gpt_c_run_count > 15 and last_gpt_e_timestamp:
-        try:
-            last_run = datetime.fromisoformat(last_gpt_e_timestamp.replace('Z', '+00:00'))
-            time_since_last_run = datetime.now(last_run.tzinfo) - last_run
-            
-            if time_since_last_run >= timedelta(hours=24):
-                logger.info(f"[gpt_e] Triggering run - {gpt_c_run_count} gpt_c runs and {time_since_last_run.total_seconds()/3600:.1f} hours since last run")
-                return True
-        except Exception as e:
-            logger.error(f"[gpt_e] Error parsing last_gpt_e_timestamp: {e}")
     
     return False
 
@@ -96,7 +88,7 @@ def prepare_gpt_e_prompt(chat_history: List[Dict], current_profile: str) -> str:
 מטרתך: לזהות מידע חדש, לתקן טעויות, ולחדד את הפרופיל הרגשי.
 דגש מיוחד על עדכון השדה "primary_conflict" - הקונפליקט המרכזי שעמו המשתמש מתמודד כרגע.
 
-היסטוריית השיחה (50 הודעות אחרונות):
+היסטוריית השיחה ({GPT_E_SCAN_LAST_MESSAGES} הודעות אחרונות):
 {json.dumps(formatted_history, ensure_ascii=False, indent=2)}
 
 פרופיל רגשי קיים:
@@ -144,7 +136,7 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
     try:
         # שלב 1: שליפת היסטוריית שיחה
         logger.info(f"[gpt_e] Fetching chat history for chat_id={chat_id}")
-        chat_history = get_chat_history_messages(chat_id, limit=15)
+        chat_history = get_chat_history_messages(chat_id, limit=GPT_E_SCAN_LAST_MESSAGES)
         
         if not chat_history:
             result['errors'].append("No chat history found")
@@ -379,16 +371,17 @@ def log_gpt_e_run(chat_id: str, result: Dict[str, Any]) -> None:
 
 async def execute_gpt_e_if_needed(chat_id: str) -> Optional[Dict[str, Any]]:
     """
-    בודק אם צריך להפעיל gpt_e (כל 10 הודעות משתמש) ומפעיל אם כן.
+    בודק אם צריך להפעיל gpt_e ומפעיל אם כן.
     :param chat_id: מזהה המשתמש
     :return: תוצאות הריצה אם הופעל, None אם לא הופעל
     """
     from chat_utils import get_user_stats_and_history
-    logger.info(f"[gpt_e] Checking if should run for chat_id={chat_id} (every 10 user messages)")
+    logger.info(f"[gpt_e] Checking if should run for chat_id={chat_id} (every {GPT_E_RUN_EVERY_MESSAGES} user messages)")
     try:
         stats, _ = get_user_stats_and_history(chat_id)
         total_messages = stats.get("total_messages", 0)
-        if total_messages > 0 and total_messages % 10 == 0:
+        
+        if should_run_gpt_e(chat_id, total_messages):
             logger.info(f"[gpt_e] Triggered for chat_id={chat_id} (user sent {total_messages} messages)")
             result = await run_gpt_e(chat_id)
             if result['success']:

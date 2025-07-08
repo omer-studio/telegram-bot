@@ -1465,7 +1465,7 @@ def check_user_approved_status_db(chat_id):
     בדיקת סטטוס אישור משתמש במסד נתונים
     
     :param chat_id: מזהה צ'אט
-    :return: {"status": "approved"/"pending"/"not_found"}
+    :return: {"status": "approved"/"pending_approval"/"pending_code"/"not_found"}
     """
     try:
         conn = psycopg2.connect(DB_URL)
@@ -1487,13 +1487,14 @@ def check_user_approved_status_db(chat_id):
         code_approve, approved = row
         
         if not code_approve:
-            # משתמש קיים אבל אין לו קוד (שורה זמנית)
-            return {"status": "pending"}
+            # משתמש קיים אבל אין לו קוד (שורה זמנית) - צריך קוד
+            return {"status": "pending_code"}
         
         if approved:
             return {"status": "approved"}
         else:
-            return {"status": "pending"}
+            # משתמש קיים עם קוד אבל לא אישר תנאים - צריך אישור
+            return {"status": "pending_approval"}
             
     except Exception as e:
         if should_log_debug_prints():

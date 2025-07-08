@@ -299,17 +299,25 @@ def _send_admin_profile_overview_notification(
     try:
         from notifications import send_admin_notification_raw
 
+        # ✅ שליחה רק אם יש שינויים
+        if not (gpt_c_changes or gpt_d_changes or gpt_e_changes):
+            return
+
         lines: List[str] = [f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>"]
 
+        # ✅ הודעת המשתמש ללא מגבלת תווים
         if user_msg:
             lines.append(f"<i>{user_msg.strip()}</i>")
 
         lines.append("")
         lines.append(f"<b>{gpt_c_info}</b>")
-        # הצגת השדות שחולצו על ידי GPT-C
+        # הצגת השדות שחולצו על ידי GPT-C (ללא chat_id ו-summary)
         if gpt_c_changes:
             for ch in gpt_c_changes:
                 field = ch.get("field")
+                # ✅ דילוג על שדות מיותרים
+                if field in ["chat_id", "summary"]:
+                    continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
                 ct = ch.get("change_type")
@@ -331,10 +339,13 @@ def _send_admin_profile_overview_notification(
 
         lines.append("")
         lines.append(f"<b>{gpt_d_info}</b>")
-        # הצגת שדות רק אם GPT-D באמת הופעל ויש שדות שמוזגו
+        # הצגת שדות רק אם GPT-D באמת הופעל ויש שדות שמוזגו (ללא chat_id ו-summary)
         if gpt_d_changes:
             for ch in gpt_d_changes:
                 field = ch.get("field")
+                # ✅ דילוג על שדות מיותרים
+                if field in ["chat_id", "summary"]:
+                    continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
                 ct = ch.get("change_type")
@@ -356,10 +367,13 @@ def _send_admin_profile_overview_notification(
 
         lines.append("")
         lines.append(f"<b>{gpt_e_info}</b>")
-        # הצגת שדות רק אם GPT-E באמת הופעל ויש שדות חדשים
+        # הצגת שדות רק אם GPT-E באמת הופעל ויש שדות חדשים (ללא chat_id ו-summary)
         if gpt_e_changes:
             for ch in gpt_e_changes:
                 field = ch.get("field")
+                # ✅ דילוג על שדות מיותרים
+                if field in ["chat_id", "summary"]:
+                    continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
                 ct = ch.get("change_type")
@@ -379,14 +393,14 @@ def _send_admin_profile_overview_notification(
                     else:
                         lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
+        # ✅ סיכום מלא ללא מגבלת תווים
         if summary and summary.strip():
             lines.append("")
             lines.append(f"<b>Summary</b>: {summary}")
 
-        # הצגת סנכרון רק אם יש שינויים בכלל
-        if gpt_c_changes or gpt_d_changes or gpt_e_changes:
-            lines.append("")
-            lines.append("<b>סנכרון</b>: עודכן בקובץ user_profiles.json ולאחר מכן בגוגל שיטס - הכל מסונכרן")
+        # ✅ הודעה מעודכנת על סנכרון
+        lines.append("")
+        lines.append("<b>סנכרון</b>: עודכן במסד נתונים")
 
         # הטיימסטמפ יתווסף אוטומטית על ידי send_admin_notification_raw
 
