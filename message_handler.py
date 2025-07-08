@@ -28,7 +28,7 @@ from utils import handle_secret_command, log_event_to_file
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, get_user_state, clear_user_cache_force
+from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, clear_user_cache_force
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
@@ -585,20 +585,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # שלב 3: משתמש מאושר
-        # בדיקה אם זה הכפתור "אהלן" - אם כן, מסירים את המקלדת
-        if user_msg.strip() == "אהלן":
-            await update.message.reply_text(
-                "שמח לראות אותך! 😊",
-                reply_markup=ReplyKeyboardRemove()
-            )
-            
-            # עדכון היסטוריה
-            update_chat_history(chat_id, user_msg, "שמח לראות אותך! 😊")
-            
-            await end_monitoring_user(str(chat_id), True)
-            return
-        
-        # שליחת תשובה מיד!
+        # אין טיפול מיוחד ב"אהלן" – כל הודעה, כולל 'אהלן', תנותב ישירות לבינה
         await update_user_processing_stage(str(chat_id), "gpt_a")
         logging.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
@@ -846,23 +833,10 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 clear_result2 = clear_user_cache_force(chat_id)
                 if clear_result2.get("success"):
                     print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
-                
-                await send_system_message(update, chat_id, full_access_message())
-                # שליחת מקלדת "אהלן" עם one_time_keyboard כדי שתיעלם מיד
-                from telegram import ReplyKeyboardMarkup
-                await send_system_message(
-                    update,
-                    chat_id,
-                    nice_keyboard_message(),
-                    reply_markup=ReplyKeyboardMarkup(
-                        [["אהלן"]],
-                        one_time_keyboard=True,
-                        resize_keyboard=True
-                    )
-                )
-            else:
-                await send_system_message(update, chat_id, "הייתה בעיה באישור. אנא נסה שוב.")
-                
+                await send_system_message(update, chat_id, full_access_message(), reply_markup=ReplyKeyboardRemove())
+                # לא שולחים מקלדת/הודעה נוספת – המשתמש יקבל תשובה מהבינה בלבד
+                return
+
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
             # דחיית תנאים – הצגת הודעת האישור מחדש
             # במקום להחזיר את המשתמש לשלב הקוד (שעלול ליצור מבוי סתום),
