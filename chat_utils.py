@@ -65,8 +65,6 @@ __all__: List[str] = [
 def update_chat_history(chat_id, user_msg, bot_summary):
     """Update the persistent chat-history using SQL database."""
     try:
-        chat_id = str(chat_id)
-        
         # שמירה ל-SQL באמצעות db_manager
         if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
             save_chat_message(chat_id, user_msg or "", bot_summary or "")
@@ -150,9 +148,8 @@ def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) ->
     ⚠️ תמיד מחזירה את 15 ההודעות האחרונות ללא סינון!
     """
     try:
-        # 🔒 שליפה בטוחה מ-SQL באמצעות db_core - תמיד 15 הודעות מקסימום
-        from db_core import safe_get_chat_history
-        rows = safe_get_chat_history(chat_id, 15)
+        # שליפה ישירה מ-SQL באמצעות db_manager - תמיד 15 הודעות מקסימום
+        rows = get_chat_history(chat_id, 15)
         
         messages: List[Dict[str, str]] = []
         for row in rows:
@@ -287,9 +284,8 @@ def _calculate_user_stats_from_history(history: list) -> dict:
 
 def get_user_stats_and_history(chat_id: str) -> Tuple[dict, list]:
     try:
-        # 🔒 שליפה בטוחה מ-SQL באמצעות db_core
-        from db_core import safe_get_chat_history
-        rows = safe_get_chat_history(chat_id)  # הוסרה מגבלת 100 הודעות
+        # שליפה ישירה מ-SQL באמצעות db_manager
+        rows = get_chat_history(chat_id)  # ללא מגבלת הודעות
         if not rows:
             return {"total_messages": 0, "first_contact": None, "last_contact": None}, []
         
@@ -383,9 +379,8 @@ def get_weekday_context_instruction(chat_id: Optional[str] = None, user_msg: Opt
             else:
                 # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
                 try:
-                    # 🔒 שליפה בטוחה מ-SQL באמצעות db_core
-                    from db_core import safe_get_chat_history
-                    rows = safe_get_chat_history(chat_id, 30)
+                    # שליפה ישירה מ-SQL באמצעות db_manager
+                    rows = get_chat_history(chat_id, 30)
                     history = [{"user": row[0], "bot": row[1], "timestamp": row[2]} for row in rows]
                 except Exception:
                     history = []

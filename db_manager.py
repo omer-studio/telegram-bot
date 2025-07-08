@@ -345,11 +345,12 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
 
 
 def get_chat_history(chat_id, limit=100):
+    # שימוש ישיר ב-chat_id כמספר (BIGINT)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     cur.execute(
         "SELECT user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id=%s ORDER BY timestamp DESC LIMIT %s",
-        (str(chat_id), limit)
+        (chat_id, limit)
     )
     rows = cur.fetchall()
     cur.close()
@@ -408,6 +409,7 @@ def get_user_profile(chat_id):
     """
     מחזיר פרופיל משתמשdict עם כל השדות
     """
+    # שימוש ישיר ב-chat_id כמספר (BIGINT)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -417,7 +419,7 @@ def get_user_profile(chat_id):
     fields = ['chat_id'] + get_user_profile_fields()
     select_sql = f"SELECT {', '.join(fields)} FROM user_profiles WHERE chat_id=%s"
     
-    cur.execute(select_sql, (str(chat_id),))
+    cur.execute(select_sql, (chat_id,))
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -513,7 +515,7 @@ def save_reminder_state(chat_id, reminder_info):
             INSERT INTO reminder_states (chat_id, last_activity, reminder_sent, reminder_count, state_data)
             VALUES (%s, %s, %s, %s, %s)
         """, (
-            str(chat_id),
+            chat_id,
             reminder_info.get('last_activity'),
             reminder_info.get('reminder_sent', False),
             reminder_info.get('reminder_count', 0),
@@ -996,7 +998,7 @@ def increment_user_message_count(chat_id):
         cur = conn.cursor()
         
         # בדיקה אם המשתמש כבר קיים
-        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
         result = cur.fetchone()
         
         if result:
@@ -1005,7 +1007,7 @@ def increment_user_message_count(chat_id):
             new_count = current_count + 1
             cur.execute(
                 "UPDATE user_profiles SET total_messages_count = %s, updated_at = %s WHERE chat_id = %s",
-                (new_count, datetime.utcnow(), str(chat_id))
+                (new_count, datetime.utcnow(), chat_id)
             )
             if should_log_debug_prints():
                 print(f"📊 [DB] Updated message count for {chat_id}: {current_count} → {new_count}")
@@ -1054,7 +1056,7 @@ def get_user_message_count(chat_id):
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
-        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
         result = cur.fetchone()
         
         cur.close()
@@ -1309,6 +1311,7 @@ def check_user_approved_status_db(chat_id):
     :return: {"status": "approved"/"pending_approval"/"pending_code"/"not_found"}
     """
     try:
+        # שימוש ישיר ב-chat_id כמספר (BIGINT)
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
@@ -1316,7 +1319,7 @@ def check_user_approved_status_db(chat_id):
             SELECT code_approve, approved 
             FROM user_profiles 
             WHERE chat_id = %s
-        """, (str(chat_id),))
+        """, (chat_id,))
         
         row = cur.fetchone()
         cur.close()
