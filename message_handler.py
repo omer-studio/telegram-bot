@@ -694,18 +694,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             history_messages = []
             
             try:
+                print(f"🔧 [DEBUG] מתחיל טעינת נתונים עבור {chat_id}")
+                
                 # קריאה מהירה מקובץ מקומי בלבד - בלי Google Sheets!
+                print(f"🔧 [DEBUG] מייבא get_chat_history_messages_fast")
                 from chat_utils import get_chat_history_messages_fast
+                
+                print(f"🔧 [DEBUG] קורא להיסטוריה עבור {chat_id}")
                 history_messages = get_chat_history_messages_fast(chat_id)  # 🔧 תמיד 15 הודעות מקסימום
+                print(f"🔧 [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
                 
                 # קריאה מהירה מפרופיל מקומי בלבד
+                print(f"🔧 [DEBUG] מייבא get_user_summary_fast")
                 from profile_utils import get_user_summary_fast
+                
+                print(f"🔧 [DEBUG] קורא לסיכום עבור {chat_id}")
                 current_summary = get_user_summary_fast(chat_id)
+                print(f"🔧 [DEBUG] סיכום הוחזר: '{current_summary}'")
+                
+                print(f"✅ [DEBUG] טעינת נתונים הושלמה בהצלחה עבור {chat_id}")
                     
             except Exception as data_err:
                 logging.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}")
                 print(f"🚨 [HISTORY_DEBUG] שגיאה בטעינת נתונים עבור {chat_id}: {data_err}")
                 print(f"🚨 [HISTORY_DEBUG] exception type: {type(data_err).__name__}")
+                print(f"🚨 [HISTORY_DEBUG] full traceback:")
+                traceback.print_exc()
                 # ממשיכים בלי נתונים - עדיף תשובה מהירה מאשר נתונים מלאים
             
             # בניית ההודעות ל-gpt_a - מינימלי ומהיר

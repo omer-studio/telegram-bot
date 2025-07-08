@@ -1862,32 +1862,24 @@ def get_database_table_counts():
                 if table in changes:
                     change = changes[table]
                     change_sign = "+" if change['change'] > 0 else ""
-                    change_info = f"({change_sign}{change['change']:,})"
-                else:
-                    change_info = ""
+                    change_info = f" **({change_sign}{change['change']:,})**"
                 sorted_tables.append((table, count, change_info, abs(changes.get(table, {}).get('change', 0))))
             else:
-                sorted_tables.append((table, count, "שגיאה", 0))
+                sorted_tables.append((table, count, "", 0))
         
         # מיון לפי גודל השינוי (הכי גדול קודם)
         sorted_tables.sort(key=lambda x: x[3], reverse=True)
         
-        # פורמט טבלה נקי עם רווחים
-        message += "```\n"
-        message += f"{'שם הטבלה':<25} {'שורות':<10} {'שינוי':<15}\n"
-        message += "=" * 50 + "\n"
-        
-        # יצירת שורות הטבלה
+        # פורמט פשוט שעובד בטלגרם
         for table, count, change_info, _ in sorted_tables:
-            table_name = table[:24]  # חיתוך לאורך מקסימלי
             if isinstance(count, int):
                 count_str = f"{count:,}"
-                message += f"{table_name:<25} {count_str:<10} {change_info:<15}\n"
+                message += f"• **{table}** - {count_str} שורות{change_info}\n"
             else:
-                message += f"{table_name:<25} {'שגיאה':<10} {'N/A':<15}\n"
+                message += f"• **{table}** - {count}\n"
         
         # 📊 שורת סיכום
-        message += "=" * 50 + "\n"
+        message += f"\n➖➖➖➖➖➖➖➖➖➖\n"
         
         # חישוב שינוי כללי
         total_change = 0
@@ -1896,15 +1888,11 @@ def get_database_table_counts():
             total_change = total_rows - previous_total
             if total_change != 0:
                 change_sign = "+" if total_change > 0 else ""
-                total_change_str = f"({change_sign}{total_change:,})"
+                message += f"📈 **סה״כ שורות:** {total_rows:,} **({change_sign}{total_change:,})**"
             else:
-                total_change_str = "(ללא שינוי)"
+                message += f"📈 **סה״כ שורות:** {total_rows:,} (ללא שינוי)"
         else:
-            total_change_str = "(פריסה ראשונה)"
-        
-        total_str = f"{total_rows:,}"
-        message += f"{'**סה״כ**':<25} {total_str:<10} {total_change_str:<15}\n"
-        message += "```"
+            message += f"📈 **סה״כ שורות:** {total_rows:,} (פריסה ראשונה)"
         
         return message
         

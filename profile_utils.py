@@ -279,118 +279,109 @@ def _send_admin_profile_overview_notification(
     gpt_e_info: str,
     summary: str = "",
 ):
-    """שליחת הודעת אדמין מרוכזת על כל העדכון (GPT-C/D/E + summary)."""
+    """שליחת הודעת אדמין מרוכזת על כל העדכון (GPT-C/D/E + summary) לפי התבנית המדויקת."""
     try:
         from notifications import send_admin_notification_raw
+        from utils import get_israel_time
 
         # ✅ שליחה רק אם יש שינויים
         if not (gpt_c_changes or gpt_d_changes or gpt_e_changes):
             return
 
-        lines: List[str] = [f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>"]
-
-        # ✅ הודעת המשתמש ללא מגבלת תווים
-        if user_msg:
-            lines.append(f"<i>{user_msg.strip()}</i>")
-
-        # ✅ תיקון: הצגת קטעים רק אם יש שינויים בפועל
+        lines: List[str] = []
+        
+        # 1. כותרת עדכון פרופיל
+        lines.append(f"✅ עדכון פרופיל למשתמש {chat_id} ✅")
+        
+        # 2. תוכן ההודעה המלא (לא מצונזר)
+        if user_msg and user_msg.strip():
+            lines.append(f"{user_msg.strip()}")
+        
+        lines.append("")  # שורה ריקה
+        
+        # 3. GPT-C: שינויים או "אין שינויים"
+        lines.append("*GPT-C:*")
         if gpt_c_changes:
-            lines.append("")
-            lines.append(f"<b>{gpt_c_info}</b>")
             for ch in gpt_c_changes:
                 field = ch.get("field")
-                # ✅ דילוג על שדות מיותרים
-                if field in ["chat_id", "summary"]:
+                # דילוג על שדות טכניים
+                if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                ct = ch.get("change_type")
-                if ct == "added":
-                    if field.lower() == "name":
-                        lines.append(f"  ➕ שם: [ריק] → [{new_val}]")
-                    else:
-                        lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
-                elif ct == "updated":
-                    if field.lower() == "name":
-                        lines.append(f"  ✏️ שם: [{old_val}] → [{new_val}]")
-                    else:
-                        lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
-                elif ct == "removed":
-                    if field.lower() == "name":
-                        lines.append(f"  ➖ שם: [{old_val}] → <i>נמחק</i>")
-                    else:
-                        lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
-
-        # ✅ תיקון: הצגת GPT-D רק אם יש שינויים בפועל
+                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+        else:
+            lines.append("  אין שינויים")
+        
+        lines.append("")  # שורה ריקה
+        
+        # 4. GPT-D: שינויים או "אין שינויים"  
+        lines.append("*GPT-D:* שדות")
         if gpt_d_changes:
-            lines.append("")
-            lines.append(f"<b>{gpt_d_info}</b>")
             for ch in gpt_d_changes:
                 field = ch.get("field")
-                # ✅ דילוג על שדות מיותרים
-                if field in ["chat_id", "summary"]:
+                # דילוג על שדות טכניים
+                if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                ct = ch.get("change_type")
-                if ct == "added":
-                    if field.lower() == "name":
-                        lines.append(f"  ➕ שם: [ריק] → [{new_val}]")
-                    else:
-                        lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
-                elif ct == "updated":
-                    if field.lower() == "name":
-                        lines.append(f"  ✏️ שם: [{old_val}] → [{new_val}]")
-                    else:
-                        lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
-                elif ct == "removed":
-                    if field.lower() == "name":
-                        lines.append(f"  ➖ שם: [{old_val}] → <i>נמחק</i>")
-                    else:
-                        lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
-
-        # ✅ תיקון: הצגת GPT-E רק אם יש שינויים בפועל
+                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+        else:
+            lines.append("  אין שינויים")
+        
+        lines.append("")  # שורה ריקה
+        
+        # 5. GPT-E: שינויים + קאונטר או "אין שינויים"
+        lines.append("GPT-E:")
         if gpt_e_changes:
-            lines.append("")
-            lines.append(f"<b>{gpt_e_info}</b>")
             for ch in gpt_e_changes:
                 field = ch.get("field")
-                # ✅ דילוג על שדות מיותרים
-                if field in ["chat_id", "summary"]:
+                # דילוג על שדות טכניים
+                if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                ct = ch.get("change_type")
-                if ct == "added":
-                    if field.lower() == "name":
-                        lines.append(f"  ➕ שם: [ריק] → [{new_val}]")
-                    else:
-                        lines.append(f"  ➕ {field}: [ריק] → [{new_val}]")
-                elif ct == "updated":
-                    if field.lower() == "name":
-                        lines.append(f"  ✏️ שם: [{old_val}] → [{new_val}]")
-                    else:
-                        lines.append(f"  ✏️ {field}: [{old_val}] → [{new_val}]")
-                elif ct == "removed":
-                    if field.lower() == "name":
-                        lines.append(f"  ➖ שם: [{old_val}] → <i>נמחק</i>")
-                    else:
-                        lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
-
-        # ✅ הודעה מעודכנת על סנכרון
-        lines.append("")
-        lines.append("<b>סנכרון</b>: עודכן במסד נתונים")
-
-        # ✅ הוספת SUMMARY כללי מהמסד לפני הטיימסטמפ
+                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+        else:
+            # הוספת קאונטר גם כשאין שינויים
+            try:
+                from chat_utils import get_user_stats_and_history
+                from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                stats, _ = get_user_stats_and_history(chat_id)
+                total_messages = stats.get("total_messages", 0)
+                lines.append(f"  אין שינויים {total_messages}/{GPT_E_RUN_EVERY_MESSAGES}")
+            except:
+                lines.append("  אין שינויים")
+        
+        lines.append("")  # שורה ריקה
+        lines.append("")  # שורה ריקה נוספת
+        
+        # 6. שדה SUMMARY: תוכן השדה המסכם במלואו
+        lines.append("שדה SUMMARY:")
         if summary and summary.strip():
-            lines.append("")
-            lines.append(f"<b>📋 Summary מהמסד</b>: {summary}")
+            lines.append(f"{summary.strip()}")
+        else:
+            lines.append("אין סיכום")
+        
+        lines.append("")  # שורה ריקה
+        lines.append("")  # שורה ריקה נוספת
+        
+        # 7. זמן עדכון ושם הטבלה
+        current_time = get_israel_time().strftime('%d/%m/%Y %H:%M:%S')
+        lines.append(f"⏰ {current_time} - עודכן במסד נתונים בטבלת user_profiles")
 
-        # הטיימסטמפ יתווסף אוטומטית על ידי send_admin_notification_raw
-
-        send_admin_notification_raw("\n".join(lines))
+        # שליחת ההודעה
+        notification_text = "\n".join(lines)
+        send_admin_notification_raw(notification_text)
+        
     except Exception as exc:
         logging.error(f"_send_admin_profile_overview_notification failed: {exc}")
+        # גיבוי - שליחת הודעה בסיסית במקרה של שגיאה
+        try:
+            from notifications import send_admin_notification_raw
+            send_admin_notification_raw(f"⚠️ שגיאה בהודעת עדכון פרופיל למשתמש {chat_id}: {exc}")
+        except:
+            pass
 
 
 # ---------------------------------------------------------------------------
