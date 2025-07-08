@@ -236,8 +236,10 @@ def _extract_topics_from_text(text: str) -> dict:
 
 
 def _calculate_user_stats_from_history(history: list) -> dict:
+    # סופר רק הודעות משתמש (לא בוט)
+    user_messages = [entry["user"] for entry in history if entry.get("user")]
     basic_stats = {
-        "total_messages": len(history),
+        "total_messages": len(user_messages),  # רק הודעות משתמש
         "first_contact": history[0]["timestamp"] if history else None,
         "last_contact": history[-1]["timestamp"] if history else None,
     }
@@ -255,7 +257,6 @@ def _calculate_user_stats_from_history(history: list) -> dict:
     weekday = effective_now.weekday()
     weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
 
-    user_messages = [entry["user"] for entry in history if entry.get("user")]
     all_user_text = " ".join(user_messages).lower()
     topic_mentions = _extract_topics_from_text(all_user_text)
 
@@ -263,7 +264,7 @@ def _calculate_user_stats_from_history(history: list) -> dict:
         {
             "days_knowing_each_other": days_together,
             "hours_since_last_message": round(hours_since_last, 1),
-            "messages_per_day_avg": round(len(history) / max(days_together, 1), 1),
+            "messages_per_day_avg": round(len(user_messages) / max(days_together, 1), 1),
             "current_time_of_day": _get_time_of_day(current_hour),
             "current_hour": current_hour,
             "is_weekend": weekday >= 5,
