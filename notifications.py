@@ -933,13 +933,14 @@ def send_concurrent_alert(alert_type: str, details: dict):
                 f"👥 משתמשים פעילים: {details.get('active_users', 0)}\n"
                 f"📊 שיעור שגיאות: {details.get('error_rate', 0):.1%}"
             )
-        elif alert_type == "sheets_queue_overflow":
-            message = (
-                f"🗂️ **התראת עומס Google Sheets**\n"
-                f"📥 גודל תור: {details.get('queue_size', 0)}\n"
-                f"⚡ פעולות לדקה: {details.get('operations_per_minute', 0)}\n"
-                f"🚨 יש לבדוק אם Google Sheets מגיב כראוי"
-            )
+        # 🗑️ עברנו למסד נתונים - הסרת התראות Google Sheets
+        # elif alert_type == "sheets_queue_overflow":
+        #     message = (
+        #         f"🗂️ **התראת עומס Google Sheets**\n"
+        #         f"📥 גודל תור: {details.get('queue_size', 0)}\n"
+        #         f"⚡ פעולות לדקה: {details.get('operations_per_minute', 0)}\n"
+        #         f"🚨 יש לבדוק אם Google Sheets מגיב כראוי"
+        #     )
         elif alert_type == "concurrent_error":
             # 🔧 תיקון: הוספת פרטים ספציפיים ל-session timeout
             if details.get('component') == 'session_timeout':
@@ -963,13 +964,14 @@ def send_concurrent_alert(alert_type: str, details: dict):
                     f"👤 משתמש: {details.get('chat_id', 'לא ידוע')}\n"
                     f"⏰ זמן: {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
                 )
-        elif alert_type == "queue_failure":
-            message = (
-                f"🔥 **כשל בתור Google Sheets**\n"
-                f"📊 פעולות שנדחו: {details.get('dropped_operations', 0)}\n"
-                f"🔄 סוג פעולה: {details.get('operation_type', 'לא ידוע')}\n"
-                f"⚠️ נתונים עלולים להיאבד!"
-            )
+        # 🗑️ עברנו למסד נתונים - הסרת התראות Google Sheets
+        # elif alert_type == "queue_failure":
+        #     message = (
+        #         f"🔥 **כשל בתור Google Sheets**\n"
+        #         f"📊 פעולות שנדחו: {details.get('dropped_operations', 0)}\n"
+        #         f"🔄 סוג פעולה: {details.get('operation_type', 'לא ידוע')}\n"
+        #         f"⚠️ נתונים עלולים להיאבד!"
+        #     )
         elif alert_type == "memory_warning":
             message = (
                 f"🧠 **התראת זיכרון**\n"
@@ -999,12 +1001,13 @@ def send_recovery_notification(recovery_type: str, details: dict):
                 f"⏱️ זמן תגובה: {details.get('avg_response_time', 0):.2f}s\n"
                 f"📊 המערכת פועלת כרגיל"
             )
-        elif recovery_type == "queue_cleared":
-            message = (
-                f"🧹 **תור Google Sheets נוקה**\n"
-                f"📥 גודל תור חדש: {details.get('queue_size', 0)}\n"
-                f"✅ המערכת פועלת כרגיל"
-            )
+        # 🗑️ עברנו למסד נתונים - הסרת התראות Google Sheets
+        # elif recovery_type == "queue_cleared":
+        #     message = (
+        #         f"🧹 **תור Google Sheets נוקה**\n"
+        #         f"📥 גודל תור חדש: {details.get('queue_size', 0)}\n"
+        #         f"✅ המערכת פועלת כרגיל"
+        #     )
         else:
             message = f"🔄 התאוששות: {recovery_type}\n{details}"
         

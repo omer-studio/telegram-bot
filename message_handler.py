@@ -732,8 +732,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as data_err:
                 print(f"🚨 [HISTORY_DEBUG] שגיאה בטעינת נתונים עבור {chat_id}: {data_err}")
                 print(f"🚨 [HISTORY_DEBUG] exception type: {type(data_err).__name__}")
-                                    print(f"🚨 [HISTORY_DEBUG] full traceback:")
-                    traceback.print_exc()
+                print(f"🚨 [HISTORY_DEBUG] full traceback:")
+                traceback.print_exc()
                 
                 # שמירת השגיאה במסד נתונים למעקב
                 try:

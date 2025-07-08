@@ -52,37 +52,37 @@
       "description": "Test database connection and return current time + PostgreSQL version"
     },
     {
-      "name": "טבלת_משתמשים",
+      "name": "טבלה_משתמשים",
       "path": "db_tool.py",
-      "description": "הצגת טבלת משתמשים עם המידע החשוב ביותר - chat_id, name, approved, code_try",
+      "description": "הצגת טבלת user_profiles מלאה עם כל השדות",
       "parameters": {
         "limit": {
           "type": "integer",
-          "description": "מספר המשתמשים להציג (ברירת מחדל: 15)",
-          "default": 15
+          "description": "מספר הרשומות להציג (ברירת מחדל: 20)",
+          "default": 20
         }
       }
     },
     {
-      "name": "טבלת_לוג_רנדר",
+      "name": "טבלה_הודעות",
       "path": "db_tool.py",
-      "description": "הצגת לוגי רנדר ופריסות - מצב השרת ופעולות deploy",
+      "description": "הצגת טבלת chat_messages מלאה עם כל השדות",
       "parameters": {
         "limit": {
-          "type": "integer", 
-          "description": "מספר הלוגים להציג (ברירת מחדל: 10)",
-          "default": 10
+          "type": "integer",
+          "description": "מספר ההודעות להציג (ברירת מחדל: 30)",
+          "default": 30
         }
       }
     },
     {
-      "name": "טבלת_צאט_היסטורי",
+      "name": "טבלה_הודעות_משתמש",
       "path": "db_tool.py",
-      "description": "הצגת היסטוריית צ'אט - כל המשתמשים או משתמש ספציפי",
+      "description": "הצגת הודעות של משתמש ספציפי מלאות",
       "parameters": {
         "chat_id": {
           "type": "string",
-          "description": "ID משתמש ספציפי (אופציונלי - אם לא מצוין, יציג כל המשתמשים)"
+          "description": "ID של המשתמש"
         },
         "limit": {
           "type": "integer",
@@ -92,61 +92,125 @@
       }
     },
     {
-      "name": "טבלת_שגיאות",
+      "name": "טבלה_gpt_לוגים",
       "path": "db_tool.py",
-      "description": "הצגת שגיאות אחרונות במערכת",
+      "description": "הצגת טבלת gpt_calls_log מלאה עם כל השדות",
       "parameters": {
         "limit": {
           "type": "integer",
-          "description": "מספר השגיאות להציג (ברירת מחדל: 15)",
-          "default": 15
+          "description": "מספר הרשומות להציג (ברירת מחדל: 25)",
+          "default": 25
         }
       }
     },
     {
-      "name": "טבלת_עלויות_gpt",
-      "path": "db_tool.py", 
-      "description": "הצגת עלויות GPT לפי משתמשים - שבוע אחרון",
+      "name": "טבלה_gpt_קריאות",
+      "path": "db_tool.py",
+      "description": "הצגת טבלת gpt_calls מלאה עם כל השדות",
       "parameters": {
         "limit": {
           "type": "integer",
-          "description": "מספר המשתמשים להציג (ברירת מחדל: 20)",
+          "description": "מספר הרשומות להציג (ברירת מחדל: 25)",
+          "default": 25
+        }
+      }
+    },
+    {
+      "name": "טבלה_שגיאות",
+      "path": "db_tool.py",
+      "description": "הצגת טבלת errors_stats מלאה עם כל השדות",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר השגיאות להציג (ברירת מחדל: 20)",
           "default": 20
         }
       }
     },
     {
-      "name": "טבלת_פעילות_יומית",
+      "name": "טבלה_פריסות",
       "path": "db_tool.py",
-      "description": "הצגת פעילות יומית - משתמשים פעילים והודעות לפי יום",
-      "parameters": {
-        "days": {
-          "type": "integer",
-          "description": "מספר ימים אחורה (ברירת מחדל: 7)",
-          "default": 7
-        }
-      }
-    },
-    {
-      "name": "טבלת_משתמשים_קריטיים",
-      "path": "db_tool.py",
-      "description": "הצגת משתמשים קריטיים עם שגיאות",
+      "description": "הצגת טבלת deployment_logs מלאה עם כל השדות",
       "parameters": {
         "limit": {
           "type": "integer",
-          "description": "מספר המשתמשים להציג (ברירת מחדל: 10)",
-          "default": 10
+          "description": "מספר הלוגים להציג (ברירת מחדל: 15)",
+          "default": 15
         }
       }
     },
     {
-      "name": "חיפוש_משתמש",
+      "name": "טבלה_משתמשים_קריטיים",
       "path": "db_tool.py",
-      "description": "חיפוש מידע מלא על משתמש ספציפי - פרופיל, הודעות אחרונות ושימוש GPT",
+      "description": "הצגת טבלת critical_users מלאה עם כל השדות",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר הרשומות להציג (ברירת מחדל: 15)",
+          "default": 15
+        }
+      }
+    },
+    {
+      "name": "טבלה_חיובים",
+      "path": "db_tool.py",
+      "description": "הצגת טבלת billing_usage מלאה עם כל השדות",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר הרשומות להציג (ברירת מחדל: 20)",
+          "default": 20
+        }
+      }
+    },
+    {
+      "name": "טבלה_מגבלות_חינמיות",
+      "path": "db_tool.py",
+      "description": "הצגת טבלת free_model_limits מלאה עם כל השדות",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר הרשומות להציג (ברירת מחדל: 15)",
+          "default": 15
+        }
+      }
+    },
+    {
+      "name": "טבלה_gpt_שימוש",
+      "path": "db_tool.py",
+      "description": "הצגת טבלת gpt_usage_log מלאה עם כל השדות",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר הרשומות להציג (ברירת מחדל: 20)",
+          "default": 20
+        }
+      }
+    },
+    {
+      "name": "טבלה_מפורטת",
+      "path": "db_tool.py",
+      "description": "הצגת כל טבלה לפי שם עם כל השדות",
+      "parameters": {
+        "table_name": {
+          "type": "string",
+          "description": "שם הטבלה להציג"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "מספר הרשומות להציג (ברירת מחדל: 20)",
+          "default": 20
+        }
+      }
+    },
+    {
+      "name": "חיפוש_משתמש_מלא",
+      "path": "db_tool.py",
+      "description": "חיפוש מידע מלא על משתמש ספציפי - כל הטבלאות הרלוונטיות",
       "parameters": {
         "chat_id": {
           "type": "string",
-          "description": "ID של המשתמש לחיפוש"
+          "description": "ID של המשתמש לחיפוש מלא"
         }
       }
     },

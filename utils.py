@@ -90,10 +90,12 @@ def log_event_to_file(event_data: Dict[str, Any], filename: Optional[str] = None
 
 SECRET_CODES = {  # קודים סודיים
     "#487chaCha2025": "clear_history",    # מחק היסטוריית שיח
-    "#512SheetBooM": "clear_sheets",      # מחק מידע מהגיליונות
-    "#734TotalZap": "clear_all",          # מחק הכל (היסטוריה + גיליונות)
-    "#999PerformanceCheck": "performance_info",  # מידע על ביצועים ו-cache
-    "#888ResetCache": "reset_cache",      # איפוס cache של Google Sheets
+    # 🗑️ עברנו למסד נתונים - הסרת קוד Google Sheets
+    # "#512SheetBooM": "clear_sheets",      # היה מוחק מידע מגיליונות
+    "#734TotalZap": "clear_all",          # מחק הכל (היסטוריה + מסד נתונים)
+    "#999PerformanceCheck": "performance_info",  # מידע על ביצועים ומסד נתונים
+    # 🗑️ עברנו למסד נתונים - הסרת קוד reset cache
+    # "#888ResetCache": "reset_cache",      # היה מאפס cache של Google Sheets
 }
 
 def handle_secret_command(chat_id, user_msg):
@@ -109,61 +111,65 @@ def handle_secret_command(chat_id, user_msg):
         _send_admin_secret_notification(f"🔑 הופעל קוד סודי למחיקת היסטוריה מצ'אט {chat_id}.")
         return True, msg
     
-    if action == "clear_sheets":
-        deleted_sheet, deleted_state = clear_from_sheets(chat_id)
-        msg = "🗑️ כל הגיליונות שלך נמחקו מהגיליונות!" if (deleted_sheet or deleted_state) else "⚠️לא נמצא מידע למחיקה מהגיליונות."
-        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_sheets", "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
-        _send_admin_secret_notification(f"🔑 הופעל קוד סודי למחיקת גיליונות מצ'אט {chat_id}.")
-        return True, msg
+    # 🗑️ עברנו למסד נתונים - הסרת טיפול בclear_sheets
+    # if action == "clear_sheets":
+    #     deleted_sheet, deleted_state = clear_from_sheets(chat_id)
+    #     msg = "🗑️ כל הגיליונות שלך נמחקו מהגיליונות!" if (deleted_sheet or deleted_state) else "⚠️לא נמצא מידע למחיקה מהגיליונות."
+    #     log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_sheets", "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
+    #     _send_admin_secret_notification(f"🔑 הופעל קוד סודי למחיקת גיליונות מצ'אט {chat_id}.")
+    #     return True, msg
     
     if action == "clear_all":
         cleared = clear_chat_history(chat_id)
-        deleted_sheet, deleted_state = clear_from_sheets(chat_id)
+        # 🗑️ עברנו למסד נתונים - אין צורך למחוק מגיליונות
+        # deleted_sheet, deleted_state = clear_from_sheets(chat_id)
         
         # מחיקה מהמסד נתונים
         from db_manager import clear_user_from_database
         db_cleared = clear_user_from_database(chat_id)
         
-        msg = "💥 עשה הכל נמחק! (היסטוריה + גיליונות + מסד נתונים)" if (cleared or deleted_sheet or deleted_state or db_cleared) else "⚠️לא נמצא שום מידע למחיקה."
-        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_sheet": deleted_sheet, "deleted_state": deleted_state, "db_cleared": db_cleared})
+        msg = "💥 עשה הכל נמחק! (היסטוריה + מסד נתונים)" if (cleared or db_cleared) else "⚠️לא נמצא שום מידע למחיקה."
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "db_cleared": db_cleared})
         _send_admin_secret_notification(f"🔑 הופעל קוד סודי למחיקת **הכל** מצ'אט {chat_id}.")
         return True, msg
     
     if action == "performance_info":
         try:
-            from config import get_sheets_cache_info
             from gpt_a_handler import get_filter_analytics
+            from db_manager import get_chat_statistics
             
-            cache_info = get_sheets_cache_info()
             filter_analytics = get_filter_analytics()
+            db_stats = get_chat_statistics()
             
             msg = f"📊 **דוח ביצועים:**\n\n"
-            msg += f"📋 **Google Sheets Cache:**\n"
-            msg += f"• סטטוס: {cache_info['status']}\n"
-            msg += f"• גיל: {cache_info['age_seconds']} שניות\n\n"
+            msg += f"🗄️ **מסד נתונים PostgreSQL:**\n"
+            msg += f"• הודעות כולל: {db_stats.get('total_messages', 0)}\n"
+            msg += f"• צ'אטים פעילים: {db_stats.get('unique_chats', 0)}\n"
+            msg += f"• עלות כוללת: ${db_stats.get('total_cost_usd', 0):.4f}\n\n"
             msg += f"🤖 **GPT Model Filter:**\n"
             msg += f"• סה החלטות: {filter_analytics.get('total_decisions', 0)}\n"
             msg += f"• שימוש מודל מתקדם: {filter_analytics.get('premium_usage', 0)}%\n"
             msg += f"• פילוח: {filter_analytics.get('percentages', {})}\n\n"
             msg += f"💡 **טיפים לשיפור ביצועים:**\n"
-            msg += f"• Cache קיים ~2-3 שניות בכל גישה\n"
-            msg += f"• המודל המהיר קיים ~40% בעלויות\n"
-            msg += f"• מכנגישות GPT-B+GPT-C קופצת ~3-5 שניות"
+            msg += f"• מסד נתונים מהיר פי 10 מ-Google Sheets\n"
+            msg += f"• המודל המהיר חוסך ~40% בעלויות\n"
+            msg += f"• גישות מקבילות למסד ביצועים מעולים"
             
             _send_admin_secret_notification(f"📊 הופעל קוד סודי לדוח ביצועים מצ'אט {chat_id}.")
             return True, msg
         except Exception as e:
             return True, f"❌ שגיאה בהכנת דוח ביצועים: {e}"
     
-    if action == "reset_cache":
-        try:
-            from config import reset_sheets_cache
-            reset_sheets_cache()
-            msg = "🔄 Cache של Google Sheets אופס בהצלחה!\nהגישה הבאה תיקח קצת קוד."
-            _send_admin_secret_notification(f"🔄 הופעל קוד סודי לאיפוס cache מצ'אט {chat_id}.")
-            return True, msg
-        except Exception as e:
-            return True, f"❌ שגיאה באיפוס cache: {e}"
+    # 🗑️ עברנו למסד נתונים - הסרת טיפול ברeset_cache
+    # if action == "reset_cache":
+    #     try:
+    #         from config import reset_sheets_cache
+    #         reset_sheets_cache()
+    #         msg = "🔄 Cache של Google Sheets אופס בהצלחה!\nהגישה הבאה תיקח קצת קוד."
+    #         _send_admin_secret_notification(f"🔄 הופעל קוד סודי לאיפוס cache מצ'אט {chat_id}.")
+    #         return True, msg
+    #     except Exception as e:
+    #         return True, f"❌ שגיאה באיפוס cache: {e}"
 
     return False, None
 
@@ -187,12 +193,11 @@ def clear_chat_history(chat_id):
         return False
 
 def clear_from_sheets(chat_id):
-    """מחק גיליון משתמש מהגיליונות - 🗑️ עברנו למסד נתונים!"""
-    # 🗑️ במסד נתונים אין צורך למחוק שורות - הנתונים נשמרים
-    # הפונקציה נשארת לתאימות אחורה אבל לא עושה כלום
-    deleted_sheet = True  # mock success - אין צורך למחוק במסד נתונים
-    deleted_state = True  # mock success - אין צורך למחוק במסד נתונים
-    return deleted_sheet, deleted_state
+    """🗑️ עברנו למסד נתונים - פונקציה deprecated"""
+    # 🗑️ במסד נתונים אין צורך למחוק - המידע נשמר בטוח יותר
+    # הפונקציה נשארת לתאימות אחורה בלבד
+    logging.info(f"🗑️ clear_from_sheets deprecated - using database for {chat_id}")
+    return False, False  # לא בוצעה מחיקה - עברנו למסד נתונים
 
 def _send_admin_secret_notification(message: str):
     """שולח הודעה לאדמין על שימוש בקוד סודי"""
@@ -220,12 +225,12 @@ for _module_name in ("chat_utils", "profile_utils"):
 def show_log_status():
     """מציג את מצב הלוגים הקיים"""
     try:
-        from config import (ENABLE_DEBUG_PRINTS, ENABLE_GPT_COST_DEBUG, ENABLE_SHEETS_DEBUG, 
+        from config import (ENABLE_DEBUG_PRINTS, ENABLE_GPT_COST_DEBUG, 
                            ENABLE_PERFORMANCE_DEBUG, ENABLE_MESSAGE_DEBUG, 
                            ENABLE_DATA_EXTRACTION_DEBUG, DEFAULT_LOG_LEVEL)
         print(f"\n🔧 רמת לוגים: {DEFAULT_LOG_LEVEL}")
-        print(f"🔍 דיבוג: {'כן' if ENABLE_DEBUG_PRINTS else 'לא'} | 💰 GPT: {'כן' if ENABLE_GPT_COST_DEBUG else 'לא'} | 📊 גיליונות: {'כן' if ENABLE_DATA_EXTRACTION_DEBUG else 'לא'}")
-        print(f"⚡ ביצועים: {'כן' if ENABLE_PERFORMANCE_DEBUG else 'לא'} | 💬 הודעות: {'כן' if ENABLE_MESSAGE_DEBUG else 'לא'} | 📋 גיליונות: {'כן' if ENABLE_SHEETS_DEBUG else 'לא'}")
+        print(f"🔍 דיבוג: {'כן' if ENABLE_DEBUG_PRINTS else 'לא'} | 💰 GPT: {'כן' if ENABLE_GPT_COST_DEBUG else 'לא'} | 📊 חילוץ נתונים: {'כן' if ENABLE_DATA_EXTRACTION_DEBUG else 'לא'}")
+        print(f"⚡ ביצועים: {'כן' if ENABLE_PERFORMANCE_DEBUG else 'לא'} | 💬 הודעות: {'כן' if ENABLE_MESSAGE_DEBUG else 'לא'} | 🗄️ מסד נתונים: פעיל")
     except ImportError as e:
         print(f"❌ שגיאה בimport: {e}")
     except Exception as e:

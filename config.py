@@ -213,7 +213,8 @@ import os
 DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL)
 ENABLE_DEBUG_PRINTS = os.getenv("ENABLE_DEBUG_PRINTS", str(ENABLE_DEBUG_PRINTS)).lower() == "true"
 ENABLE_GPT_COST_DEBUG = os.getenv("ENABLE_GPT_COST_DEBUG", str(ENABLE_GPT_COST_DEBUG)).lower() == "true"
-ENABLE_SHEETS_DEBUG = os.getenv("ENABLE_SHEETS_DEBUG", str(ENABLE_SHEETS_DEBUG)).lower() == "true"
+# 🗑️ עברנו למסד נתונים - Google Sheets Debug תמיד False
+ENABLE_SHEETS_DEBUG = False  # קבוע - לא נדרש יותר
 ENABLE_PERFORMANCE_DEBUG = os.getenv("ENABLE_PERFORMANCE_DEBUG", str(ENABLE_PERFORMANCE_DEBUG)).lower() == "true"
 ENABLE_MESSAGE_DEBUG = os.getenv("ENABLE_MESSAGE_DEBUG", str(ENABLE_MESSAGE_DEBUG)).lower() == "true"
 ENABLE_DATA_EXTRACTION_DEBUG = os.getenv("ENABLE_DATA_EXTRACTION_DEBUG", str(ENABLE_DATA_EXTRACTION_DEBUG)).lower() == "true"
@@ -350,100 +351,33 @@ FREE_MODEL_DAILY_LIMIT = 100
 # except Exception as e:
 #     print(f"❌ [CONFIG] שגיאה בהגדרת אימות עבור Google Vertex AI: {e}")
 
-# הגדרת Google Sheets
-_sheets_cache = None  # Cache גלובלי לחיבורי Google Sheets
-_cache_created_at = None  # זמן יצירת ה-cache
+# 🗑️ עברנו למסד נתונים - Google Sheets cache לא נדרש יותר
+# _sheets_cache = None  # היה משמש לcache של Google Sheets
+# _cache_created_at = None  # היה משמש לזמן יצירת cache
 
 def reset_sheets_cache():
-    """מאפס את ה-cache של Google Sheets - שימושי לפתרון בעיות"""
-    global _sheets_cache, _cache_created_at
-    _sheets_cache = None
-    _cache_created_at = None
-    print("[DEBUG] 🔄 Google Sheets cache reset")
+    """🗑️ עברנו למסד נתונים - פונקציה לא נדרשת יותר"""
+    # Google Sheets cache לא קיים יותר - הפונקציה נשארת למען תאימות
+    print("[DEBUG] 🗑️ Google Sheets cache reset (deprecated - using database)")
 
 def get_sheets_cache_info():
-    """מחזיר מידע על מצב ה-cache"""
-    global _sheets_cache, _cache_created_at
-    if _sheets_cache is None:
-        return {"status": "empty", "created_at": None, "age_seconds": 0}
-    
-    age_seconds = (time.time() - _cache_created_at) if _cache_created_at else 0
+    """🗑️ עברנו למסד נתונים - מחזיר מידע על מצב מסד הנתונים"""
+    # במקום cache של Google Sheets, מחזירים מידע על מסד נתונים
     return {
-        "status": "active",
-        "created_at": _cache_created_at,
-        "age_seconds": round(age_seconds, 2)
+        "status": "database_mode", 
+        "created_at": None, 
+        "age_seconds": 0,
+        "note": "עברנו למסד נתונים - Google Sheets לא בשימוש"
     }
 
 def setup_google_sheets():
     """
-    מגדיר את החיבור ל-Google Sheets ומחזיר ארבעה ערכים: client וגיליונות עיקריים.
-    עם מנגנון cache לביצועים מהירים יותר.
-    פלט: gs_client, sheet_users, sheet_log, sheet_states
+    🗑️ עברנו למסד נתונים - פונקציה לא נדרשת יותר
+    מחזירה None values למען תאימות עם קוד קיים
+    פלט: gs_client, sheet_users, sheet_log, sheet_states (כולם None)
     """
-    global _sheets_cache, _cache_created_at
-    
-    # 📦  אם רצים בסביבת CI – מחזירים dummy placeholders ומדלגים על התחברות אמיתית
-    if any(os.getenv(var) for var in ["CI", "GITHUB_ACTIONS", "CONTINUOUS_INTEGRATION"]):
-        if _sheets_cache is None:
-            # יצירת tuple ריק פעם אחת ושמירתו ב-cache כדי להימנע מיצירה חוזרת בבדיקות
-            _sheets_cache = (None, None, None, None)
-            _cache_created_at = time.time()
-        return _sheets_cache
-    
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    # מאפשר override של SERVICE_ACCOUNT_DICT באמצעות משתנה סביבה – שימושי ב-CI/Secrets
-    _env_sa = os.getenv("SERVICE_ACCOUNT_DICT", "").strip()
-    try:
-        _sa_dict = json.loads(_env_sa) if _env_sa else config["SERVICE_ACCOUNT_DICT"]
-    except Exception:
-        _sa_dict = config["SERVICE_ACCOUNT_DICT"]
-
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(_sa_dict, scope)
-    gs_client = gspread.authorize(creds)
-
-    # הגנת Fail-Fast – אם ההרשאה לא החזירה אובייקט תקף נזרוק שגיאה מיידית
-    if gs_client is None or getattr(gs_client, "open_by_key", None) is None:
-        raise RuntimeError("Google Sheets client failed to initialize – check credentials and environment variables (GOOGLE_APPLICATION_CREDENTIALS / SERVICE_ACCOUNT_DICT)")
-
-    max_retries = 3
-    delay = 5
-    last_exception = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            # Obfuscate the Sheet ID – show only the first 4 characters to avoid exposing the full key
-            safe_sheet_id = _mask_sensitive(GOOGLE_SHEET_ID, 4)
-            print(f"[DEBUG] Attempt {attempt}: Opening Google Sheet with ID: {safe_sheet_id}")
-            sheet = gs_client.open_by_key(GOOGLE_SHEET_ID)
-            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_USER_TAB']}")
-            sheet_users = sheet.worksheet(config["SHEET_USER_TAB"])
-            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_LOG_TAB']}")
-            sheet_log = sheet.worksheet(config["SHEET_LOG_TAB"])
-            print(f"[DEBUG] Attempt {attempt}: Accessing worksheet: {config['SHEET_STATES_TAB']}")
-            sheet_states = sheet.worksheet(config["SHEET_STATES_TAB"])
-            print(f"[DEBUG] ✅ Google Sheets loaded successfully and cached!")
-            
-            # 🗑️ עברנו למסד נתונים - וידוא עמודות לא נדרש!
-            # במסד נתונים עמודות נוצרות אוטומטית
-            try:
-                # Google Sheets עמודות היו נדרשות רק ב
-                # במסד נתונים זה לא נדרש
-                pass
-                safe_print(f"[DEBUG] ✅ Ensured 'name' column exists in sheets")
-            except Exception as e:
-                safe_print(f"[DEBUG] ⚠️ Warning: Could not ensure 'name' column: {e}")
-            
-            # שמירה ב-cache עם timestamp
-            _sheets_cache = (gs_client, sheet_users, sheet_log, sheet_states)
-            _cache_created_at = time.time()
-            return _sheets_cache
-        except Exception as e:
-            print(f"[ERROR] Google Sheets access failed on attempt {attempt}: {e}")
-            last_exception = e
-            if attempt < max_retries:
-                print(f"[DEBUG] Retrying in {delay} seconds...")
-                time.sleep(delay)
-    print(f"[FATAL] All attempts to access Google Sheets failed.")
-    logging.critical("[FATAL] All attempts to access Google Sheets failed.")
+    # 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
+    print("[DEBUG] 🗑️ Google Sheets setup called (deprecated - using database)")
     return None, None, None, None
 
 

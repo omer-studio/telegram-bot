@@ -599,21 +599,18 @@ def validate_emotional_identity_data(emotional_data: Dict[str, Any]) -> Tuple[bo
 # ---------------------------------------------------------------------------
 
 def force_sync_to_sheets(chat_id: str) -> bool:
+    """🗑️ עברנו למסד נתונים - פונקציה deprecated"""
     try:
         local_profile = get_user_profile_fast(chat_id)
         if not local_profile:
-            logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
+            logging.warning(f"אין נתונים למשתמש {chat_id}")
             return False
-        # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
-        try:
-            _sync_local_to_sheets_sync(chat_id)
-        except Exception as exc:
-            logging.error(f"שגיאה בסנכרון כפוי: {exc}")
-            return False
-        logging.info(f"✅ סנכרון כפוי ל-Google Sheets עבור משתמש {chat_id}")
-        return True
+        # 🗑️ עברנו למסד נתונים - אין צורך בסנכרון Google Sheets יותר
+        # במסד נתונים כל הנתונים כבר סונכרנו אוטומטית
+        logging.info(f"🗑️ force_sync_to_sheets deprecated - using database for {chat_id}")
+        return True  # תמיד מצליח כי במסד נתונים הכל כבר סונכרן
     except Exception as exc:
-        logging.error(f"שגיאה בסנכרון כפוי: {exc}")
+        logging.error(f"שגיאה בבדיקת נתונים: {exc}")
         return False
 
 
