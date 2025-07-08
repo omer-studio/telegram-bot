@@ -150,8 +150,9 @@ def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) ->
     ⚠️ תמיד מחזירה את 15 ההודעות האחרונות ללא סינון!
     """
     try:
-        # שליפה מ-SQL באמצעות db_manager - תמיד 15 הודעות מקסימום
-        rows = get_chat_history(chat_id, 15)
+        # 🔒 שליפה בטוחה מ-SQL באמצעות db_core - תמיד 15 הודעות מקסימום
+        from db_core import safe_get_chat_history
+        rows = safe_get_chat_history(chat_id, 15)
         
         messages: List[Dict[str, str]] = []
         for row in rows:
@@ -286,8 +287,9 @@ def _calculate_user_stats_from_history(history: list) -> dict:
 
 def get_user_stats_and_history(chat_id: str) -> Tuple[dict, list]:
     try:
-        # שליפה מ-SQL באמצעות db_manager
-        rows = get_chat_history(chat_id)  # הוסרה מגבלת 100 הודעות
+        # 🔒 שליפה בטוחה מ-SQL באמצעות db_core
+        from db_core import safe_get_chat_history
+        rows = safe_get_chat_history(chat_id)  # הוסרה מגבלת 100 הודעות
         if not rows:
             return {"total_messages": 0, "first_contact": None, "last_contact": None}, []
         
@@ -381,8 +383,9 @@ def get_weekday_context_instruction(chat_id: Optional[str] = None, user_msg: Opt
             else:
                 # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
                 try:
-                    # שליפה מ-SQL באמצעות db_manager
-                    rows = get_chat_history(chat_id, 30)
+                    # 🔒 שליפה בטוחה מ-SQL באמצעות db_core
+                    from db_core import safe_get_chat_history
+                    rows = safe_get_chat_history(chat_id, 30)
                     history = [{"user": row[0], "bot": row[1], "timestamp": row[2]} for row in rows]
                 except Exception:
                     history = []

@@ -349,7 +349,7 @@ def get_chat_history(chat_id, limit=100):
     cur = conn.cursor()
     cur.execute(
         "SELECT user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id=%s ORDER BY timestamp DESC LIMIT %s",
-        (chat_id, limit)
+        (str(chat_id), limit)
     )
     rows = cur.fetchall()
     cur.close()
@@ -417,7 +417,7 @@ def get_user_profile(chat_id):
     fields = ['chat_id'] + get_user_profile_fields()
     select_sql = f"SELECT {', '.join(fields)} FROM user_profiles WHERE chat_id=%s"
     
-    cur.execute(select_sql, (chat_id,))
+    cur.execute(select_sql, (str(chat_id),))
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -996,7 +996,7 @@ def increment_user_message_count(chat_id):
         cur = conn.cursor()
         
         # בדיקה אם המשתמש כבר קיים
-        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
+        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
         result = cur.fetchone()
         
         if result:
@@ -1005,7 +1005,7 @@ def increment_user_message_count(chat_id):
             new_count = current_count + 1
             cur.execute(
                 "UPDATE user_profiles SET total_messages_count = %s, updated_at = %s WHERE chat_id = %s",
-                (new_count, datetime.utcnow(), chat_id)
+                (new_count, datetime.utcnow(), str(chat_id))
             )
             if should_log_debug_prints():
                 print(f"📊 [DB] Updated message count for {chat_id}: {current_count} → {new_count}")
@@ -1054,7 +1054,7 @@ def get_user_message_count(chat_id):
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
-        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
+        cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
         result = cur.fetchone()
         
         cur.close()

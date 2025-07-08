@@ -467,7 +467,9 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
 
 def get_user_summary_fast(chat_id: str) -> str:
     try:
-        profile = get_user_profile_fast(chat_id)
+        # 🔒 שימוש בפונקציה בטוחה מבחינת טיפוסים
+        from db_core import safe_get_user_profile
+        profile = safe_get_user_profile(chat_id) or {}
         return profile.get("summary", "")
     except Exception as exc:
         logging.debug(f"Error getting summary for {chat_id}: {exc}")
