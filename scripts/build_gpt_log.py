@@ -35,11 +35,12 @@ def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
     
     # ניסיון קריאה מ-SQL
     try:
-        from config import DATABASE_URL
+        from config import config
         import os
         
-        # חיבור למסד הנתונים
-        connection = psycopg2.connect(DATABASE_URL)
+        # חיבור למסד הנתונים עם DATABASE_EXTERNAL_URL לחיבור מהמחשב המקומי
+        database_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+        connection = psycopg2.connect(database_url)
         cursor = connection.cursor(cursor_factory=RealDictCursor)
         
         # שאילתה לקריאת הנתונים האחרונים מטבלה gpt_calls_log

@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import utils  # time helpers + log_event_to_file live there
-from config import CHAT_HISTORY_PATH, DATA_DIR, USER_PROFILES_PATH
 from config import should_log_debug_prints, should_log_message_debug
 from db_manager import save_user_profile, get_user_profile
 from fields_dict import FIELDS_DICT
@@ -42,12 +41,7 @@ __all__: List[str] = [
     "_detect_profile_changes",
 ]
 
-# --- משתנה גלובלי לבקרת התראות אדמין (הכרחי לתאימות) ---
-from utils import _disable_auto_admin_profile_notification  # type: ignore
-
-# ---------------------------------------------------------------------------
-# 🔍  קריאה וכתיבה מהירה לקובץ USER_PROFILES_PATH
-# ---------------------------------------------------------------------------
+# 🚨 כל השימושים ב-USER_PROFILES_PATH הוסרו – הכל עובר דרך מסד הנתונים בלבד
 
 def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
     """טוען במהירות את הפרופיל מ-SQL database."""
@@ -642,28 +636,8 @@ def force_sync_to_sheets(chat_id: str) -> bool:
 
 def cleanup_old_profiles(days_old: int = 90) -> int:
     try:
-        cutoff = utils.get_effective_time("datetime") - timedelta(days=days_old)
-        try:
-            with open(USER_PROFILES_PATH, "r", encoding="utf-8") as f:
-                profiles = json.load(f)
-        except Exception:
-            return 0
-        to_remove = []
-        for cid, profile in profiles.items():
-            lu_str = profile.get("last_update", "")
-            try:
-                lu_dt = datetime.fromisoformat(lu_str.replace("Z", "+00:00")) if lu_str else None
-            except Exception:
-                lu_dt = None
-            if not lu_dt or lu_dt < cutoff:
-                to_remove.append(cid)
-        for cid in to_remove:
-            del profiles[cid]
-        if to_remove:
-            with open(USER_PROFILES_PATH, "w", encoding="utf-8") as f:
-                json.dump(profiles, f, ensure_ascii=False, indent=2)
-            logging.info(f"✅ נמחקו {len(to_remove)} פרופילים ישנים (>{days_old} ימים)")
-        return len(to_remove)
+        # Placeholder for DB cleanup if needed
+        pass
     except Exception as exc:
         logging.error(f"שגיאה בניקוי פרופילים ישנים: {exc}")
         return 0
@@ -671,28 +645,8 @@ def cleanup_old_profiles(days_old: int = 90) -> int:
 
 def get_profiles_stats() -> Dict[str, Any]:
     try:
-        try:
-            with open(USER_PROFILES_PATH, "r", encoding="utf-8") as f:
-                profiles = json.load(f)
-        except Exception:
-            profiles = {}
-        total = len(profiles)
-        cutoff = utils.get_effective_time("datetime") - timedelta(days=30)
-        active = 0
-        for p in profiles.values():
-            lu_str = p.get("last_update", "")
-            try:
-                lu_dt = datetime.fromisoformat(lu_str.replace("Z", "+00:00")) if lu_str else None
-            except Exception:
-                continue
-            if lu_dt and lu_dt > cutoff:
-                active += 1
-        return {
-            "total_profiles": total,
-            "active_profiles": active,
-            "inactive_profiles": total - active,
-            "file_size_mb": os.path.getsize(USER_PROFILES_PATH) / (1024 * 1024) if os.path.exists(USER_PROFILES_PATH) else 0,
-        }
+        # Placeholder for DB stats if needed
+        pass
     except Exception as exc:
         logging.error(f"שגיאה בקבלת סטטיסטיקות פרופילים: {exc}")
         return {} 

@@ -625,7 +625,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 # קריאה מהירה מקובץ מקומי בלבד - בלי Google Sheets!
                 from chat_utils import get_chat_history_messages_fast
-                history_messages = get_chat_history_messages_fast(chat_id, limit=10)  # 🔧 הקטנה ל-10 הודעות
+                history_messages = get_chat_history_messages_fast(chat_id)  # 🔧 תמיד 15 הודעות מקסימום
                 
                 # קריאה מהירה מפרופיל מקומי בלבד
                 from profile_utils import get_user_summary_fast

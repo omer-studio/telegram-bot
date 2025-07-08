@@ -19,11 +19,9 @@ import asyncio
 import shutil
 
 from config import (
-    CHAT_HISTORY_PATH,
     MAX_CHAT_HISTORY_MESSAGES,
     BOT_TRACE_LOG_FILENAME,
     BOT_ERRORS_FILENAME,
-    DATA_DIR,
     MAX_OLD_LOG_LINES,
     gpt_log_path,
     MAX_TRACEBACK_LENGTH,
@@ -149,39 +147,30 @@ def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list
 def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) -> list:
     """
     🔧 פונקציה מהירה לקריאת היסטוריה מ-SQL בלבד
-    זו גרסה מהירה יותר של get_chat_history_messages - בלי Google Sheets
+    ⚠️ תמיד מחזירה את 15 ההודעות האחרונות ללא סינון!
     """
     try:
-        # שליפה מ-SQL באמצעות db_manager
-        rows = get_chat_history(chat_id, limit or 20)
+        # שליפה מ-SQL באמצעות db_manager - תמיד 15 הודעות מקסימום
+        rows = get_chat_history(chat_id, 15)
         
         messages: List[Dict[str, str]] = []
         for row in rows:
             user_content = row[0] or ""  # user_msg
             bot_content = row[1] or ""   # bot_msg
             
-            # 🚨 SECURITY: סינון הודעות פנימיות
-            if bot_content and any(marker in bot_content for marker in ["[עדכון פרופיל]", "[הודעה אוטומטית", "[תשובת GPT-A]"]):
-                continue
-            
-            if user_content and user_content.startswith("[הודעה"):
-                continue
-            
-            # הוספת הודעות
+            # הוספת הודעות - ללא שום סינון!
             if user_content.strip():
                 messages.append({"role": "user", "content": user_content})
             
             if bot_content.strip():
                 messages.append({"role": "assistant", "content": bot_content})
-            
-            # הגבלה
-            if limit and len(messages) >= limit:
-                break
 
+        print(f"[HISTORY_CRITICAL] chat_id={chat_id} | נשלפו {len(rows)} שורות מDB | נשלחו {len(messages)} הודעות ל-GPT")
         return messages
         
     except Exception as e:
         logging.error(f"שגיאה בשליפת היסטוריה מהירה: {e}")
+        print(f"[HISTORY_ERROR] chat_id={chat_id} | שגיאה: {e}")
         return []
 
 
@@ -467,7 +456,7 @@ def clean_old_logs() -> None:
     try:
         files_to_clean = [BOT_TRACE_LOG_FILENAME, BOT_ERRORS_FILENAME]
         for file_name in files_to_clean:
-            file_path = os.path.join(DATA_DIR, file_name)
+            file_path = os.path.join(gpt_log_path, file_name)
             if os.path.exists(file_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
@@ -665,6 +654,7 @@ def cleanup_test_users():
         logging.info(f"🗑️ ניקוי משתמשי בדיקה - לא נתמך ב-SQL בשלב זה")
     except Exception as e:
         logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
+
 
     try:
         # קריאת תזכורות ממסד הנתונים

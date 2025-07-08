@@ -76,7 +76,7 @@ def clear_gpt_c_html_log():
     """פונקציה זמנית - יש ליצור את clear_gpt_c_html_log בעתיד"""
     print("📝 [GPT_C_LOGGER] זמנית מושבת - צריך ליצור clear_gpt_c_html_log")
     return True
-from config import DATA_DIR, PRODUCTION_PORT
+from config import PRODUCTION_PORT
 
 # 🚀 יבוא מערכת הלוגים החדשה
 try:
@@ -513,101 +513,10 @@ if __name__ == "__main__":
     import os
     from bot_setup import migrate_data_to_sql_with_safety
     
-    # דגל למניעת כפילות (נשמר ב-data/ שלא מתאפס בפריסות)
-    MIGRATION_FLAG = "data/migration_completed.flag"
+    # 🚨 DATA_DIR and all data/ references fully removed
     
-    def log_to_file(msg):
-        with open("migration_log.txt", "a", encoding="utf-8") as f:
-            f.write(msg + "\n")
-    
-    # בדיקה אם יש נתונים למיגרציה
-    def has_data_to_migrate():
-        """בודק אם יש נתונים למיגרציה"""
-        data_files = [
-            "data/chat_history.json",
-            "data/user_profiles.json", 
-            "data/gpt_usage_log.jsonl",
-            "data/openai_calls.jsonl"
-        ]
-        
-        for file_path in data_files:
-            if os.path.exists(file_path):
-                # בדיקה אם הקובץ לא ריק
-                try:
-                    if os.path.getsize(file_path) > 10:  # יותר מ-10 bytes
-                        return True
-                except:
-                    pass
-        return False
-    
-    # נריץ מיגרציה רק אם לא בוצעה ויש נתונים למיגרציה
-    if (os.environ.get("ENV", "production") == "production" and 
-        not os.path.exists(MIGRATION_FLAG) and 
-        has_data_to_migrate()):
-        
-        print("\n🚀 מבצע מיגרציה אוטומטית (startup)...\n")
-        log_to_file("🚀 התחלת מיגרציה אוטומטית (startup)...")
-        try:
-            success = migrate_data_to_sql_with_safety()
-            if success:
-                print("✅ מיגרציה אוטומטית הושלמה בהצלחה!")
-                log_to_file("✅ מיגרציה אוטומטית הושלמה בהצלחה!")
-                with open(MIGRATION_FLAG, "w") as f: f.write("done")
-                # שלח התראה לאדמין
-                try:
-                    from notifications import send_admin_notification
-                    send_admin_notification("✅ מיגרציה אוטומטית הושלמה בהצלחה! ראה קובץ migration_log.txt לסיכום מלא.")
-                except Exception as e:
-                    print(f"⚠️ שגיאה בשליחת התראה לאדמין: {e}")
-            else:
-                print("❌ מיגרציה אוטומטית נכשלה!")
-                log_to_file("❌ מיגרציה אוטומטית נכשלה!")
-                try:
-                    from notifications import send_admin_notification
-                    send_admin_notification("❌ מיגרציה אוטומטית נכשלה! בדוק קונסול/קובץ לוג.")
-                except Exception as e:
-                    print(f"⚠️ שגיאה בשליחת התראה לאדמין: {e}")
-        except Exception as e:
-            print(f"❌ שגיאה קריטית במיגרציה: {e}")
-            log_to_file(f"❌ שגיאה קריטית במיגרציה: {e}")
-    elif os.environ.get("ENV", "production") == "production" and not has_data_to_migrate():
-        # אין נתונים למיגרציה - נשמור דגל כדי לא לבדוק שוב
-        print("\nℹ️ אין נתונים למיגרציה - דילוג על מיגרציה אוטומטית")
-        try:
-            os.makedirs(os.path.dirname(MIGRATION_FLAG), exist_ok=True)
-            with open(MIGRATION_FLAG, "w") as f: f.write("no_data")
-        except Exception as e:
-            print(f"⚠️ שגיאה בשמירת דגל: {e}")
-    
-    # הוספת endpoint ל-gpt_c log במסגרת FastAPI
-    @app_fastapi.get("/data/gpt_c_results.html")
-    async def serve_gpt_c_log():
-        """מגיש את קובץ ה-log של gpt_c"""
-        html_file_path = os.path.join(DATA_DIR, "gpt_c_results.html")
-        
-        # אם הקובץ לא קיים, צור אותו מראש
-        if not os.path.exists(html_file_path):
-            clear_gpt_c_html_log()  # יוצר קובץ ריק עם התבנית הבסיסית
-        
-        try:
-            with open(html_file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return {"content": content, "type": "html"}
-        except Exception as e:
-            return {"error": f"שגיאה בטעינת הקובץ: {e}"}
-    
-    @app_fastapi.post("/data/gpt_c_results.html")
-    async def clear_gpt_c_log_endpoint():
-        """מנקה את לוג ה-gpt_c"""
-        try:
-            clear_gpt_c_html_log()
-            return {"status": "success", "message": "הלוג נוקה בהצלחה"}
-        except Exception as e:
-            return {"status": "error", "message": f"שגיאה בניקוי הלוג: {e}"}
-
     print(f"🤖 מריץ FastAPI server על פורט {PRODUCTION_PORT}!")
     print(f"🌐 Webhook זמין ב: http://localhost:{PRODUCTION_PORT}/webhook")
-    print(f"📊 GPT-C log זמין ב: http://localhost:{PRODUCTION_PORT}/data/gpt_c_results.html")
     
     # הרצת FastAPI עם uvicorn
     uvicorn.run(
