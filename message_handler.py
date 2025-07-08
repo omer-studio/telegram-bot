@@ -588,6 +588,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             log_payload["message_id"] = message_id
             log_payload["user_msg"] = user_msg
             logging.info(f"📩 התקבלה הודעה | chat_id={chat_id}, message_id={message_id}, תוכן={user_msg!r}")
+            
+            # 🔧 CRITICAL DEBUG: רישום כל הודעה נכנסת למסד נתונים למעקב
+            try:
+                with db_manager.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
+                        VALUES (%s, %s, %s, NOW())
+                    ''', (
+                        f"INCOMING_{chat_id}",
+                        f"📥 הודעה נכנסת: {user_msg}",
+                        "INCOMING_MESSAGE_LOG"
+                    ))
+                    conn.commit()
+            except Exception as db_err:
+                pass  # אל תיכשל בגלל דיבאג
+            
             print(f"[IN_MSG] chat_id={chat_id} | message_id={message_id} | text={user_msg.replace(chr(10), ' ')[:120]}")
         except Exception as ex:
             logging.error(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
