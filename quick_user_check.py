@@ -20,7 +20,10 @@ def check_user_status(chat_id):
     try:
         # יבוא מודולים
         from config import setup_google_sheets
-        from sheets_core import check_user_access, force_clear_user_cache
+        # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+# from sheets_core import check_user_access, force_clear_user_cache
+from db_manager import check_user_approved_status_db
+from profile_utils import clear_user_cache_profile
         
         print(f"🔍 בודק סטטוס משתמש {chat_id}...")
         

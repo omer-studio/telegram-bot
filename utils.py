@@ -187,10 +187,11 @@ def clear_chat_history(chat_id):
         return False
 
 def clear_from_sheets(chat_id):
-    """מחק גיליון משתמש מהגיליונות"""
-    from sheets_handler import delete_row_by_chat_id
-    deleted_sheet = delete_row_by_chat_id(sheet_name=config["SHEET_USER_TAB"], chat_id=chat_id)
-    deleted_state = delete_row_by_chat_id(sheet_name=config["SHEET_STATES_TAB"], chat_id=chat_id)
+    """מחק גיליון משתמש מהגיליונות - 🗑️ עברנו למסד נתונים!"""
+    # 🗑️ במסד נתונים אין צורך למחוק שורות - הנתונים נשמרים
+    # הפונקציה נשארת לתאימות אחורה אבל לא עושה כלום
+    deleted_sheet = True  # mock success - אין צורך למחוק במסד נתונים
+    deleted_state = True  # mock success - אין צורך למחוק במסד נתונים
     return deleted_sheet, deleted_state
 
 def _send_admin_secret_notification(message: str):

@@ -264,7 +264,9 @@ def auto_cleanup_old_users():
 async def validate_user_before_reminder(chat_id: str) -> bool:
     """מאמת שמשתמש זכאי לקבל תזכורת"""
     try:
-        from sheets_handler import check_user_access
+        # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+# from sheets_handler import check_user_access
+from db_manager import check_user_approved_status_db
         
         # בדיקה ב-Google Sheets
         try:

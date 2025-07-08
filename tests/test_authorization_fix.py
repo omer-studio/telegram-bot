@@ -28,20 +28,20 @@ class TestAuthorizationFix(unittest.TestCase):
         pass
         
     def test_basic_authorization_import(self):
-        """בדיקה בסיסית: ייבוא מודולי הרשאות"""
+        """בדיקה בסיסית: ייבוא מודולי הרשאות - עבר למסד נתונים"""
         try:
-            from sheets_core import check_user_access
             from db_manager import check_user_approved_status_db, increment_user_message_count
+            from profile_utils import get_user_summary_fast
             self.assertTrue(True, "All authorization modules imported successfully")
         except Exception as e:
             self.fail(f"Failed to import authorization modules: {e}")
             
     def test_check_user_access_function_exists(self):
-        """בדיקה: פונקציית check_user_access קיימת ועובדת"""
-        from sheets_core import check_user_access
+        """בדיקה: פונקציות הרשאה במסד נתונים קיימות ועובדות"""
+        from db_manager import check_user_approved_status_db
         
         # בדיקה שהפונקציה קיימת
-        self.assertTrue(callable(check_user_access), "check_user_access should be callable")
+        self.assertTrue(callable(check_user_approved_status_db), "check_user_approved_status_db should be callable")
         
     def test_increment_user_message_count_exists(self):
         """בדיקה: פונקציית increment_user_message_count קיימת"""
@@ -59,14 +59,14 @@ class TestAuthorizationFix(unittest.TestCase):
             self.assertIsInstance(status, str, f"Status {status} should be string")
             
     def test_message_handler_basic_import(self):
-        """בדיקה בסיסית: ייבוא message_handler ובדיקת זמינות פונקציות הרשאה"""
+        """בדיקה בסיסית: ייבוא message_handler ובדיקת זמינות פונקציות הרשאה במסד נתונים"""
         try:
             import message_handler
             self.assertTrue(hasattr(message_handler, 'handle_message'), "handle_message function should exist")
             
-            # בדיקה שהאישור עובד דרך sheets_handler כמו שקורה באמת בקוד
-            from sheets_handler import check_user_access
-            self.assertTrue(callable(check_user_access), "check_user_access should be callable from sheets_handler")
+            # בדיקה שהאישור עובד דרך מסד הנתונים כמו שקורה באמת בקוד
+            from db_manager import check_user_approved_status_db
+            self.assertTrue(callable(check_user_approved_status_db), "check_user_approved_status_db should be callable from db_manager")
         except Exception as e:
             self.fail(f"Failed to import message_handler or authorization functions: {e}")
 

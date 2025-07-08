@@ -27,6 +27,7 @@ __all__: List[str] = [
     "update_user_summary_fast",
     "increment_code_try_fast",
     "increment_gpt_c_run_count_fast",
+    "clear_user_cache_profile",
     # Emotional-identity API
     "update_emotional_identity_fast",
     "get_emotional_identity_fast",
@@ -42,6 +43,30 @@ __all__: List[str] = [
 ]
 
 # 🚨 כל השימושים ב-USER_PROFILES_PATH הוסרו – הכל עובר דרך מסד הנתונים בלבד
+
+def clear_user_cache_profile(chat_id: str) -> Dict[str, Any]:
+    """
+    מנקה cache של פרופיל משתמש ספציפי.
+    מחזיר מידע על ההצלחה וכמות ה-cache keys שנוקו.
+    """
+    try:
+        # במערכת הנוכחית אין cache file-based, אז זה placeholder
+        # שמחזיר תמיד הצלחה ללא ניקוי בפועל
+        logging.debug(f"[CACHE_CLEAR] ניסה לנקות cache עבור משתמש {chat_id}")
+        
+        return {
+            "success": True,
+            "cleared_count": 0,
+            "message": "No file-based cache to clear in current system"
+        }
+    except Exception as e:
+        logging.error(f"שגיאה בניקוי cache למשתמש {chat_id}: {e}")
+        return {
+            "success": False,
+            "cleared_count": 0,
+            "error": str(e)
+        }
+
 
 def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
     """טוען במהירות את הפרופיל מ-SQL database."""

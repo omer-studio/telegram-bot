@@ -40,8 +40,8 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
     # Stub heavy external interactions to keep test isolated
     monkeypatch.setattr(profile_utils, "_schedule_sheets_sync_safely", lambda _cid: None, raising=False)
 
-    import sheets_core  # imported after CI env flag
-    monkeypatch.setattr(sheets_core, "generate_summary_from_profile_data", lambda _d: "", raising=False)
+    # Patch functions that moved to database - no need for sheets_core anymore
+    monkeypatch.setattr(profile_utils, "generate_summary_from_profile_data", lambda _d: "", raising=False)
 
     chat_id = "test_chat_id"
 

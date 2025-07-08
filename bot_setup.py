@@ -47,7 +47,10 @@ import requests
 import logging
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 from config import TELEGRAM_BOT_TOKEN, config
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user
+# 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+# from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user
+from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new
+from profile_utils import get_user_summary_fast, update_user_profile_fast
 from notifications import send_startup_notification
 from messages import get_welcome_messages
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages, send_error_stats_report, send_usage_report

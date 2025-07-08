@@ -1851,12 +1851,6 @@ def get_database_table_counts():
         # 📊 כותרת ראשית
         message = "📊 **סטטוס מסד הנתונים:**\n\n"
         
-        # 📋 כותרת טבלה
-        message += "```\n"
-        message += "┌─────────────────────────┬──────────┬─────────────────┐\n"
-        message += "│ שם הטבלה                │ מס׳ שורות │ שינוי           │\n"
-        message += "├─────────────────────────┼──────────┼─────────────────┤\n"
-        
         total_rows = 0
         
         # מיון לפי שינוי (הכי גדול קודם)
@@ -1868,9 +1862,9 @@ def get_database_table_counts():
                 if table in changes:
                     change = changes[table]
                     change_sign = "+" if change['change'] > 0 else ""
-                    change_info = f"{change_sign}{change['change']:,}"
+                    change_info = f"({change_sign}{change['change']:,})"
                 else:
-                    change_info = "-"
+                    change_info = ""
                 sorted_tables.append((table, count, change_info, abs(changes.get(table, {}).get('change', 0))))
             else:
                 sorted_tables.append((table, count, "שגיאה", 0))
@@ -1878,20 +1872,22 @@ def get_database_table_counts():
         # מיון לפי גודל השינוי (הכי גדול קודם)
         sorted_tables.sort(key=lambda x: x[3], reverse=True)
         
+        # פורמט טבלה נקי עם רווחים
+        message += "```\n"
+        message += f"{'שם הטבלה':<25} {'שורות':<10} {'שינוי':<15}\n"
+        message += "=" * 50 + "\n"
+        
         # יצירת שורות הטבלה
         for table, count, change_info, _ in sorted_tables:
-            table_name = table[:22].ljust(22)  # חיתוך לאורך מקסימלי
+            table_name = table[:24]  # חיתוך לאורך מקסימלי
             if isinstance(count, int):
-                count_str = f"{count:,}".rjust(8)
-                change_str = change_info.center(15)
+                count_str = f"{count:,}"
+                message += f"{table_name:<25} {count_str:<10} {change_info:<15}\n"
             else:
-                count_str = "שגיאה".center(8)
-                change_str = "N/A".center(15)
-            
-            message += f"│ {table_name} │ {count_str} │ {change_str} │\n"
+                message += f"{table_name:<25} {'שגיאה':<10} {'N/A':<15}\n"
         
         # 📊 שורת סיכום
-        message += "├─────────────────────────┼──────────┼─────────────────┤\n"
+        message += "=" * 50 + "\n"
         
         # חישוב שינוי כללי
         total_change = 0
@@ -1900,15 +1896,14 @@ def get_database_table_counts():
             total_change = total_rows - previous_total
             if total_change != 0:
                 change_sign = "+" if total_change > 0 else ""
-                total_change_str = f"{change_sign}{total_change:,}".center(15)
+                total_change_str = f"({change_sign}{total_change:,})"
             else:
-                total_change_str = "ללא שינוי".center(15)
+                total_change_str = "(ללא שינוי)"
         else:
-            total_change_str = "(פריסה ראשונה)".center(15)
+            total_change_str = "(פריסה ראשונה)"
         
-        total_str = f"{total_rows:,}".rjust(8)
-        message += f"│ {'**סה״כ**'.ljust(22)} │ {total_str} │ {total_change_str} │\n"
-        message += "└─────────────────────────┴──────────┴─────────────────┘\n"
+        total_str = f"{total_rows:,}"
+        message += f"{'**סה״כ**':<25} {total_str:<10} {total_change_str:<15}\n"
         message += "```"
         
         return message

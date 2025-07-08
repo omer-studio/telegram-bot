@@ -397,23 +397,23 @@ class ComprehensiveDeployChecker:
             return False, [f"❌ שגיאה בבדיקת זיכרון: {e}"]
     
     def check_interface_compatibility(self) -> Tuple[bool, List[str]]:
-        """בדיקת תאימות ממשקי ליבה"""
+        """בדיקת תאימות ממשקי ליבה - כעת במסד נתונים"""
         errors = []
         
         try:
-            from sheets_handler import register_user, approve_user
+            # בדיקת פונקציות ליבה במסד הנתונים
+            from profile_utils import get_user_summary_fast, update_user_profile_fast
+            from db_wrapper import reset_gpt_c_run_count_wrapper
             
-            for fn_name, fn in [("register_user", register_user), ("approve_user", approve_user)]:
-                sig = inspect.signature(fn)
+            # בדיקת פונקציות קיימות
+            if not callable(get_user_summary_fast):
+                errors.append("❌ get_user_summary_fast לא ניתן לקריאה")
+            
+            if not callable(update_user_profile_fast):
+                errors.append("❌ update_user_profile_fast לא ניתן לקריאה")
                 
-                # בדיקת פרמטרים
-                if not (1 <= len(sig.parameters) <= 2):
-                    errors.append(f"❌ {fn_name}: ציפיתי ל-1-2 פרמטרים, קיבלתי {len(sig.parameters)}")
-                
-                # בדיקת החזרת success
-                src = inspect.getsource(fn)
-                if not re.search(r"return\s+\{[^}]*['\"]success['\"]", src):
-                    errors.append(f"❌ {fn_name}: אין 'success' בהחזרת הפונקציה")
+            if not callable(reset_gpt_c_run_count_wrapper):
+                errors.append("❌ reset_gpt_c_run_count_wrapper לא ניתן לקריאה")
             
             if not errors:
                 print("✅ ממשקי ליבה תקינים")
@@ -423,111 +423,71 @@ class ComprehensiveDeployChecker:
         
         return len(errors) == 0, errors
 
-    def check_sheets_logging(self) -> Tuple[bool, List[str]]:
-        """בדיקת רישום לוגים לגיליונות Google Sheets"""
+    def check_database_logging(self) -> Tuple[bool, List[str]]:
+        """בדיקת רישום לוגים במסד הנתונים (עבר מגיליונות לDB)"""
         errors = []
         
         try:
-            from config import setup_google_sheets
-            from sheets_advanced import log_to_sheets_sync
-            import gspread
+            from config import config
+            import psycopg2
             
-            # בדיקת חיבור לגיליונות
-            print("🔍 בודק חיבור לגיליונות Google Sheets...")
-            gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
-            
-            # בדיקת גיליון הלוגים
-            if not sheet_log:
-                errors.append("❌ גיליון לוגים לא נטען")
+            # בדיקת חיבור למסד הנתונים
+            print("🔍 בודק חיבור למסד הנתונים...")
+            db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+            if not db_url:
+                errors.append("❌ לא נמצא URL למסד הנתונים")
                 return False, errors
             
-            print(f"✅ גיליון לוגים נטען: {sheet_log.title}")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
             
-            # בדיקת כותרות גיליון
-            headers = sheet_log.row_values(1)
-            required_headers = ["message_id", "chat_id", "user_msg", "bot_reply"]
-            missing_headers = [h for h in required_headers if h not in headers]
+            # בדיקת טבלת chat_messages
+            print("🔍 בודק טבלת chat_messages...")
+            cur.execute("SELECT COUNT(*) FROM chat_messages")
+            message_count = cur.fetchone()[0]
             
-            if missing_headers:
-                errors.append(f"❌ כותרות חסרות בגיליון: {missing_headers}")
+            if message_count < 1:
+                errors.append("❌ טבלת chat_messages ריקה")
                 return False, errors
             
-            print(f"✅ כותרות גיליון תקינות: {len(headers)} עמודות")
+            print(f"✅ טבלת chat_messages מכילה {message_count} הודעות")
             
-            # בדיקת כתיבה לגיליון
-            print("🔍 בודק כתיבה לגיליון...")
-            test_message_id = f"ci_test_{int(time.time())}"
-            test_chat_id = "ci_test_chat"
+            # בדיקת טבלת gpt_calls_log
+            print("🔍 בודק טבלת gpt_calls_log...")
+            cur.execute("SELECT COUNT(*) FROM gpt_calls_log")
+            gpt_calls_count = cur.fetchone()[0]
             
-            # כתיבת שורת בדיקה
-            result = log_to_sheets_sync(
-                message_id=test_message_id,
-                chat_id=test_chat_id,
-                user_msg="בדיקת CI - הודעת משתמש",
-                reply_text="בדיקת CI - תשובת בוט",
-                reply_summary="בדיקת CI - סיכום",
-                main_usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "model": "gpt-4"},
-                summary_usage={},
-                extract_usage={},
-                total_tokens=15,
-                cost_usd=0.001,
-                cost_ils=0.004
-            )
+            print(f"✅ טבלת gpt_calls_log מכילה {gpt_calls_count} קריאות GPT")
             
-            if not result:
-                errors.append("❌ כתיבה לגיליון נכשלה")
+            # בדיקת טבלת user_profiles
+            print("🔍 בודק טבלת user_profiles...")
+            cur.execute("SELECT COUNT(*) FROM user_profiles")
+            profiles_count = cur.fetchone()[0]
+            
+            if profiles_count < 1:
+                errors.append("❌ טבלת user_profiles ריקה")
                 return False, errors
             
-            print("✅ כתיבה לגיליון הצליחה")
+            print(f"✅ טבלת user_profiles מכילה {profiles_count} פרופילים")
             
-            # בדיקת קריאה מהגיליון
-            print("🔍 בודק קריאה מהגיליון...")
-            from sheets_core import get_sheet_all_values_cached
-            all_values = get_sheet_all_values_cached(sheet_log)
-            # מציאת אינדקסים של העמודות
-            msgid_col = headers.index("message_id")
-            chatid_col = headers.index("chat_id")
-            # חיפוש שורה תואמת
-            test_row_idx = None
-            for idx, row in enumerate(all_values[1:], start=2):  # gspread: שורה 1=כותרות, שורה 2=ראשונה אמיתית
-                if len(row) > max(msgid_col, chatid_col) and row[msgid_col] == test_message_id and row[chatid_col] == test_chat_id:
-                    test_row_idx = idx
-                    break
-            if not test_row_idx:
-                errors.append("❌ שורת הבדיקה לא נמצאה בגיליון")
-                return False, errors
-            print(f"✅ שורת בדיקה נמצאה בגיליון: שורה {test_row_idx}")
-            # מחיקת שורת הבדיקה
-            try:
-                sheet_log.delete_rows(test_row_idx)
-                print(f"✅ שורת בדיקה נמחקה מהגיליון (שורה {test_row_idx})")
-            except Exception as e:
-                errors.append(f"❌ שגיאה במחיקת שורת בדיקה: {e}")
-                return False, errors
-            # המשך הבדיקות (היסטוריה וכו')
-            total_rows = len(all_values)
-            if total_rows < 10:
-                errors.append(f"❌ מעט מדי שורות בגיליון: {total_rows}")
-                return False, errors
-            print(f"✅ גיליון מכיל {total_rows} שורות")
-            print("🔍 בודק היסטוריית הודעות...")
-            recent_rows = all_values[-10:]  # 10 השורות האחרונות
-            message_rows = [row for row in recent_rows if len(row) > 2 and row[0] and row[1] and row[2]]
-            if len(message_rows) < 3:
-                errors.append(f"❌ מעט מדי הודעות בהיסטוריה: {len(message_rows)} הודעות ב-10 שורות אחרונות")
-                return False, errors
-            print(f"✅ היסטוריה תקינה: {len(message_rows)} הודעות ב-10 שורות אחרונות")
-            chat_ids = set()
-            for row in recent_rows:
-                if len(row) > 1 and row[1]:
-                    chat_ids.add(row[1])
-            if len(chat_ids) < 1:
-                errors.append(f"❌ אין משתמשים בהיסטוריה: {len(chat_ids)} משתמשים שונים")
-                return False, errors
-            print(f"✅ מגוון משתמשים תקין: {len(chat_ids)} משתמשים שונים")
+            # בדיקת הודעות אחרונות
+            print("🔍 בודק הודעות אחרונות...")
+            cur.execute("""
+                SELECT COUNT(DISTINCT chat_id) 
+                FROM chat_messages 
+                WHERE created_at > NOW() - INTERVAL '7 days'
+            """)
+            active_users = cur.fetchone()[0]
+            
+            print(f"✅ משתמשים פעילים בשבוע האחרון: {active_users}")
+            
+            cur.close()
+            conn.close()
+            
             return True, []
+            
         except Exception as e:
-            errors.append(f"❌ שגיאה בבדיקת גיליונות: {e}")
+            errors.append(f"❌ שגיאה בבדיקת מסד נתונים: {e}")
             return False, errors
     
     def check_concurrent_system(self) -> Tuple[bool, List[str]]:
@@ -605,7 +565,7 @@ class ComprehensiveDeployChecker:
             ("בדיקות Unit", self.check_unit_tests),
             ("צריכת זיכרון", self.check_memory_usage),
             ("תאימות ממשקי ליבה", self.check_interface_compatibility),
-            ("רישום לוגים לגיליונות", self.check_sheets_logging),
+            ("רישום לוגים במסד נתונים", self.check_database_logging),
             ("מערכת Concurrent Handling", self.check_concurrent_system),
             ("שלמות requirements.txt", self.check_requirements_completeness),
         ]

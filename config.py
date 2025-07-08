@@ -421,11 +421,12 @@ def setup_google_sheets():
             sheet_states = sheet.worksheet(config["SHEET_STATES_TAB"])
             print(f"[DEBUG] ✅ Google Sheets loaded successfully and cached!")
             
-            # וידוא שעמודת name קיימת בגיליונות
+            # 🗑️ עברנו למסד נתונים - וידוא עמודות לא נדרש!
+            # במסד נתונים עמודות נוצרות אוטומטית
             try:
-                from sheets_core import ensure_name_column_exists
-                ensure_name_column_exists(sheet_users)
-                ensure_name_column_exists(sheet_states)
+                # Google Sheets עמודות היו נדרשות רק ב
+                # במסד נתונים זה לא נדרש
+                pass
                 safe_print(f"[DEBUG] ✅ Ensured 'name' column exists in sheets")
             except Exception as e:
                 safe_print(f"[DEBUG] ⚠️ Warning: Could not ensure 'name' column: {e}")

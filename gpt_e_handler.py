@@ -25,7 +25,8 @@ import pytz
 
 # ייבוא פונקציות עזר
 from utils import get_chat_history_messages, get_israel_time
-from sheets_handler import get_user_summary, update_user_profile, reset_gpt_c_run_count
+from profile_utils import get_user_summary_fast, update_user_profile_fast
+from db_wrapper import reset_gpt_c_run_count_wrapper
 from prompts import build_profile_extraction_enhanced_prompt, JSON_RESPONSE_INSTRUCTION, JSON_EXAMPLE
 from gpt_utils import normalize_usage_dict, safe_get_usage_value, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from config import GPT_MODELS, GPT_PARAMS
@@ -147,7 +148,7 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         
         # שלב 2: שליפת פרופיל קיים
         logger.info(f"[gpt_e] Fetching current profile for chat_id={chat_id}")
-        current_profile = get_user_summary(chat_id)
+        current_profile = get_user_summary_fast(chat_id)
         
         # דיבאג מפורט של הפרופיל הנוכחי
         print(f"[DEBUG] gpt_e_profile | chat={chat_id} | profile='{current_profile[:35]}{'...' if len(current_profile) > 35 else ''}'")
@@ -335,7 +336,7 @@ async def update_user_state_after_gpt_e(chat_id: str, result: Dict[str, Any]) ->
     try:
         if result['success']:
             # איפוס מונה gpt_c_run_count ועדכון last_gpt_e_timestamp
-            success = reset_gpt_c_run_count(chat_id)
+            success = reset_gpt_c_run_count_wrapper(chat_id)
             
             if success:
                 logger.info(f"[gpt_e] Updated user state for chat_id={chat_id} after successful run")

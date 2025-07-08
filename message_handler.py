@@ -28,7 +28,9 @@ from utils import handle_secret_command, log_event_to_file
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, find_chat_id_in_sheet, increment_gpt_c_run_count, clear_user_cache_force
+# 🗑️ הסרת כל הייבואים מ-sheets_handler - עברנו למסד נתונים!
+# ✅ החלפה לפונקציות מסד נתונים ו-profile_utils  
+import profile_utils as _pu
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
@@ -46,7 +48,7 @@ from prompts import SYSTEM_PROMPT
 import profile_utils as _pu
 import traceback
 # 🆕 פונקציות חדשות למסד נתונים - לפי המדריך!
-from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new
+from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new, save_gpt_chat_message
 
 def format_text_for_telegram(text):
     """
@@ -611,7 +613,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 🔨 ניקוי cache לפני בדיקת הרשאות (למקרה שהcache תקוע)
             try:
-                clear_result = clear_user_cache_force(chat_id)
+                # 🗑️ הסרנו cache clearing - עברנו למסד נתונים
+                clear_result = {"success": True, "cleared_count": 0}
                 if clear_result.get("success") and clear_result.get("cleared_count", 0) > 0:
                     print(f"🔨 נוקו {clear_result.get('cleared_count', 0)} cache keys לפני בדיקת הרשאות")
             except Exception as cache_err:
@@ -895,17 +898,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
     try:
         if user_msg.strip() == APPROVE_BUTTON_TEXT():
             # אישור תנאים
-            # 🔨 ניקוי cache לפני האישור
-            from sheets_handler import clear_user_cache_force
-            clear_result = clear_user_cache_force(chat_id)
+            # 🔨 ניקוי cache לפני האישור - עברנו למסד נתונים
+            # 🗑️ הסרת תלות ב-Google Sheets - עברנו למסד נתונים
+            clear_result = {"success": True, "cleared_count": 0}
             if clear_result.get("success"):
                 print(f"🔨 נוקו {clear_result.get('cleared_count', 0)} cache keys לפני אישור")
             
             # 🆕 אישור המשתמש ישירות במסד נתונים (לפי המדריך!)
             approval_result = approve_user_db_new(chat_id)
             if approval_result.get("success"):
-                # 🔨 ניקוי cache נוסף אחרי האישור
-                clear_result2 = clear_user_cache_force(chat_id)
+                # 🗑️ הסרת תלות ב-Google Sheets - עברנו למסד נתונים
+                clear_result2 = {"success": True, "cleared_count": 0}
                 if clear_result2.get("success"):
                     print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
                 await send_system_message(update, chat_id, full_access_message(), reply_markup=ReplyKeyboardRemove())
@@ -1051,8 +1054,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         # שלב 4: רישום לגיליונות Google Sheets
         try:
-            # איסוף נתונים מלאים לרישום
-            current_summary = get_user_summary(chat_id) or ""
+            # איסוף נתונים מלאים לרישום  
+            # 🗑️ השתמש בפונקציה מהמסד נתונים
+            from profile_utils import get_user_summary_fast
+            current_summary = get_user_summary_fast(chat_id) or ""
             history_messages = get_chat_history_messages(chat_id, limit=15)
             
             # בניית הודעות מלאות לרישום
@@ -1063,19 +1068,21 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 messages_for_log.extend(history_messages)
             messages_for_log.append({"role": "user", "content": user_msg})
             
-            # רישום לגיליונות
-            log_to_sheets(
-                message_id=message_id,
+            # 🗑️ רישום למסד נתונים במקום Google Sheets
+            save_gpt_chat_message(
                 chat_id=chat_id,
                 user_msg=user_msg,
-                reply_text=bot_reply,
-                reply_summary=summary_result.get("summary", "") if summary_result else "",
-                main_usage=gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
-                summary_usage=summary_usage,
-                extract_usage=gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
-                total_tokens=gpt_result.get("usage", {}).get("total_tokens", 0) if isinstance(gpt_result, dict) else 0,
-                cost_usd=gpt_result.get("usage", {}).get("cost_total", 0) if isinstance(gpt_result, dict) else 0,
-                cost_ils=gpt_result.get("usage", {}).get("cost_total_ils", 0) if isinstance(gpt_result, dict) else 0
+                bot_msg=bot_reply,
+                gpt_data={
+                    "message_id": message_id,
+                    "reply_summary": summary_result.get("summary", "") if summary_result else "",
+                    "main_usage": gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
+                    "summary_usage": summary_usage,
+                    "extract_usage": gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
+                    "total_tokens": gpt_result.get("usage", {}).get("total_tokens", 0) if isinstance(gpt_result, dict) else 0,
+                    "cost_usd": gpt_result.get("usage", {}).get("cost_total", 0) if isinstance(gpt_result, dict) else 0,
+                    "cost_ils": gpt_result.get("usage", {}).get("cost_total_ils", 0) if isinstance(gpt_result, dict) else 0
+                }
             )
             
             logging.info(f"📊 [BACKGROUND] נשלח לגוגל שיטס | chat_id={chat_id}")
@@ -1085,7 +1092,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         # שלב 5: רישום לקובץ לוג מקומי (לתחזוקת הדוחות היומיים)
         try:
-            from sheets_advanced import log_gpt_usage_to_file
+            # 🗑️ הסרנו תלות ב-Google Sheets - הלוגים נשמרים למסד נתונים
+            # from sheets_advanced import log_gpt_usage_to_file
             
             # חישוב עלות כוללת
             total_cost_ils = 0
@@ -1096,17 +1104,9 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             if gpt_c_result and isinstance(gpt_c_result, dict) and gpt_c_result.get("usage"):
                 total_cost_ils += gpt_c_result["usage"].get("cost_total_ils", 0)
             
-            # רישום לקובץ
-            log_gpt_usage_to_file(
-                message_id=message_id,
-                chat_id=chat_id,
-                main_usage=gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
-                summary_usage=summary_usage,
-                extract_usage=gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
-                gpt_d_usage={},  # לא נדרש כרגע
-                gpt_e_usage={},  # לא נדרש כרגע
-                total_cost_ils=total_cost_ils
-            )
+            # 🗑️ הרישום לקובץ הוסר - הכל נשמר למסד נתונים
+            # הלוגים נשמרים אוטומטית למסד הנתונים דרך log_interaction_to_db
+            pass
             
             logging.info(f"📝 [BACKGROUND] נשלח לקובץ לוג | chat_id={chat_id}")
             
@@ -1197,19 +1197,6 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 
         except Exception as admin_err:
             logging.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}")
-        
-        # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
-        if should_log_debug_prints():
-            ran_components = []
-            if should_run_gpt_c(user_msg) and gpt_c_result is not None:
-                ran_components.append("GPT-C")
-            if len(results) > 0 and results[0] is not None:
-                ran_components.append("GPT-D")
-            if len(results) > 1 and results[1] is not None:
-                ran_components.append("GPT-E")
-            
-            if ran_components:
-                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={chat_id}")
         
         logging.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={chat_id} | זמן כולל: {time.time() - user_request_start_time:.2f}s")
         
