@@ -280,40 +280,43 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
     import sys; sys.stdout.flush()
     
-    # 🔧 תיקון קריטי: הוספת timeout ו-retry mechanism למניעת timeout errors
+    # 🔧 תיקון קריטי: Progressive timeout אופטימלי ו-retry mechanism למניעת timeout errors
     try:
-        max_retries = 2
-        timeout_seconds = 15  # timeout של 15 שניות לשליחת הודעה
+        max_retries = 5  # 6 ניסיונות סה"כ (0-5)
+        timeout_seconds = [1, 2, 3, 3, 4, 5]  # Progressive timeout אופטימלי! 🚀
         
         for attempt in range(max_retries + 1):
+            current_timeout = timeout_seconds[min(attempt, len(timeout_seconds) - 1)]
             try:
-                # שליחה עם timeout מוגדר
+                # שליחה עם timeout הדרגתי אופטימלי
                 sent_message = await asyncio.wait_for(
                     update.message.reply_text(formatted_text, parse_mode="HTML"),
-                    timeout=timeout_seconds
+                    timeout=current_timeout
                 )
                 
                 if should_log_message_debug():
-                    print(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+                    print(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
                 
-                logging.info(f"[TELEGRAM_REPLY] message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
+                logging.info(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
                 break  # הצלחה - יוצאים מהלולאה
                 
             except asyncio.TimeoutError:
                 if attempt < max_retries:
-                    logging.warning(f"[TELEGRAM_TIMEOUT] Timeout on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying...")
-                    print(f"⚠️ [TELEGRAM_TIMEOUT] Timeout on attempt {attempt + 1} - retrying in 2 seconds...")
-                    await asyncio.sleep(2)  # חכה 2 שניות לפני ניסיון נוסף
+                    next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
+                    logging.warning(f"[TELEGRAM_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying with {next_timeout}s...")
+                    print(f"⚠️ [TELEGRAM_TIMEOUT] ⏰ Timeout after {current_timeout}s - retrying with {next_timeout}s timeout...")
+                    await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
                     # כל הניסיונות נכשלו - זורקים שגיאה
-                    raise Exception(f"Telegram API timeout after {max_retries + 1} attempts (each {timeout_seconds}s)")
+                    raise Exception(f"Telegram API timeout after {max_retries + 1} attempts (timeouts: {timeout_seconds})")
                     
             except Exception as e:
                 if attempt < max_retries and ("network" in str(e).lower() or "timeout" in str(e).lower() or "connection" in str(e).lower()):
-                    logging.warning(f"[TELEGRAM_RETRY] Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
-                    print(f"⚠️ [TELEGRAM_RETRY] Network error - retrying in 2 seconds...")
-                    await asyncio.sleep(2)
+                    next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
+                    logging.warning(f"[TELEGRAM_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                    print(f"⚠️ [TELEGRAM_RETRY] 🌐 Network error - retrying with {next_timeout}s timeout...")
+                    await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
                     # שגיאה שלא ניתן לתקן או גמרנו הניסיונות
@@ -363,33 +366,36 @@ async def send_approval_message(update, chat_id):
     # ❌ לא עושים פורמטינג להודעות מערכת - רק לתשובות GPT-A
     
     try:
-        # 🔧 תיקון קריטי: הוספת timeout ו-retry mechanism גם להודעת אישור
-        max_retries = 2
-        timeout_seconds = 15
+        # 🔧 תיקון קריטי: Progressive timeout אופטימלי גם להודעת אישור
+        max_retries = 5  # 6 ניסיונות סה"כ (0-5)
+        timeout_seconds = [1, 2, 3, 3, 4, 5]  # Progressive timeout אופטימלי! 🚀
         
         for attempt in range(max_retries + 1):
+            current_timeout = timeout_seconds[min(attempt, len(timeout_seconds) - 1)]
             try:
                 await asyncio.wait_for(
                     update.message.reply_text(
                         approval_msg,
                         reply_markup=ReplyKeyboardMarkup(approval_keyboard(), one_time_keyboard=True, resize_keyboard=True)
                     ),
-                    timeout=timeout_seconds
+                    timeout=current_timeout
                 )
                 break  # הצלחה - יוצאים מהלולאה
                 
             except asyncio.TimeoutError:
                 if attempt < max_retries:
-                    logging.warning(f"[APPROVAL_MSG_TIMEOUT] Timeout on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying...")
-                    await asyncio.sleep(2)
+                    next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
+                    logging.warning(f"[APPROVAL_MSG_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying with {next_timeout}s...")
+                    await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
-                    raise Exception(f"Approval message timeout after {max_retries + 1} attempts")
+                    raise Exception(f"Approval message timeout after {max_retries + 1} attempts (timeouts: {timeout_seconds})")
                     
             except Exception as e:
                 if attempt < max_retries and ("network" in str(e).lower() or "timeout" in str(e).lower() or "connection" in str(e).lower()):
-                    logging.warning(f"[APPROVAL_MSG_RETRY] Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
-                    await asyncio.sleep(2)
+                    next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
+                    logging.warning(f"[APPROVAL_MSG_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                    await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
                     raise e
@@ -926,36 +932,39 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
     שולחת הודעת מערכת למשתמש ללא פורמטינג מתקדם
     """
     try:
-        # 🔧 תיקון קריטי: הוספת timeout ו-retry mechanism גם להודעות מערכת
-        max_retries = 2
-        timeout_seconds = 15
+        # 🔧 תיקון קריטי: Progressive timeout אופטימלי גם להודעות מערכת
+        max_retries = 5  # 6 ניסיונות סה"כ (0-5)
+        timeout_seconds = [1, 2, 3, 3, 4, 5]  # Progressive timeout אופטימלי! 🚀
         
         for attempt in range(max_retries + 1):
+            current_timeout = timeout_seconds[min(attempt, len(timeout_seconds) - 1)]
             try:
                 if reply_markup:
                     await asyncio.wait_for(
                         update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML"),
-                        timeout=timeout_seconds
+                        timeout=current_timeout
                     )
                 else:
                     await asyncio.wait_for(
                         update.message.reply_text(text, parse_mode="HTML"),
-                        timeout=timeout_seconds
+                        timeout=current_timeout
                     )
                 break  # הצלחה - יוצאים מהלולאה
                 
             except asyncio.TimeoutError:
                 if attempt < max_retries:
-                    logging.warning(f"[SYSTEM_MSG_TIMEOUT] Timeout on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying...")
-                    await asyncio.sleep(2)
+                    next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
+                    logging.warning(f"[SYSTEM_MSG_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying with {next_timeout}s...")
+                    await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
-                    raise Exception(f"System message timeout after {max_retries + 1} attempts")
+                    raise Exception(f"System message timeout after {max_retries + 1} attempts (timeouts: {timeout_seconds})")
                     
             except Exception as e:
                 if attempt < max_retries and ("network" in str(e).lower() or "timeout" in str(e).lower() or "connection" in str(e).lower()):
-                    logging.warning(f"[SYSTEM_MSG_RETRY] Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
-                    await asyncio.sleep(2)
+                    next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
+                    logging.warning(f"[SYSTEM_MSG_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                    await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
                     raise e
