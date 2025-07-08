@@ -235,35 +235,53 @@ def _calculate_user_stats_from_history(history: list) -> dict:
     if not history:
         return basic_stats
 
-    effective_now = utils.get_effective_time("datetime")
-    first_contact_dt = datetime.fromisoformat(history[0]["timestamp"])
-    last_contact_dt = datetime.fromisoformat(history[-1]["timestamp"])
+    try:
+        effective_now = utils.get_effective_time("datetime")
+        first_contact_dt = datetime.fromisoformat(history[0]["timestamp"])
+        last_contact_dt = datetime.fromisoformat(history[-1]["timestamp"])
 
-    days_together = (effective_now - first_contact_dt).days
-    hours_since_last = (effective_now - last_contact_dt).total_seconds() / 3600
+        # 🔧 תיקון: וידוא timezone consistency
+        import pytz
+        israel_tz = pytz.timezone('Asia/Jerusalem')
+        
+        # אם effective_now אין לו timezone, מוסיפים
+        if effective_now.tzinfo is None:
+            effective_now = israel_tz.localize(effective_now)
+        
+        # אם התאריכים מההיסטוריה אין להם timezone, מוסיפים
+        if first_contact_dt.tzinfo is None:
+            first_contact_dt = israel_tz.localize(first_contact_dt)
+        if last_contact_dt.tzinfo is None:
+            last_contact_dt = israel_tz.localize(last_contact_dt)
 
-    current_hour = effective_now.hour
-    weekday = effective_now.weekday()
-    weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+        days_together = (effective_now - first_contact_dt).days
+        hours_since_last = (effective_now - last_contact_dt).total_seconds() / 3600
 
-    all_user_text = " ".join(user_messages).lower()
-    topic_mentions = _extract_topics_from_text(all_user_text)
+        current_hour = effective_now.hour
+        weekday = effective_now.weekday()
+        weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
 
-    basic_stats.update(
-        {
-            "days_knowing_each_other": days_together,
-            "hours_since_last_message": round(hours_since_last, 1),
-            "messages_per_day_avg": round(len(user_messages) / max(days_together, 1), 1),
-            "current_time_of_day": _get_time_of_day(current_hour),
-            "current_hour": current_hour,
-            "is_weekend": weekday >= 5,
-            "weekend_approaching": weekday >= 3,
-            "weekday_name": weekday_names[weekday],
-            "main_topics_mentioned": topic_mentions,
-            "total_user_words": len(all_user_text.split()),
-        }
-    )
-    return basic_stats
+        all_user_text = " ".join(user_messages).lower()
+        topic_mentions = _extract_topics_from_text(all_user_text)
+
+        basic_stats.update(
+            {
+                "days_knowing_each_other": days_together,
+                "hours_since_last_message": round(hours_since_last, 1),
+                "messages_per_day_avg": round(len(user_messages) / max(days_together, 1), 1),
+                "current_time_of_day": _get_time_of_day(current_hour),
+                "current_hour": current_hour,
+                "is_weekend": weekday >= 5,
+                "weekend_approaching": weekday >= 3,
+                "weekday_name": weekday_names[weekday],
+                "main_topics_mentioned": topic_mentions,
+                "total_user_words": len(all_user_text.split()),
+            }
+        )
+        return basic_stats
+    except Exception as e:
+        logging.error(f"שגיאה בחישוב סטטיסטיקות מההיסטוריה: {e}")
+        return basic_stats  # מחזיר לפחות את הסטטיסטיקות הבסיסיות
 
 
 def get_user_stats_and_history(chat_id: str) -> Tuple[dict, list]:
