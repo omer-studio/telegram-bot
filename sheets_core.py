@@ -540,74 +540,7 @@ def check_user_access(sheet, chat_id: str) -> Dict[str, Any]:
         error_result = {"status": "error", "code": None}
         return error_result
 
-def ensure_user_state_row(sheet_users, sheet_states, chat_id: str) -> bool:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        
-        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
-        all_values = get_sheet_all_values_cached(sheet_states)
-        
-        if not all_values or len(all_values) < 1:
-            debug_log("Sheet is empty or has no headers")
-            return False
-        
-        # שורה ראשונה = כותרות
-        headers = all_values[0]
-        
-        # מציאת אינדקס עמודת chat_id
-        chat_id_col = None
-        for i, header in enumerate(headers):
-            if header.lower() == "chat_id":
-                chat_id_col = i + 1  # gspread uses 1-based indexing
-                break
-        
-        if not chat_id_col:
-            debug_log("chat_id column not found")
-            return False
-        
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
-        if row_index:
-            debug_log(f"User {chat_id} already exists in user_states at row {row_index}")
-            return True
-        
-        from utils import get_israel_time
-        timestamp = get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # ✅ שיפור: עבודה ישירה עם כותרות במקום מספרי עמודות
-        required_fields = {
-            "code_try": "1",
-            "created_at": timestamp,
-            "last_updated": timestamp,
-            "gpt_c_run_count": "0",
-            "name": ""
-        }
-        
-        # וידוא שכל העמודות הנדרשות קיימות
-        for field in required_fields.keys():
-            ensure_column_exists(sheet_states, field)
-        
-        # יצירת שורה חדשה לפי כותרות
-        new_row = [""] * len(headers)  # שורה ריקה באורך הכותרות
-        
-        # מילוי השדות לפי כותרות
-        for i, header in enumerate(headers):
-            header_lower = header.lower()
-            if header_lower == "chat_id":
-                new_row[i] = chat_id
-            elif header_lower in required_fields:
-                new_row[i] = required_fields[header_lower]
-        
-        # 📝 קובע את מיקום ההוספה בצורה דינמית – תמיד אחרי השורה האחרונה הקיימת
-        # אם יש רק כותרות (len(all_values) == 1) ההוספה תהיה בשורה 2, כפי שנדרש.
-        insert_index = len(all_values) + 1  # 1-based index, +1 מוסיף אחרי השורה האחרונה
-        sheet_states.insert_row(new_row, insert_index)
-        debug_log(f"Added new user {chat_id} to user_states with code_try=1")
-        return True
-        
-    except Exception as e:
-        debug_log(f"Error ensuring user state row for {chat_id}: {e}")
-        send_error_notification(f"Error in ensure_user_state_row: {e}")
-        return False
+
 
 def register_user(sheet, chat_id: str, code_input: str) -> bool:
     """

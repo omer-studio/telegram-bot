@@ -225,21 +225,24 @@ def _detect_profile_changes(old: Dict[str, Any], new: Dict[str, Any]) -> List[Di
         "created_at",
         "updated_at",
     }
+    numeric_fields = {"total_messages_count"}  # אפשר להרחיב בעתיד
     changes: List[Dict[str, Any]] = []
 
     for field, new_val in new.items():
         if field in technical_fields:
             continue
         old_val = old.get(field)
+        # חריג: בשדות מספריים, 0 וריק נחשבים אותו דבר
+        if field in numeric_fields:
+            if (old_val in [None, "", 0] and new_val in [None, "", 0]):
+                continue  # לא שינוי אמיתי
         if field not in old:
             if new_val not in [None, ""]:
                 changes.append({"field": field, "old_value": None, "new_value": new_val, "change_type": "added"})
-                # לוג מיוחד להוספת שם
                 if field.lower() == "name":
                     logging.info(f"[PROFILE_CHANGE] Added name for user: '{new_val}'")
         elif old_val != new_val:
             changes.append({"field": field, "old_value": old_val, "new_value": new_val, "change_type": "updated"})
-            # לוג מיוחד לעדכון שם
             if field.lower() == "name":
                 logging.info(f"[PROFILE_CHANGE] Updated name for user: '{old_val}' → '{new_val}'")
 

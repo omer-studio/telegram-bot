@@ -279,7 +279,7 @@ def _calculate_user_stats_from_history(history: list) -> dict:
 def get_user_stats_and_history(chat_id: str) -> Tuple[dict, list]:
     try:
         # שליפה מ-SQL באמצעות db_manager
-        rows = get_chat_history(chat_id, 100)  # הגדלה ל-100 לקבלת יותר היסטוריה
+        rows = get_chat_history(chat_id)  # הוסרה מגבלת 100 הודעות
         if not rows:
             return {"total_messages": 0, "first_contact": None, "last_contact": None}, []
         

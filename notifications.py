@@ -1860,7 +1860,7 @@ def get_database_table_counts():
                 if table in changes:
                     change = changes[table]
                     change_sign = "+" if change['change'] > 0 else ""
-                    change_info = f" ({change_sign}{change['change']:+d})"
+                    change_info = f" **({change_sign}{change['change']:+d})**"
                 sorted_tables.append((table, count, change_info, abs(changes.get(table, {}).get('change', 0))))
             else:
                 sorted_tables.append((table, count, "", 0))
@@ -1868,9 +1868,13 @@ def get_database_table_counts():
         # מיון לפי גודל השינוי (הכי גדול קודם)
         sorted_tables.sort(key=lambda x: x[3], reverse=True)
         
+        # יצירת טבלה מסודרת עם טאבים
         for table, count, change_info, _ in sorted_tables:
             if isinstance(count, int):
-                message += f"• {table}: {count:,} שורות{change_info}\n"
+                # פורמט טבלה עם טאבים
+                table_name = table.ljust(20)  # ריווח קבוע לשם הטבלה
+                count_str = f"{count:,}".ljust(8)  # ריווח קבוע למספר
+                message += f"• {table_name} {count_str} שורות{change_info}\n"
             else:
                 message += f"• {table}: {count}\n"
         
@@ -1881,7 +1885,7 @@ def get_database_table_counts():
             total_change = total_rows - previous_total
             if total_change != 0:
                 change_sign = "+" if total_change > 0 else ""
-                message += f"\n📈 **סה״כ שורות:** {total_rows:,} ({change_sign}{total_change:+d})"
+                message += f"\n📈 **סה״כ שורות:** {total_rows:,} **({change_sign}{total_change:+d})**"
             else:
                 message += f"\n📈 **סה״כ שורות:** {total_rows:,} (ללא שינוי)"
         else:

@@ -47,7 +47,7 @@ import requests
 import logging
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 from config import TELEGRAM_BOT_TOKEN, config
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row
+from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user
 from notifications import send_startup_notification
 from messages import get_welcome_messages
 from utils import log_event_to_file, update_chat_history, get_chat_history_messages, send_error_stats_report, send_usage_report

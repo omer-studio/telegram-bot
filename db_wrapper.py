@@ -183,7 +183,6 @@ def get_migration_summary():
         "eliminated_api_calls": [
             "get_user_state()",
             "update_user_state()",
-            "ensure_user_state_row()", 
             "register_user()",
             "approve_user()",
             "increment_code_try()",

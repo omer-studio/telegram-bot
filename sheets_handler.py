@@ -5,7 +5,7 @@ sheets_handler.py - ממשק ראשי ל-Google Sheets עם אריכטקטורה
 # ייבוא הפונקציונליות החדשה מהקבצים הרזים - יבואים ספציפיים במקום wildcard
 from sheets_core import (
     debug_log, safe_int, safe_float, check_user_access,
-    ensure_user_state_row, register_user as _core_register_user, approve_user as _core_approve_user,
+    register_user as _core_register_user, approve_user as _core_approve_user,
     delete_row_by_chat_id, increment_code_try_sync,
     get_user_summary, update_user_profile_data, find_chat_id_in_sheet, increment_gpt_c_run_count,
     reset_gpt_c_run_count, force_clear_user_cache
@@ -63,13 +63,12 @@ def register_user(chat_id, code_input=None):
         if code_input is not None:
             # נסיון רישום מלא עם קוד
             success = _core_register_user(sheet_users, str(chat_id), str(code_input))
-            # מבטיח שקיימת שורה ב-user_states (לצורך מונים עתידיים)
-            ensure_user_state_row(sheet_users, sheet_states, str(chat_id))
+            # 🗑️ לא צריך יותר ensure_user_state_row - הכל במסד נתונים
             return {"success": bool(success)}
 
         # 🔙 Legacy path – ללא קוד (לא מומלץ)
-        state_ok = ensure_user_state_row(sheet_users, sheet_states, str(chat_id))
-        return {"success": bool(state_ok)}
+        # 🗑️ לא צריך יותר ensure_user_state_row - הכל במסד נתונים
+        return {"success": True}
 
     except Exception as e:
         logging.error(f"[SheetsHandler] register_user wrapper failed for {chat_id}: {e}")

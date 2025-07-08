@@ -28,7 +28,7 @@ from utils import handle_secret_command, log_event_to_file
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
-from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, ensure_user_state_row, find_chat_id_in_sheet, increment_gpt_c_run_count, clear_user_cache_force
+from sheets_handler import increment_code_try, get_user_summary, update_user_profile, log_to_sheets, check_user_access, register_user, approve_user, find_chat_id_in_sheet, increment_gpt_c_run_count, clear_user_cache_force
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
@@ -1025,6 +1025,9 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         try:
             from profile_utils import _send_admin_profile_overview_notification, _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
             
+            # 🔧 תיקון: שמירת הפרופיל הישן לפני כל העדכונים
+            old_profile_before_updates = get_user_profile_fast(chat_id)
+            
             gpt_c_changes = []
             gpt_d_changes = []
             gpt_e_changes = []
@@ -1032,26 +1035,23 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             # GPT-C changes
             if should_run_gpt_c(user_msg) and gpt_c_result is not None and not isinstance(gpt_c_result, Exception):
                 extracted_fields = gpt_c_result.get("extracted_fields", {}) if isinstance(gpt_c_result, dict) else {}
-                old_profile = get_user_profile_fast(chat_id)
-                new_profile = {**old_profile, **extracted_fields}
-                gpt_c_changes = _detect_profile_changes(old_profile, new_profile)
+                new_profile = {**old_profile_before_updates, **extracted_fields}
+                gpt_c_changes = _detect_profile_changes(old_profile_before_updates, new_profile)
             
             # GPT-D changes
             gpt_d_res = results[0] if len(results) > 0 else None
             if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
                 updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
                 if updated_profile and isinstance(updated_profile, dict):
-                    old_profile = get_user_profile_fast(chat_id)
-                    gpt_d_changes = _detect_profile_changes(old_profile, updated_profile)
+                    gpt_d_changes = _detect_profile_changes(old_profile_before_updates, updated_profile)
             
             # GPT-E changes
             gpt_e_res = results[1] if len(results) > 1 else None
             if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
                 changes = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
                 if changes:
-                    old_profile = get_user_profile_fast(chat_id)
-                    new_profile = {**old_profile, **changes}
-                    gpt_e_changes = _detect_profile_changes(old_profile, new_profile)
+                    new_profile = {**old_profile_before_updates, **changes}
+                    gpt_e_changes = _detect_profile_changes(old_profile_before_updates, new_profile)
             
             # שליחת התראה רק אם יש שינויים
             if gpt_c_changes or gpt_d_changes or gpt_e_changes:
