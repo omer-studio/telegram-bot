@@ -783,108 +783,7 @@ def delete_row_by_chat_id(sheet_name: str, chat_id: str) -> bool:
         send_error_notification(f"Error in delete_row_by_chat_id: {e}")
         return False
 
-def get_user_state(chat_id: str) -> Dict[str, Any]:
-    try:
-        chat_id = validate_chat_id(chat_id)
-        
-        # בדיקת cache קודם
-        cache_key = _get_cache_key("user_state", chat_id)
-        cached_state = _get_from_cache(cache_key)
-        if cached_state is not None:
-            return cached_state
-        
-        # אם אין ב-cache, קורא מהשיטס
-        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
-        
-        if not sheet_states:
-            debug_log("sheet_states is None", chat_id=chat_id)
-            return {}
-        
-        # קריאת כל הנתונים כולל כותרות (עם cache מתקדם)
-        all_values = get_sheet_all_values_cached(sheet_states)
-        
-        if not all_values or len(all_values) < 1:
-            debug_log("Sheet is empty or has no headers")
-            return {}
-        
-        # שורה ראשונה = כותרות
-        headers = all_values[0]
-        
-        # מציאת אינדקס עמודת chat_id
-        chat_id_col = None
-        for i, header in enumerate(headers):
-            if header.lower() == "chat_id":
-                chat_id_col = i + 1  # gspread uses 1-based indexing
-                break
-        
-        if not chat_id_col:
-            debug_log("chat_id column not found")
-            return {}
-        
-        # מציאת השורה של המשתמש
-        row_index = find_chat_id_in_sheet(sheet_states, chat_id, col=chat_id_col)
-        if not row_index:
-            debug_log(f"User {chat_id} not found in user_states")
-            empty_state = {}
-            _set_cache(cache_key, empty_state)  # cache גם תוצאות ריקות
-            return empty_state
-        
-        # קריאת שורת הנתונים
-        _increment_api_call()
-        row_data = sheet_states.row_values(row_index)
-        
-        # מיפוי דינמי של שדות לעמודות לפי כותרות
-        field_to_col = {}
-        for i, header in enumerate(headers):
-            field_to_col[header.lower()] = i  # 0-based indexing for row_data
-        
-        # בניית state לפי כותרות
-        state = {}
-        for field_name in ["chat_id", "code_try", "summary", "last_updated", "profile_data", "created_at", "gpt_c_run_count", "name"]:
-            col_index = field_to_col.get(field_name.lower())
-            if col_index is not None and col_index < len(row_data):
-                value = row_data[col_index]
-                
-                # טיפול מיוחד בשדות מספריים
-                if field_name in ["code_try", "gpt_c_run_count"]:
-                    state[field_name] = safe_int(value)
-                else:
-                    state[field_name] = value
-            else:
-                # ערכי ברירת מחדל
-                if field_name in ["code_try", "gpt_c_run_count"]:
-                    state[field_name] = 0
-                else:
-                    state[field_name] = ""
-        
-        # טיפול מיוחד ב-profile_data (JSON) עם לוגים מפורטים
-        if state["profile_data"]:
-            try:
-                raw = state["profile_data"].strip()
-                data = json.loads(raw)
-                if isinstance(data, dict):
-                    state["profile_data"] = data
-                else:
-                    debug_log(f"Profile data parsed but not a dict for user {chat_id}: {type(data)}")
-                    state["profile_data"] = {}
-            except json.JSONDecodeError as json_err:
-                debug_log(f"JSON parsing error: {json_err} | raw: {raw}")
-                state["profile_data"] = {}
-            except Exception as e:
-                debug_log(f"Unexpected error parsing profile_data for user {chat_id}: {e} | Data: {state['profile_data'][:200]}...")
-                state["profile_data"] = {}
-        else:
-            state["profile_data"] = {}
-        
-        # שמירה ב-cache
-        _set_cache(cache_key, state)
-        debug_log(f"Retrieved state for user {chat_id}")
-        return state
-        
-    except Exception as e:
-        debug_log(f"Error getting user state for {chat_id}: {e}")
-        send_error_notification(f"Error in get_user_state: {e}")
-        return {}
+# 🗑️ נמחקה הפונקציה get_user_state - הכל עכשיו ב-user_profiles במסד נתונים
 
 def update_user_state(chat_id: str, updates: Dict[str, Any]) -> bool:
     try:
@@ -1199,8 +1098,10 @@ def ensure_name_column_exists(sheet):
 def is_user_exists(chat_id: str) -> bool:
     try:
         chat_id = validate_chat_id(chat_id)
-        state = get_user_state(chat_id)
-        return bool(state.get("chat_id"))
+        # בדיקה מהירה אם המשתמש קיים ב-user_profiles
+        from utils import get_user_profile_fast
+        profile = get_user_profile_fast(chat_id)
+        return bool(profile.get("chat_id"))
     except Exception as e:
         debug_log(f"Error checking if user exists {chat_id}: {e}")
         return False

@@ -31,7 +31,7 @@ class TestAuthorizationFix(unittest.TestCase):
         """בדיקה בסיסית: ייבוא מודולי הרשאות"""
         try:
             from sheets_core import check_user_access
-            from db_manager import check_user_access_db, increment_user_message_count
+            from db_manager import check_user_approved_status_db, increment_user_message_count
             self.assertTrue(True, "All authorization modules imported successfully")
         except Exception as e:
             self.fail(f"Failed to import authorization modules: {e}")

@@ -1067,235 +1067,54 @@ def get_user_message_count(chat_id):
             print(f"❌ שגיאה בקריאת מונה הודעות עבור {chat_id}: {e}")
         return 0
 
+def clear_user_from_database(chat_id):
+    """מוחק משתמש מהמסד נתונים (חוץ מקוד האישור)"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # מחיקת היסטוריית צ'אט
+        cur.execute("DELETE FROM chat_messages WHERE chat_id = %s", (chat_id,))
+        chat_deleted = cur.rowcount
+        
+        # מחיקת לוג קריאות GPT
+        cur.execute("DELETE FROM gpt_calls_log WHERE chat_id = %s", (chat_id,))
+        gpt_deleted = cur.rowcount
+        
+        # איפוס פרופיל משתמש (חוץ מקוד האישור)
+        cur.execute("""
+            UPDATE user_profiles 
+            SET name = NULL, age = NULL, pronoun_preference = NULL, occupation_or_role = NULL,
+                attracted_to = NULL, relationship_type = NULL, parental_status = NULL,
+                self_religious_affiliation = NULL, self_religiosity_level = NULL, family_religiosity = NULL,
+                closet_status = NULL, who_knows = NULL, who_doesnt_know = NULL, attends_therapy = NULL,
+                primary_conflict = NULL, trauma_history = NULL, goal_in_course = NULL,
+                language_of_strength = NULL, date_first_seen = NULL, coping_strategies = NULL,
+                fears_concerns = NULL, future_vision = NULL, other_insights = NULL,
+                total_messages_count = 0, summary = NULL, updated_at = %s
+            WHERE chat_id = %s
+        """, (datetime.utcnow(), chat_id))
+        profile_updated = cur.rowcount
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if should_log_debug_prints():
+            print(f"🗑️ [DB] נמחקו {chat_deleted} הודעות צ'אט, {gpt_deleted} קריאות GPT, {profile_updated} פרופילים אופסו עבור {chat_id}")
+        
+        return chat_deleted > 0 or gpt_deleted > 0 or profile_updated > 0
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ שגיאה במחיקת משתמש מהמסד נתונים: {e}")
+        return False
+
 # ================================
 # 🔥 פונקציות חדשות למסד נתונים - מחליפות Google Sheets!
 # ================================
 
-def save_user_state(chat_id, state_data):
-    """שומר מצב משתמש במסד נתונים (מחליף Google Sheets)"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # יצירת טבלה אם לא קיימת
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS user_states (
-            id SERIAL PRIMARY KEY,
-            chat_id VARCHAR(50) UNIQUE NOT NULL,
-            code_try INTEGER DEFAULT 0,
-            summary TEXT,
-            profile_data JSONB,
-            gpt_c_run_count INTEGER DEFAULT 0,
-            name VARCHAR(255),
-            approved BOOLEAN DEFAULT FALSE,
-            code_approve VARCHAR(100),
-            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # המרת state_data ל-fields
-    fields = {'chat_id': chat_id, 'updated_at': datetime.utcnow()}
-    
-    if isinstance(state_data, dict):
-        for key, value in state_data.items():
-            if key == 'profile_data' and isinstance(value, dict):
-                fields[key] = json.dumps(value)
-            else:
-                fields[key] = value
-    
-    # יצירת SQL דינמי
-    field_names = list(fields.keys())
-    placeholders = ', '.join(['%s'] * len(field_names))
-    values = list(fields.values())
-    
-    insert_sql = f"""
-    INSERT INTO user_states ({', '.join(field_names)})
-    VALUES ({placeholders})
-    ON CONFLICT (chat_id) DO UPDATE SET
-    {', '.join([f"{field} = EXCLUDED.{field}" for field in field_names if field != 'chat_id'])}
-    """
-    
-    cur.execute(insert_sql, values)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def get_user_state(chat_id):
-    """מחזיר מצב משתמש מהמסד נתונים (מחליף Google Sheets)"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    cur.execute("""
-        SELECT chat_id, code_try, summary, profile_data, gpt_c_run_count, 
-               name, approved, code_approve, last_updated, created_at
-        FROM user_states 
-        WHERE chat_id = %s
-    """, (chat_id,))
-    
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    
-    if row:
-        state = {
-            'chat_id': row[0],
-            'code_try': row[1] or 0,
-            'summary': row[2] or '',
-            'profile_data': json.loads(row[3]) if row[3] else {},
-            'gpt_c_run_count': row[4] or 0,
-            'name': row[5] or '',
-            'approved': row[6] or False,
-            'code_approve': row[7] or '',
-            'last_updated': row[8].isoformat() if row[8] else '',
-            'created_at': row[9].isoformat() if row[9] else ''
-        }
-        return state
-    
-    return {}
-
-def update_user_state_db(chat_id, updates):
-    """מעדכן מצב משתמש במסד נתונים (מחליף Google Sheets)"""
-    if not updates:
-        return False
-        
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # וידוא שהמשתמש קיים
-    cur.execute("SELECT chat_id FROM user_states WHERE chat_id = %s", (chat_id,))
-    if not cur.fetchone():
-        # יצירת רשומה חדשה
-        save_user_state(chat_id, updates)
-        cur.close()
-        conn.close()
-        return True
-    
-    # עדכון שדות קיימים
-    set_clauses = []
-    values = []
-    
-    for field, value in updates.items():
-        if field == 'profile_data' and isinstance(value, dict):
-            value = json.dumps(value)
-        set_clauses.append(f"{field} = %s")
-        values.append(value)
-    
-    # הוספת timestamp אוטומטי
-    set_clauses.append("updated_at = %s")
-    values.append(datetime.utcnow())
-    values.append(chat_id)
-    
-    update_sql = f"UPDATE user_states SET {', '.join(set_clauses)} WHERE chat_id = %s"
-    cur.execute(update_sql, values)
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    return True
-
-def increment_code_try_db(chat_id):
-    """מגדיל מונה ניסיונות קוד במסד נתונים (מחליף Google Sheets)"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # בדיקה אם המשתמש קיים
-    cur.execute("SELECT code_try FROM user_states WHERE chat_id = %s", (chat_id,))
-    row = cur.fetchone()
-    
-    if row:
-        new_val = (row[0] or 0) + 1
-        cur.execute("UPDATE user_states SET code_try = %s, updated_at = %s WHERE chat_id = %s", 
-                   (new_val, datetime.utcnow(), chat_id))
-    else:
-        # יצירת רשומה חדשה
-        cur.execute("""
-            INSERT INTO user_states (chat_id, code_try, created_at, updated_at)
-            VALUES (%s, 1, %s, %s)
-        """, (chat_id, datetime.utcnow(), datetime.utcnow()))
-        new_val = 1
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    return new_val
-
-def register_user_db(chat_id, code_input):
-    """רושם משתמש במסד נתונים (מחליף Google Sheets)"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # בדיקה אם הקוד קיים ולא בשימוש
-    cur.execute("SELECT chat_id FROM user_states WHERE code_approve = %s", (code_input,))
-    existing = cur.fetchone()
-    
-    if existing and existing[0] != chat_id:
-        # הקוד כבר בשימוש
-        cur.close()
-        conn.close()
-        return False
-    
-    # עדכון או יצירת רשומה
-    cur.execute("""
-        INSERT INTO user_states (chat_id, code_approve, created_at, updated_at)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (chat_id) DO UPDATE SET
-        code_approve = EXCLUDED.code_approve,
-        updated_at = EXCLUDED.updated_at
-    """, (chat_id, code_input, datetime.utcnow(), datetime.utcnow()))
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    return True
-
-def approve_user_db(chat_id):
-    """מאשר משתמש במסד נתונים (מחליף Google Sheets)"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    cur.execute("UPDATE user_states SET approved = TRUE, updated_at = %s WHERE chat_id = %s", 
-               (datetime.utcnow(), chat_id))
-    
-    success = cur.rowcount > 0
-    conn.commit()
-    cur.close()
-    conn.close()
-    return success
-
-def check_user_access_db(chat_id):
-    """בודק הרשאות משתמש במסד נתונים (מחליף Google Sheets)"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    cur.execute("SELECT approved FROM user_states WHERE chat_id = %s", (chat_id,))
-    row = cur.fetchone()
-    
-    cur.close()
-    conn.close()
-    
-    return row[0] if row else False
-
-def increment_gpt_c_run_count_db(chat_id):
-    """מגדיל מונה הרצות GPT-C במסד נתונים"""
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    cur.execute("""
-        INSERT INTO user_states (chat_id, gpt_c_run_count, created_at, updated_at)
-        VALUES (%s, 1, %s, %s)
-        ON CONFLICT (chat_id) DO UPDATE SET
-        gpt_c_run_count = COALESCE(user_states.gpt_c_run_count, 0) + 1,
-        updated_at = EXCLUDED.updated_at
-    """, (chat_id, datetime.utcnow(), datetime.utcnow()))
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def reset_gpt_c_run_count_db(chat_id):
-    """מאפס מונה הרצות GPT-C במסד נתונים"""
-    return update_user_state_db(chat_id, {'gpt_c_run_count': 0})
+# 🗑️ נמחקו הפונקציות הישנות של user_states - הכל עכשיו ב-user_profiles
 
 # ================================
 # 📋 פונקציות לוגיקת קודי אישור חדשה - לפי המדריך!

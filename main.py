@@ -513,15 +513,38 @@ if __name__ == "__main__":
     import os
     from bot_setup import migrate_data_to_sql_with_safety
     
-    # דגל למניעת כפילות (קובץ זמני)
-    MIGRATION_FLAG = "migration_completed.flag"
+    # דגל למניעת כפילות (נשמר ב-data/ שלא מתאפס בפריסות)
+    MIGRATION_FLAG = "data/migration_completed.flag"
     
     def log_to_file(msg):
         with open("migration_log.txt", "a", encoding="utf-8") as f:
             f.write(msg + "\n")
     
-    # נריץ מיגרציה רק אם לא בוצעה
-    if os.environ.get("ENV", "production") == "production" and not os.path.exists(MIGRATION_FLAG):
+    # בדיקה אם יש נתונים למיגרציה
+    def has_data_to_migrate():
+        """בודק אם יש נתונים למיגרציה"""
+        data_files = [
+            "data/chat_history.json",
+            "data/user_profiles.json", 
+            "data/gpt_usage_log.jsonl",
+            "data/openai_calls.jsonl"
+        ]
+        
+        for file_path in data_files:
+            if os.path.exists(file_path):
+                # בדיקה אם הקובץ לא ריק
+                try:
+                    if os.path.getsize(file_path) > 10:  # יותר מ-10 bytes
+                        return True
+                except:
+                    pass
+        return False
+    
+    # נריץ מיגרציה רק אם לא בוצעה ויש נתונים למיגרציה
+    if (os.environ.get("ENV", "production") == "production" and 
+        not os.path.exists(MIGRATION_FLAG) and 
+        has_data_to_migrate()):
+        
         print("\n🚀 מבצע מיגרציה אוטומטית (startup)...\n")
         log_to_file("🚀 התחלת מיגרציה אוטומטית (startup)...")
         try:
@@ -547,6 +570,14 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ שגיאה קריטית במיגרציה: {e}")
             log_to_file(f"❌ שגיאה קריטית במיגרציה: {e}")
+    elif os.environ.get("ENV", "production") == "production" and not has_data_to_migrate():
+        # אין נתונים למיגרציה - נשמור דגל כדי לא לבדוק שוב
+        print("\nℹ️ אין נתונים למיגרציה - דילוג על מיגרציה אוטומטית")
+        try:
+            os.makedirs(os.path.dirname(MIGRATION_FLAG), exist_ok=True)
+            with open(MIGRATION_FLAG, "w") as f: f.write("no_data")
+        except Exception as e:
+            print(f"⚠️ שגיאה בשמירת דגל: {e}")
     
     # הוספת endpoint ל-gpt_c log במסגרת FastAPI
     @app_fastapi.get("/data/gpt_c_results.html")

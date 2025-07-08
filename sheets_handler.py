@@ -6,7 +6,7 @@ sheets_handler.py - ממשק ראשי ל-Google Sheets עם אריכטקטורה
 from sheets_core import (
     debug_log, safe_int, safe_float, check_user_access,
     ensure_user_state_row, register_user as _core_register_user, approve_user as _core_approve_user,
-    delete_row_by_chat_id, get_user_state, update_user_state, increment_code_try_sync,
+    delete_row_by_chat_id, increment_code_try_sync,
     get_user_summary, update_user_profile_data, find_chat_id_in_sheet, increment_gpt_c_run_count,
     reset_gpt_c_run_count, force_clear_user_cache
 )

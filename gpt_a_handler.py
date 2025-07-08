@@ -110,7 +110,7 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
     """יוצר system message חכם עם שדות חסרים שכדאי לשאול עליהם
     מחזיר tuple: (system_message, missing_text)"""
     try:
-        from sheets_core import get_user_state
+        from db_manager import get_user_profile
         try:
             from fields_dict import FIELDS_DICT
         except ImportError:
@@ -118,7 +118,7 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
         if not should_ask_profile_question(chat_id):
             logging.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
             return "", ""
-        profile_data = get_user_state(chat_id).get("profile_data", {})
+        profile_data = get_user_profile(chat_id) or {}
         key_fields = ["name", "age", "attracted_to", "relationship_type", "self_religious_affiliation", 
                      "closet_status", "pronoun_preference", "occupation_or_role", 
                      "self_religiosity_level", "primary_conflict", "goal_in_course"]

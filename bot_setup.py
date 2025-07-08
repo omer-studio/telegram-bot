@@ -639,6 +639,28 @@ def backup_data_to_drive():
 def migrate_data_to_sql_with_safety():
     """מבצע מיגרציה בטוחה של כל הנתונים מ-data/ ל-SQL עם דיבאג מפורט"""
     try:
+        # בדיקה מהירה אם יש נתונים למיגרציה
+        def has_data_to_migrate():
+            data_files = [
+                "data/chat_history.json",
+                "data/user_profiles.json", 
+                "data/gpt_usage_log.jsonl",
+                "data/openai_calls.jsonl"
+            ]
+            
+            for file_path in data_files:
+                if os.path.exists(file_path):
+                    try:
+                        if os.path.getsize(file_path) > 10:  # יותר מ-10 bytes
+                            return True
+                    except:
+                        pass
+            return False
+        
+        if not has_data_to_migrate():
+            print("ℹ️ אין נתונים למיגרציה - המיגרציה הושלמה בהצלחה ללא פעולה")
+            return True
+        
         print("🔐 === מיגרציה בטוחה עם קוד סודי ===")
         print("🚨 מנגנוני בטיחות מופעלים:")
         print("   ✅ גיבוי אוטומטי לפני מיגרציה")
@@ -1425,7 +1447,7 @@ def print_detailed_summary(migration_results, verification_results):
         summary_lines.append(f"   ⚠️ שגיאות: {errors}")
         summary_lines.append(f"   🔍 אימות: {verification_results[category]['details']}")
         if errors > 0 and results['details']:
-            summary_lines.append("   📝 פרטי שגיאות:")
+            summary_lines.append(f"   📝 פרטי שגיאות:")
             for detail in results['details'][:5]:
                 summary_lines.append(f"      • {detail}")
             if len(results['details']) > 5:
@@ -1434,6 +1456,11 @@ def print_detailed_summary(migration_results, verification_results):
     summary_lines.append(f"   📊 סה״כ הועברו: {total_migrated}")
     summary_lines.append(f"   ⚠️ סה״כ שגיאות: {total_errors}")
     summary_lines.append(f"   📈 אחוז הצלחה: {((total_migrated - total_errors) / max(total_migrated, 1) * 100):.1f}%")
+    
+    # בדיקה אם הייתה מיגרציה אמיתית
+    if total_migrated == 0:
+        summary_lines.append(f"\nℹ️ הערה: לא הועברו נתונים - יתכן שהקבצים ריקים או לא קיימים")
+        summary_lines.append(f"ℹ️ זו לא שגיאה - המיגרציה הושלמה בהצלחה ללא נתונים למיגרציה")
     
     # הוספת פירוט מפורט לכל chat_id
     if 'chat_details' in migration_results.get('chat_messages', {}):
@@ -1478,10 +1505,15 @@ def print_detailed_summary(migration_results, verification_results):
     summary = "\n".join(summary_lines)
     print(summary)
     log_to_file(summary)
-    try:
-        send_admin_notification(f"📋 סיכום מיגרציה:\n{summary[:3500]}")
-    except Exception as e:
-        print(f"⚠️ שגיאה בשליחת סיכום לאדמין: {e}")
+    
+    # שליחה לאדמין רק אם הייתה מיגרציה אמיתית
+    if total_migrated > 0:
+        try:
+            send_admin_notification(f"📋 סיכום מיגרציה:\n{summary[:3500]}")
+        except Exception as e:
+            print(f"⚠️ שגיאה בשליחת סיכום לאדמין: {e}")
+    else:
+        print("ℹ️ לא נשלחה הודעת מיגרציה לאדמין - לא היו נתונים למיגרציה")
 
 async def handle_migrate_command(update, context):
     """מטפל בפקודת /migrate_all_data עם קוד סודי"""

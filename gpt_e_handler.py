@@ -25,7 +25,7 @@ import pytz
 
 # ייבוא פונקציות עזר
 from utils import get_chat_history_messages, get_israel_time
-from sheets_handler import get_user_summary, update_user_profile, get_user_state, reset_gpt_c_run_count
+from sheets_handler import get_user_summary, update_user_profile, reset_gpt_c_run_count
 from prompts import build_profile_extraction_enhanced_prompt, JSON_RESPONSE_INSTRUCTION, JSON_EXAMPLE
 from gpt_utils import normalize_usage_dict, safe_get_usage_value, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from config import GPT_MODELS, GPT_PARAMS

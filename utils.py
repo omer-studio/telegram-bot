@@ -119,8 +119,13 @@ def handle_secret_command(chat_id, user_msg):
     if action == "clear_all":
         cleared = clear_chat_history(chat_id)
         deleted_sheet, deleted_state = clear_from_sheets(chat_id)
-        msg = "💥 עשה הכל נמחק! (היסטוריה + גיליונות)" if (cleared or deleted_sheet or deleted_state) else "⚠️לא נמצא שום מידע למחיקה."
-        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_sheet": deleted_sheet, "deleted_state": deleted_state})
+        
+        # מחיקה מהמסד נתונים
+        from db_manager import clear_user_from_database
+        db_cleared = clear_user_from_database(chat_id)
+        
+        msg = "💥 עשה הכל נמחק! (היסטוריה + גיליונות + מסד נתונים)" if (cleared or deleted_sheet or deleted_state or db_cleared) else "⚠️לא נמצא שום מידע למחיקה."
+        log_event_to_file({"event": "secret_command", "timestamp": get_israel_time().isoformat(), "chat_id": chat_id, "action": "clear_all", "cleared_history": cleared, "deleted_sheet": deleted_sheet, "deleted_state": deleted_state, "db_cleared": db_cleared})
         _send_admin_secret_notification(f"🔑 הופעל קוד סודי למחיקת **הכל** מצ'אט {chat_id}.")
         return True, msg
     
