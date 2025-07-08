@@ -18,6 +18,7 @@ import utils  # time helpers + log_event_to_file live there
 from config import CHAT_HISTORY_PATH, DATA_DIR, USER_PROFILES_PATH
 from config import should_log_debug_prints, should_log_message_debug
 from db_manager import save_user_profile, get_user_profile
+from fields_dict import FIELDS_DICT
 
 __all__: List[str] = [
     # Main fast-path helpers
@@ -410,7 +411,43 @@ def _send_admin_profile_overview_notification(
 
 
 # ---------------------------------------------------------------------------
-# 📌 Public API
+# 📝  Auto-summary generation (moved from sheets_core.py)
+# ---------------------------------------------------------------------------
+
+def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
+    """
+    Generates an emotional summary string from a user's profile data dict.
+    This function is now independent of Google Sheets.
+    """
+    if not profile_data:
+        return ""
+
+    def get_field_priority(field_name):
+        # Default priority is high to ensure unknown fields are included
+        priority = FIELDS_DICT.get(field_name, {}).get("priority", 99)
+        # Ensure priority is a number, default to 99 if not
+        return priority if isinstance(priority, (int, float)) else 99
+
+    # Sort fields by priority (lower number = higher priority)
+    sorted_fields = sorted(profile_data.keys(), key=get_field_priority)
+
+    summary_parts = []
+    technical_fields = {"chat_id", "name", "last_update", "date_first_seen", "code", "code_try", "gpt_c_run_count", "summary"}
+
+    for field in sorted_fields:
+        if field in technical_fields:
+            continue
+        
+        value = profile_data.get(field)
+        
+        # Ensure value is a string and not empty/None
+        if isinstance(value, str) and value.strip() and value.strip() != 'לא צוין':
+            summary_parts.append(value.strip())
+            
+    return " | ".join(summary_parts)
+
+# ---------------------------------------------------------------------------
+# 📌 Public API (continued)
 # ---------------------------------------------------------------------------
 
 def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_notification: bool = True):
@@ -420,7 +457,6 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
 
         # auto-generate summary via Google-Sheets helper (optional)
         try:
-            from sheets_core import generate_summary_from_profile_data
             auto_summary = generate_summary_from_profile_data(new_profile)
             logging.debug(f"[SUMMARY_DEBUG] Generated auto summary: '{auto_summary}' for user {chat_id}")
             # ✅ תמיד מעדכנים את הסיכום אם יש שינוי בפרופיל
@@ -442,7 +478,7 @@ def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_n
             _log_profile_changes_to_chat_history(chat_id, changes)
 
         # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
-        _schedule_sheets_sync_safely(chat_id)
+        # _schedule_sheets_sync_safely(chat_id) # ⚠️ מנוטרל - עובדים רק עם מסד הנתונים
 
         # ✅ ההודעה המפורטת נשלחת ממקום אחר - אין צורך בהודעה נוספת כאן
 

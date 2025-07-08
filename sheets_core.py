@@ -1124,77 +1124,9 @@ def get_user_profile_data(chat_id: str) -> Dict[str, Any]:
     return get_user_profile_fast(chat_id)  # מהיר!
 
 def update_user_profile_data(chat_id: str, profile_updates: Dict[str, Any]) -> bool:
-    """עכשיו מעדכן מהיר + Google Sheets ברקע"""
-    try:
-        from utils import update_user_profile_fast  # type: ignore
-    except (ImportError, AttributeError):
-        from profile_utils import update_user_profile_fast  # type: ignore
-    update_user_profile_fast(chat_id, profile_updates)  # מהיר!
-    return True
+    """מעדכן שדות בפרופיל המשתמש ב-user_states"""
+    return update_user_state(chat_id, {"profile_data": profile_updates})
 
-def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
-    """
-    יוצר summary אוטומטי מנתוני הפרופיל בהתבסס על fields_dict
-    מסתכל רק על שדות שיש להם show_in_summary ושהם מלאים
-    """
-    if not profile_data:
-        debug_log("Empty profile_data provided to generate_summary_from_profile_data")
-        return ""
-    
-    try:
-        from fields_dict import get_summary_fields, FIELDS_DICT
-    except ImportError as e:
-        debug_log(f"Failed to import fields_dict: {e}")
-        return ""
-    
-    # ✅ תיקון: הסרת שדות טכניים שלא אמורים להיות בסיכום
-    clean_profile = {k: v for k, v in profile_data.items() if k not in ["last_update", "summary", "code_try", "gpt_c_run_count"]}
-    debug_log(f"Cleaned profile has {len(clean_profile)} fields: {list(clean_profile.keys())}")
-    
-    summary_parts = []
-    
-    # ✅ תיקון: משתמש ברשימת השדות הנכונה מ-fields_dict
-    summary_fields = get_summary_fields()
-    debug_log(f"Summary fields from fields_dict: {summary_fields}")
-    
-    # מיון מיוחד - השם תמיד ראשון, אחר כך גיל, ואז שאר השדות
-    def get_field_priority(field_name):
-        if field_name == "name":
-            return 0  # ראשון
-        elif field_name == "age":
-            return 1  # שני
-        else:
-            return 2  # שאר השדות
-    
-    # מיון השדות לפי עדיפות
-    sorted_summary_fields = sorted(summary_fields, key=get_field_priority)
-    
-    # עובר על השדות שנמצאים ברשימת השדות לסיכום בלבד
-    for field_name in sorted_summary_fields:
-        if field_name not in FIELDS_DICT:
-            continue
-            
-        field_info = FIELDS_DICT[field_name]
-        field_value = clean_profile.get(field_name, "")
-        
-        # רק אם השדה מלא
-        if field_value and str(field_value).strip():
-            show_label = field_info.get("show_in_summary", "")
-            clean_value = str(field_value).strip()
-            
-            if show_label:  # יש label מיוחד
-                part = f"{show_label} {clean_value}"
-                summary_parts.append(part)
-                debug_log(f"Added to summary with label: {field_name} = '{part}'")
-            else:  # אין label - רק הערך
-                summary_parts.append(clean_value)
-                debug_log(f"Added to summary without label: {field_name} = '{clean_value}'")
-        else:
-            debug_log(f"Skipped empty field: {field_name}")
-    
-    final_summary = " | ".join(summary_parts)
-    debug_log(f"Final generated summary: '{final_summary}' (from {len(summary_parts)} parts)")
-    return final_summary
 
 def compose_emotional_summary(row: List[str], headers: Optional[List[str]] = None) -> str:
     """
