@@ -533,11 +533,12 @@ def build_html() -> None:
         fh.write(full_html)
     print(f"✅ Wrote {HTML_OUT_PATH} with {len(entries_html)} entries.")
     
-    # העלאה אוטומטית ל-Sheets
-    try:
-        upload_to_sheets(HTML_OUT_PATH)
-    except Exception as e:
-        print(f"⚠️  Auto-upload to Sheets failed: {e}")
+    # 🗑️ עברנו למסד נתונים - הסרת העלאה אוטומטית ל-Sheets
+    # try:
+    #     upload_to_sheets(HTML_OUT_PATH)
+    # except Exception as e:
+    #     print(f"⚠️  Auto-upload to Sheets failed: {e}")
+    print("🗑️ Google Sheets העלאה לא זמינה - עברנו למסד נתונים")
 
 
 # -----------------------------------------------------------------------------
@@ -596,63 +597,13 @@ def upload_to_drive(html_path: str, folder_id: str = DRIVE_FOLDER_ID) -> None:
 
 
 def upload_to_sheets(html_path: str) -> None:
-    """Upload HTML content to Google Sheets for easy viewing and synchronization.
+    """🗑️ עברנו למסד נתונים - פונקציה deprecated
     
-    Creates a new sheet with the HTML content formatted for easy reading.
+    Google Sheets לא נדרש יותר - כל הנתונים נשמרים במסד נתונים.
     """
-    try:
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from config import setup_google_sheets, SERVICE_ACCOUNT_DICT
-        import gspread
-        from oauth2client.service_account import ServiceAccountCredentials
-    except ImportError as exc:
-        raise SystemExit(f"Failed to import required modules: {exc}")
-
-    try:
-        # קרא את תוכן ה-HTML
-        with open(html_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
-        
-        # הגדר את Google Sheets
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(SERVICE_ACCOUNT_DICT, scope)
-        gs_client = gspread.authorize(creds)
-        
-        # שם הגיליון החדש
-        sheet_name = f"GPT_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # צור גיליון חדש
-        new_spreadsheet = gs_client.create(sheet_name)
-        sheet_id = new_spreadsheet.id
-        
-        # הכנס את התוכן HTML כטקסט רגיל (ללא עיצוב)
-        import re
-        text_content = re.sub(r'<[^>]+>', '', html_content)
-        text_content = re.sub(r'\s+', ' ', text_content).strip()
-        
-        # חלק את התוכן לשורות
-        lines = text_content.split('.')
-        
-        # הכנס את השורות לגיליון
-        worksheet = new_spreadsheet.sheet1
-        data = []
-        for i, line in enumerate(lines[:100]):  # הגבל ל-100 שורות
-            if line.strip():
-                data.append([f"שורה {i+1}", line.strip()])
-        
-        if data:
-            worksheet.update('A1:B100', data)
-        
-        print(f"📊 Uploaded GPT log to Google Sheets: {sheet_name}")
-        print(f"🔗 Sheet URL: https://docs.google.com/spreadsheets/d/{sheet_id}")
-        
-    except Exception as e:
-        print(f"❌ Error uploading to Sheets: {e}")
+    print("🗑️ upload_to_sheets deprecated - עברנו למסד נתונים PostgreSQL")
+    print("📊 כל נתוני GPT זמינים במסד הנתונים במקום Google Sheets")
+    return  # לא עושה כלום
 
 
 def upload_jsonl_to_drive(jsonl_path: str, folder_id: str = DRIVE_FOLDER_ID) -> None:
@@ -707,13 +658,15 @@ def upload_jsonl_to_drive(jsonl_path: str, folder_id: str = DRIVE_FOLDER_ID) -> 
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Build GPT HTML log from SQL database (and optionally upload to Drive/Sheets)")
+    parser = ArgumentParser(description="Build GPT HTML log from SQL database (and optionally upload to Drive)")
     parser.add_argument("--upload", action="store_true", help="Also upload/update the HTML file on Google Drive")
-    parser.add_argument("--sheets", action="store_true", help="Also upload HTML content to Google Sheets")
+    # 🗑️ עברנו למסד נתונים - הסרת אופציית Google Sheets
+    # parser.add_argument("--sheets", action="store_true", help="Also upload HTML content to Google Sheets")
     args = parser.parse_args()
 
     build_html()
     if args.upload:
         upload_to_drive(HTML_OUT_PATH)
-    if args.sheets:
-        upload_to_sheets(HTML_OUT_PATH)
+    # 🗑️ עברנו למסד נתונים - הסרת העלאה ל-Google Sheets
+    # if args.sheets:
+    #     upload_to_sheets(HTML_OUT_PATH)

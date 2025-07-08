@@ -709,7 +709,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     with db_manager.get_connection() as conn:
                         cursor = conn.cursor()
                         cursor.execute('''
-                            INSERT INTO chat_messages (chat_id, user_msg, bot_response, timestamp)
+                            INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
                             VALUES (%s, %s, %s, NOW())
                         ''', (
                             f"DEBUG_{chat_id}",
@@ -740,7 +740,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     with db_manager.get_connection() as conn:
                         cursor = conn.cursor()
                         cursor.execute('''
-                            INSERT INTO chat_messages (chat_id, user_msg, bot_response, timestamp)
+                            INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
                             VALUES (%s, %s, %s, NOW())
                         ''', (
                             f"ERROR_{chat_id}",
