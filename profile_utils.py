@@ -247,7 +247,7 @@ def _send_admin_profile_overview_notification(
     gpt_e_info: str,
     summary: str = "",
 ):
-    """שליחת הודעת אדמין מרוכזת על כל העדכון (GPT-C/D/E + summary) לפי התבנית המדויקת."""
+    """שליחת הודעת אדמין מרוכזת על כל העדכון (GPT-C/D/E + summary) עם עיצוב משופר."""
     try:
         from notifications import send_admin_notification_raw
         from utils import get_israel_time
@@ -258,87 +258,110 @@ def _send_admin_profile_overview_notification(
 
         lines: List[str] = []
         
-        # 1. כותרת עדכון פרופיל
-        lines.append(f"✅ עדכון פרופיל למשתמש {chat_id} ✅")
+        # 🎯 כותרת מעוצבת עם אייקונים
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
         
-        # 2. תוכן ההודעה המלא (לא מצונזר)
+        # 💬 תוכן ההודעה המלא
         if user_msg and user_msg.strip():
-            lines.append(f"{user_msg.strip()}")
+            lines.append("📝 <b>הודעת המשתמש:</b>")
+            lines.append(f"<i>{user_msg.strip()}</i>")
+            lines.append("")
         
-        lines.append("")  # שורה ריקה
+        lines.append("🔄 <b>עדכוני מודלים:</b>")
+        lines.append("")
         
-        # 3. GPT-C: שינויים או "אין שינויים"
-        lines.append("*GPT-C:*")
+        # 🤖 GPT-C - עם עיצוב משופר
+        lines.append("🧠 <b>GPT-C:</b>")
         if gpt_c_changes:
             for ch in gpt_c_changes:
                 field = ch.get("field")
-                # דילוג על שדות טכניים
                 if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+                lines.append(f"   🔹 <b>{field}:</b> {old_val} ➜ <code>{new_val}</code>")
         else:
-            lines.append("  אין שינויים")
+            lines.append("   ➖ <i>אין שינויים</i>")
         
-        lines.append("")  # שורה ריקה
+        lines.append("")
         
-        # 4. GPT-D: שינויים או "אין שינויים"  
-        lines.append("*GPT-D:* שדות")
+        # 🤖 GPT-D - עם עיצוב משופר
+        lines.append("🎯 <b>GPT-D (שדות מתקדמים):</b>")
         if gpt_d_changes:
             for ch in gpt_d_changes:
                 field = ch.get("field")
-                # דילוג על שדות טכניים
                 if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+                lines.append(f"   🔹 <b>{field}:</b> {old_val} ➜ <code>{new_val}</code>")
         else:
-            lines.append("  אין שינויים")
+            lines.append("   ➖ <i>אין שינויים</i>")
         
-        lines.append("")  # שורה ריקה
+        lines.append("")
         
-        # 5. GPT-E: שינויים + קאונטר או "אין שינויים"
-        lines.append("GPT-E:")
+        # 🤖 GPT-E - עם קאונטר ועיצוב משופר
+        lines.append("🚀 <b>GPT-E (עדכון מתקדם):</b>")
         if gpt_e_changes:
             for ch in gpt_e_changes:
                 field = ch.get("field")
-                # דילוג על שדות טכניים
                 if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+                lines.append(f"   🔹 <b>{field}:</b> {old_val} ➜ <code>{new_val}</code>")
         else:
-            # הוספת קאונטר גם כשאין שינויים
+            # הוספת קאונטר עם עיצוב יפה
             try:
                 from chat_utils import get_user_stats_and_history
                 from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
                 stats, _ = get_user_stats_and_history(chat_id)
                 total_messages = stats.get("total_messages", 0)
-                lines.append(f"  אין שינויים {total_messages}/{GPT_E_RUN_EVERY_MESSAGES}")
+                lines.append(f"   ➖ <i>אין שינויים</i> 📊 <code>{total_messages}/{GPT_E_RUN_EVERY_MESSAGES}</code>")
             except:
-                lines.append("  אין שינויים")
+                lines.append("   ➖ <i>אין שינויים</i>")
         
-        lines.append("")  # שורה ריקה
-        lines.append("")  # שורה ריקה נוספת
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         
-        # 6. שדה SUMMARY: תוכן השדה המסכם במלואו
-        lines.append("שדה SUMMARY:")
+        # 📋 שדה SUMMARY עם עיצוב יפה
+        lines.append("📋 <b>SUMMARY (סיכום פרופיל):</b>")
         if summary and summary.strip():
-            lines.append(f"{summary.strip()}")
+            # חלוקה לשורות קצרות אם הסיכום ארוך
+            summary_clean = summary.strip()
+            if len(summary_clean) > 80:
+                # חלוקה לשורות של 80 תווים מקסימום
+                words = summary_clean.split()
+                current_line = ""
+                for word in words:
+                    if len(current_line + " " + word) <= 80:
+                        current_line += (" " + word) if current_line else word
+                    else:
+                        if current_line:
+                            lines.append(f"   📝 <i>{current_line}</i>")
+                        current_line = word
+                if current_line:
+                    lines.append(f"   📝 <i>{current_line}</i>")
+            else:
+                lines.append(f"   📝 <i>{summary_clean}</i>")
         else:
-            lines.append("אין סיכום")
+            lines.append("   ❌ <i>אין סיכום זמין</i>")
         
-        lines.append("")  # שורה ריקה
-        lines.append("")  # שורה ריקה נוספת
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         
-        # 7. זמן עדכון ושם הטבלה
+        # ⏰ פרטי עדכון עם עיצוב יפה
         current_time = get_israel_time().strftime('%d/%m/%Y %H:%M:%S')
-        lines.append(f"⏰ {current_time} - עודכן במסד נתונים בטבלת user_profiles")
+        lines.append("💾 <b>פרטי עדכון:</b>")
+        lines.append(f"   ⏰ <b>זמן:</b> <code>{current_time}</code>")
+        lines.append(f"   🗄️ <b>מיקום:</b> <code>user_profiles</code> (מסד נתונים)")
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        # שליחת ההודעה
+        # שליחת ההודעה המעוצבת
         notification_text = "\n".join(lines)
         send_admin_notification_raw(notification_text)
         
