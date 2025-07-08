@@ -364,14 +364,36 @@ def alert_system_status(message, level="info"):
     except Exception as e:
         print(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
-def send_anonymous_chat_notification(user_message: str, bot_response: str):
+def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
     try:
         # יצירת הודעה מפורמטת ללא מזהה משתמש
         notification_text = f"💬 **התכתבות חדשה**\n\n"
-        notification_text += f"👤 **משתמש כתב:**\n{user_message}\n\n"
-        notification_text += f"➖➖➖➖➖➖➖➖➖➖\n\n"
-        notification_text += f"🤖 **הבוט ענה:**\n{bot_response}"
+        
+        # הודעת המשתמש
+        notification_text += f"__משתמש כתב:__\n{user_message}\n\n"
+        notification_text += f"-----------------------------\n"
+        
+        # מידע על היסטוריה
+        if history_messages:
+            user_count = len([msg for msg in history_messages if msg.get("role") == "user"])
+            bot_count = len([msg for msg in history_messages if msg.get("role") == "assistant"])
+            notification_text += f"נשלחה היסטוריה: {bot_count} בוט + {user_count} משתמש\n"
+        else:
+            notification_text += f"נשלחה היסטוריה: 0 בוט + 0 משתמש\n"
+        
+        # סיסטם פרומפטים
+        if messages_for_gpt:
+            system_prompts = [msg for msg in messages_for_gpt if msg.get("role") == "system"]
+            for i, prompt in enumerate(system_prompts, 1):
+                prompt_content = prompt.get("content", "")
+                prompt_preview = prompt_content[:20] + "..." if len(prompt_content) > 20 else prompt_content
+                notification_text += f"סיסטם פרומט {i}: {prompt_preview}\n"
+        
+        notification_text += f"-----------------------\n"
+        
+        # תשובת הבוט
+        notification_text += f"__תשובת הבוט:__\n{bot_response}"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:

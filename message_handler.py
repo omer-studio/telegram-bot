@@ -740,7 +740,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 📨 שליחת התכתבות אנונימית לאדמין
             try:
                 from admin_notifications import send_anonymous_chat_notification
-                send_anonymous_chat_notification(user_msg, bot_reply)
+                send_anonymous_chat_notification(user_msg, bot_reply, history_messages, messages_for_gpt)
             except Exception as admin_chat_err:
                 logging.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}")
 
