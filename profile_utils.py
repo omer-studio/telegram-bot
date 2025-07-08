@@ -149,14 +149,11 @@ def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str,
 
 
 def _schedule_sheets_sync_safely(chat_id: str):
-    """Safe wrapper to schedule sheets sync without coroutine issues."""
-    try:
-        # נסה להשתמש בפונקציה סינכרונית
-        _sync_local_to_sheets_sync(chat_id)
-    except Exception as exc:
-        logging.debug(f"שגיאה בסנכרון לשיטס עבור משתמש {chat_id}: {exc}")
-        # אם יש בעיה, לפחות נציין זאת ללוג
-        print(f"⚠️ לא ניתן לסנכרן משתמש {chat_id} לשיטס - ימשיך לעבוד מקומית")
+    """🗑️ עברנו למסד נתונים - פונקציה deprecated"""
+    # 🗑️ עברנו למסד נתונים - אין צורך בסנכרון Google Sheets יותר
+    # במסד נתונים כל הנתונים כבר סונכרנו אוטומטית
+    logging.debug(f"🗑️ _schedule_sheets_sync_safely deprecated - using database for {chat_id}")
+    return  # לא עושה כלום
 
 
 # ---------------------------------------------------------------------------
