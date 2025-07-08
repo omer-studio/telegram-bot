@@ -50,6 +50,110 @@
       "name": "test_connection",
       "path": "db_tool.py", 
       "description": "Test database connection and return current time + PostgreSQL version"
+    },
+    {
+      "name": "טבלת_משתמשים",
+      "path": "db_tool.py",
+      "description": "הצגת טבלת משתמשים עם המידע החשוב ביותר - chat_id, name, approved, code_try",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר המשתמשים להציג (ברירת מחדל: 15)",
+          "default": 15
+        }
+      }
+    },
+    {
+      "name": "טבלת_לוג_רנדר",
+      "path": "db_tool.py",
+      "description": "הצגת לוגי רנדר ופריסות - מצב השרת ופעולות deploy",
+      "parameters": {
+        "limit": {
+          "type": "integer", 
+          "description": "מספר הלוגים להציג (ברירת מחדל: 10)",
+          "default": 10
+        }
+      }
+    },
+    {
+      "name": "טבלת_צאט_היסטורי",
+      "path": "db_tool.py",
+      "description": "הצגת היסטוריית צ'אט - כל המשתמשים או משתמש ספציפי",
+      "parameters": {
+        "chat_id": {
+          "type": "string",
+          "description": "ID משתמש ספציפי (אופציונלי - אם לא מצוין, יציג כל המשתמשים)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "מספר ההודעות להציג (ברירת מחדל: 20)",
+          "default": 20
+        }
+      }
+    },
+    {
+      "name": "טבלת_שגיאות",
+      "path": "db_tool.py",
+      "description": "הצגת שגיאות אחרונות במערכת",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר השגיאות להציג (ברירת מחדל: 15)",
+          "default": 15
+        }
+      }
+    },
+    {
+      "name": "טבלת_עלויות_gpt",
+      "path": "db_tool.py", 
+      "description": "הצגת עלויות GPT לפי משתמשים - שבוע אחרון",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר המשתמשים להציג (ברירת מחדל: 20)",
+          "default": 20
+        }
+      }
+    },
+    {
+      "name": "טבלת_פעילות_יומית",
+      "path": "db_tool.py",
+      "description": "הצגת פעילות יומית - משתמשים פעילים והודעות לפי יום",
+      "parameters": {
+        "days": {
+          "type": "integer",
+          "description": "מספר ימים אחורה (ברירת מחדל: 7)",
+          "default": 7
+        }
+      }
+    },
+    {
+      "name": "טבלת_משתמשים_קריטיים",
+      "path": "db_tool.py",
+      "description": "הצגת משתמשים קריטיים עם שגיאות",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "description": "מספר המשתמשים להציג (ברירת מחדל: 10)",
+          "default": 10
+        }
+      }
+    },
+    {
+      "name": "חיפוש_משתמש",
+      "path": "db_tool.py",
+      "description": "חיפוש מידע מלא על משתמש ספציפי - פרופיל, הודעות אחרונות ושימוש GPT",
+      "parameters": {
+        "chat_id": {
+          "type": "string",
+          "description": "ID של המשתמש לחיפוש"
+        }
+      }
+    },
+    {
+      "name": "סטטיסטיקות_כלליות",
+      "path": "db_tool.py",
+      "description": "סטטיסטיקות כלליות של המערכת - סך המשתמשים, מאושרים, הודעות היום ועלויות"
     }
   ]
 } 

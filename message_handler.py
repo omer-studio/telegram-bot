@@ -48,6 +48,7 @@ from prompts import SYSTEM_PROMPT
 import profile_utils as _pu
 import traceback
 # 🆕 פונקציות חדשות למסד נתונים - לפי המדריך!
+import db_manager
 from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new, save_gpt_chat_message
 
 def format_text_for_telegram(text):
@@ -693,34 +694,65 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_summary = ""
             history_messages = []
             
+            print(f"🔧 [DEBUG] מתחיל טעינת נתונים עבור {chat_id}")
+            
             try:
-                print(f"🔧 [DEBUG] מתחיל טעינת נתונים עבור {chat_id}")
-                
-                # קריאה מהירה מקובץ מקומי בלבד - בלי Google Sheets!
                 print(f"🔧 [DEBUG] מייבא get_chat_history_messages_fast")
                 from chat_utils import get_chat_history_messages_fast
                 
                 print(f"🔧 [DEBUG] קורא להיסטוריה עבור {chat_id}")
-                history_messages = get_chat_history_messages_fast(chat_id)  # 🔧 תמיד 15 הודעות מקסימום
+                history_messages = get_chat_history_messages_fast(chat_id)
                 print(f"🔧 [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
                 
-                # קריאה מהירה מפרופיל מקומי בלבד
+                # DEBUG: שמירה במסד נתונים
+                try:
+                    with db_manager.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            INSERT INTO chat_messages (chat_id, user_msg, bot_response, timestamp)
+                            VALUES (%s, %s, %s, NOW())
+                        ''', (
+                            f"DEBUG_{chat_id}",
+                            f"🔧 HISTORY_DEBUG: קיבלתי {len(history_messages) if history_messages else 0} הודעות היסטוריה",
+                            "DEBUG_ENTRY"
+                        ))
+                        conn.commit()
+                except Exception as db_err:
+                    pass  # אל תיכשל בגלל דיבאג
+                
                 print(f"🔧 [DEBUG] מייבא get_user_summary_fast")
                 from profile_utils import get_user_summary_fast
                 
                 print(f"🔧 [DEBUG] קורא לסיכום עבור {chat_id}")
-                current_summary = get_user_summary_fast(chat_id)
+                current_summary = get_user_summary_fast(chat_id) or ""
                 print(f"🔧 [DEBUG] סיכום הוחזר: '{current_summary}'")
                 
                 print(f"✅ [DEBUG] טעינת נתונים הושלמה בהצלחה עבור {chat_id}")
                     
             except Exception as data_err:
-                logging.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}")
                 print(f"🚨 [HISTORY_DEBUG] שגיאה בטעינת נתונים עבור {chat_id}: {data_err}")
                 print(f"🚨 [HISTORY_DEBUG] exception type: {type(data_err).__name__}")
-                print(f"🚨 [HISTORY_DEBUG] full traceback:")
-                traceback.print_exc()
-                # ממשיכים בלי נתונים - עדיף תשובה מהירה מאשר נתונים מלאים
+                                    print(f"🚨 [HISTORY_DEBUG] full traceback:")
+                    traceback.print_exc()
+                
+                # שמירת השגיאה במסד נתונים למעקב
+                try:
+                    with db_manager.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            INSERT INTO chat_messages (chat_id, user_msg, bot_response, timestamp)
+                            VALUES (%s, %s, %s, NOW())
+                        ''', (
+                            f"ERROR_{chat_id}",
+                            f"🚨 HISTORY_ERROR: {type(data_err).__name__}: {str(data_err)[:200]}",
+                            f"ERROR_TRACEBACK: {traceback.format_exc()[:500]}"
+                        ))
+                        conn.commit()
+                except Exception as db_err:
+                    pass  # אל תיכשל בגלל דיבאג
+                
+                logging.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}")
+                # אין נתונים - ממשיכים בלי היסטוריה (מעדיפים מהירות על שלמות נתונים)
             
             # בניית ההודעות ל-gpt_a - מינימלי ומהיר
             messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]

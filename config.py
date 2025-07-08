@@ -198,7 +198,8 @@ config = load_config()
 DEFAULT_LOG_LEVEL = "INFO"  # רמת לוגים כללית
 ENABLE_DEBUG_PRINTS = False  # DEBUG prints כלליים (False = רזה יותר)
 ENABLE_GPT_COST_DEBUG = True  # דיבאג עלויות GPT מפורט - חשוב לתפעול!
-ENABLE_SHEETS_DEBUG = False  # דיבאג גיליונות Google
+# 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
+ENABLE_SHEETS_DEBUG = False  # תמיד False - עברנו למסד נתונים
 ENABLE_PERFORMANCE_DEBUG = True  # דיבאג ביצועים מפורט - חשוב לזמני תגובה!
 ENABLE_MESSAGE_DEBUG = True  # הודעות בסיסיות (מומלץ True)
 ENABLE_DATA_EXTRACTION_DEBUG = True  # מידע על חילוץ נתונים מ-GPT C,D,E
