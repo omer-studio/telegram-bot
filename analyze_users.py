@@ -9,7 +9,9 @@ import json
 from datetime import datetime
 from db_manager import get_chat_history, get_user_profile, save_user_profile
 from fields_dict import FIELDS_DICT, get_user_profile_fields, get_summary_fields
-from sheets_handler import get_user_summary
+# 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+# from sheets_handler import get_user_summary
+from profile_utils import get_user_summary_fast
 
 def analyze_user_chat_history(chat_id):
     """

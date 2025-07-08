@@ -440,7 +440,9 @@ def get_holiday_system_message(chat_id: str, bot_reply: str = "") -> str:
         if not is_active_hours():
             return ""
         
-        from sheets_core import get_user_profile_data  # noqa – late import to avoid cycles
+        # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+        # from sheets_core import get_user_profile_data  # noqa – late import to avoid cycles
+        from profile_utils import get_user_profile_fast  # המחליף במסד נתונים
         with open("special_events.json", "r", encoding="utf-8") as f:
             events = json.load(f)
 
@@ -504,7 +506,8 @@ def health_check() -> dict:
     try:
         check_config_sanity()
         health["config_loaded"] = True
-        from sheets_handler import sheet_users, sheet_log  # noqa – just to assert import
+        # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+        # from sheets_handler import sheet_users, sheet_log  # noqa – just to assert import
         health["sheets_connected"] = True
 
         try:

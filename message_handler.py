@@ -704,6 +704,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
             except Exception as data_err:
                 logging.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}")
+                print(f"🚨 [HISTORY_DEBUG] שגיאה בטעינת נתונים עבור {chat_id}: {data_err}")
+                print(f"🚨 [HISTORY_DEBUG] exception type: {type(data_err).__name__}")
                 # ממשיכים בלי נתונים - עדיף תשובה מהירה מאשר נתונים מלאים
             
             # בניית ההודעות ל-gpt_a - מינימלי ומהיר
@@ -714,8 +716,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 messages_for_gpt.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
             
             # הוספת היסטוריה (מהיר)
+            print(f"🔍 [HISTORY_DEBUG] history_messages לאחר טעינה: {len(history_messages) if history_messages else 0} הודעות")
             if history_messages:
                 messages_for_gpt.extend(history_messages)
+                print(f"✅ [HISTORY_DEBUG] הוספו {len(history_messages)} הודעות היסטוריה ל-messages_for_gpt")
+            else:
+                print(f"❌ [HISTORY_DEBUG] לא הוספו הודעות היסטוריה - history_messages ריק!")
             
             # הוספת ההודעה החדשה
             messages_for_gpt.append({"role": "user", "content": user_msg})

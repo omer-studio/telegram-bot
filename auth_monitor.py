@@ -133,33 +133,22 @@ class AuthorizationMonitor:
         return issues
     
     def check_sheets_core_integrity(self) -> List[str]:
-        """בדיקת תקינות sheets_core.py"""
+        """בדיקת תקינות sheets_core.py - 🗑️ עברנו למסד נתונים"""
         issues = []
         
         try:
-            with open('sheets_core.py', 'r', encoding='utf-8') as f:
-                content = f.read()
+            # 🗑️ עברנו למסד נתונים - sheets_core.py לא קיים יותר
+            issues.append("ℹ️ sheets_core.py הוסר - עברנו למסד נתונים 100%")
             
-            # בדיקות קריטיות
-            required_functions = [
-                'check_user_access',
-                'approve_user', 
-                'register_user'
-            ]
-            
-            for func in required_functions:
-                if f'def {func}(' not in content:
-                    issues.append(f"❌ חסרה פונקציה: {func}")
-                    
-            # בדיקת logic תקין ב-check_user_access
-            if 'if str(approved_status).strip().upper() == "TRUE":' not in content:
-                issues.append("❌ לוגיקת בדיקת approved לא תקינה")
-                
-            if 'status = "approved"' not in content:
-                issues.append("❌ חסר קביעת סטטוס approved")
+            # במקום זה, נבדוק שהפונקציות קיימות במסד נתונים
+            try:
+                from db_manager import check_user_approved_status_db, approve_user_db_new, register_user_with_code_db
+                issues.append("✅ פונקציות מסד נתונים זמינות")
+            except ImportError as import_err:
+                issues.append(f"❌ פונקציות מסד נתונים לא זמינות: {import_err}")
                 
         except Exception as e:
-            issues.append(f"❌ שגיאה בבדיקת sheets_core.py: {e}")
+            issues.append(f"❌ שגיאה בבדיקת מסד נתונים: {e}")
             
         return issues
     

@@ -18,7 +18,9 @@ from config import config
 # יבוא של FIELDS_DICT
 try:
     from fields_dict import FIELDS_DICT, get_user_profile_fields
-    from sheets_handler import update_user_profile, get_user_summary
+    # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
+# from sheets_handler import update_user_profile, get_user_summary
+from profile_utils import update_user_profile_fast, get_user_summary_fast
 except ImportError:
     print("⚠️ לא ניתן לייבא חלק מהמודולים - חלק מהפונקציות לא יעבדו")
 

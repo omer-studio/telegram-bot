@@ -109,70 +109,31 @@ def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
 # ---------------------------------------------------------------------------
 
 async def _sync_to_sheet_by_headers(sheet, chat_id: str, local_profile: Dict[str, Any]):
-    """Synchronise fields by header names (not by fixed column indices)."""
+    """Synchronise fields by header names - 🗑️ עברנו למסד נתונים"""
     try:
-        from sheets_core import get_sheet_all_values_cached
-        all_values = get_sheet_all_values_cached(sheet)
-        if not all_values:
-            logging.warning("גיליון ריק או ללא כותרות")
-            return
-
-        headers = all_values[0]
-        chat_id_col = next((i + 1 for i, h in enumerate(headers) if h.lower() == "chat_id"), None)
-        if not chat_id_col:
-            logging.warning("עמודת chat_id לא נמצאה בגיליון")
-            return
-
-        from sheets_core import find_chat_id_in_sheet
-        row_index = find_chat_id_in_sheet(sheet, chat_id, col=chat_id_col) or len(all_values) + 1
-        if row_index == len(all_values) + 1:
-            sheet.update_cell(row_index, chat_id_col, chat_id)
-
-        field_to_col = {h.lower(): i + 1 for i, h in enumerate(headers)}
-        for field, value in local_profile.items():
-            col_index = field_to_col.get(field.lower())
-            if not col_index:
-                continue
-            try:
-                sheet.update_cell(row_index, col_index, str(value))
-            except Exception as e:
-                logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
+        # 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
+        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
+        return  # פשוט מחזיר בלי לעשות כלום
     except Exception as exc:
         logging.error(f"שגיאה בסנכרון לפי כותרות: {exc}")
 
 
 async def _sync_local_to_sheets_background(chat_id: str):
-    """Background task – push the local profile to Google Sheets."""
+    """Background task - 🗑️ עברנו למסד נתונים"""
     try:
-        local_profile = get_user_profile_fast(chat_id)
-        if not local_profile:
-            logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
-            return
-
-        from sheets_core import setup_google_sheets
-        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
-        await _sync_to_sheet_by_headers(sheet_users, chat_id, local_profile)
-        await _sync_to_sheet_by_headers(sheet_states, chat_id, local_profile)
-        logging.info(f"✅ Google Sheets סונכרן עבור משתמש {chat_id}")
+        # 🗑️ עברנו למסד נתונים - סנכרון Google Sheets לא נדרש יותר
+        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
+        return  # פשוט מחזיר בלי לעשות כלום
     except Exception as exc:
         logging.error(f"שגיאה בסנכרון ל-Google Sheets: {exc}")
 
 
 def _sync_local_to_sheets_sync(chat_id: str):
-    """Synchronous wrapper for _sync_local_to_sheets_background."""
+    """Synchronous wrapper - 🗑️ עברנו למסד נתונים"""
     try:
-        local_profile = get_user_profile_fast(chat_id)
-        if not local_profile:
-            logging.warning(f"אין נתונים מקומיים למשתמש {chat_id}")
-            return
-
-        from sheets_core import setup_google_sheets
-        gc, sheet_users, sheet_log, sheet_states = setup_google_sheets()
-        
-        # Use synchronous methods instead of async
-        _sync_to_sheet_by_headers_sync(sheet_users, chat_id, local_profile)
-        _sync_to_sheet_by_headers_sync(sheet_states, chat_id, local_profile)
-        logging.info(f"✅ Google Sheets סונכרן עבור משתמש {chat_id}")
+        # 🗑️ עברנו למסד נתונים - סנכרון Google Sheets לא נדרש יותר
+        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
+        return  # פשוט מחזיר בלי לעשות כלום
     except Exception as exc:
         logging.error(f"שגיאה בסנכרון ל-Google Sheets: {exc}")
 
