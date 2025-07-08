@@ -718,7 +718,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from chat_utils import get_chat_history_messages_fast
                 
                 print(f"🔧 [DEBUG] קורא להיסטוריה עבור {chat_id}")
-                history_messages = get_chat_history_messages_fast(chat_id)
+                history_messages = get_chat_history_messages_fast(chat_id, limit=32)
                 print(f"🔧 [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
                 
                 # DEBUG: שמירה במסד נתונים
@@ -1127,7 +1127,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             # 🗑️ השתמש בפונקציה מהמסד נתונים
             from profile_utils import get_user_summary_fast
             current_summary = get_user_summary_fast(chat_id) or ""
-            history_messages = get_chat_history_messages(chat_id, limit=15)
+            history_messages = get_chat_history_messages(chat_id, limit=32)
             
             # בניית הודעות מלאות לרישום
             messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
