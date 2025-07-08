@@ -247,14 +247,31 @@ def _send_admin_profile_overview_notification(
     gpt_e_info: str,
     summary: str = "",
 ):
-    """שליחת הודעת אדמין מרוכזת על כל העדכון (GPT-C/D/E + summary) עם עיצוב משופר."""
+    """
+    🚨 CRITICAL: שליחת הודעת אדמין מרוכזת **אך ורק אם יש שינויים בפרופיל**
+    
+    עיקרון ברזל: ההודעה נשלחת רק כאשר יש שינוי אמיתי בשדות המשתמש.
+    אם אין שינויים - לא נשלחת הודעה כלל, כדי למנוע ספאם לאדמין.
+    
+    Args:
+        gpt_c_changes: רשימת שינויים מ-GPT-C (אם ריקה - לא היו שינויים)
+        gpt_d_changes: רשימת שינויים מ-GPT-D (אם ריקה - לא היו שינויים)  
+        gpt_e_changes: רשימת שינויים מ-GPT-E (אם ריקה - לא היו שינויים)
+    """
     try:
         from notifications import send_admin_notification_raw
         from utils import get_israel_time
 
-        # ✅ שליחה רק אם יש שינויים
+        # 🚨 CRITICAL CHECK: שליחה אך ורק אם יש שינויים בשדות!
+        # זה מונע שליחת הודעות לא נחוצות לאדמין
         if not (gpt_c_changes or gpt_d_changes or gpt_e_changes):
+            logging.debug(f"[ADMIN_NOTIFICATION] 🚫 לא נשלחת הודעה למשתמש {chat_id} - אין שינויים בפרופיל")
+            print(f"[ADMIN_NOTIFICATION] 🚫 לא נשלחת הודעה למשתמש {chat_id} - אין שינויים בפרופיל")
             return
+
+        # 📊 רישום סטטיסטיקה: כמה שינויים בכל מודל
+        total_changes = len(gpt_c_changes) + len(gpt_d_changes) + len(gpt_e_changes)
+        logging.info(f"[ADMIN_NOTIFICATION] 📬 שולח הודעה למשתמש {chat_id} עם {total_changes} שינויים (C:{len(gpt_c_changes)}, D:{len(gpt_d_changes)}, E:{len(gpt_e_changes)})")
 
         lines: List[str] = []
         
@@ -365,8 +382,10 @@ def _send_admin_profile_overview_notification(
         notification_text = "\n".join(lines)
         send_admin_notification_raw(notification_text)
         
+        logging.info(f"[ADMIN_NOTIFICATION] ✅ הודעה נשלחה בהצלחה למשתמש {chat_id}")
+        
     except Exception as exc:
-        logging.error(f"_send_admin_profile_overview_notification failed: {exc}")
+        logging.error(f"[ADMIN_NOTIFICATION] ❌ שגיאה בשליחת הודעה למשתמש {chat_id}: {exc}")
         # גיבוי - שליחת הודעה בסיסית במקרה של שגיאה
         try:
             from notifications import send_admin_notification_raw
