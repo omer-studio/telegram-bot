@@ -153,8 +153,8 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
     monkeypatch.setattr(profile_utils, "USER_PROFILES_PATH", str(profiles_file), raising=False)
     monkeypatch.setattr(profile_utils, "_schedule_sheets_sync_safely", lambda _cid: None, raising=False)
 
-    import sheets_core
-    monkeypatch.setattr(sheets_core, "generate_summary_from_profile_data", lambda _d: "", raising=False)
+    # 🗑️ עברנו למסד נתונים - במקום sheets_core נשתמש ב-profile_utils
+    monkeypatch.setattr(profile_utils, "generate_summary_from_profile_data", lambda _d: "", raising=False)
 
     chat_id = "test_chat_id"
     success = profile_utils.update_user_profile_fast(chat_id, {"age": 35}, send_admin_notification=False)

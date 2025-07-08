@@ -507,8 +507,8 @@ def health_check() -> dict:
         check_config_sanity()
         health["config_loaded"] = True
         # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
-        # from sheets_handler import sheet_users, sheet_log  # noqa – just to assert import
-        health["sheets_connected"] = True
+        # Google Sheets לא רלוונטי יותר - עובדים רק עם מסד נתונים
+        health["sheets_connected"] = True  # תמיד True כי אין צורך ב-Sheets
 
         try:
             from gpt_utils import measure_llm_latency

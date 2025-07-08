@@ -1849,7 +1849,7 @@ def get_database_table_counts():
             return "❌ לא נמצאו טבלאות במסד הנתונים"
         
         # 📊 כותרת ראשית
-        message = "📊 **סטטוס מסד הנתונים:**\n\n"
+        message = "📊 סטטוס מסד הנתונים:\n\n"
         
         total_rows = 0
         
@@ -1862,7 +1862,7 @@ def get_database_table_counts():
                 if table in changes:
                     change = changes[table]
                     change_sign = "+" if change['change'] > 0 else ""
-                    change_info = f" **({change_sign}{change['change']:,})**"
+                    change_info = f" ({change_sign}{change['change']:,})"
                 sorted_tables.append((table, count, change_info, abs(changes.get(table, {}).get('change', 0))))
             else:
                 sorted_tables.append((table, count, "", 0))
@@ -1870,16 +1870,16 @@ def get_database_table_counts():
         # מיון לפי גודל השינוי (הכי גדול קודם)
         sorted_tables.sort(key=lambda x: x[3], reverse=True)
         
-        # פורמט פשוט שעובד בטלגרם
+        # פורמט מינימליסטי
         for table, count, change_info, _ in sorted_tables:
             if isinstance(count, int):
                 count_str = f"{count:,}"
-                message += f"• **{table}** - {count_str} שורות{change_info}\n"
+                message += f"▪️ {table} — {count_str} שורות{change_info}\n"
             else:
-                message += f"• **{table}** - {count}\n"
+                message += f"▪️ {table} — {count}\n"
         
         # 📊 שורת סיכום
-        message += f"\n➖➖➖➖➖➖➖➖➖➖\n"
+        message += f"\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n"
         
         # חישוב שינוי כללי
         total_change = 0
@@ -1888,11 +1888,11 @@ def get_database_table_counts():
             total_change = total_rows - previous_total
             if total_change != 0:
                 change_sign = "+" if total_change > 0 else ""
-                message += f"📈 **סה״כ שורות:** {total_rows:,} **({change_sign}{total_change:,})**"
+                message += f"📈 סה״כ שורות: {total_rows:,} ({change_sign}{total_change:,})"
             else:
-                message += f"📈 **סה״כ שורות:** {total_rows:,} (ללא שינוי)"
+                message += f"📈 סה״כ שורות: {total_rows:,} (ללא שינוי)"
         else:
-            message += f"📈 **סה״כ שורות:** {total_rows:,} (פריסה ראשונה)"
+            message += f"📈 סה״כ שורות: {total_rows:,} (פריסה ראשונה)"
         
         return message
         

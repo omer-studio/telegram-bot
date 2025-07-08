@@ -139,43 +139,11 @@ def _sync_local_to_sheets_sync(chat_id: str):
 
 
 def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str, Any]):
-    """Synchronous version of _sync_to_sheet_by_headers."""
+    """Synchronous version - 🗑️ עברנו למסד נתונים"""
     try:
-        from sheets_core import get_sheet_all_values_cached
-        all_values = get_sheet_all_values_cached(sheet)
-        if not all_values:
-            logging.warning("גיליון ריק או ללא כותרות")
-            return
-
-        headers = all_values[0]
-        chat_id_col = next((i + 1 for i, h in enumerate(headers) if h.lower() == "chat_id"), None)
-        if not chat_id_col:
-            logging.warning("עמודת chat_id לא נמצאה בגיליון")
-            return
-
-        from sheets_core import find_chat_id_in_sheet
-        row_index = find_chat_id_in_sheet(sheet, chat_id, col=chat_id_col) or len(all_values) + 1
-        if row_index == len(all_values) + 1:
-            sheet.update_cell(row_index, chat_id_col, chat_id)
-
-        # ✅ שיפור: וידוא שכל העמודות קיימות לפני עדכון
-        for field, value in local_profile.items():
-            try:
-                from sheets_core import ensure_column_exists
-                col_index = ensure_column_exists(sheet, field)
-                
-                if col_index:
-                    sheet.update_cell(row_index, col_index, str(value))
-                    # לוג מיוחד לעדכון הסיכום
-                    if field.lower() == "summary":
-                        logging.info(f"[SHEETS_SYNC] עודכן סיכום בגוגל שיטס למשתמש {chat_id}: '{value}'")
-                    # לוג מיוחד לעדכון השם
-                    elif field.lower() == "name":
-                        logging.info(f"[SHEETS_SYNC] עודכן שם בגוגל שיטס למשתמש {chat_id}: '{value}'")
-                else:
-                    logging.warning(f"⚠️ לא ניתן ליצור עמודה '{field}' עבור משתמש {chat_id}")
-            except Exception as e:
-                logging.debug(f"שגיאה בעדכון שדה {field}: {e}")
+        # 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
+        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
+        return  # פשוט מחזיר בלי לעשות כלום
     except Exception as exc:
         logging.error(f"שגיאה בסנכרון לפי כותרות: {exc}")
 
@@ -527,12 +495,12 @@ def get_emotional_identity_fast(chat_id: str) -> Dict[str, Any]:
 
 def ensure_emotional_identity_consistency(chat_id: str) -> bool:
     try:
+        # 🗑️ עברנו למסד נתונים - אין צורך לבדוק עקביות עם Google Sheets
         local_profile = get_user_profile_fast(chat_id)
-        from sheets_core import get_user_profile_data
-        sheets_profile = get_user_profile_data(chat_id)
-        matched = local_profile == sheets_profile
+        # במסד נתונים אין צורך להשוות - הכל במקום אחד
+        matched = True  # תמיד תואם כי זה אותו מקור
         logging.info(
-            f"✅ תעודת זהות רגשית {'תואמת' if matched else 'לא תואמת'} עבור משתמש {chat_id}"
+            f"✅ תעודת זהות רגשית תואמת עבור משתמש {chat_id} (מסד נתונים)"
         )
         return matched
     except Exception as exc:
