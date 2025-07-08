@@ -32,7 +32,8 @@ from config import (
     ADMIN_CHAT_ID,
     BOT_TOKEN
 )
-from utils import log_error_stat, get_israel_time
+from utils import get_israel_time
+from chat_utils import log_error_stat
 import time
 
 # קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
@@ -1849,37 +1850,52 @@ def get_database_table_counts():
             return "❌ לא נמצאו טבלאות במסד הנתונים"
         
         # 📊 כותרת ראשית
-        message = "📊 סטטוס מסד הנתונים:\n\n"
+        message = "📊 **סטטוס מסד הנתונים:**\n\n"
         
         total_rows = 0
         
         # מיון לפי שינוי (הכי גדול קודם)
         sorted_tables = []
-        for table, count in table_counts.items():
-            if isinstance(count, int):
-                total_rows += count
+        for table, current_count in table_counts.items():
+            if isinstance(current_count, int):
+                total_rows += current_count
                 change_info = ""
                 if table in changes:
                     change = changes[table]
                     change_sign = "+" if change['change'] > 0 else ""
-                    change_info = f" ({change_sign}{change['change']:,})"
-                sorted_tables.append((table, count, change_info, abs(changes.get(table, {}).get('change', 0))))
+                    change_info = f"({change_sign}{change['change']:,})"
+                else:
+                    change_info = ""
+                sorted_tables.append((table, current_count, change_info, abs(changes.get(table, {}).get('change', 0))))
             else:
-                sorted_tables.append((table, count, "", 0))
+                sorted_tables.append((table, current_count, "שגיאה", 0))
         
         # מיון לפי גודל השינוי (הכי גדול קודם)
         sorted_tables.sort(key=lambda x: x[3], reverse=True)
         
-        # פורמט מינימליסטי
-        for table, count, change_info, _ in sorted_tables:
-            if isinstance(count, int):
-                count_str = f"{count:,}"
-                message += f"▪️ {table} — {count_str} שורות{change_info}\n"
-            else:
-                message += f"▪️ {table} — {count}\n"
+        # טבלה עם פונט קבוע
+        message += "```\n"
+        message += f"{'טבלה':<20} {'שורות':>8} {'שינוי':>10}\n"
+        message += "=" * 40 + "\n"
         
-        # 📊 שורת סיכום
-        message += f"\n┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n"
+        for table, count, change_info, _ in sorted_tables:
+            # קיצור שם הטבלה
+            short_name = table.replace('_', ' ')
+            if len(short_name) > 19:
+                short_name = short_name[:16] + "..."
+            table_name = short_name.ljust(19)
+            
+            if isinstance(count, int):
+                count_str = f"{count:,}".rjust(8)
+                change_str = change_info.rjust(10) if change_info else "".rjust(10)
+            else:
+                count_str = "שגיאה".rjust(8)
+                change_str = "N/A".rjust(10)
+            
+            message += f"{table_name} {count_str} {change_str}\n"
+        
+        # שורת סיכום
+        message += "=" * 40 + "\n"
         
         # חישוב שינוי כללי
         total_change = 0
@@ -1888,11 +1904,15 @@ def get_database_table_counts():
             total_change = total_rows - previous_total
             if total_change != 0:
                 change_sign = "+" if total_change > 0 else ""
-                message += f"📈 סה״כ שורות: {total_rows:,} ({change_sign}{total_change:,})"
+                total_change_str = f"({change_sign}{total_change:,})".rjust(10)
             else:
-                message += f"📈 סה״כ שורות: {total_rows:,} (ללא שינוי)"
+                total_change_str = "(אין שינוי)".rjust(10)
         else:
-            message += f"📈 סה״כ שורות: {total_rows:,} (פריסה ראשונה)"
+            total_change_str = "(ראשונה)".rjust(10)
+        
+        total_str = f"{total_rows:,}".rjust(8)
+        message += f"{'סה״כ'.ljust(19)} {total_str} {total_change_str}\n"
+        message += "```"
         
         return message
         
