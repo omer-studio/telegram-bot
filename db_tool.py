@@ -66,7 +66,7 @@ def run_query(query: str) -> List[Dict[str, Any]]:
     if not re.match(r'^\s*select', query.strip(), re.IGNORECASE):
         raise ValueError("❌ Only SELECT queries are allowed. Query must start with SELECT.")
     
-    # חסימת פקודות מסוכנות
+    # חסימת פקודות מסוכנות - בדיקה על גבולות מילים
     dangerous_keywords = [
         'insert', 'update', 'delete', 'drop', 'create', 'alter', 
         'truncate', 'grant', 'revoke', 'exec', 'execute'
@@ -74,7 +74,8 @@ def run_query(query: str) -> List[Dict[str, Any]]:
     
     query_lower = query.lower()
     for keyword in dangerous_keywords:
-        if keyword in query_lower:
+        # בדיקה שהמילה מופיעה כמילה שלמה ולא כחלק ממילה אחרת
+        if re.search(r'\b' + keyword + r'\b', query_lower):
             raise ValueError(f"❌ Dangerous keyword '{keyword}' detected in query. Only SELECT queries allowed.")
     
     try:

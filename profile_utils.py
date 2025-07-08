@@ -275,23 +275,21 @@ def _send_admin_profile_overview_notification(
 
         lines: List[str] = []
         
-        # 🎯 כותרת מעוצבת עם אייקונים
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"<b>✅ עדכון פרופיל למשתמש <code>{chat_id}</code> ✅</b>")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        # 🎯 כותרת פשוטה ויפה
+        lines.append("✅ עדכון פרופיל למשתמש " + str(chat_id) + " ✅")
         lines.append("")
         
-        # 💬 תוכן ההודעה המלא
+        # 💬 הודעת המשתמש
         if user_msg and user_msg.strip():
-            lines.append("📝 <b>הודעת המשתמש:</b>")
-            lines.append(f"<i>{user_msg.strip()}</i>")
+            lines.append("📝 הודעת המשתמש:")
+            lines.append(user_msg.strip())
             lines.append("")
         
-        lines.append("🔄 <b>עדכוני מודלים:</b>")
+        lines.append("🔄 עדכוני מודלים:")
         lines.append("")
         
-        # 🤖 GPT-C - עם עיצוב משופר
-        lines.append("🧠 <b>GPT-C:</b>")
+        # 🧠 GPT-C
+        lines.append("🧠 GPT-C:")
         if gpt_c_changes:
             for ch in gpt_c_changes:
                 field = ch.get("field")
@@ -299,14 +297,14 @@ def _send_admin_profile_overview_notification(
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"   🔹 <b>{field}:</b> {old_val} ➜ <code>{new_val}</code>")
+                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
         else:
-            lines.append("   ➖ <i>אין שינויים</i>")
+            lines.append("  ➖ אין שינויים")
         
         lines.append("")
         
-        # 🤖 GPT-D - עם עיצוב משופר
-        lines.append("🎯 <b>GPT-D (שדות מתקדמים):</b>")
+        # 🎯 GPT-D
+        lines.append("🎯 GPT-D (שדות מתקדמים):")
         if gpt_d_changes:
             for ch in gpt_d_changes:
                 field = ch.get("field")
@@ -314,14 +312,14 @@ def _send_admin_profile_overview_notification(
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"   🔹 <b>{field}:</b> {old_val} ➜ <code>{new_val}</code>")
+                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
         else:
-            lines.append("   ➖ <i>אין שינויים</i>")
+            lines.append("  ➖ אין שינויים")
         
         lines.append("")
         
-        # 🤖 GPT-E - עם קאונטר ועיצוב משופר
-        lines.append("🚀 <b>GPT-E (עדכון מתקדם):</b>")
+        # 🚀 GPT-E
+        lines.append("🚀 GPT-E (עדכון מתקדם):")
         if gpt_e_changes:
             for ch in gpt_e_changes:
                 field = ch.get("field")
@@ -329,23 +327,23 @@ def _send_admin_profile_overview_notification(
                     continue
                 old_val = _pretty_val(ch.get("old_value"))
                 new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"   🔹 <b>{field}:</b> {old_val} ➜ <code>{new_val}</code>")
+                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
         else:
-            # הוספת קאונטר עם עיצוב יפה
+            # הוספת קאונטר עם עיצוב פשוט
             try:
                 from chat_utils import get_user_stats_and_history
                 from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
                 stats, _ = get_user_stats_and_history(chat_id)
                 total_messages = stats.get("total_messages", 0)
-                lines.append(f"   ➖ <i>אין שינויים</i> 📊 <code>{total_messages}/{GPT_E_RUN_EVERY_MESSAGES}</code>")
+                lines.append(f"  ➖ אין שינויים {total_messages}/{GPT_E_RUN_EVERY_MESSAGES}")
             except:
-                lines.append("   ➖ <i>אין שינויים</i>")
+                lines.append("  ➖ אין שינויים")
         
         lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("═══════════════════════")
         
-        # 📋 שדה SUMMARY עם עיצוב יפה
-        lines.append("📋 <b>SUMMARY (סיכום פרופיל):</b>")
+        # 📋 SUMMARY פשוט ויפה
+        lines.append("📋 SUMMARY (סיכום פרופיל):")
         if summary and summary.strip():
             # חלוקה לשורות קצרות אם הסיכום ארוך
             summary_clean = summary.strip()
@@ -358,27 +356,25 @@ def _send_admin_profile_overview_notification(
                         current_line += (" " + word) if current_line else word
                     else:
                         if current_line:
-                            lines.append(f"   📝 <i>{current_line}</i>")
+                            lines.append(f"  📝 {current_line}")
                         current_line = word
                 if current_line:
-                    lines.append(f"   📝 <i>{current_line}</i>")
+                    lines.append(f"  📝 {current_line}")
             else:
-                lines.append(f"   📝 <i>{summary_clean}</i>")
+                lines.append(f"  📝 {summary_clean}")
         else:
-            lines.append("   ❌ <i>אין סיכום זמין</i>")
+            lines.append("  ❌ אין סיכום זמין")
         
         lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("═══════════════════════")
         
-        # ⏰ פרטי עדכון עם עיצוב יפה
+        # ⏰ פרטי עדכון פשוטים
         current_time = get_israel_time().strftime('%d/%m/%Y %H:%M:%S')
-        lines.append("💾 <b>פרטי עדכון:</b>")
-        lines.append(f"   ⏰ <b>זמן:</b> <code>{current_time}</code>")
-        lines.append(f"   🗄️ <b>מיקום:</b> <code>user_profiles</code> (מסד נתונים)")
-        lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("💾 פרטי עדכון:")
+        lines.append(f"  ⏰ זמן: {current_time}")
+        lines.append(f"  🗄️ מיקום: user_profiles (מסד נתונים)")
 
-        # שליחת ההודעה המעוצבת
+        # שליחת ההודעה הפשוטה והיפה
         notification_text = "\n".join(lines)
         send_admin_notification_raw(notification_text)
         
