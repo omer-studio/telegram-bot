@@ -307,10 +307,10 @@ def _send_admin_profile_overview_notification(
         if user_msg:
             lines.append(f"<i>{user_msg.strip()}</i>")
 
-        lines.append("")
-        lines.append(f"<b>{gpt_c_info}</b>")
-        # הצגת השדות שחולצו על ידי GPT-C (ללא chat_id ו-summary)
+        # ✅ תיקון: הצגת קטעים רק אם יש שינויים בפועל
         if gpt_c_changes:
+            lines.append("")
+            lines.append(f"<b>{gpt_c_info}</b>")
             for ch in gpt_c_changes:
                 field = ch.get("field")
                 # ✅ דילוג על שדות מיותרים
@@ -335,10 +335,10 @@ def _send_admin_profile_overview_notification(
                     else:
                         lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
-        lines.append("")
-        lines.append(f"<b>{gpt_d_info}</b>")
-        # הצגת שדות רק אם GPT-D באמת הופעל ויש שדות שמוזגו (ללא chat_id ו-summary)
+        # ✅ תיקון: הצגת GPT-D רק אם יש שינויים בפועל
         if gpt_d_changes:
+            lines.append("")
+            lines.append(f"<b>{gpt_d_info}</b>")
             for ch in gpt_d_changes:
                 field = ch.get("field")
                 # ✅ דילוג על שדות מיותרים
@@ -363,10 +363,10 @@ def _send_admin_profile_overview_notification(
                     else:
                         lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
-        lines.append("")
-        lines.append(f"<b>{gpt_e_info}</b>")
-        # הצגת שדות רק אם GPT-E באמת הופעל ויש שדות חדשים (ללא chat_id ו-summary)
+        # ✅ תיקון: הצגת GPT-E רק אם יש שינויים בפועל
         if gpt_e_changes:
+            lines.append("")
+            lines.append(f"<b>{gpt_e_info}</b>")
             for ch in gpt_e_changes:
                 field = ch.get("field")
                 # ✅ דילוג על שדות מיותרים
@@ -391,14 +391,14 @@ def _send_admin_profile_overview_notification(
                     else:
                         lines.append(f"  ➖ {field}: [{old_val}] → <i>נמחק</i>")
 
-        # ✅ סיכום מלא ללא מגבלת תווים
-        if summary and summary.strip():
-            lines.append("")
-            lines.append(f"<b>Summary</b>: {summary}")
-
         # ✅ הודעה מעודכנת על סנכרון
         lines.append("")
         lines.append("<b>סנכרון</b>: עודכן במסד נתונים")
+
+        # ✅ הוספת SUMMARY כללי מהמסד לפני הטיימסטמפ
+        if summary and summary.strip():
+            lines.append("")
+            lines.append(f"<b>📋 Summary מהמסד</b>: {summary}")
 
         # הטיימסטמפ יתווסף אוטומטית על ידי send_admin_notification_raw
 

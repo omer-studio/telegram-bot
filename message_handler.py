@@ -731,6 +731,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # שלב 3: שליחת התשובה למשתמש מיד!
             await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
+            # 📨 שליחת התכתבות אנונימית לאדמין
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(user_msg, bot_reply)
+            except Exception as admin_chat_err:
+                logging.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}")
+
             # 🔧 תיקון: כל השאר ברקע - המשתמש כבר קיבל תשובה!
             asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result))
             
@@ -1146,21 +1153,23 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             
             # שליחת התראה רק אם יש שינויים
             if gpt_c_changes or gpt_d_changes or gpt_e_changes:
-                # בניית מידע על השינויים
-                gpt_c_info = f"GPT-C: {len(gpt_c_changes)} שדות" if gpt_c_changes else "GPT-C: אין שינויים"
-                gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות" if gpt_d_changes else "GPT-D: אין שינויים"
+                # ✅ תיקון: בניית מידע רק למודלים עם שינויים בפועל
+                gpt_c_info = f"GPT-C: {len(gpt_c_changes)} שדות" if gpt_c_changes else ""
+                gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות" if gpt_d_changes else ""
                 
-                # ✅ הוספת קאונטר ל-GPT-E לפי הלוגיקה החדשה
-                try:
-                    from chat_utils import get_user_stats_and_history
-                    from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
-                    stats, _ = get_user_stats_and_history(chat_id)
-                    total_messages = stats.get("total_messages", 0)
-                    gpt_e_counter = f" ({total_messages}/{GPT_E_RUN_EVERY_MESSAGES})"
-                except:
-                    gpt_e_counter = ""
-                
-                gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות{gpt_e_counter}" if gpt_e_changes else f"GPT-E: אין שינויים{gpt_e_counter}"
+                # ✅ הוספת קאונטר ל-GPT-E רק אם יש שינויים
+                gpt_e_info = ""
+                if gpt_e_changes:
+                    try:
+                        from chat_utils import get_user_stats_and_history
+                        from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                        stats, _ = get_user_stats_and_history(chat_id)
+                        total_messages = stats.get("total_messages", 0)
+                        gpt_e_counter = f" ({total_messages}/{GPT_E_RUN_EVERY_MESSAGES})"
+                    except:
+                        gpt_e_counter = ""
+                    
+                    gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות{gpt_e_counter}"
                 
                 # יצירת סיכום מהיר
                 current_summary = get_user_summary_fast(chat_id) or ""

@@ -363,3 +363,22 @@ def alert_system_status(message, level="info"):
         
     except Exception as e:
         print(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
+
+def send_anonymous_chat_notification(user_message: str, bot_response: str):
+    """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
+    try:
+        # יצירת הודעה מפורמטת ללא מזהה משתמש
+        notification_text = f"💬 **התכתבות חדשה**\n\n"
+        notification_text += f"👤 **משתמש כתב:**\n{user_message}\n\n"
+        notification_text += f"➖➖➖➖➖➖➖➖➖➖\n\n"
+        notification_text += f"🤖 **הבוט ענה:**\n{bot_response}"
+        
+        # הגבלת אורך ההודעה למניעת שגיאות טלגרם
+        if len(notification_text) > 3900:
+            notification_text = notification_text[:3900] + "\n\n... (הודעה קוצרה)"
+        
+        send_admin_notification_raw(notification_text)
+        
+    except Exception as e:
+        print(f"🚨 שגיאה בשליחת התראת התכתבות אנונימית: {e}")
+        logging.error(f"Error sending anonymous chat notification: {e}") 
