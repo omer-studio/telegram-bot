@@ -262,32 +262,38 @@ def auto_cleanup_old_users():
             pass
 
 async def validate_user_before_reminder(chat_id: str) -> bool:
-    """מאמת שמשתמש זכאי לקבל תזכורת"""
+    """מאמת שמשתמש זכאי לקבל תזכורת - 🗑️ עברנו למסד נתונים"""
     try:
         # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
-# from sheets_handler import check_user_access
-from db_manager import check_user_approved_status_db
+        from db_manager import check_user_approved_status_db
         
-        # בדיקה ב-Google Sheets
+        # בדיקה במסד נתונים במקום Google Sheets
         try:
-            user_status = check_user_access(chat_id)
-            if user_status.get("blocked", False):
-                print(f"⚠️ משתמש {chat_id} חסום - לא ישלח תזכורת")
+            user_status = check_user_approved_status_db(chat_id)
+            
+            if isinstance(user_status, dict):
+                if user_status.get("status") == "not_found":
+                    print(f"ℹ️ משתמש {chat_id} לא נמצא במסד - לא ישלח תזכורת")
+                    return False
+                    
+                if not user_status.get("approved", False):
+                    print(f"ℹ️ משתמש {chat_id} לא מאושר - לא ישלח תזכורת")
+                    return False
+            else:
+                print(f"⚠️ תגובה לא צפויה מהמסד למשתמש {chat_id}")
                 return False
                 
-            if not user_status.get("approved", False):
-                print(f"ℹ️ משתמש {chat_id} לא מאושר - לא ישלח תזכורת")
-                return False
-                
-        except Exception as sheets_error:
-            print(f"⚠️ שגיאה בבדיקת Google Sheets למשתמש {chat_id}: {sheets_error}")
-            # במקרה של שגיאה, נניח שהמשתמש מאושר
+        except Exception as db_error:
+            print(f"⚠️ שגיאה בבדיקת מסד נתונים למשתמש {chat_id}: {db_error}")
+            # במקרה של שגיאה, נניח שהמשתמש מאושר (נותנים הטבה של הספק)
+            return True
         
         return True
         
     except Exception as e:
         print(f"🚨 שגיאה באימות משתמש {chat_id}: {e}")
-        return False
+        # במקרה של שגיאה כללית, נותנים הטבה של הספק
+        return True
 
 async def check_and_send_gentle_reminders():
     """בודק ושולח תזכורות עדינות למשתמשים שזקוקים להן"""

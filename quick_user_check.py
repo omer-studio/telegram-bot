@@ -16,51 +16,65 @@ from datetime import datetime
 sys.path.append('.')
 
 def check_user_status(chat_id):
-    """בדיקה מהירה של סטטוס משתמש"""
+    """בדיקה מהירה של סטטוס משתמש - 🗑️ עברנו למסד נתונים"""
     try:
-        # יבוא מודולים
-        from config import setup_google_sheets
-        # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
-# from sheets_core import check_user_access, force_clear_user_cache
-from db_manager import check_user_approved_status_db
-from profile_utils import clear_user_cache_profile
+        # 🗑️ יבוא ממסד נתונים במקום Google Sheets
+        from db_manager import check_user_approved_status_db
+        from profile_utils import clear_user_cache_profile, get_user_profile_fast
         
-        print(f"🔍 בודק סטטוס משתמש {chat_id}...")
+        print(f"🔍 בודק סטטוס משתמש {chat_id} במסד נתונים...")
         
-        # חיבור לגיליון
-        gs_client, sheet_users, sheet_log, sheet_states = setup_google_sheets()
-        
-        # ניקוי cache
+        # ניקוי cache (אם יש)
         print("🔨 מנקה cache...")
-        cleared_count = force_clear_user_cache(chat_id)
-        print(f"   נוקו {cleared_count} cache keys")
+        try:
+            clear_result = clear_user_cache_profile(chat_id)
+            cleared_count = clear_result.get("cleared_count", 0) if isinstance(clear_result, dict) else 0
+            print(f"   נוקו {cleared_count} cache keys")
+        except Exception as cache_err:
+            print(f"   ⚠️ לא ניתן לנקות cache: {cache_err}")
+            cleared_count = 0
         
-        # בדיקת סטטוס
-        print("📊 בודק סטטוס...")
-        access_result = check_user_access(sheet_users, chat_id)
+        # בדיקת סטטוס במסד נתונים
+        print("📊 בודק סטטוס במסד נתונים...")
+        access_result = check_user_approved_status_db(chat_id)
+        
+        # בדיקת פרופיל משתמש
+        print("👤 בודק פרופיל משתמש...")
+        user_profile = get_user_profile_fast(chat_id)
         
         # הצגת התוצאות
         print("\n" + "="*50)
         print(f"📋 תוצאות בדיקה למשתמש {chat_id}")
         print("="*50)
         
-        status = access_result.get("status", "unknown")
-        code = access_result.get("code", "N/A")
+        if isinstance(access_result, dict):
+            status = access_result.get("status", "unknown")
+            approved = access_result.get("approved", False)
+        else:
+            status = "error"
+            approved = False
         
         print(f"🔍 סטטוס: {status}")
-        print(f"🔢 קוד: {code}")
+        print(f"✅ מאושר: {approved}")
         
         # פרשנות
-        if status == "approved":
+        if status == "found" and approved:
             print("✅ המשתמש מאושר - אמור לקבל גישה מלאה")
-        elif status == "pending":
+        elif status == "found" and not approved:
             print("⏳ המשתמש לא אישר תנאים - יקבל בקשת אישור")
         elif status == "not_found":
             print("❌ המשתמש לא נמצא - יקבל בקשת קוד")
-        elif status == "error":
-            print("🚨 שגיאה בבדיקת הסטטוס")
         else:
-            print(f"⚠️ סטטוס לא מוכר: {status}")
+            print(f"⚠️ סטטוס: {status}")
+        
+        # הצגת פרופיל
+        if user_profile:
+            print(f"\n👤 פרופיל משתמש:")
+            print(f"   שם: {user_profile.get('name', 'לא צוין')}")
+            print(f"   סיכום: {user_profile.get('summary', 'אין')[:100]}...")
+            print(f"   הודעות GPT-C: {user_profile.get('gpt_c_run_count', 0)}")
+        else:
+            print("\n�� אין פרופיל משתמש")
         
         # בדיקת נתונים גולמיים
         print("\n🔍 נתונים גולמיים:")
@@ -71,7 +85,9 @@ from profile_utils import clear_user_cache_profile
             "chat_id": chat_id,
             "check_timestamp": datetime.now().isoformat(),
             "access_result": access_result,
-            "cache_cleared": cleared_count
+            "user_profile": user_profile,
+            "cache_cleared": cleared_count,
+            "source": "database"  # מציין שהנתונים מהמסד
         }
         
         with open(f"user_check_{chat_id}.json", "w", encoding="utf-8") as f:
@@ -97,7 +113,7 @@ def main():
     
     chat_id = sys.argv[1]
     
-    print("🚀 בדיקה מהירה של סטטוס משתמש")
+    print("🚀 בדיקה מהירה של סטטוס משתמש (מסד נתונים)")
     print("="*50)
     
     result = check_user_status(chat_id)
