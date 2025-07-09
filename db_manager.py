@@ -393,117 +393,8 @@ def get_chat_history(chat_id, limit=100):
     conn.close()
     return rows[::-1]  # מהישן לחדש
 
-# === שמירת פרופיל משתמש ===
-def save_user_profile(chat_id, profile_data):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.save_user_profile במקום!
-    
-    פונקציה זו קיימת לתאימות לאחור בלבד.
-    profile_utils מספק:
-    - Cache לביצועים טובים יותר
-    - Error handling מתקדם יותר
-    - שכבה אחידה לכל פעולות הפרופיל
-    
-    שומר פרופיל משתמש במבנה החדש עם עמודות נפרדות
-    profile_data יכול להיות dict או JSON string
-    """
-    # 🎯 נרמול chat_id לטיפוס אחיד
-    chat_id = validate_chat_id(chat_id)
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # המרת JSON string ל-dict אם צריך
-    if isinstance(profile_data, str):
-        try:
-            profile_data = json.loads(profile_data)
-        except:
-            profile_data = {}
-    
-    # הכנת נתונים להכנסה
-    from fields_dict import get_user_profile_fields
-    
-    # יצירת dict עם כל השדות
-    insert_data = {'chat_id': chat_id}
-    for field in get_user_profile_fields():
-        if field in profile_data:
-            insert_data[field] = profile_data[field]
-        else:
-            insert_data[field] = None
-    
-    # הוספת timestamp
-    insert_data['updated_at'] = datetime.utcnow()
-    
-    # יצירת SQL דינמי
-    fields = list(insert_data.keys())
-    placeholders = ', '.join(['%s'] * len(fields))
-    values = list(insert_data.values())
-    
-    insert_sql = f"""
-    INSERT INTO user_profiles ({', '.join(fields)})
-    VALUES ({placeholders})
-    ON CONFLICT (chat_id) DO UPDATE SET
-    {', '.join([f"{field} = EXCLUDED.{field}" for field in fields if field != 'chat_id'])}
-    """
-    
-    cur.execute(insert_sql, values)
-    conn.commit()
-    cur.close()
-    conn.close()
-
-# === שליפת פרופיל משתמש ===
-def get_user_profile(chat_id):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.get_user_profile במקום!
-    
-    פונקציה זו קיימת לתאימות לאחור בלבד.
-    profile_utils.get_user_profile מספק:
-    - Cache לביצועים טובים יותר
-    - Error handling מתקדם יותר
-    - תמיכה בפונקציות נוספות
-    
-    מחזיר פרופיל משתמשdict עם כל השדות
-    """
-    # 🎯 נרמול chat_id לטיפוס אחיד
-    chat_id = validate_chat_id(chat_id)
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    from fields_dict import get_user_profile_fields
-    
-    # יצירת SQL עם כל השדות
-    fields = ['chat_id'] + get_user_profile_fields()
-    select_sql = f"SELECT {', '.join(fields)} FROM user_profiles WHERE chat_id=%s"
-    
-    cur.execute(select_sql, (chat_id,))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    
-    if row:
-        # המרת השורה ל-dict
-        profile_dict = {}
-        for i, field in enumerate(fields):
-            profile_dict[field] = row[i]
-        return profile_dict
-    
-    return None
-
-# === תאימות לאחור - forwarding functions ל-profile_utils ===
-def get_user_profile_fast(chat_id):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.get_user_profile_fast במקום!
-    פונקציה זו מפנה ל-profile_utils.get_user_profile_fast
-    """
-    from profile_utils import get_user_profile_fast as profile_fast
-    return profile_fast(chat_id)
-
-def update_user_profile_fast(chat_id, updates):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
-    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
-    """
-    from profile_utils import update_user_profile_fast as profile_update_fast
-    return profile_update_fast(chat_id, updates)
+# ✅ הוסרו פונקציות deprecated: save_user_profile, get_user_profile, get_user_profile_fast, update_user_profile_fast
+# כל הפונקציות הועברו ל-profile_utils והן פעילות שם
 
 # === שמירת לוג GPT ===
 def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp=None):
@@ -1479,58 +1370,29 @@ def increment_code_try_db_new(chat_id):
 
 def approve_user_db_new(chat_id):
     """
-    מאשר משתמש במסד נתונים (עדכון approved=TRUE) - הגרסה החדשה
-    
-    :param chat_id: מזהה צ'אט
-    :return: {"success": bool}
+    מאשר משתמש במסד הנתונים לאחר הזנת קוד תקין
     """
-    try:
+    safe_chat_id = safe_str(chat_id)
+    def _approve_user():
         conn = psycopg2.connect(DB_URL)
-        cur = conn.cursor()
-        
-        cur.execute("""
-            UPDATE user_profiles 
-            SET approved = TRUE, updated_at = %s 
-            WHERE chat_id = %s AND code_approve IS NOT NULL
-        """, (datetime.utcnow(), chat_id))
-        
-        success = cur.rowcount > 0
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE user_profiles SET approved = 1 WHERE chat_id = %s",
+            (safe_chat_id,)
+        )
         conn.commit()
-        cur.close()
         conn.close()
-        
-        if should_log_debug_prints():
-            print(f"✅ [DB] approve_user_db_new: {chat_id} -> success={success}")
-        
-        return {"success": success}
-        
-    except Exception as e:
-        if should_log_debug_prints():
-            print(f"❌ [DB] שגיאה ב-approve_user_db_new: {e}")
-        return {"success": False}
+        return cursor.rowcount > 0
+    
+    return safe_operation(_approve_user)
 
-# === נקודת הכניסה לפונקציות המדריך ===
+# DEPRECATED: תאימות לאחור בלבד
+def get_user_profile(chat_id):
+    """
+    DEPRECATED: Use profile_utils.get_user_profile instead
+    Forward to profile_utils for backward compatibility
+    """
+    from profile_utils import get_user_profile as profile_utils_get_user_profile
+    return profile_utils_get_user_profile(chat_id)
 
-def update_user_profile_fast(chat_id, updates):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
-    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
-    """
-    from profile_utils import update_user_profile_fast as profile_update_fast
-    return profile_update_fast(chat_id, updates)
-
-def save_user_profile_forwarding(chat_id, profile_data):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.save_user_profile במקום!
-    פונקציה זו מפנה ל-profile_utils.save_user_profile
-    """
-    from profile_utils import save_user_profile as profile_save
-    return profile_save(chat_id, profile_data)
-
-def update_user_profile_field(chat_id, field_name, field_value):
-    """
-    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
-    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
-    """
-    from profile_utils import update_user_profile_fast as profile_update_fast
-    return profile_update_fast(chat_id, {field_name: field_value})
+# ✅ הוסרו כל הפונקציות deprecated - כל פונקציות הפרופיל עברו ל-profile_utils

@@ -106,6 +106,13 @@ def test_admin_notification_on_profile_update(monkeypatch):
     # Prepare environment
     os.environ.setdefault("CI", "1")
 
+    # 🔧 כיבוי בדיקת סביבת בדיקה כך שהתראות יישלחו
+    def _fake_is_test_env():
+        return False
+    
+    monkeypatch.setattr("admin_notifications.is_test_environment", _fake_is_test_env, raising=False)
+    monkeypatch.setattr("unified_profile_notifications.is_test_environment", _fake_is_test_env, raising=False)
+
     # Reload base config & profile utils first
     config = _reload_module("config")
     profile_utils = _reload_module("profile_utils")
@@ -126,6 +133,7 @@ def test_admin_notification_on_profile_update(monkeypatch):
         return {"changes": {}}
 
     monkeypatch.setattr("gpt_c_handler.extract_user_info", _fake_extract, raising=False)
+
     monkeypatch.setattr("gpt_d_handler.smart_update_profile_with_gpt_d_async", _fake_gpt_d_async, raising=False)
     monkeypatch.setattr("gpt_e_handler.execute_gpt_e_if_needed", _fake_gpt_e_async, raising=False)
 
@@ -134,6 +142,7 @@ def test_admin_notification_on_profile_update(monkeypatch):
 
     # For extra safety, patch the copies inside message_handler as well
     monkeypatch.setattr(message_handler, "extract_user_info", _fake_extract, raising=False)
+
     monkeypatch.setattr(message_handler, "smart_update_profile_with_gpt_d_async", _fake_gpt_d_async, raising=False)
     monkeypatch.setattr(message_handler, "execute_gpt_e_if_needed", _fake_gpt_e_async, raising=False)
 
@@ -149,17 +158,17 @@ def test_admin_notification_on_profile_update(monkeypatch):
     # יצירת mock objects נדרשים
     class MockUpdate:
         pass
-    
+
     class MockContext:
         def __init__(self):
             self.bot_data = {}
-    
+
     mock_update = MockUpdate()
     mock_context = MockContext()
     message_id = "test_msg_456"
     user_request_start_time = 0.0
     user_response_actual_time = 2.0  # זמן תגובה אמיתי
-    
+
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
