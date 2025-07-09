@@ -7,12 +7,14 @@ gentle_reminders.py
 
 import json
 import os
-import logging
 import asyncio
 from datetime import datetime, timedelta
 from config import BOT_TOKEN
 from utils import get_israel_time
 import pytz
+
+# 🚀 יבוא המערכת החדשה - פשוטה ועקבית
+from simple_logger import logger
 
 # קובץ לניהול מצבי תזכורות
 REMINDER_STATE_FILE = "data/reminder_state.json"
@@ -25,7 +27,7 @@ def _load_reminder_state():
                 return json.load(f)
         return {}
     except Exception as e:
-        logging.error(f"Error loading reminder state: {e}")
+        logger.error(f"Error loading reminder state: {e}", source="gentle_reminders")
         return {}
 
 def _save_reminder_state(state):
@@ -35,7 +37,7 @@ def _save_reminder_state(state):
         with open(REMINDER_STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        logging.error(f"Error saving reminder state: {e}")
+        logger.error(f"Error saving reminder state: {e}", source="gentle_reminders")
 
 def mark_user_active(chat_id: str):
     """מסמן משתמש כפעיל (קיבל הודעה או שלח הודעה) ומאפס דגל תזכורת"""
@@ -60,7 +62,7 @@ def mark_user_active(chat_id: str):
         _save_reminder_state(state)
         
     except Exception as e:
-        logging.error(f"Error marking user {chat_id} as active: {e}")
+        logger.error(f"Error marking user {chat_id} as active: {e}", source="gentle_reminders")
 
 def _is_allowed_time() -> bool:
     """בדיקה אם זה זמן מתאים לשליחת תזכורות (9:00-21:00)"""
@@ -79,7 +81,7 @@ def _mark_reminder_delayed(chat_id: str) -> None:
             state[user_id]["delay_reason"] = "inappropriate_time"
             _save_reminder_state(state)
     except Exception as e:
-        logging.error(f"Error marking reminder delayed for {chat_id}: {e}")
+        logger.error(f"Error marking reminder delayed for {chat_id}: {e}", source="gentle_reminders")
 
 def _mark_reminder_sent(chat_id: str) -> None:
     """מסמן שתזכורת נשלחה למשתמש ואנחנו מחכים לתשובה"""
@@ -96,7 +98,7 @@ def _mark_reminder_sent(chat_id: str) -> None:
             state[user_id]["reminder_delayed"] = False
             _save_reminder_state(state)
     except Exception as e:
-        logging.error(f"Error marking reminder sent for {chat_id}: {e}")
+        logger.error(f"Error marking reminder sent for {chat_id}: {e}", source="gentle_reminders")
 
 def _log_to_chat_history(chat_id: str) -> None:
     """רושם את התזכורת להיסטוריית הצ'אט"""
@@ -113,7 +115,7 @@ def _log_to_chat_history(chat_id: str) -> None:
         update_chat_history(chat_id, reminder_message)
         
     except Exception as e:
-        logging.error(f"Error logging reminder to chat history for {chat_id}: {e}")
+        logger.error(f"Error logging reminder to chat history for {chat_id}: {e}", source="gentle_reminders")
 
 async def send_gentle_reminder(chat_id: str) -> bool:
     """שולח תזכורת עדינה למשתמש"""
@@ -167,7 +169,7 @@ def _mark_user_inactive(chat_id: str) -> None:
             _save_reminder_state(state)
             
     except Exception as e:
-        logging.error(f"Error marking user {chat_id} as inactive: {e}")
+        logger.error(f"Error marking user {chat_id} as inactive: {e}", source="gentle_reminders")
 
 def cleanup_inactive_users():
     """מנקה משתמשים לא פעילים מרשימת התזכורות"""
@@ -403,7 +405,7 @@ async def gentle_reminder_background_task():
         
     except Exception as e:
         print(f"🚨 שגיאה במשימת רקע לתזכורות: {e}")
-        logging.error(f"Error in gentle reminder background task: {e}")
+        logger.error(f"Error in gentle reminder background task: {e}", source="gentle_reminders")
         
         try:
             from admin_notifications import send_admin_notification

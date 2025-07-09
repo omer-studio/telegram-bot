@@ -46,6 +46,7 @@ import logging
 import os
 import psutil  # לניטור זיכרון
 from utils import get_israel_time
+from simple_config import TimeoutConfig
 
 @dataclass
 class UserSession:
@@ -55,7 +56,7 @@ class UserSession:
     message_id: str
     stage: str  # "queued", "processing", "gpt_a", "background", "completed"
     queue_position: int  # FIFO position
-    max_allowed_time: float = 50.0  # 🔧 תיקון: הגדלה ל-50 שניות (5 שניות יותר מ-GPT timeout)
+    max_allowed_time: float = TimeoutConfig.CONCURRENT_SESSION_TIMEOUT  # 🔧 תיקון: משתמש בתצורה מרכזית
     
     def is_timeout(self) -> bool:
         """בדיקה אם הסשן עבר timeout"""
