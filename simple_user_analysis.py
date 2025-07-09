@@ -15,11 +15,14 @@ import os
 import json
 import re
 from datetime import datetime
+from utils import safe_str, get_logger
 
-# המשתמשים לניתוח
+logger = get_logger(__name__)
+
+# המשתמשים לניתוח - מוגדרים כמחרוזות בטוחות
 TARGET_USERS = [
-    "1118251087", "179392777", "5676571979", 
-    "7957193610", "5526006524", "7186596694"
+    safe_str("1118251087"), safe_str("179392777"), safe_str("5676571979"), 
+    safe_str("7957193610"), safe_str("5526006524"), safe_str("7186596694")
 ]
 
 class SimpleAnalyzer:
@@ -98,6 +101,7 @@ class SimpleAnalyzer:
 
 def load_available_data():
     """טעינת כל הנתונים הזמינים"""
+    logger.info("טוען נתונים זמינים")
     print("📂 טוען נתונים זמינים...")
     
     data = {}
@@ -174,6 +178,7 @@ def load_available_data():
 
 def main():
     """ניתוח ראשי"""
+    logger.info("מתחיל ניתוח פשוט ומקיף של 6 המשתמשים")
     print("🎯 ניתוח פשוט ומקיף של 6 המשתמשים")
     print("=" * 60)
     
@@ -181,6 +186,7 @@ def main():
     user_data = load_available_data()
     
     if not user_data:
+        logger.warning("לא נמצאו נתונים")
         print("❌ לא נמצאו נתונים!")
         return
     
@@ -193,10 +199,13 @@ def main():
     all_results = {}
     
     for user_id in TARGET_USERS:
-        print(f"\n👤 משתמש {user_id}:")
+        safe_user_id = safe_str(user_id)
+        logger.info(f"מנתח משתמש {safe_user_id}")
+        print(f"\n👤 משתמש {safe_user_id}:")
         print("-" * 40)
         
         if user_id not in user_data:
+            logger.warning(f"אין נתונים זמינים למשתמש {safe_user_id}")
             print("❌ אין נתונים זמינים")
             all_results[user_id] = {'status': 'no_data'}
             continue

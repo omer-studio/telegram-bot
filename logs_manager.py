@@ -9,6 +9,7 @@ import subprocess
 import datetime
 import asyncio
 import threading
+from simple_config import TimeoutConfig
 
 async def handle_show_logs_command(update, context):
     """מטפל בפקודת /show_logs לקריאת לוגים מרנדר"""
@@ -78,7 +79,7 @@ def get_render_logs(log_type="service", lines=50):
         
         print(f"📋 מריץ פקודה: {cmd}")
         
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_MEDIUM)
         
         if result.returncode == 0:
             return result.stdout

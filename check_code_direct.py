@@ -41,29 +41,31 @@ def check_code_15689309():
             
             # חיפוש קודים דומים
             print("\n🔍 מחפש קודים דומים...")
-            cur.execute("""
+            similar_query = """
                 SELECT code_approve, chat_id, approved 
                 FROM user_profiles 
                 WHERE code_approve LIKE '%156893%'
                    OR code_approve LIKE '%15689%'
                    OR code_approve LIKE '%89309%'
                 LIMIT 10
-            """)
+            """
+            similar = data_manager.execute_query(similar_query)
             
-            similar = cur.fetchall()
             if similar:
                 print("📋 קודים דומים שנמצאו:")
                 for code, chat_id, approved in similar:
+                    safe_chat_id = safe_str(chat_id)
                     status = "✅ מאושר" if approved else "⏳ ממתין"
-                    print(f"   {code} -> chat_id={chat_id} | {status}")
+                    print(f"   {code} -> chat_id={safe_chat_id} | {status}")
             else:
                 print("❌ לא נמצאו קודים דומים")
                 
         else:
             print(f"✅ נמצא קוד 15689309!")
             for chat_id, code, code_try, approved, updated_at, name in results:
+                safe_chat_id = safe_str(chat_id)
                 print(f"\n📋 פרטי המשתמש:")
-                print(f"   📱 chat_id: {chat_id}")
+                print(f"   📱 chat_id: {safe_chat_id}")
                 print(f"   🔐 code_approve: {code}")
                 print(f"   🔢 code_try: {code_try}")
                 print(f"   ✅ approved: {approved}")
@@ -71,7 +73,7 @@ def check_code_15689309():
                 print(f"   👤 name: {name}")
                 
                 # ניתוח המצב
-                if chat_id and chat_id.strip():
+                if chat_id and str(chat_id).strip():
                     if approved:
                         print("\n🎯 המצב: המשתמש מאושר לחלוטין!")
                         print("🤖 הבוט אמור: לתת גישה מלאה")
@@ -88,7 +90,7 @@ def check_code_15689309():
         print(f"\n🔍 5 משתמשים אחרונים:")
         print("=" * 50)
         
-        cur.execute("""
+        recent_query = """
             SELECT 
                 code_approve, 
                 chat_id, 
@@ -101,21 +103,19 @@ def check_code_15689309():
             AND code_approve IS NOT NULL
             ORDER BY updated_at DESC
             LIMIT 5
-        """)
-        
-        recent = cur.fetchall()
+        """
+        recent = data_manager.execute_query(recent_query)
         
         if recent:
             for code_approve, chat_id, approved, code_try, updated_at, name in recent:
+                safe_chat_id = safe_str(chat_id)
                 status = "✅ מאושר" if approved else "⏳ ממתין"
-                print(f"   {code_approve} -> {chat_id} | {status} | {name}")
+                print(f"   {code_approve} -> {safe_chat_id} | {status} | {name}")
         else:
             print("   אין משתמשים במסד")
         
-        cur.close()
-        conn.close()
-        
     except Exception as e:
+        logger.error(f"שגיאה בבדיקת קוד: {e}")
         print(f"❌ שגיאה: {e}")
         import traceback
         traceback.print_exc()

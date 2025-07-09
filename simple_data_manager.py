@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional, List
 from simple_logger import logger
 from db_manager import safe_str, safe_operation  
 from user_friendly_errors import safe_int, handle_database_error
+from simple_config import TimeoutConfig
 
 # טעינת קונפיגורציה
 try:
@@ -26,7 +27,7 @@ class SimpleDataManager:
     def __init__(self):
         self._connection = None
         self._last_used = None
-        self._connection_timeout = 300  # 5 דקות
+        self._connection_timeout = TimeoutConfig.DATABASE_CONNECTION_TIMEOUT  # 🔧 תיקון מערכתי
     
     def _get_connection(self):
         """חיבור ממוזג - חיבור אחד לכל המערכת"""

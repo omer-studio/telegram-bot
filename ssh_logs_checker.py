@@ -5,6 +5,7 @@
 import subprocess
 import time
 from datetime import datetime
+from simple_config import TimeoutConfig
 
 def check_ssh_logs():
     """חיפוש הודעות דיבאג בלוגי רנדר דרך SSH"""
@@ -46,14 +47,14 @@ def check_ssh_logs():
         
         try:
             # הרצת פקודת SSH
-            full_cmd = f'ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+            full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
             
             result = subprocess.run(
                 full_cmd,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=15
+                timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT
             )
             
             if result.returncode == 0:
@@ -113,7 +114,7 @@ def check_recent_activity():
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=15
+                timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT
             )
             
             if result.returncode == 0:

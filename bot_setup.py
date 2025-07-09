@@ -1564,7 +1564,9 @@ def get_render_logs(log_type="service", lines=50):
         
         print(f"📋 מריץ פקודה: {cmd}")
         
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        # בדיקה נוספת - התקנת dependency (אם זמין)
+        from simple_config import TimeoutConfig
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_MEDIUM)
         
         if result.returncode == 0:
             return result.stdout

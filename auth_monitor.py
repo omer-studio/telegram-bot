@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Set
 import subprocess
 from simple_logger import logger
+from simple_config import TimeoutConfig
 
 class AuthorizationMonitor:
     """מוניטור הרשאות בזמן אמת"""
@@ -103,7 +104,7 @@ class AuthorizationMonitor:
                 ['python', '-m', 'pytest', 'tests/test_authorization_fix.py', '-v'],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=TimeoutConfig.AUTH_SESSION_TIMEOUT
             )
             
             if result.returncode != 0:

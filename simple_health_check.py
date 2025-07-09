@@ -4,6 +4,9 @@
 4 בדיקות בסיסיות בלבד - לא overengineering
 """
 
+from utils import get_logger
+logger = get_logger(__name__)
+
 def check_config():
     """בדיקה 1: קובץ config.json נגיש"""
     try:
@@ -17,22 +20,20 @@ def check_config():
 def check_database():
     """בדיקה 2: מסד נתונים מחובר"""
     try:
-        import psycopg2
-        from config import config
-        db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
-        if not db_url:
-            return False
-        conn = psycopg2.connect(db_url)
-        conn.close()
-        return True
+        from simple_data_manager import DataManager
+        data_manager = DataManager()
+        # בדיקה פשוטה של חיבור
+        result = data_manager.execute_query("SELECT 1 as test")
+        return result is not None
     except Exception as e:
+        logger.error(f"Database check failed: {e}")
         print(f"❌ Database: {e}")
         return False
 
 def check_chat_id_handling():
     """בדיקה 3: chat_id מטופל נכון"""
     try:
-        from db_manager import safe_str
+        from utils import safe_str
         # בדיקות בסיסיות
         assert safe_str(123) == "123"
         assert safe_str("456") == "456"
@@ -43,6 +44,7 @@ def check_chat_id_handling():
             pass  # זה מה שאנחנו רוצים
         return True
     except Exception as e:
+        logger.error(f"chat_id check failed: {e}")
         print(f"❌ chat_id: {e}")
         return False
 
@@ -50,16 +52,18 @@ def check_imports():
     """בדיקה 4: import בסיסיים עובדים"""
     try:
         import config
-        from db_manager import safe_str
+        from utils import safe_str
         # בדיקה פשוטה
         test_result = safe_str("123")
         return test_result == "123"
     except Exception as e:
+        logger.error(f"imports check failed: {e}")
         print(f"❌ Imports: {e}")
         return False
 
 def main():
     """הרצת כל הבדיקות"""
+    logger.info("מתחיל בדיקת בריאות מערכת")
     checks = [
         ("Config", check_config),
         ("Database", check_database), 
@@ -71,16 +75,20 @@ def main():
     for name, check_func in checks:
         result = check_func()
         status = "✅" if result else "❌"
+        logger.info(f"בדיקת {name}: {'תקין' if result else 'נכשל'}")
         print(f"{status} {name}")
         results.append(result)
     
     score = sum(results)
+    logger.info(f"תוצאה סופית: {score}/4")
     print(f"\n📊 תוצאה: {score}/4 ({score*25}%)")
     
     if score == 4:
+        logger.info("המערכת תקינה")
         print("🎉 המערכת תקינה!")
         return True
     else:
+        logger.warning("יש בעיות שצריך לטפל בהן")
         print("⚠️ יש בעיות שצריך לטפל בהן")
         return False
 

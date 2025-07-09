@@ -21,7 +21,8 @@ try:
         }
         
         print('\n🔍 בודק גישה לרנדר...')
-        response = requests.get('https://api.render.com/v1/services', headers=headers, timeout=10)
+        from simple_config import TimeoutConfig
+        response = requests.get('https://api.render.com/v1/services', headers=headers, timeout=TimeoutConfig.RENDER_API_TIMEOUT)
         
         if response.status_code == 200:
             services = response.json()

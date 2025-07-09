@@ -40,7 +40,8 @@ def fetch_render_logs():
     
     try:
         print(f"🔍 משיכת לוגים מרנדר מ-{start_time.strftime('%H:%M')}...")
-        response = requests.get(url, headers=headers, params=params, timeout=30)
+        from simple_config import TimeoutConfig
+        response = requests.get(url, headers=headers, params=params, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT_LONG)
         response.raise_for_status()
         
         logs_data = response.json()

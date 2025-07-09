@@ -12,20 +12,27 @@ from fields_dict import FIELDS_DICT, get_user_profile_fields, get_summary_fields
 # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
 # from sheets_handler import get_user_summary
 from profile_utils import get_user_summary_fast
+from utils import safe_str, get_logger
+
+logger = get_logger(__name__)
 
 def analyze_user_chat_history(chat_id):
     """
     מנתח את היסטוריית הצ'אט של משתמש ומחזיר תובנות עליו
     """
-    print(f"\n🔍 מנתח היסטוריה של משתמש {chat_id}")
+    safe_chat_id = safe_str(chat_id)
+    logger.info(f"מנתח היסטוריה של משתמש {safe_chat_id}")
+    print(f"\n🔍 מנתח היסטוריה של משתמש {safe_chat_id}")
     
     # קבלת היסטוריית הצ'אט
     history = get_chat_history(chat_id, limit=200)  # נקח עד 200 הודעות אחרונות
     
     if not history:
-        print(f"❌ לא נמצאה היסטוריה עבור משתמש {chat_id}")
+        logger.warning(f"לא נמצאה היסטוריה עבור משתמש {safe_chat_id}")
+        print(f"❌ לא נמצאה היסטוריה עבור משתמש {safe_chat_id}")
         return None
     
+    logger.info(f"נמצאו {len(history)} הודעות למשתמש {safe_chat_id}")
     print(f"📊 נמצאו {len(history)} הודעות")
     
     # חילוץ תובנות מההיסטוריה
@@ -149,14 +156,18 @@ def analyze_user_profile(chat_id):
     """
     מנתח את הפרופיל הקיים של המשתמש
     """
-    print(f"\n📋 מנתח פרופיל קיים של משתמש {chat_id}")
+    safe_chat_id = safe_str(chat_id)
+    logger.info(f"מנתח פרופיל קיים של משתמש {safe_chat_id}")
+    print(f"\n📋 מנתח פרופיל קיים של משתמש {safe_chat_id}")
     
     profile = get_user_profile(chat_id)
     
     if not profile:
-        print(f"❌ לא נמצא פרופיל קיים עבור משתמש {chat_id}")
+        logger.warning(f"לא נמצא פרופיל קיים עבור משתמש {safe_chat_id}")
+        print(f"❌ לא נמצא פרופיל קיים עבור משתמש {safe_chat_id}")
         return None
     
+    logger.info(f"נמצא פרופיל קיים למשתמש {safe_chat_id}")
     print(f"✅ נמצא פרופיל קיים")
     
     # בדיקת שדות מלאים ריקים
@@ -187,9 +198,12 @@ def compare_history_with_profile(chat_id, history_insights, profile_analysis):
     """
     משווה בין המידע שהתגלה בהיסטוריה לבין הפרופיל הקיים
     """
-    print(f"\n🔄 משווה היסטוריה עם פרופיל עבור משתמש {chat_id}")
+    safe_chat_id = safe_str(chat_id)
+    logger.info(f"משווה היסטוריה עם פרופיל עבור משתמש {safe_chat_id}")
+    print(f"\n🔄 משווה היסטוריה עם פרופיל עבור משתמש {safe_chat_id}")
     
     if not history_insights or not profile_analysis:
+        logger.warning("לא ניתן לבצע השוואה - חסר מידע")
         print("❌ לא ניתן לבצע השוואה - חסר מידע")
         return None
     
@@ -413,15 +427,17 @@ def main():
     """
     מנתח את כל המשתמשים הנדרשים
     """
+    # מזהים המשתמשים כמחרוזות בטוחות
     users_to_analyze = [
-        "1118251087",
-        "179392777", 
-        "5676571979",
-        "7957193610",
-        "5526006524",
-        "7186596694"
+        safe_str("1118251087"),
+        safe_str("179392777"), 
+        safe_str("5676571979"),
+        safe_str("7957193610"),
+        safe_str("5526006524"),
+        safe_str("7186596694")
     ]
     
+    logger.info(f"מתחיל ניתוח מעמיק של {len(users_to_analyze)} משתמשים")
     print("🚀 מתחיל ניתוח מעמיק של משתמשים")
     print(f"👥 {len(users_to_analyze)} משתמשים לניתוח")
     
@@ -432,7 +448,9 @@ def main():
             result = analyze_single_user(chat_id)
             all_results.append(result)
         except Exception as e:
-            print(f"❌ שגיאה בניתוח משתמש {chat_id}: {e}")
+            safe_chat_id = safe_str(chat_id)
+            logger.error(f"שגיאה בניתוח משתמש {safe_chat_id}: {e}")
+            print(f"❌ שגיאה בניתוח משתמש {safe_chat_id}: {e}")
             continue
     
     # סיכום כללי

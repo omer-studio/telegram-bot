@@ -4,6 +4,7 @@ import threading
 import json
 import logging
 from config import config
+from simple_config import TimeoutConfig
 
 try:
     from config import should_log_debug_prints
@@ -22,7 +23,7 @@ def _metrics_worker():
     _metrics_worker_running = True
     while _metrics_worker_running:
         try:
-            metrics_data = _metrics_queue.get(timeout=1)
+            metrics_data = _metrics_queue.get(timeout=TimeoutConfig.QUEUE_TIMEOUT)
             if metrics_data is None:
                 break
             _save_system_metrics_sync(**metrics_data)
@@ -118,7 +119,7 @@ def stop_metrics_worker():
     _metrics_worker_running = False
     _metrics_queue.put(None)
     if _metrics_worker_thread and _metrics_worker_thread.is_alive():
-        _metrics_worker_thread.join(timeout=5)
+        _metrics_worker_thread.join(timeout=TimeoutConfig.THREAD_JOIN_TIMEOUT)
 
 def save_system_metrics(metric_type, chat_id=None, **metrics):
     try:
@@ -129,7 +130,7 @@ def save_system_metrics(metric_type, chat_id=None, **metrics):
             'chat_id': chat_id,
             **metrics
         }
-        _metrics_queue.put(metrics_data, timeout=0.001)
+        _metrics_queue.put(metrics_data, timeout=TimeoutConfig.QUEUE_PUT_TIMEOUT)
         return True
     except queue.Full:
         if should_log_debug_prints():
