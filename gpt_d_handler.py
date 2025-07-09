@@ -14,7 +14,7 @@ import traceback
 from prompts import build_profile_merge_prompt
 from config import GPT_MODELS, GPT_PARAMS, should_log_data_extraction_debug
 from gpt_utils import normalize_usage_dict, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
-from user_friendly_errors import safe_str
+from db_manager import safe_str
 
 def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, message_id=None):
     """

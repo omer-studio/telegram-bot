@@ -30,6 +30,16 @@ def validate_chat_id(chat_id):
         raise ValueError("chat_id לא יכול להיות None")
     return safe_str(chat_id)
 
+def safe_operation(operation, *args, **kwargs):
+    """
+    🎯 הרצת פעולה בטוחה עם טיפול בשגיאות
+    """
+    try:
+        return operation(*args, **kwargs)
+    except Exception as e:
+        print(f"❌ שגיאה בפעולה: {e}")
+        return None
+
 # ייבוא פונקציית debug logging
 try:
     from config import should_log_debug_prints

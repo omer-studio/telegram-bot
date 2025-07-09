@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from simple_logger import logger
-from user_friendly_errors import safe_str, safe_operation
+from db_manager import safe_str, safe_operation
 
 # Cache פשוט לפרופילים
 _profile_cache = {}

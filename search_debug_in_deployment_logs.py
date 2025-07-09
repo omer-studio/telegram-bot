@@ -9,8 +9,8 @@ from datetime import datetime
 def main():
     print('🔍 חיפוש דיבאג בטבלת deployment_logs...')
 
-    with open('etc/secrets/config.json', 'r', encoding='utf-8') as f:
-        config = json.load(f)
+    from config import get_config
+    config = get_config()
     db_url = config.get('DATABASE_EXTERNAL_URL') or config.get('DATABASE_URL')
 
     connection = psycopg2.connect(db_url)

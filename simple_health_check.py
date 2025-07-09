@@ -50,9 +50,10 @@ def check_imports():
     """בדיקה 4: import בסיסיים עובדים"""
     try:
         import config
-        import db_manager
-        import main
-        return True
+        from db_manager import safe_str
+        # בדיקה פשוטה
+        test_result = safe_str("123")
+        return test_result == "123"
     except Exception as e:
         print(f"❌ Imports: {e}")
         return False

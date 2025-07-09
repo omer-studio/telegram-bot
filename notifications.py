@@ -4,7 +4,7 @@ import os
 import re
 import traceback
 from simple_logger import logger
-from user_friendly_errors import safe_str
+from db_manager import safe_str
 import asyncio
 try:
     import telegram

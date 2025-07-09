@@ -125,7 +125,7 @@ def log_event_to_file(*args, **kwargs):
             log_data = args[0]
             log_message = f"Event: {log_data.get('event_type', 'unknown')}"
             if 'chat_id' in log_data:
-                log_message += f" | chat_id={log_data['chat_id']}"
+                log_message += f" | chat_id={safe_str(log_data['chat_id'])}"
             if 'bot_message' in log_data:
                 log_message += f" | message={log_data['bot_message'][:100]}..."
             logger.info(log_message, source="legacy_log_event")

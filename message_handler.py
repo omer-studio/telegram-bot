@@ -14,7 +14,7 @@ import time
 from simple_config import config, TimeoutConfig
 from simple_logger import logger
 from simple_data_manager import data_manager
-from user_friendly_errors import safe_str, safe_operation
+from db_manager import safe_str, safe_operation
 
 from utils import get_israel_time
 from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, get_chat_history_simple, update_last_bot_message
@@ -22,7 +22,7 @@ from chat_utils import log_error_stat, update_chat_history, get_chat_history_mes
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove  # type: ignore
 from telegram.ext import ContextTypes  # type: ignore
 from datetime import datetime
-from utils import handle_secret_command, log_event_to_file
+from utils import handle_secret_command
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error
@@ -343,11 +343,8 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     if is_bot_message:
         # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
         update_chat_history(safe_str(chat_id), "", formatted_text)  # הודעת מערכת - אין הודעת משתמש
-    log_event_to_file({
-        "chat_id": safe_str(chat_id),
-        "bot_message": formatted_text,
-        "timestamp": get_israel_time().isoformat()
-    })
+    # 🗑️ הוחלף ב-logger פשוט
+    logger.info(f"הודעה נשלחה: {formatted_text[:100]}...", source="message_handler", chat_id=chat_id)
     if should_log_message_debug():
         print(f"[BOT_MSG] {formatted_text.replace(chr(10), ' ')[:120]}")
 
@@ -398,12 +395,8 @@ async def send_approval_message(update, chat_id):
         
         # 🔧 תיקון: עדכון היסטוריה נכון - הבוט שלח, לא המשתמש
         update_chat_history(safe_str(chat_id), "", approval_msg)  # הודעת מערכת - אין הודעת משתמש
-        log_event_to_file({
-            "chat_id": safe_str(chat_id),
-            "bot_message": approval_msg,
-            "timestamp": get_israel_time().isoformat(),
-            "message_type": "approval_request"
-        })
+        # 🗑️ הוחלף ב-logger פשוט
+        logger.info("הודעת אישור נשלחה", source="message_handler", chat_id=chat_id)
         
     except Exception as e:
         logger.error(f"[ERROR] שליחת הודעת אישור נכשלה: {e}", source="message_handler")
@@ -528,13 +521,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await send_system_message(update, chat_id, voice_message)
                     
                     # רישום להיסטוריה ולוגים
-                    log_event_to_file({
-                        "chat_id": safe_str(chat_id),
-                        "message_id": message_id,
-                        "message_type": "voice",
-                        "timestamp": get_israel_time().isoformat(),
-                        "event_type": "voice_temporarily_disabled"
-                    })
+                    # 🗑️ הוחלף ב-logger פשוט
+                    logger.info("הודעה קולית נדחתה - תכונה זמנית לא זמינה", source="message_handler", chat_id=chat_id)
                     
                     await end_monitoring_user(safe_str(chat_id), True)
                     return
@@ -546,15 +534,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.info(f"📩 התקבלה הודעה מסוג {message_type} | chat_id={safe_str(chat_id)}", source="message_handler")
                     print(f"[NON_TEXT_MSG] chat_id={safe_str(chat_id)} | message_id={message_id} | type={message_type}")
                     
-                    # רישום להיסטוריה ולוגים
-                    log_event_to_file({
-                        "chat_id": safe_str(chat_id),
-                        "message_id": message_id,
-                        "message_type": message_type,
-                        "bot_response": appropriate_response,
-                        "timestamp": get_israel_time().isoformat(),
-                        "event_type": "unsupported_message"
-                    })
+                    # רישום להיסטוריה ולוגים  
+                    # 🗑️ הוחלף ב-logger פשוט
+                    logger.info(f"הודעה לא נתמכת מסוג {message_type}", source="message_handler", chat_id=chat_id)
                     
                     await send_system_message(update, chat_id, appropriate_response)
                     await end_monitoring_user(safe_str(chat_id), True)
@@ -1048,12 +1030,8 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
         
         # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
         update_chat_history(safe_str(chat_id), "", text)  # הודעת מערכת - אין הודעת משתמש
-        log_event_to_file({
-            "chat_id": safe_str(chat_id),
-            "bot_message": text,
-            "timestamp": get_israel_time().isoformat(),
-            "message_type": "system_message"
-        })
+        # 🗑️ הוחלף ב-logger פשוט
+        logger.info(f"הודעת מערכת נשלחה: {text[:100]}...", source="message_handler", chat_id=chat_id)
         
     except Exception as e:
         logger.error(f"שליחת הודעת מערכת נכשלה: {e}", source="message_handler")

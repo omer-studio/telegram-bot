@@ -3,8 +3,8 @@ import json
 from datetime import datetime
 
 # Load DB config
-with open('etc/secrets/config.json', encoding='utf-8') as f:
-    config = json.load(f)
+from config import get_config
+    config = get_config()
 DB_URL = config.get('DATABASE_EXTERNAL_URL') or config.get('DATABASE_URL')
 
 conn = psycopg2.connect(DB_URL)

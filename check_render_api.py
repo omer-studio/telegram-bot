@@ -5,8 +5,8 @@ import requests
 print('🔍 בודק נתוני API של רנדר...')
 
 try:
-    with open('etc/secrets/config.json', 'r', encoding='utf-8') as f:
-        config = json.load(f)
+    from config import get_config
+    config = get_config()
     
     api_key = config.get('RENDER_API_KEY')
     service_id = config.get('RENDER_SERVICE_ID')
