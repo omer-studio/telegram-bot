@@ -415,11 +415,10 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"⌛ המשתמש קיבל תשובה תוך {user_timing:.1f} שניות\n"
             notification_text += f"⌛ **פער קוד {gap_time:.1f} שניות**\n"
         
-        # מונה הודעות משתמש - מאוחד ומתוקן
+        # מונה הודעות משתמש - מאוחד ומתוקן (משתמש במשתנה שכבר חושב)
         if history_messages:
-            user_messages_count_history = len([msg for msg in history_messages if msg.get("role") == "user"])
-            total_user_messages = user_messages_count_history + 1  # +1 להודעה הנוכחית
-            notification_text += f"\n**מונה הודעות משתמש:** {total_user_messages} (היסטוריה: {user_messages_count_history})"
+            total_user_messages = user_count + 1  # +1 להודעה הנוכחית
+            notification_text += f"\n**מונה הודעות משתמש:** {total_user_messages} (היסטוריה: {user_count})"
         else:
             notification_text += f"\n**מונה הודעות משתמש:** 1 (היסטוריה: 0)"
         

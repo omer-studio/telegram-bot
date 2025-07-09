@@ -131,6 +131,42 @@ def safe_str(value: Any, default: str = "") -> str:
     except Exception:
         return default
 
+def safe_chat_id(chat_id, require_valid=True):
+    """
+    🎯 פונקציה מאוחדת לטיפול ב-chat_id - מחליפה 3 פונקציות כפולות
+    
+    :param chat_id: הערך להמרה
+    :param require_valid: אם True - זורק שגיאה עבור ערך לא תקין, אם False - מחזיר bool
+    :return: safe_str(chat_id).strip() או bool (תלוי ב-require_valid)
+    
+    מחליף:
+    - db_manager.normalize_chat_id() 
+    - db_manager.validate_chat_id()
+    - utils.is_valid_chat_id()
+    """
+    try:
+        if chat_id is None:
+            if require_valid:
+                raise ValueError("chat_id cannot be None")
+            return False
+            
+        safe_id = safe_str(chat_id).strip()
+        
+        # בדיקת תקינות - צריך להיות לא ריק אחרי strip
+        is_valid = bool(safe_id)
+        
+        if require_valid:
+            if not is_valid:
+                raise ValueError(f"Invalid chat_id: {chat_id}")
+            return safe_id
+        else:
+            return is_valid
+            
+    except Exception as e:
+        if require_valid:
+            raise ValueError(f"Error processing chat_id {chat_id}: {e}")
+        return False
+
 def safe_dict(value: Any, default: Dict = None) -> Dict:
     """המרה בטוחה ל-dict"""
     try:

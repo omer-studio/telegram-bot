@@ -8,20 +8,22 @@ import queue
 # 🎯 ייבוא מרכזי של פונקציות בטוחות
 from user_friendly_errors import safe_str, safe_operation
 
+# 🎯 פונקציות מאוחדות לטיפול ב-chat_id - משתמשות בפונקציה המרכזית
+from user_friendly_errors import safe_chat_id
+
 def normalize_chat_id(chat_id):
     """
-    🎯 מנרמל chat_id לטיפוס אחיד (TEXT)
-    מונע בעיות text=bigint
+    🎯 מנרמל chat_id לטיפוס אחיד (TEXT) - DEPRECATED
+    ✅ השתמש ב-safe_chat_id() במקום
     """
-    return safe_str(chat_id)
+    return safe_chat_id(chat_id, require_valid=True)
 
 def validate_chat_id(chat_id):
     """
-    🎯 בודק תקינות chat_id
+    🎯 בודק תקינות chat_id - DEPRECATED  
+    ✅ השתמש ב-safe_chat_id() במקום
     """
-    if chat_id is None:
-        raise ValueError("chat_id לא יכול להיות None")
-    return safe_str(chat_id)
+    return safe_chat_id(chat_id, require_valid=True)
 
 def safe_operation(operation, *args, **kwargs):
     """

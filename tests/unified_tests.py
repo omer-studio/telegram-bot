@@ -364,6 +364,52 @@ def test_send_admin_notification(monkeypatch):
     assert sent, "requests.post not called"
     assert sent['data']["parse_mode"], "parse_mode should exist"
 
+def test_safe_chat_id_unified_function():
+    """Verify the unified safe_chat_id function works correctly and replaces the old functions."""
+    from user_friendly_errors import safe_chat_id
+    
+    # ✅ Basic functionality tests
+    assert safe_chat_id(123) == "123", "Should convert int to string"
+    assert safe_chat_id("456") == "456", "Should handle string input"
+    assert safe_chat_id(" 789 ") == "789", "Should strip whitespace"
+    
+    # ✅ Boolean mode tests  
+    assert safe_chat_id(123, require_valid=False) == True, "Should return True for valid chat_id"
+    assert safe_chat_id("", require_valid=False) == False, "Should return False for empty string"
+    assert safe_chat_id(None, require_valid=False) == False, "Should return False for None"
+    
+    # ✅ Error mode tests
+    try:
+        safe_chat_id(None, require_valid=True)
+        assert False, "Should raise ValueError for None when require_valid=True"
+    except ValueError:
+        pass  # Expected
+    
+    try:
+        safe_chat_id("", require_valid=True)
+        assert False, "Should raise ValueError for empty string when require_valid=True" 
+    except ValueError:
+        pass  # Expected
+
+def test_backward_compatibility_chat_id_functions():
+    """Verify that old chat_id functions still work (backward compatibility)."""
+    from db_manager import validate_chat_id, normalize_chat_id
+    from utils import is_valid_chat_id
+    
+    # ✅ validate_chat_id should work like before
+    assert validate_chat_id(123) == "123", "validate_chat_id should return string"
+    assert validate_chat_id("456") == "456", "validate_chat_id should handle string"
+    
+    # ✅ normalize_chat_id should work like before  
+    assert normalize_chat_id(789) == "789", "normalize_chat_id should return string"
+    assert normalize_chat_id("abc") == "abc", "normalize_chat_id should handle string"
+    
+    # ✅ is_valid_chat_id should work like before
+    assert is_valid_chat_id(123) == True, "is_valid_chat_id should return True for valid"
+    assert is_valid_chat_id("456") == True, "is_valid_chat_id should return True for valid string"
+    assert is_valid_chat_id(None) == False, "is_valid_chat_id should return False for None"
+    assert is_valid_chat_id("") == False, "is_valid_chat_id should return False for empty"
+
 # ============================================================================
 # 🧪 בדיקות בסיסיות
 # ============================================================================

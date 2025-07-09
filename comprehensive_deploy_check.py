@@ -206,7 +206,8 @@ class ComprehensiveDeployChecker:
         
         try:
             import notifications
-            from admin_notifications import send_admin_notification_raw, _load_critical_error_users
+            from admin_notifications import send_admin_notification_raw
+            from notifications import _load_critical_error_users
             
             # בדיקה בסיסית
             print("✅ notifications - יובא בהצלחה")

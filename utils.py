@@ -111,12 +111,12 @@ def get_israel_time():
     return datetime.now(israel_tz)
 
 def is_valid_chat_id(chat_id: Any) -> bool:
-    """בדיקה אם chat_id תקין - פונקציה אחת פשוטה"""
-    try:
-        safe_id = safe_str(chat_id)
-        return bool(safe_id and safe_id.strip())
-    except:
-        return False
+    """
+    בדיקה אם chat_id תקין - DEPRECATED
+    ✅ השתמש ב-safe_chat_id(chat_id, require_valid=False) במקום
+    """
+    from user_friendly_errors import safe_chat_id
+    return safe_chat_id(chat_id, require_valid=False)
 
 def log_event_to_file(*args, **kwargs):
     """תאימות לאחור – פונקציה זו עברה ל-simple_logger"""
