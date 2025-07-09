@@ -53,89 +53,43 @@ from chat_utils import get_weekday_context_instruction, get_holiday_system_messa
 
 def format_text_for_telegram(text):
     """
-    📝 פורמטינג פשוט וברור לפי כללי המשתמש:
-    1. כל נקודה/שאלה/קריאה = מעבר שורה
-    2. אם יש אימוג'י אחרי הפיסוק, האימוג'י נשאר באותה שורה ואז מעבר שורה
-    3. אם זה נקודה - מוחקים את הנקודה
+    📝 פורמטינג פשוט - הכללים של המשתמש:
+    נקודה/שאלה/קריאה + אימוג'י → אימוג'י באותה שורה + מעבר שורה
+    אם נקודה → מוחקים אותה
     """
     import re
     
-    # רג'קס לזיהוי אימוג'ים
-    emoji_pattern = re.compile(
-        r"[\U0001F600-\U0001F64F"
-        r"\U0001F300-\U0001F6FF"
-        r"\U0001F700-\U0001F77F"
-        r"\U0001F780-\U0001F7FF"
-        r"\U0001F800-\U0001F8FF"
-        r"\U0001F900-\U0001F9FF"
-        r"\U0001FA00-\U0001FA6F"
-        r"\U0001FA70-\U0001FAFF"
-        r"\U00002702-\U000027B0"
-        r"\U000024C2-\U0001F251]"
-    )
-    
-    # שלב 1: ניקוי HTML קיים
+    # שלב 1: ניקוי HTML
     text = re.sub(r'<[^>]+>', '', text)
     
-    # שלב 2: המרת Markdown לHTML
+    # שלב 2: Markdown 
     text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
     text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
     text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
     text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
     
-    # שלב 3: הכללים הפשוטים!
+    # שלב 3: הפתרון הכי פשוט שיש!
     
-    # עוברים תו אחר תו ובונים טקסט חדש
-    result = ""
-    i = 0
-    while i < len(text):
-        char = text[i]
-        
-        if char in '.?!':
-            # מצאנו פיסוק - בודקים מה יש אחריו
-            rest_of_text = text[i+1:]
-            
-            # בודקים אם יש רווחים ואחר כך אימוג'י
-            emoji_match = re.match(r'(\s*)(' + emoji_pattern.pattern + r')', rest_of_text)
-            
-            if emoji_match:
-                # יש אימוג'י אחרי הפיסוק!
-                spaces = emoji_match.group(1)
-                emoji = emoji_match.group(2)
-                
-                if char == '.':
-                    # נקודה - מוחקים את הנקודה, שומרים אימוג'י ועושים מעבר שורה
-                    result += ' ' + emoji + '\n'
-                else:
-                    # שאלה/קריאה - שומרים פיסוק ואימוג'י ועושים מעבר שורה
-                    result += char + ' ' + emoji + '\n'
-                
-                # מדלגים על הרווחים והאימוג'י
-                i += 1 + len(spaces) + len(emoji)
-            else:
-                # אין אימוג'י אחרי הפיסוק
-                if char == '.':
-                    # נקודה - מוחקים ועושים מעבר שורה
-                    result += '\n'
-                else:
-                    # שאלה/קריאה - שומרים ועושים מעבר שורה
-                    result += char + '\n'
-                i += 1
-        else:
-            # תו רגיל - מעתיקים
-            result += char
-            i += 1
+    # רק 4 רג'קסים פשוטים:
     
-    # ניקוי: הסרת רווחים מיותרים אחרי מעברי שורה
-    result = re.sub(r'\n\s+', '\n', result)
+    # 1. נקודה + רווח + אימוג'י → אימוג'י + מעבר שורה (מוחק נקודה)
+    text = re.sub(r'\. ([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r' \1\n', text)
     
-    # ניקוי: מעברי שורה כפולים יתר
-    result = re.sub(r'\n{3,}', '\n\n', result)
+    # 2. שאלה/קריאה + רווח + אימוג'י → פיסוק + אימוג'י + מעבר שורה
+    text = re.sub(r'([?!]) ([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r'\1 \2\n', text)
     
-    # ניקוי: שורות ריקות בתחילה ובסוף
-    result = result.strip()
+    # 3. כל נקודה שנשארה → מעבר שורה (מוחק נקודה)
+    text = re.sub(r'\.(\s*)', '\n', text)
     
-    return result
+    # 4. כל שאלה/קריאה שנשארה (רק אם אין \n אחרי) → פיסוק + מעבר שורה
+    text = re.sub(r'([?!])(\s*)(?!\n)', r'\1\n', text)
+    
+    # ניקוי בסיסי
+    text = re.sub(r'\n\s+', '\n', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = text.strip()
+    
+    return text
 
 async def _handle_holiday_check(update, chat_id, bot_reply):
     """
@@ -1161,68 +1115,78 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         # שלב 5: התראות אדמין (אם יש שינויים)
         try:
-            from profile_utils import _send_admin_profile_overview_notification, _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
+            from unified_profile_notifications import send_profile_update_notification
+            from profile_utils import _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
             
             # 🔧 תיקון: שמירת הפרופיל הישן לפני כל העדכונים
             old_profile_before_updates = get_user_profile_fast(safe_str(chat_id))
             
-            gpt_c_changes = []
-            gpt_d_changes = []
-            gpt_e_changes = []
+            gpt_c_changes_list = []
+            gpt_d_changes_list = []
+            gpt_e_changes_list = []
             
             # GPT-C changes
             if should_run_gpt_c(user_msg) and gpt_c_result is not None and not isinstance(gpt_c_result, Exception):
                 extracted_fields = gpt_c_result.get("extracted_fields", {}) if isinstance(gpt_c_result, dict) else {}
                 new_profile = {**old_profile_before_updates, **extracted_fields}
-                gpt_c_changes = _detect_profile_changes(old_profile_before_updates, new_profile)
+                changes = _detect_profile_changes(old_profile_before_updates, new_profile)
+                for change in changes:
+                    gpt_c_changes_list.append({
+                        'field': change['field'],
+                        'old_value': change['old_value'] or 'ריק',
+                        'new_value': change['new_value']
+                    })
             
             # GPT-D changes
             gpt_d_res = results[0] if len(results) > 0 else None
             if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
                 updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
                 if updated_profile and isinstance(updated_profile, dict):
-                    gpt_d_changes = _detect_profile_changes(old_profile_before_updates, updated_profile)
+                    changes = _detect_profile_changes(old_profile_before_updates, updated_profile)
+                    for change in changes:
+                        gpt_d_changes_list.append({
+                            'field': change['field'],
+                            'old_value': change['old_value'] or 'ריק',
+                            'new_value': change['new_value']
+                        })
             
             # GPT-E changes
             gpt_e_res = results[1] if len(results) > 1 else None
+            gpt_e_counter = None
             if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
-                changes = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
-                if changes:
-                    new_profile = {**old_profile_before_updates, **changes}
-                    gpt_e_changes = _detect_profile_changes(old_profile_before_updates, new_profile)
-            
-            # שליחת התראה רק אם יש שינויים
-            if gpt_c_changes or gpt_d_changes or gpt_e_changes:
-                # ✅ תיקון: בניית מידע רק למודלים עם שינויים בפועל
-                gpt_c_info = f"GPT-C: {len(gpt_c_changes)} שדות" if gpt_c_changes else ""
-                gpt_d_info = f"GPT-D: {len(gpt_d_changes)} שדות" if gpt_d_changes else ""
-                
-                # ✅ הוספת קאונטר ל-GPT-E רק אם יש שינויים
-                gpt_e_info = ""
-                if gpt_e_changes:
+                changes_dict = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
+                if changes_dict:
+                    new_profile = {**old_profile_before_updates, **changes_dict}
+                    changes = _detect_profile_changes(old_profile_before_updates, new_profile)
+                    for change in changes:
+                        gpt_e_changes_list.append({
+                            'field': change['field'],
+                            'old_value': change['old_value'] or 'ריק',
+                            'new_value': change['new_value']
+                        })
+                    
+                    # הוספת קאונטר GPT-E
                     try:
                         from chat_utils import get_user_stats_and_history
                         from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
                         stats, _ = get_user_stats_and_history(safe_str(chat_id))
                         total_messages = stats.get("total_messages", 0)
-                        gpt_e_counter = f" ({total_messages}/{GPT_E_RUN_EVERY_MESSAGES})"
+                        gpt_e_counter = f"{total_messages}/{GPT_E_RUN_EVERY_MESSAGES}"
                     except:
-                        gpt_e_counter = ""
-                    
-                    gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות{gpt_e_counter}"
-                
+                        gpt_e_counter = None
+            
+            # שליחת התראה רק אם יש שינויים
+            if gpt_c_changes_list or gpt_d_changes_list or gpt_e_changes_list:
                 # יצירת סיכום מהיר
                 current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
                 
-                _send_admin_profile_overview_notification(
+                send_profile_update_notification(
                     chat_id=safe_str(chat_id),
-                    user_msg=user_msg,
-                    gpt_c_changes=gpt_c_changes,
-                    gpt_d_changes=gpt_d_changes,
-                    gpt_e_changes=gpt_e_changes,
-                    gpt_c_info=gpt_c_info,
-                    gpt_d_info=gpt_d_info,
-                    gpt_e_info=gpt_e_info,
+                    user_message=user_msg,
+                    gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
+                    gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
+                    gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
+                    gpt_e_counter=gpt_e_counter,
                     summary=current_summary
                 )
                 

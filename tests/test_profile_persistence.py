@@ -217,37 +217,36 @@ def test_send_admin_notification(monkeypatch):
 
 
 def test_profile_overview_admin_notification(monkeypatch):
-    """Ensure _send_admin_profile_overview_notification constructs correct content."""
-    import profile_utils as pu
+    """Ensure unified profile notification system constructs correct content."""
+    import unified_profile_notifications as upn
     import notifications
 
     captured = {}
 
     def fake_raw(msg):
         captured['msg'] = msg
+        return 12345  # Mock message_id
 
     monkeypatch.setattr(notifications, "send_admin_notification_raw", fake_raw, raising=False)
 
     chat_id = "999999"
-    gpt_c_changes = [{"field": "age", "old_value": None, "new_value": "30", "change_type": "added"}]
+    gpt_c_changes = [{"field": "age", "old_value": "ריק", "new_value": "30"}]
 
-    pu._send_admin_profile_overview_notification(
+    result = upn.send_profile_update_notification(
         chat_id=chat_id,
-        user_msg="אני בן 30",
+        user_message="אני בן 30",
         gpt_c_changes=gpt_c_changes,
         gpt_d_changes=[],
         gpt_e_changes=[],
-        gpt_c_info="GPT-C info",
-        gpt_d_info="GPT-D info",
-        gpt_e_info="GPT-E info",
         summary="גיל: 30"
     )
 
+    assert result is True, "Profile notification should return True"
     assert captured, "Admin overview notification not sent"
     text = captured['msg']
     assert chat_id in text, "chat_id missing in overview notification"
     assert "age" in text or "גיל" in text, "Updated field name missing"
-    assert "GPT-C" in text, "GPT-C section missing"
+    assert "<b>GPT-C:</b>" in text, "GPT-C section missing (should be HTML formatted)"
 
 
 def test_admin_notification_content_on_profile_update(monkeypatch):

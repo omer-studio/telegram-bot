@@ -517,73 +517,7 @@ def _detect_profile_changes(old_profile: Dict, new_profile: Dict) -> List[Dict]:
         logger.error(f"שגיאה בזיהוי שינויי פרופיל: {exc}", source="profile_utils")
         return []
 
-def _send_admin_profile_overview_notification(chat_id: str, user_msg: str, gpt_c_changes: List, 
-                                            gpt_d_changes: List, gpt_e_changes: List,
-                                            gpt_c_info: str, gpt_d_info: str, gpt_e_info: str,
-                                            summary: str) -> bool:
-    """שליחת הודעת סקירת פרופיל מפורטת לאדמין - פונקציה פשוטה"""
-    try:
-        safe_id = safe_str(chat_id)
-        
-        # בניית הודעה מפורטת
-        overview_message = f"📊 סקירת עדכון פרופיל למשתמש {safe_id}...\n\n"
-        
-        # הודעת המשתמש (קצרה)
-        short_user_msg = user_msg[:50] + "..." if len(user_msg) > 50 else user_msg
-        overview_message += f"💬 הודעה: {short_user_msg}\n\n"
-        
-        # פירוט שינויים לפי מודל
-        total_changes = len(gpt_c_changes) + len(gpt_d_changes) + len(gpt_e_changes)
-        
-        if total_changes > 0:
-            overview_message += f"🔄 סה\"כ שינויים: {total_changes}\n"
-            
-            if gpt_c_changes:
-                overview_message += f"• {gpt_c_info}\n"
-                for change in gpt_c_changes[:3]:  # רק 3 ראשונים
-                    field = change.get('field', 'unknown')
-                    new_val = str(change.get('new_value', ''))[:30]
-                    overview_message += f"  ◦ {field}: {new_val}\n"
-                if len(gpt_c_changes) > 3:
-                    overview_message += f"  ◦ ...ועוד {len(gpt_c_changes) - 3}\n"
-            
-            if gpt_d_changes:
-                overview_message += f"• {gpt_d_info}\n"
-                for change in gpt_d_changes[:3]:
-                    field = change.get('field', 'unknown')
-                    new_val = str(change.get('new_value', ''))[:30]
-                    overview_message += f"  ◦ {field}: {new_val}\n"
-                if len(gpt_d_changes) > 3:
-                    overview_message += f"  ◦ ...ועוד {len(gpt_d_changes) - 3}\n"
-            
-            if gpt_e_changes:
-                overview_message += f"• {gpt_e_info}\n"
-                for change in gpt_e_changes[:3]:
-                    field = change.get('field', 'unknown')
-                    new_val = str(change.get('new_value', ''))[:30]
-                    overview_message += f"  ◦ {field}: {new_val}\n"
-                if len(gpt_e_changes) > 3:
-                    overview_message += f"  ◦ ...ועוד {len(gpt_e_changes) - 3}\n"
-        
-        # סיכום עדכני (קצר)
-        if summary:
-            short_summary = summary[:100] + "..." if len(summary) > 100 else summary
-            overview_message += f"\n📝 סיכום: {short_summary}"
-        
-        # שליחה דרך הפונקציה הכללית
-        from notifications import send_admin_notification_raw
-        success = send_admin_notification_raw(f"✅ עדכון פרופיל למשתמש ✅\n\n{overview_message}")
-        
-        if success:
-            logger.info(f"[PROFILE_OVERVIEW] ✅ סקירת פרופיל נשלחה למשתמש {safe_id}", source="profile_utils")
-            return True
-        else:
-            logger.error(f"[PROFILE_OVERVIEW] ❌ שגיאה בשליחת סקירת פרופיל למשתמש {safe_id}", source="profile_utils")
-            return False
-            
-    except Exception as exc:
-        logger.error(f"[PROFILE_OVERVIEW] ❌ שגיאה בסקירת פרופיל למשתמש {safe_str(chat_id)}: {exc}", source="profile_utils")
-        return False
+# 🗑️ פונקציה זו הוחלפה ב-unified_profile_notifications.send_profile_update_notification
 
 def get_user_profile_fast(chat_id: Any) -> Dict:
     """קבלת פרופיל מהיר - תאימות לאחור"""

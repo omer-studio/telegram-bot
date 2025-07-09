@@ -22,13 +22,11 @@ class ImportHealthChecker:
     CRITICAL_FUNCTIONS = {
         "notifications": [
             "send_admin_notification_raw",
-            "send_error_notification", 
-            "send_admin_profile_change_notification"
+            "send_error_notification"
         ],
         "profile_utils": [
             "send_admin_profile_notification",
-            "_detect_profile_changes",
-            "_send_admin_profile_overview_notification"
+            "_detect_profile_changes"
         ],
         "message_handler": [
             "handle_message",

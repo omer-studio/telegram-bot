@@ -767,23 +767,7 @@ def send_admin_notification_raw(message):
         print(f"💥 שגיאה בשליחת הודעה: {e}")
         return None
 
-def send_admin_profile_change_notification(message):
-    """שולח הודעת עדכון פרופיל לאדמין - פונקציה פשוטה"""
-    try:
-        # המרת ההודעה לפורמט הנכון עם הכותרת המיוחדת
-        profile_notification = f"✅ עדכון פרופיל למשתמש ✅\n\n{message}"
-        
-        # שליחה דרך הפונקציה הכללית של התראות אדמין
-        send_admin_notification_raw(profile_notification)
-        
-        logger.info("Profile change notification sent to admin", source="notifications")
-        print(f"✅ הודעת עדכון פרופיל נשלחה לאדמין")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error sending profile change notification: {e}", source="notifications")
-        print(f"❌ שגיאה בשליחת הודעת עדכון פרופיל: {e}")
-        return False
+# 🗑️ פונקציה זו הוחלפה ב-unified_profile_notifications.send_profile_update_notification
 
 # === הוספה: שליחת התראת קוד סודי לאדמין ===
 def send_admin_secret_command_notification(message: str):
@@ -1404,7 +1388,7 @@ def auto_cleanup_old_users():
                         continue
                     
                     # משתמשים שקיבלו תזכורת אבל לא הגיבו יותר מ-30 יום
-                    user_state = _reminder_state.get(str(chat_id), {})
+                    user_state = _reminder_state.get(safe_str(chat_id), {})
                     if user_state.get("reminder_sent"):
                         reminder_time_str = user_state.get("sent_at")
                         if reminder_time_str:
@@ -1429,7 +1413,7 @@ def auto_cleanup_old_users():
         # סימון המשתמשים כלא פעילים
         marked_count = 0
         for chat_id, reason in cleanup_candidates:
-            _reminder_state[str(chat_id)] = {
+            _reminder_state[safe_str(chat_id)] = {
                 "user_inactive": True,
                 "marked_inactive_at": now.isoformat(),
                 "reason": f"auto_cleanup_{reason}"
