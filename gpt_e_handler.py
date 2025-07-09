@@ -15,7 +15,7 @@ gpt_e_handler.py
 GPT_E_RUN_EVERY_MESSAGES = 10  # כל כמה הודעות להפעיל GPT-E
 GPT_E_SCAN_LAST_MESSAGES = 15  # כמה הודעות אחרונות לסרוק
 
-import logging
+from simple_logger import logger
 import asyncio
 import json
 import lazy_litellm as litellm
@@ -31,8 +31,8 @@ from prompts import build_profile_extraction_enhanced_prompt, JSON_RESPONSE_INST
 from gpt_utils import normalize_usage_dict, safe_get_usage_value, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from config import GPT_MODELS, GPT_PARAMS
 
-# הגדרת לוגר
-logger = logging.getLogger(__name__)
+# הגדרת לוגר  
+# logger already imported from simple_logger
 
 def should_run_gpt_e(chat_id: str, total_messages: int) -> bool:
     """
@@ -264,7 +264,7 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                 try:
                     changes = json.loads(content)
                 except json.JSONDecodeError as e:
-                    logging.error(f"[GPT_E] JSON decode error: {e} | Content: {content[:200]}")
+                    logger.error(f"[GPT_E] JSON decode error: {e} | Content: {content[:200]}")
                     changes = {}
             else:
                 # חיפוש JSON בתוך הטקסט
@@ -275,7 +275,7 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
                     try:
                         changes = json.loads(json_str)
                     except json.JSONDecodeError as e:
-                        logging.error(f"[GPT_E] JSON decode error: {e} | Content: {json_str[:200]}")
+                        logger.error(f"[GPT_E] JSON decode error: {e} | Content: {json_str[:200]}")
                         changes = {}
                 else:
                     changes = {}

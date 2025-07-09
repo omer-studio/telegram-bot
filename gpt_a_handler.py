@@ -5,7 +5,7 @@ gpt_a_handler.py
 עם מנגנון הודעה זמנית ופילטר חכם לבחירת מודל
 """
 
-import logging
+from simple_logger import logger
 from datetime import datetime
 import json
 import lazy_litellm as litellm
@@ -59,23 +59,23 @@ def should_ask_profile_question(chat_id: str) -> bool:
     # אם המשתמש בפסק זמן - מקטינים את המונה
     if profile_question_cooldowns[chat_id] > 0:
         profile_question_cooldowns[chat_id] -= 1
-        logging.info(f"📊 [PROFILE_QUESTION] בפסק זמן | chat_id={chat_id} | cooldown_left={profile_question_cooldowns[chat_id]}")
+        logger.info(f"📊 [PROFILE_QUESTION] בפסק זמן | chat_id={chat_id} | cooldown_left={profile_question_cooldowns[chat_id]}")
         return False
     
     # לא בפסק זמן - אפשר לשאול
-    logging.info(f"📊 [PROFILE_QUESTION] הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
+    logger.info(f"📊 [PROFILE_QUESTION] הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
     return True
 
 def start_profile_question_cooldown(chat_id: str):
     """מתחיל פסק זמן של 3 הודעות אחרי ששאלה נשאלה"""
     profile_question_cooldowns[chat_id] = 3
-    logging.info(f"📊 [PROFILE_QUESTION] פסק זמן התחיל | chat_id={chat_id} | cooldown=3")
+    logger.info(f"📊 [PROFILE_QUESTION] פסק זמן התחיל | chat_id={chat_id} | cooldown=3")
 
 def reset_profile_question_counter(chat_id: str):
     """מאפס את המונה למשתמש מסוים (למקרה של שאלה שנענתה)"""
     if chat_id in profile_question_counters:
         profile_question_counters[chat_id] = 0
-        logging.info(f"📊 [PROFILE_QUESTION] מונה אופס | chat_id={chat_id}")
+        logger.info(f"📊 [PROFILE_QUESTION] מונה אופס | chat_id={chat_id}")
 
 def get_profile_question_stats():
     """מחזיר סטטיסטיקות של מוני השאלות"""
@@ -91,7 +91,7 @@ def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
     מוסיף לוגים מפורטים לצורך דיבאגינג.
     """
     if not missing_text or not bot_reply:
-        logging.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={chat_id}")
+        logger.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={chat_id}")
         return False
     
     # מפרק את missing_text למילים בודדות (ללא סימני פיסוק)
@@ -102,7 +102,7 @@ def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
     # מוצא מילים משותפות
     matches = [word for word in missing_words if word in bot_words]
     
-    logging.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={chat_id} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}")
+    logger.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={chat_id} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}")
     
     return len(matches) >= 2
 
@@ -116,7 +116,7 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
         except ImportError:
             FIELDS_DICT = {"dummy": "dummy"}
         if not should_ask_profile_question(chat_id):
-            logging.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
+            logger.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
             return "", ""
         profile_data = get_user_profile(chat_id) or {}
         key_fields = ["name", "age", "attracted_to", "relationship_type", "self_religious_affiliation", 
@@ -127,13 +127,13 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
                   and FIELDS_DICT[f].get("missing_question", "").strip()]
         if len(missing) >= 2:
             missing_text = ', '.join(missing[:4])
-            logging.info(f"📊 [PROFILE_QUESTION] שולח שאלת פרופיל | chat_id={chat_id} | missing_fields={len(missing)} | missing_text={missing_text}")
+            logger.info(f"📊 [PROFILE_QUESTION] שולח שאלת פרופיל | chat_id={chat_id} | missing_fields={len(missing)} | missing_text={missing_text}")
             return f"""פרטים שהמשתמש עדיין לא סיפר לך וחשוב מאוד לשאול אותו בעדינות וברגישות במטרה להכיר אותו יותר טוב: {missing_text}
 \nראשית תסביר לו את הרציונל, תסביר לו למה אתה שואל, תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו - תבחר אחד מהשאלות שנראית לך הכי מתאימה - ורק אם זה מרגיש לך מתאים אז תשאל אותו בעדינות וברגישות ותשלב את זה באלגנטיות. (את השאלות תעשה בכתב מודגש)""", missing_text
-        logging.info(f"📊 [PROFILE_QUESTION] אין מספיק שדות חסרים לשאלה | chat_id={chat_id} | missing_fields={len(missing)}")
+        logger.info(f"📊 [PROFILE_QUESTION] אין מספיק שדות חסרים לשאלה | chat_id={chat_id} | missing_fields={len(missing)}")
         return "", ""
     except Exception as e:
-        logging.error(f"שגיאה ביצירת הודעת שדות חסרים: {e}")
+        logger.error(f"שגיאה ביצירת הודעת שדות חסרים: {e}")
         return "", ""
 
 # מילות מפתח שמצדיקות מודל מתקדם
@@ -242,7 +242,7 @@ def should_use_extra_emotion_model(user_message, chat_history_length=0):
     """
     # 🆕 בדיקה 1: 20 ההודעות הראשונות - רושם ראשוני חשוב
     if chat_history_length <= 20:
-        logging.info(f"🎯 [PREMIUM_FILTER] 20 ההודעות הראשונות: {chat_history_length} הודעות -> מודל מתקדם (רושם ראשוני)")
+        logger.info(f"🎯 [PREMIUM_FILTER] 20 ההודעות הראשונות: {chat_history_length} הודעות -> מודל מתקדם (רושם ראשוני)")
         result = True, f"20 ההודעות הראשונות ({chat_history_length}/20) - רושם ראשוני חשוב", "first_20_messages"
         log_filter_decision(result[2])
         return result
@@ -250,7 +250,7 @@ def should_use_extra_emotion_model(user_message, chat_history_length=0):
     # בדיקת אורך הודעה
     word_count = len(user_message.split())
     if word_count > LONG_MESSAGE_THRESHOLD:
-        logging.info(f"🎯 [PREMIUM_FILTER] הודעה ארוכה: {word_count} מילים -> מודל מתקדם")
+        logger.info(f"🎯 [PREMIUM_FILTER] הודעה ארוכה: {word_count} מילים -> מודל מתקדם")
         result = True, f"הודעה ארוכה ({word_count} מילים)", "length"
         log_filter_decision(result[2])
         return result
@@ -259,7 +259,7 @@ def should_use_extra_emotion_model(user_message, chat_history_length=0):
     user_message_lower = user_message.lower()
     found_keywords = [keyword for keyword in PREMIUM_MODEL_KEYWORDS if keyword in user_message_lower]
     if found_keywords:
-        logging.info(f"🎯 [PREMIUM_FILTER] מילות מפתח נמצאו: {found_keywords[:3]} -> מודל מתקדם")
+        logger.info(f"🎯 [PREMIUM_FILTER] מילות מפתח נמצאו: {found_keywords[:3]} -> מודל מתקדם")
         result = True, f"מילות מפתח: {', '.join(found_keywords[:3])}", "keywords"
         log_filter_decision(result[2])
         return result
@@ -267,13 +267,13 @@ def should_use_extra_emotion_model(user_message, chat_history_length=0):
     # בדיקת דפוסי ביטויים מורכבים
     for pattern in COMPLEX_PATTERNS:
         if re.search(pattern, user_message_lower):
-            logging.info(f"🎯 [PREMIUM_FILTER] דפוס מורכב נמצא: {pattern} -> מודל מתקדם")
+            logger.info(f"🎯 [PREMIUM_FILTER] דפוס מורכב נמצא: {pattern} -> מודל מתקדם")
             result = True, f"דפוס מורכב זוהה", "pattern"
             log_filter_decision(result[2])
             return result
     
     # אחרת, מודל מהיר
-    logging.info(f"🚀 [PREMIUM_FILTER] מקרה רגיל -> מודל מהיר")
+    logger.info(f"🚀 [PREMIUM_FILTER] מקרה רגיל -> מודל מהיר")
     result = False, "מקרה רגיל - מודל מהיר", "default"
     log_filter_decision(result[2])
     return result
@@ -291,7 +291,7 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=8):
         
         # בדיקה נוספת אחרי השינה - אם המשימה בוטלה, לא נשלח הודעה
         if asyncio.current_task().cancelled():
-            logging.info(f"📤 [TEMP_MSG] משימה בוטלה לפני שליחת הודעה זמנית | chat_id={chat_id}")
+            logger.info(f"📤 [TEMP_MSG] משימה בוטלה לפני שליחת הודעה זמנית | chat_id={chat_id}")
             return None
             
         from message_handler import send_system_message  # local import to avoid circular
@@ -299,13 +299,13 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=8):
         await send_system_message(update, chat_id, temp_message_text)
         
         # נחזיר None כי send_system_message לא מחזיר את האובייקט
-        logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
+        logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
         return None  # לא מחזירים אובייקט כי send_system_message לא מחזיר
     except asyncio.CancelledError:
-        logging.info(f"📤 [TEMP_MSG] משימה בוטלה בזמן שליחת הודעה זמנית | chat_id={chat_id}")
+        logger.info(f"📤 [TEMP_MSG] משימה בוטלה בזמן שליחת הודעה זמנית | chat_id={chat_id}")
         return None
     except Exception as e:
-        logging.error(f"❌ [TEMP_MSG] שגיאה בשליחת הודעה זמנית: {e}")
+        logger.error(f"❌ [TEMP_MSG] שגיאה בשליחת הודעה זמנית: {e}")
         return None
 
 async def delete_temporary_message_and_send_new(update, temp_message, new_text):
@@ -319,16 +319,16 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
     try:
         # מחיקת ההודעה הזמנית - לא רלוונטי כי send_message לא מחזיר אובייקט
         if temp_message is not None:
-            logging.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_message)")
+            logger.info(f"🗑️ [DELETE_MSG] הודעה זמנית לא נמחקה (לא רלוונטי עם send_message)")
 
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
         await send_message(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
-        logging.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
+        logger.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
         return True
 
     except Exception as send_err:
-        logging.error(f"❌ [DELETE_MSG] כשל בשליחה: {send_err}")
+        logger.error(f"❌ [DELETE_MSG] כשל בשליחה: {send_err}")
         return False
 
 def _execute_gpt_call(completion_params, full_messages):
@@ -349,7 +349,7 @@ def _execute_gpt_call(completion_params, full_messages):
             "model_dump": response
         }
     except Exception as e:
-        logging.error(f"[gpt_a] שגיאה במודל {completion_params['model']}: {e}")
+        logger.error(f"[gpt_a] שגיאה במודל {completion_params['model']}: {e}")
         raise e
 
 def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_extra_emotion=True, filter_reason="", match_type="unknown"):
@@ -378,11 +378,11 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
     if use_extra_emotion:
         model = GPT_MODELS["gpt_a"]  # המודל המתקדם מ-config
         model_tier = "premium"
-        logging.info(f"🎯 [MODEL_SELECTION] משתמש במודל מתקדם: {model} | סיבה: {filter_reason}")
+        logger.info(f"🎯 [MODEL_SELECTION] משתמש במודל מתקדם: {model} | סיבה: {filter_reason}")
     else:
         model = GPT_FALLBACK_MODELS["gpt_a"]  # המודל המהיר מ-config
         model_tier = "fast"
-        logging.info(f"🚀 [MODEL_SELECTION] משתמש במודל מהיר: {model} | סיבה: {filter_reason}")
+        logger.info(f"🚀 [MODEL_SELECTION] משתמש במודל מהיר: {model} | סיבה: {filter_reason}")
     
     completion_params = {
         "model": model,
@@ -438,7 +438,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         
         gpt_duration = time.time() - gpt_start_time
         log_memory_usage("after_gpt_call")
-        logging.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
+        logger.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
         
         # שלב 3: עיבוד התשובה
         processing_start_time = time.time()
@@ -469,7 +469,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             )
             usage.update(cost_info)
         except Exception as _cost_e:
-            logging.warning(f"[gpt_a] לא הצלחתי לחשב עלות usage: {_cost_e}")
+            logger.warning(f"[gpt_a] לא הצלחתי לחשב עלות usage: {_cost_e}")
         
         processing_time = time.time() - processing_start_time
         print(f"⚡ [TIMING] Processing time: {processing_time:.3f}s")
@@ -490,7 +490,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
                 # התראות לאדמין
                 if billing_status.get("warnings"):
                     for warning in billing_status["warnings"]:
-                        logging.warning(f"[💰 תקציב] {warning}")
+                        logger.warning(f"[💰 תקציב] {warning}")
                 
                 # התראה בטלגרם אם צריך
                 status = billing_guard.get_current_status()
@@ -534,12 +534,12 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
                 }
             )
         except Exception as save_err:
-            logging.warning(f"Could not save GPT timing metrics: {save_err}")
+            logger.warning(f"Could not save GPT timing metrics: {save_err}")
         
         # 🆕 בדיקה אם התשובה מכילה שאלת פרופיל והתחלת פסק זמן
         if chat_id and detect_profile_question_in_response(bot_reply):
             start_profile_question_cooldown(chat_id)
-            logging.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={chat_id}")
+            logger.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={chat_id}")
         
         result = {
             "bot_reply": bot_reply, 
@@ -591,7 +591,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         return result
         
     except Exception as e:
-        logging.error(f"[gpt_a] שגיאה במודל {gpt_result['model']}: {e}")
+        logger.error(f"[gpt_a] שגיאה במודל {gpt_result['model']}: {e}")
         
         # שליחת הודעת שגיאה טכנית לאדמין
         send_error_notification(
@@ -643,7 +643,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
             user_stats = get_user_stats(chat_id)
             chat_history_length = user_stats.get("total_messages", 0)
         except Exception as e:
-            logging.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
+            logger.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
             # fallback לספירה מ-full_messages
             chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     else:
@@ -677,7 +677,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         gpt_result = await asyncio.wait_for(gpt_task, timeout=GPT_TIMEOUT_SECONDS)
         
         gpt_duration = time.time() - gpt_start_time
-        logging.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
+        logger.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
         
         # 🆕 בדיקה אם התשובה מכילה שאלת פרופיל והתחלת פסק זמן
         if chat_id and detect_profile_question_in_response(gpt_result["bot_reply"]):
@@ -702,14 +702,14 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 from message_handler import send_system_message
                 temp_message_text = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך..."
                 await send_system_message(update, chat_id, temp_message_text)
-                logging.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
+                logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
             except Exception as temp_err:
-                logging.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
+                logger.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
         
         return gpt_result
         
     except asyncio.TimeoutError:
-        logging.error(f"[gpt_a] Timeout - GPT לא הגיב תוך {GPT_TIMEOUT_SECONDS} שניות")
+        logger.error(f"[gpt_a] Timeout - GPT לא הגיב תוך {GPT_TIMEOUT_SECONDS} שניות")
         
         # שליחת התראה לאדמין על timeout
         send_error_notification(
@@ -730,7 +730,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         }
         
     except Exception as e:
-        logging.error(f"[gpt_a] שגיאה כללית: {e}")
+        logger.error(f"[gpt_a] שגיאה כללית: {e}")
         
         # שליחת הודעת שגיאה טכנית לאדמין
         send_error_notification(
@@ -770,7 +770,7 @@ def get_main_response(full_messages, chat_id=None, message_id=None):
             user_stats = get_user_stats(chat_id)
             chat_history_length = user_stats.get("total_messages", 0)
         except Exception as e:
-            logging.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
+            logger.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
             # fallback לספירה מ-full_messages
             chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     else:
@@ -826,7 +826,7 @@ def detect_profile_question_in_response(bot_reply: str) -> bool:
     is_profile_question = indicators >= 2
     
     if is_profile_question:
-        logging.info(f"📊 [PROFILE_QUESTION] זוהתה שאלת פרופיל בתשובה | indicators={indicators} | has_question_mark={has_question_mark} | has_keywords={has_profile_keywords} | has_bold={has_bold_text} | has_starters={has_question_starters}")
+        logger.info(f"📊 [PROFILE_QUESTION] זוהתה שאלת פרופיל בתשובה | indicators={indicators} | has_question_mark={has_question_mark} | has_keywords={has_profile_keywords} | has_bold={has_bold_text} | has_starters={has_question_starters}")
     
     return is_profile_question
 
@@ -889,7 +889,7 @@ def log_memory_usage(stage: str):
         import os
         process = psutil.Process(os.getpid())
         memory_mb = process.memory_info().rss / 1024 / 1024
-        logging.info(f"[MEMORY] GPT-A {stage}: {memory_mb:.1f} MB")
+        logger.info(f"[MEMORY] GPT-A {stage}: {memory_mb:.1f} MB")
         
         # 💾 שמירת מדידת זיכרון למסד הנתונים
         try:
@@ -901,7 +901,7 @@ def log_memory_usage(stage: str):
                 additional_data={"component": "gpt_a", "stage": stage}
             )
         except Exception as save_err:
-            logging.warning(f"Could not save memory metrics: {save_err}")
+            logger.warning(f"Could not save memory metrics: {save_err}")
             
     except Exception as e:
-        logging.warning(f"Could not log memory usage: {e}")
+        logger.warning(f"Could not log memory usage: {e}")
