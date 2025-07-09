@@ -396,6 +396,14 @@ def get_chat_history(chat_id, limit=100):
 # === שמירת פרופיל משתמש ===
 def save_user_profile(chat_id, profile_data):
     """
+    🚨 DEPRECATED: השתמש ב-profile_utils.save_user_profile במקום!
+    
+    פונקציה זו קיימת לתאימות לאחור בלבד.
+    profile_utils מספק:
+    - Cache לביצועים טובים יותר
+    - Error handling מתקדם יותר
+    - שכבה אחידה לכל פעולות הפרופיל
+    
     שומר פרופיל משתמש במבנה החדש עם עמודות נפרדות
     profile_data יכול להיות dict או JSON string
     """

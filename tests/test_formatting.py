@@ -55,35 +55,35 @@ class TestFormatting(unittest.TestCase):
     def test_period_with_emoji(self):
         """בדיקת נקודה + אימוג'י (נקודה נמחקת)"""
         input_text = "זה נכון. 👍"
-        expected = "זה נכון 👍\n"
+        expected = "זה נכון 👍\n"  # פורמט נוכחי - נקודה נמחקת
         result = format_text_for_telegram(input_text)
         self.assertEqual(result, expected, "נקודה + אימוג'י: נקודה נמחקת")
     
     def test_punctuation_without_emoji(self):
         """בדיקת פיסוק בלי אימוג'י"""
         input_text = "איך אתה? מה שלומך!"
-        expected = "איך אתה?\nמה שלומך!\n"
+        expected = "איך אתה?\nמה שלומך!\n"  # פורמט נוכחי
         result = format_text_for_telegram(input_text)
         self.assertEqual(result, expected)
     
     def test_period_without_emoji(self):
         """בדיקת נקודה בלי אימוג'י (נמחקת)"""
         input_text = "זה נכון. זה טוב."
-        expected = "זה נכון\nזה טוב\n"
+        expected = "זה נכון\nזה טוב\n"  # פורמט נוכחי
         result = format_text_for_telegram(input_text)
         self.assertEqual(result, expected, "נקודות חייבות להיעלם")
     
     def test_markdown_formatting(self):
         """בדיקת Markdown"""
         input_text = "**בולד** ו*קו תחתון*"
-        expected = "<b>בולד</b> ו<u>קו תחתון</u>\n"
+        expected = "<b>בולד</b> ו<u>קו תחתון</u>\n"  # פורמט נוכחי
         result = format_text_for_telegram(input_text)
         self.assertEqual(result, expected)
     
     def test_mixed_complex_case(self):
         """בדיקת מקרה מורכב - מעורב"""
         input_text = "מעולה! 😊 זה נכון. איך אתה?"
-        expected = "מעולה! 😊\nזה נכון\nאיך אתה?\n"
+        expected = "מעולה! 😊\nזה נכון\nאיך אתה?\n"  # פורמט נוכחי
         result = format_text_for_telegram(input_text)
         self.assertEqual(result, expected)
     
@@ -99,7 +99,7 @@ class TestFormatting(unittest.TestCase):
         self.assertEqual(format_text_for_telegram("!"), "!\n")
         
         # נקודה בלבד (נמחקת - לא נשאר כלום)
-        self.assertEqual(format_text_for_telegram("."), "")
+        self.assertEqual(format_text_for_telegram("."), "")  # פורמט נוכחי - נקודה נמחקת
 
 if __name__ == '__main__':
     # 🛡️ הגדרות בטוחות לטסטים
