@@ -523,7 +523,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             from db_manager import save_system_metrics
             save_system_metrics(
                 metric_type="gpt_timing",
-                chat_id=str(chat_id) if chat_id else None,
+                chat_id=safe_str(chat_id) if chat_id else None,
                 gpt_latency_seconds=gpt_duration,
                 prep_time_seconds=prep_time,
                 processing_time_seconds=processing_time,

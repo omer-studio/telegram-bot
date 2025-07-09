@@ -1221,7 +1221,7 @@ def register_user_with_code_db(chat_id, code_input=None):
         
         if code_input is None:
             # שלב 1: משתמש חדש - יצירת שורה זמנית
-            cur.execute("SELECT chat_id FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            cur.execute("SELECT chat_id FROM user_profiles WHERE chat_id = %s", (chat_id,))
             existing = cur.fetchone()
             
             if existing:
@@ -1234,7 +1234,7 @@ def register_user_with_code_db(chat_id, code_input=None):
             cur.execute("""
                 INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
                 VALUES (%s, 0, FALSE, %s)
-            """, (str(chat_id), datetime.utcnow()))
+            """, (chat_id, datetime.utcnow()))
             
             conn.commit()
             cur.close()

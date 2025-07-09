@@ -314,7 +314,7 @@ def _send_telegram_message_admin_sync(bot_token, chat_id, text):
             "parse_mode": "Markdown"
         }
         
-        response = requests.post(url, data=data, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
+        response = requests.post(url, data=data, timeout=10)  # Timeout בשניות
         if response.status_code == 200:
             logger.info("✅ התראה נשלחה לאדמין")
         else:

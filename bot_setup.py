@@ -327,7 +327,7 @@ def connect_google_sheets(): # פונקציה ריקה - Google Sheets הוסר
     פונקציה ריקה לתאימות אחורה
     """
     try:
-        logging.info("🗑️ Google Sheets הוסר - עברנו למסד נתונים")
+        logger.info("🗑️ Google Sheets הוסר - עברנו למסד נתונים", source="bot_setup")
         print("🗑️ Google Sheets הוסר - עברנו למסד נתונים")
     except Exception as ex:
         logging.info(f"🗑️ Google Sheets הוסר: {ex}")
