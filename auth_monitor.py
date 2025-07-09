@@ -19,20 +19,10 @@ import os
 import re
 import time
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Set
 import subprocess
-
-# הגדרת לוגים
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('auth_monitor.log'),
-        logging.StreamHandler()
-    ]
-)
+from simple_logger import logger
 
 class AuthorizationMonitor:
     """מוניטור הרשאות בזמן אמת"""
@@ -123,7 +113,7 @@ class AuthorizationMonitor:
                 if result.stdout:
                     issues.append(f"   פלט: {result.stdout[:200]}...")
             else:
-                logging.info("✅ בדיקות הרשאות עברו בהצלחה")
+                logger.info("✅ בדיקות הרשאות עברו בהצלחה")
                 
         except subprocess.TimeoutExpired:
             issues.append("❌ בדיקות הרשאות - timeout")
@@ -187,7 +177,7 @@ class AuthorizationMonitor:
 """
             
             print(alert_msg)
-            logging.critical(alert_msg)
+            logger.critical(alert_msg)
             
             # שמירה לקובץ התראות
             with open('auth_alerts.log', 'a', encoding='utf-8') as f:
@@ -225,7 +215,7 @@ class AuthorizationMonitor:
             print("\n👋 מוניטור הופסק על ידי המשתמש")
         except Exception as e:
             print(f"\n💥 שגיאה במוניטור: {e}")
-            logging.error(f"Monitor error: {e}")
+            logger.error(f"Monitor error: {e}")
 
 
 def main():
