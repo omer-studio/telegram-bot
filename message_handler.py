@@ -217,7 +217,7 @@ async def _handle_holiday_check(update, chat_id, bot_reply):
     try:
         from chat_utils import get_holiday_system_message
         
-        holiday_message = get_holiday_system_message(str(chat_id), bot_reply)
+        holiday_message = get_holiday_system_message(safe_str(chat_id), bot_reply)
         if holiday_message:
             await send_system_message(update, chat_id, holiday_message)
             
@@ -236,15 +236,15 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     # 🚨 CRITICAL SECURITY CHECK: מנע שליחת הודעות פנימיות למשתמש!
     if text and ("[עדכון פרופיל]" in text or "[PROFILE_CHANGE]" in text or 
                  (text.startswith("[") and "]" in text and any(keyword in text for keyword in ["עדכון", "debug", "admin", "system"]))):
-        logger.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={chat_id} | text={text[:100]}")
-        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={chat_id}")
+        logger.critical(f"🚨 BLOCKED INTERNAL MESSAGE TO USER! chat_id={safe_str(chat_id)} | text={text[:100]}", source="message_handler")
+        print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={safe_str(chat_id)}")
         return
     
     # 🐛 DEBUG: מידע על השליחה
     print("=" * 80)
     print("📤 SEND_MESSAGE DEBUG")
     print("=" * 80)
-    print(f"📊 CHAT_ID: {chat_id}")
+    print(f"📊 CHAT_ID: {safe_str(chat_id)}")
     print(f"📊 IS_BOT_MESSAGE: {is_bot_message}")
     print(f"📊 IS_GPT_A_RESPONSE: {is_gpt_a_response}")
     print(f"📝 ORIGINAL TEXT ({len(text)} chars):")
@@ -265,7 +265,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
         print(f"🚫 [FORMATTING] דולג על פורמטינג (לא תשובת GPTA)")
     
     if should_log_message_debug():
-        print(f"[SEND_MESSAGE] chat_id={chat_id} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
+        print(f"[SEND_MESSAGE] chat_id={safe_str(chat_id)} | text={formatted_text.replace(chr(10), ' ')[:120]}", flush=True)
     
     try:
         bot_id = None
@@ -275,7 +275,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             bot_id = getattr(update.bot, 'id', None)
         
         if should_log_debug_prints():
-            print(f"[DEBUG] SENDING MESSAGE: from bot_id={bot_id} to chat_id={chat_id}", flush=True)
+            print(f"[DEBUG] SENDING MESSAGE: from bot_id={bot_id} to chat_id={safe_str(chat_id)}", flush=True)
     except Exception as e:
         if should_log_debug_prints():
             print(f"[DEBUG] לא הצלחתי להוציא bot_id: {e}", flush=True)
@@ -296,7 +296,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
                 )
                 
                 if should_log_message_debug():
-                    print(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
+                    print(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={safe_str(chat_id)}", flush=True)
                 
                 logger.info(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={safe_str(chat_id)}", source="message_handler")
                 break  # הצלחה - יוצאים מהלולאה
@@ -330,21 +330,21 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
         if should_log_message_debug():
             print(f"[ERROR] שליחת הודעה נכשלה: {e}", flush=True)
         
-        logger.error(f"[ERROR] שליחת הודעה נכשלה: {e}")
+        logger.error(f"[ERROR] שליחת הודעה נכשלה: {e}", source="message_handler")
         # 🗑️ הסרת log_event_to_file - עברנו למסד נתונים
         try:
             from notifications import send_error_notification
-            send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
+            send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=safe_str(chat_id), user_msg=formatted_text)
         except Exception as notify_err:
             if should_log_message_debug():
                 print(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", flush=True)
-            logger.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}")
+            logger.error(f"[ERROR] לא הצלחתי לשלוח התראה לאדמין: {notify_err}", source="message_handler")
         return
     if is_bot_message:
         # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
-        update_chat_history(chat_id, "", formatted_text)  # הודעת מערכת - אין הודעת משתמש
+        update_chat_history(safe_str(chat_id), "", formatted_text)  # הודעת מערכת - אין הודעת משתמש
     log_event_to_file({
-        "chat_id": chat_id,
+        "chat_id": safe_str(chat_id),
         "bot_message": formatted_text,
         "timestamp": get_israel_time().isoformat()
     })
@@ -381,7 +381,7 @@ async def send_approval_message(update, chat_id):
             except asyncio.TimeoutError:
                 if attempt < max_retries:
                     next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
-                    logger.warning(f"[APPROVAL_MSG_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying with {next_timeout}s...")
+                    logger.warning(f"[APPROVAL_MSG_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={safe_str(chat_id)}, retrying with {next_timeout}s...", source="message_handler")
                     await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
@@ -390,23 +390,23 @@ async def send_approval_message(update, chat_id):
             except Exception as e:
                 if attempt < max_retries and ("network" in str(e).lower() or "timeout" in str(e).lower() or "connection" in str(e).lower()):
                     next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
-                    logger.warning(f"[APPROVAL_MSG_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                    logger.warning(f"[APPROVAL_MSG_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}", source="message_handler")
                     await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
                     raise e
         
         # 🔧 תיקון: עדכון היסטוריה נכון - הבוט שלח, לא המשתמש
-        update_chat_history(chat_id, "", approval_msg)  # הודעת מערכת - אין הודעת משתמש
+        update_chat_history(safe_str(chat_id), "", approval_msg)  # הודעת מערכת - אין הודעת משתמש
         log_event_to_file({
-            "chat_id": chat_id,
+            "chat_id": safe_str(chat_id),
             "bot_message": approval_msg,
             "timestamp": get_israel_time().isoformat(),
             "message_type": "approval_request"
         })
         
     except Exception as e:
-        logger.error(f"[ERROR] שליחת הודעת אישור נכשלה: {e}")
+        logger.error(f"[ERROR] שליחת הודעת אישור נכשלה: {e}", source="message_handler")
         # ניסיון שליחה רגילה ללא מקלדת
         await send_system_message(update, chat_id, approval_msg)
 
@@ -470,15 +470,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # בדיקה אם ההודעה כבר טופלה
             if message_key in context.bot_data["processed_messages"]:
-                logger.info(f"[DUPLICATE] Message {message_id} for chat {chat_id} already processed - skipping")
-                print(f"🔄 [DUPLICATE] Message {message_id} for chat {chat_id} already processed - skipping")
+                logger.info(f"[DUPLICATE] Message {message_id} for chat {safe_str(chat_id)} already processed - skipping", source="message_handler")
+                print(f"🔄 [DUPLICATE] Message {message_id} for chat {safe_str(chat_id)} already processed - skipping")
                 return
             
             # סימון ההודעה כטופלת
             context.bot_data["processed_messages"][message_key] = current_time
             
     except Exception as e:
-        logger.warning(f"[DUPLICATE_CHECK] Error in duplicate check: {e}")
+        logger.warning(f"[DUPLICATE_CHECK] Error in duplicate check: {e}", source="message_handler")
         # ממשיכים גם אם יש שגיאה בבדיקת כפילות
 
     # 🐞 דיבאג היסטוריה - כמה הודעות יש בקובץ
@@ -486,8 +486,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from chat_utils import get_user_stats_and_history
         chat_id = update.message.chat_id if hasattr(update, 'message') and hasattr(update.message, 'chat_id') else None
         if chat_id:
-            stats, history = get_user_stats_and_history(chat_id)
-            print(f"[HISTORY_DEBUG] יש {len(history)} הודעות היסטוריה לצ'אט {chat_id}")
+            stats, history = get_user_stats_and_history(safe_str(chat_id))
+            print(f"[HISTORY_DEBUG] יש {len(history)} הודעות היסטוריה לצ'אט {safe_str(chat_id)}")
             for i, entry in enumerate(history[-3:]):
                 user = entry.get('user', '')
                 bot = entry.get('bot', '')
@@ -509,7 +509,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id = update.message.message_id
             
             # איפוס מצב תזכורת - המשתמש הגיב
-            mark_user_active(chat_id)
+            mark_user_active(safe_str(chat_id))
             
             if update.message.text:
                 user_msg = update.message.text
@@ -520,8 +520,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # 🔧 תיקון זמני: הסרת תמיכה בהודעות קוליות
                 # (עד שנפתור את בעיית ffmpeg בסביבת הענן)
                 if message_type == "voice":
-                    logger.info(f"🎤 התקבלה הודעה קולית (לא נתמכת כרגע) | chat_id={chat_id}")
-                    print(f"[VOICE_MSG_DISABLED] chat_id={chat_id} | message_id={message_id}")
+                    logger.info(f"🎤 התקבלה הודעה קולית (לא נתמכת כרגע) | chat_id={safe_str(chat_id)}", source="message_handler")
+                    print(f"[VOICE_MSG_DISABLED] chat_id={safe_str(chat_id)} | message_id={message_id}")
                     
                     # הודעה למשתמש שהתכונה לא זמינה כרגע
                     voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
@@ -529,26 +529,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # רישום להיסטוריה ולוגים
                     log_event_to_file({
-                        "chat_id": chat_id,
+                        "chat_id": safe_str(chat_id),
                         "message_id": message_id,
                         "message_type": "voice",
                         "timestamp": get_israel_time().isoformat(),
                         "event_type": "voice_temporarily_disabled"
                     })
                     
-                    await end_monitoring_user(str(chat_id), True)
+                    await end_monitoring_user(safe_str(chat_id), True)
                     return
                 
                 else:
                     # הודעות לא-טקסט אחרות (לא voice)
                     appropriate_response = get_unsupported_message_response(message_type)
                     
-                    logger.info(f"📩 התקבלה הודעה מסוג {message_type} | chat_id={chat_id}")
-                    print(f"[NON_TEXT_MSG] chat_id={chat_id} | message_id={message_id} | type={message_type}")
+                    logger.info(f"📩 התקבלה הודעה מסוג {message_type} | chat_id={safe_str(chat_id)}", source="message_handler")
+                    print(f"[NON_TEXT_MSG] chat_id={safe_str(chat_id)} | message_id={message_id} | type={message_type}")
                     
                     # רישום להיסטוריה ולוגים
                     log_event_to_file({
-                        "chat_id": chat_id,
+                        "chat_id": safe_str(chat_id),
                         "message_id": message_id,
                         "message_type": message_type,
                         "bot_response": appropriate_response,
@@ -557,30 +557,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     })
                     
                     await send_system_message(update, chat_id, appropriate_response)
-                    await end_monitoring_user(str(chat_id), True)
+                    await end_monitoring_user(safe_str(chat_id), True)
                     return
 
             # 🚀 התחלת ניטור concurrent עם progressive notifications
             try:
-                monitoring_result = await start_monitoring_user(str(chat_id), str(message_id), update)
+                monitoring_result = await start_monitoring_user(safe_str(chat_id), str(message_id), update)
                 if not monitoring_result:
                     await send_system_message(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
                     return
             except Exception as e:
-                logger.error(f"[MESSAGE_HANDLER] Error starting monitoring: {e}")
-                logger.error(f"[MESSAGE_HANDLER] Traceback: {traceback.format_exc()}")
+                logger.error(f"[MESSAGE_HANDLER] Error starting monitoring: {e}", source="message_handler")
+                logger.error(f"[MESSAGE_HANDLER] Traceback: {traceback.format_exc()}", source="message_handler")
                 await send_system_message(update, chat_id, "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות.")
                 return
 
-            did, reply = handle_secret_command(chat_id, user_msg)
+            did, reply = handle_secret_command(safe_str(chat_id), user_msg)
             if did:
                 await send_system_message(update, chat_id, reply)
-                await end_monitoring_user(str(chat_id), True)
+                await end_monitoring_user(safe_str(chat_id), True)
                 return
-            log_payload["chat_id"] = chat_id
+            log_payload["chat_id"] = safe_str(chat_id)
             log_payload["message_id"] = message_id
             log_payload["user_msg"] = user_msg
-            logger.info(f"📩 התקבלה הודעה | chat_id={chat_id}, message_id={message_id}, תוכן={user_msg!r}")
+            logger.info(f"📩 התקבלה הודעה | chat_id={safe_str(chat_id)}, message_id={message_id}, תוכן={user_msg!r}", source="message_handler")
             
             # 🔧 CRITICAL DEBUG: רישום כל הודעה נכנסת למסד נתונים למעקב
             try:
@@ -590,7 +590,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
                         VALUES (%s, %s, %s, NOW())
                     ''', (
-                        f"INCOMING_{chat_id}",
+                        f"INCOMING_{safe_str(chat_id)}",
                         f"📥 הודעה נכנסת: {user_msg}",
                         "INCOMING_MESSAGE_LOG"
                     ))
@@ -598,9 +598,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as db_err:
                 pass  # אל תיכשל בגלל דיבאג
             
-            print(f"[IN_MSG] chat_id={chat_id} | message_id={message_id} | text={user_msg.replace(chr(10), ' ')[:120]}")
+            print(f"[IN_MSG] chat_id={safe_str(chat_id)} | message_id={message_id} | text={user_msg.replace(chr(10), ' ')[:120]}")
         except Exception as ex:
-            logger.error(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
+            logger.error(f"❌ שגיאה בשליפת מידע מההודעה: {ex}", source="message_handler")
             print(f"❌ שגיאה בשליפת מידע מההודעה: {ex}")
             
             # 🔧 הוספה: רישום בטוח למשתמש לרשימת התאוששות
@@ -608,18 +608,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from notifications import safe_add_user_to_recovery_list
                 if 'chat_id' in locals():
                     # הערה: כאן אין הודעה מקורית כי השגיאה היא בextraction של ההודעה עצמה
-                    safe_add_user_to_recovery_list(str(chat_id), f"Message extraction error: {str(ex)[:50]}", "")
+                    safe_add_user_to_recovery_list(safe_str(chat_id), f"Message extraction error: {str(ex)[:50]}", "")
             except Exception as e:
-                logger.warning(f"[handle_message] שגיאה ברישום לרשימת התאוששות: {e}")
+                logger.warning(f"[handle_message] שגיאה ברישום לרשימת התאוששות: {e}", source="message_handler")
             
             await handle_critical_error(ex, None, None, update)
-            await end_monitoring_user(str(chat_id) if 'chat_id' in locals() else "unknown", False)
+            await end_monitoring_user(safe_str(chat_id) if 'chat_id' in locals() else "unknown", False)
             return
 
         # שלב 1: בדיקה מהירה של הרשאות משתמש - לפי המדריך!
         try:
-            await update_user_processing_stage(str(chat_id), "permission_check")
-            logger.info("🔍 בודק הרשאות משתמש במסד נתונים...")
+            await update_user_processing_stage(safe_str(chat_id), "permission_check")
+            logger.info("🔍 בודק הרשאות משתמש במסד נתונים...", source="message_handler")
             print("🔍 בודק הרשאות משתמש במסד נתונים...")
             
             # 🔨 ניקוי cache לפני בדיקת הרשאות (למקרה שהcache תקוע)
@@ -632,52 +632,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"⚠️ שגיאה בניקוי cache: {cache_err}")
             
             # 🆕 בדיקה מלאה של הרשאות ישירות במסד נתונים (לפי המדריך!)
-            access_result = check_user_approved_status_db(chat_id)
+            access_result = check_user_approved_status_db(safe_str(chat_id))
             status = access_result.get("status", "not_found")
             
             if status == "not_found":
                 # משתמש חדש לגמרי - שליחת 3 הודעות קבלת פנים
-                logger.info("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
+                logger.info("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים", source="message_handler")
                 print("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
                 asyncio.create_task(handle_new_user_background(update, context, chat_id, user_msg))
-                await end_monitoring_user(str(chat_id), True)
+                await end_monitoring_user(safe_str(chat_id), True)
                 return
                 
             elif status == "pending_code":
                 # משתמש קיים עם שורה זמנית - צריך קוד
-                logger.info("[Permissions] משתמש עם שורה זמנית - בקשת קוד")
+                logger.info("[Permissions] משתמש עם שורה זמנית - בקשת קוד", source="message_handler")
                 print("[Permissions] משתמש עם שורה זמנית - בקשת קוד")
                 asyncio.create_task(handle_unregistered_user_background(update, context, chat_id, user_msg))
-                await end_monitoring_user(str(chat_id), True)
+                await end_monitoring_user(safe_str(chat_id), True)
                 return
                 
             elif status == "pending_approval":
                 # משתמש קיים עם קוד אבל לא אישר תנאים - טיפול באישור
-                logger.info("[Permissions] משתמש ממתין לאישור תנאים")
+                logger.info("[Permissions] משתמש ממתין לאישור תנאים", source="message_handler")
                 print("[Permissions] משתמש ממתין לאישור תנאים")
                 asyncio.create_task(handle_pending_user_background(update, context, chat_id, user_msg))
-                await end_monitoring_user(str(chat_id), True)
+                await end_monitoring_user(safe_str(chat_id), True)
                 return
                 
         except Exception as ex:
-            logger.error(f"❌ שגיאה בבדיקת הרשאות משתמש: {ex}")
+            logger.error(f"❌ שגיאה בבדיקת הרשאות משתמש: {ex}", source="message_handler")
             print(f"❌ שגיאה בבדיקת הרשאות משתמש: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
-            await end_monitoring_user(str(chat_id), False)
+            await end_monitoring_user(safe_str(chat_id), False)
             return
 
         # שלב 3: משתמש מאושר
         # אין טיפול מיוחד ב"אהלן" – כל הודעה, כולל 'אהלן', תנותב ישירות לבינה
-        await update_user_processing_stage(str(chat_id), "gpt_a")
-        logger.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
+        await update_user_processing_stage(safe_str(chat_id), "gpt_a")
+        logger.info("👨‍💻 משתמש מאושר, שולח תשובה מיד...", source="message_handler")
         print("👨‍💻 משתמש מאושר, שולח תשובה מיד...")
 
         # 📊 עדכון מונה הודעות למשתמש
         try:
             from db_manager import increment_user_message_count
-            increment_user_message_count(chat_id)
+            increment_user_message_count(safe_str(chat_id))
         except Exception as count_err:
-            logger.warning(f"⚠️ שגיאה בעדכון מונה הודעות: {count_err}")
+            logger.warning(f"⚠️ שגיאה בעדכון מונה הודעות: {count_err}", source="message_handler")
 
         try:
             # 🔧 תיקון קריטי: שליחת הודעת ביניים מהירה אחרי 3 שניות
@@ -692,9 +692,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         temp_msg = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך... 🚀"
                         await send_system_message(update, chat_id, temp_msg)
                         temp_message_sent = True
-                        logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
+                        logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={safe_str(chat_id)}", source="message_handler")
                     except Exception as temp_err:
-                        logger.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
+                        logger.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}", source="message_handler")
             
             # התחלת הודעת ביניים ברקע
             temp_message_task = asyncio.create_task(send_temp_message())
@@ -704,14 +704,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_summary = ""
             history_messages = []
             
-            print(f"🔧 [DEBUG] מתחיל טעינת נתונים עבור {chat_id}")
+            print(f"🔧 [DEBUG] מתחיל טעינת נתונים עבור {safe_str(chat_id)}")
             
             try:
                 print(f"🔧 [DEBUG] מייבא get_chat_history_simple")
                 from chat_utils import get_chat_history_simple
                 
-                print(f"🔧 [DEBUG] קורא להיסטוריה עבור {chat_id}")
-                history_messages = get_chat_history_simple(chat_id, limit=32)
+                print(f"🔧 [DEBUG] קורא להיסטוריה עבור {safe_str(chat_id)}")
+                history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
                 print(f"🔧 [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
                 
                 # DEBUG: שמירה במסד נתונים
@@ -722,7 +722,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
                             VALUES (%s, %s, %s, NOW())
                         ''', (
-                            f"DEBUG_{chat_id}",
+                            f"DEBUG_{safe_str(chat_id)}",
                             f"🔧 HISTORY_DEBUG: קיבלתי {len(history_messages) if history_messages else 0} הודעות היסטוריה",
                             "DEBUG_ENTRY"
                         ))
@@ -733,14 +733,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"🔧 [DEBUG] מייבא get_user_summary_fast")
                 from profile_utils import get_user_summary_fast
                 
-                print(f"🔧 [DEBUG] קורא לסיכום עבור {chat_id}")
-                current_summary = get_user_summary_fast(chat_id) or ""
+                print(f"🔧 [DEBUG] קורא לסיכום עבור {safe_str(chat_id)}")
+                current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
                 print(f"🔧 [DEBUG] סיכום הוחזר: '{current_summary}'")
                 
-                print(f"✅ [DEBUG] טעינת נתונים הושלמה בהצלחה עבור {chat_id}")
+                print(f"✅ [DEBUG] טעינת נתונים הושלמה בהצלחה עבור {safe_str(chat_id)}")
                     
             except Exception as data_err:
-                print(f"🚨 [HISTORY_DEBUG] שגיאה בטעינת נתונים עבור {chat_id}: {data_err}")
+                print(f"🚨 [HISTORY_DEBUG] שגיאה בטעינת נתונים עבור {safe_str(chat_id)}: {data_err}")
                 print(f"🚨 [HISTORY_DEBUG] exception type: {type(data_err).__name__}")
                 print(f"🚨 [HISTORY_DEBUG] full traceback:")
                 traceback.print_exc()
@@ -753,7 +753,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
                             VALUES (%s, %s, %s, NOW())
                         ''', (
-                            f"ERROR_{chat_id}",
+                            f"ERROR_{safe_str(chat_id)}",
                             f"🚨 HISTORY_ERROR: {type(data_err).__name__}: {str(data_err)[:200]}",
                             f"ERROR_TRACEBACK: {traceback.format_exc()[:500]}"
                         ))
@@ -761,7 +761,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as db_err:
                     pass  # אל תיכשל בגלל דיבאג
                 
-                logger.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}")
+                logger.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}", source="message_handler")
                 # אין נתונים - ממשיכים בלי היסטוריה (מעדיפים מהירות על שלמות נתונים)
             
             # בניית ההודעות ל-gpt_a - מינימלי ומהיר
@@ -785,13 +785,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A (מהיר)")
 
             # שלב 2: שליחת תשובה מ-gpt_a - זה השלב הכי חשוב!
-            gpt_result = get_main_response(messages_for_gpt, chat_id)
+            gpt_result = get_main_response(messages_for_gpt, safe_str(chat_id))
             bot_reply = gpt_result.get("bot_reply") if isinstance(gpt_result, dict) else gpt_result
             
             if not bot_reply:
                 error_msg = error_human_funny_message()
                 await send_system_message(update, chat_id, error_msg)
-                await end_monitoring_user(str(chat_id), False)
+                await end_monitoring_user(safe_str(chat_id), False)
                 return
 
             # 🔧 תיקון: ביטול הודעת ביניים אם התשובה הגיעה מהר
@@ -805,29 +805,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 📨 שליחת התכתבות אנונימית לאדמין
             try:
                 from admin_notifications import send_anonymous_chat_notification
-                send_anonymous_chat_notification(user_msg, bot_reply, history_messages, messages_for_gpt)
+                # חישוב זמני תגובה
+                current_time = time.time()
+                user_response_time = current_time - user_request_start_time
+                gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
+                
+                send_anonymous_chat_notification(
+                    user_msg, 
+                    bot_reply, 
+                    history_messages, 
+                    messages_for_gpt,
+                    gpt_timing=gpt_response_time,
+                    user_timing=user_response_time
+                )
             except Exception as admin_chat_err:
-                logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}")
+                logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
 
             # 🔧 תיקון: כל השאר ברקע - המשתמש כבר קיבל תשובה!
             asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result))
             
         except Exception as ex:
-            logger.error(f"❌ שגיאה בטיפול בהודעה: {ex}")
+            logger.error(f"❌ שגיאה בטיפול בהודעה: {ex}", source="message_handler")
             print(f"❌ שגיאה בטיפול בהודעה: {ex}")
             await handle_critical_error(ex, chat_id, user_msg, update)
-            await end_monitoring_user(str(chat_id), False)
+            await end_monitoring_user(safe_str(chat_id), False)
             return
 
         # סיום ניטור
-        await end_monitoring_user(str(chat_id), True)
+        await end_monitoring_user(safe_str(chat_id), True)
 
     except Exception as ex:
-        logger.error(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}")
+        logger.error(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}", source="message_handler")
         print(f"❌ שגיאה קריטית בטיפול בהודעה: {ex}")
         await handle_critical_error(ex, None, None, update)
         if 'chat_id' in locals():
-            await end_monitoring_user(str(chat_id), False)
+            await end_monitoring_user(safe_str(chat_id), False)
 
 async def run_background_processors(chat_id, user_msg, bot_reply):
     """
@@ -840,13 +852,13 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
         # GPT-C - עדכון פרופיל משתמש (sync function, run separately)
         gpt_c_task = None
         if should_run_gpt_c(user_msg):
-            gpt_c_task = asyncio.create_task(asyncio.to_thread(extract_user_info, user_msg, chat_id))
+            gpt_c_task = asyncio.create_task(asyncio.to_thread(extract_user_info, user_msg, safe_str(chat_id)))
             
         # GPT-D - עדכון חכם של פרופיל
-        tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply))
+        tasks.append(smart_update_profile_with_gpt_d_async(safe_str(chat_id), user_msg, bot_reply))
         
         # GPT-E - אימוג'ים ותכונות מתקדמות
-        tasks.append(execute_gpt_e_if_needed(chat_id))
+        tasks.append(execute_gpt_e_if_needed(safe_str(chat_id)))
         
         # הפעלה במקביל של כל התהליכים ואיסוף תוצאות
         all_tasks = []
@@ -878,21 +890,21 @@ async def run_background_processors(chat_id, user_msg, bot_reply):
                 ran_components.append("GPT-E")
             
             if ran_components:
-                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל: {', '.join(ran_components)} | chat_id={chat_id}")
+                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל: {', '.join(ran_components)} | chat_id={safe_str(chat_id)}")
             
     except Exception as e:
-        logger.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}")
+        logger.error(f"❌ שגיאה בהפעלת מעבדים ברקע: {e}", source="message_handler")
 
 async def handle_new_user_background(update, context, chat_id, user_msg):
     """
     טיפול במשתמש חדש לגמרי ברקע - שליחת 3 הודעות קבלת פנים
     """
     try:
-        logger.info("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
+        logger.info("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים", source="message_handler")
         print("[Onboarding] משתמש חדש - שליחת הודעות קבלת פנים")
         
         # 🆕 יוצר שורה זמנית למשתמש חדש (לפי המדריך!)
-        register_result = register_user_with_code_db(chat_id, None)
+        register_result = register_user_with_code_db(safe_str(chat_id), None)
 
         if register_result.get("success"):
             # שליחת 3 הודעות קבלת פנים למשתמש חדש
@@ -902,15 +914,15 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
                 if i < len(welcome_messages) - 1:  # לא לחכות אחרי ההודעה האחרונה
                     await asyncio.sleep(0.5)
             
-            logger.info(f"[Onboarding] נשלחו {len(welcome_messages)} הודעות קבלת פנים למשתמש {chat_id}")
-            print(f"[Onboarding] נשלחו {len(welcome_messages)} הודעות קבלת פנים למשתמש {chat_id}")
+            logger.info(f"[Onboarding] נשלחו {len(welcome_messages)} הודעות קבלת פנים למשתמש {safe_str(chat_id)}", source="message_handler")
+            print(f"[Onboarding] נשלחו {len(welcome_messages)} הודעות קבלת פנים למשתמש {safe_str(chat_id)}")
 
         else:
             error_msg = "מצטער, הייתה בעיה ברישום. אנא נסה שוב."
             await send_system_message(update, chat_id, error_msg)
             
     except Exception as e:
-        logger.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}")
+        logger.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}", source="message_handler")
         await send_system_message(update, chat_id, "הייתה בעיה ברישום. אנא נסה שוב מאוחר יותר.")
 
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
@@ -919,7 +931,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
     מבקש קוד אישור, מוודא אותו ורק לאחר מכן שולח בקשת אישור תנאים.
     """
     try:
-        logger.info("[Permissions] משתמש עם שורה זמנית - תהליך קבלת קוד")
+        logger.info("[Permissions] משתמש עם שורה זמנית - תהליך קבלת קוד", source="message_handler")
         print("[Permissions] משתמש עם שורה זמנית - תהליך קבלת קוד")
 
         user_input = user_msg.strip()
@@ -929,7 +941,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
             code_input = user_input
 
             # 🆕 ניסיון רישום עם הקוד (מיזוג שורות לפי המדריך!)
-            register_success = register_user_with_code_db(chat_id, code_input)
+            register_success = register_user_with_code_db(safe_str(chat_id), code_input)
 
             if register_success.get("success", False):
                 # קוד אושר - מיזוג השורות הצליח
@@ -967,7 +979,7 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 print(f"🔨 נוקו {clear_result.get('cleared_count', 0)} cache keys לפני אישור")
             
             # 🆕 אישור המשתמש ישירות במסד נתונים (לפי המדריך!)
-            approval_result = approve_user_db_new(chat_id)
+            approval_result = approve_user_db_new(safe_str(chat_id))
             if approval_result.get("success"):
                 # 🗑️ הסרת תלות ב-Google Sheets - עברנו למסד נתונים
                 clear_result2 = {"success": True, "cleared_count": 0}
@@ -990,7 +1002,7 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             return
 
     except Exception as e:
-        logger.error(f"[Permissions] שגיאה בטיפול במשתמש ממתין לאישור: {e}")
+        logger.error(f"[Permissions] שגיאה בטיפול במשתמש ממתין לאישור: {e}", source="message_handler")
 
 async def send_system_message(update, chat_id, text, reply_markup=None):
     """
@@ -1019,7 +1031,7 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
             except asyncio.TimeoutError:
                 if attempt < max_retries:
                     next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
-                    logger.warning(f"[SYSTEM_MSG_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying with {next_timeout}s...")
+                    logger.warning(f"[SYSTEM_MSG_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={safe_str(chat_id)}, retrying with {next_timeout}s...", source="message_handler")
                     await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
@@ -1028,23 +1040,23 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
             except Exception as e:
                 if attempt < max_retries and ("network" in str(e).lower() or "timeout" in str(e).lower() or "connection" in str(e).lower()):
                     next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
-                    logger.warning(f"[SYSTEM_MSG_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                    logger.warning(f"[SYSTEM_MSG_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}", source="message_handler")
                     await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
                 else:
                     raise e
         
         # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
-        update_chat_history(chat_id, "", text)  # הודעת מערכת - אין הודעת משתמש
+        update_chat_history(safe_str(chat_id), "", text)  # הודעת מערכת - אין הודעת משתמש
         log_event_to_file({
-            "chat_id": chat_id,
+            "chat_id": safe_str(chat_id),
             "bot_message": text,
             "timestamp": get_israel_time().isoformat(),
             "message_type": "system_message"
         })
         
     except Exception as e:
-        logger.error(f"שליחת הודעת מערכת נכשלה: {e}")
+        logger.error(f"שליחת הודעת מערכת נכשלה: {e}", source="message_handler")
 
 async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result):
     """
@@ -1060,7 +1072,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             from db_manager import save_system_metrics
             save_system_metrics(
                 metric_type="response_time",
-                chat_id=str(chat_id),
+                chat_id=safe_str(chat_id),
                 response_time_seconds=response_time,
                 additional_data={
                     "message_id": message_id,
@@ -1070,10 +1082,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 }
             )
         except Exception as save_err:
-            logger.warning(f"Could not save response time metrics: {save_err}")
+            logger.warning(f"Could not save response time metrics: {save_err}", source="message_handler")
         
         background_data = {
-            "chat_id": str(chat_id),
+            "chat_id": safe_str(chat_id),
             "message_id": message_id,
             "user_msg": user_msg,
             "bot_reply": bot_reply,
@@ -1082,35 +1094,35 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             "processing_stage": "background"
         }
         
-        logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={chat_id} | זמן תגובה: {response_time:.2f}s")
+        logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה: {response_time:.2f}s", source="message_handler")
         
         # שלב 1: עדכון היסטוריה
         try:
-            update_chat_history(chat_id, user_msg, bot_reply)
+            update_chat_history(safe_str(chat_id), user_msg, bot_reply)
         except Exception as hist_err:
-            logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}")
+            logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
         
         # שלב 2: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
         summary_result = None
         summary_usage = {}
         if len(bot_reply) > 100:
             try:
-                summary_result = get_summary(user_msg, bot_reply, chat_id, message_id)
+                summary_result = get_summary(user_msg, bot_reply, safe_str(chat_id), message_id)
                 if summary_result and isinstance(summary_result, dict):
                     summary_usage = summary_result.get("usage", {})
                     print(f"📝 [BACKGROUND] נוצר סיכום: {summary_result.get('summary', '')[:50]}...")
             except Exception as summary_err:
-                logger.warning(f"[BACKGROUND] שגיאה ביצירת סיכום: {summary_err}")
+                logger.warning(f"[BACKGROUND] שגיאה ביצירת סיכום: {summary_err}", source="message_handler")
         
         # שלב 3: הפעלה במקביל של כל התהליכים
         all_tasks = []
         gpt_c_result = None
         
         if should_run_gpt_c(user_msg):
-            gpt_c_result = await asyncio.to_thread(extract_user_info, user_msg, chat_id)
+            gpt_c_result = await asyncio.to_thread(extract_user_info, user_msg, safe_str(chat_id))
         
-        all_tasks.append(smart_update_profile_with_gpt_d_async(chat_id, user_msg, bot_reply, gpt_c_result))
-        all_tasks.append(execute_gpt_e_if_needed(chat_id))
+        all_tasks.append(smart_update_profile_with_gpt_d_async(safe_str(chat_id), user_msg, bot_reply, gpt_c_result))
+        all_tasks.append(execute_gpt_e_if_needed(safe_str(chat_id)))
         
         results = await asyncio.gather(*all_tasks, return_exceptions=True)
         
@@ -1119,8 +1131,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             # איסוף נתונים מלאים לרישום  
             # ✅ השתמש בפונקציה מהמסד נתונים
             from profile_utils import get_user_summary_fast
-            current_summary = get_user_summary_fast(chat_id) or ""
-            history_messages = get_chat_history_simple(chat_id, limit=32)
+            current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
+            history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
             
             # בניית הודעות מלאות לרישום
             messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -1132,7 +1144,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             
             # ✅ רישום למסד נתונים
             save_gpt_chat_message(
-                chat_id=chat_id,
+                chat_id=safe_str(chat_id),
                 user_msg=user_msg,
                 bot_msg=bot_reply,
                 gpt_data={
@@ -1147,10 +1159,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 }
             )
             
-            logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={chat_id}")
+            logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)}", source="message_handler")
             
         except Exception as log_exc:
-            logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_exc}")
+            logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_exc}", source="message_handler")
         
         # שלב 5: רישום למסד נתונים (לתחזוקת הדוחות היומיים)
         try:
@@ -1165,10 +1177,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 total_cost_ils += gpt_c_result["usage"].get("cost_total_ils", 0)
             
             # ✅ הלוגים נשמרים אוטומטית למסד הנתונים
-            logger.info(f"📝 [BACKGROUND] נשמר למסד נתונים | chat_id={chat_id}")
+            logger.info(f"📝 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)}", source="message_handler")
             
         except Exception as log_file_exc:
-            logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_file_exc}")
+            logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_file_exc}", source="message_handler")
         
         # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
         if should_log_debug_prints():
@@ -1181,16 +1193,16 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 ran_components.append("GPT-E")
             
             if ran_components:
-                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={chat_id}")
+                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={safe_str(chat_id)}")
         
-        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={chat_id} | זמן כולל: {time.time() - user_request_start_time:.2f}s")
+        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן כולל: {time.time() - user_request_start_time:.2f}s", source="message_handler")
         
         # שלב 5: התראות אדמין (אם יש שינויים)
         try:
             from profile_utils import _send_admin_profile_overview_notification, _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
             
             # 🔧 תיקון: שמירת הפרופיל הישן לפני כל העדכונים
-            old_profile_before_updates = get_user_profile_fast(chat_id)
+            old_profile_before_updates = get_user_profile_fast(safe_str(chat_id))
             
             gpt_c_changes = []
             gpt_d_changes = []
@@ -1229,7 +1241,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                     try:
                         from chat_utils import get_user_stats_and_history
                         from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
-                        stats, _ = get_user_stats_and_history(chat_id)
+                        stats, _ = get_user_stats_and_history(safe_str(chat_id))
                         total_messages = stats.get("total_messages", 0)
                         gpt_e_counter = f" ({total_messages}/{GPT_E_RUN_EVERY_MESSAGES})"
                     except:
@@ -1238,10 +1250,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                     gpt_e_info = f"GPT-E: {len(gpt_e_changes)} שדות{gpt_e_counter}"
                 
                 # יצירת סיכום מהיר
-                current_summary = get_user_summary_fast(chat_id) or ""
+                current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
                 
                 _send_admin_profile_overview_notification(
-                    chat_id=chat_id,
+                    chat_id=safe_str(chat_id),
                     user_msg=user_msg,
                     gpt_c_changes=gpt_c_changes,
                     gpt_d_changes=gpt_d_changes,
@@ -1253,10 +1265,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 )
                 
         except Exception as admin_err:
-            logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}")
+            logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
         
-        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={chat_id} | זמן כולל: {time.time() - user_request_start_time:.2f}s")
+        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן כולל: {time.time() - user_request_start_time:.2f}s", source="message_handler")
         
     except Exception as ex:
-        logger.error(f"❌ [BACKGROUND] שגיאה במשימות ברקע: {ex}")
+        logger.error(f"❌ [BACKGROUND] שגיאה במשימות ברקע: {ex}", source="message_handler")
         # לא נכשל אם המשימות ברקע נכשלות - המשתמש כבר קיבל תשובה

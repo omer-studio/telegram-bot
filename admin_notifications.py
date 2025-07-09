@@ -365,15 +365,11 @@ def alert_system_status(message, level="info"):
     except Exception as e:
         print(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
-def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None):
+def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
     try:
         # יצירת הודעה מפורמטת ללא מזהה משתמש
         notification_text = f"💬 **התכתבות חדשה**\n\n"
-        
-        # הודעת המשתמש
-        notification_text += f"__משתמש כתב:__\n{user_message}\n\n"
-        notification_text += f"-----------------------------\n"
         
         # מידע על היסטוריה
         if history_messages:
@@ -388,13 +384,27 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             system_prompts = [msg for msg in messages_for_gpt if msg.get("role") == "system"]
             for i, prompt in enumerate(system_prompts, 1):
                 prompt_content = prompt.get("content", "")
-                prompt_preview = prompt_content[:20] + "..." if len(prompt_content) > 20 else prompt_content
-                notification_text += f"סיסטם פרומט {i}: {prompt_preview}\n"
+                if len(prompt_content) > 20:
+                    prompt_preview = prompt_content[:20] + "..."
+                    remaining_chars = len(prompt_content) - 20
+                    notification_text += f"סיסטם פרומט {i}: {prompt_preview} (+{remaining_chars})\n"
+                else:
+                    notification_text += f"סיסטם פרומט {i}: {prompt_content}\n"
         
-        notification_text += f"-----------------------\n"
+        notification_text += f"\n\n"
+        
+        # הודעת המשתמש
+        notification_text += f"**➖➖➖➖הודעת משתמש➖➖➖➖**\n\n"
+        notification_text += f"{user_message}\n\n"
         
         # תשובת הבוט
-        notification_text += f"__תשובת הבוט:__\n{bot_response}"
+        notification_text += f"**➖➖➖➖תשובת הבוט➖➖➖➖**\n\n"
+        notification_text += f"{bot_response}\n\n"
+        
+        # זמני תגובה
+        if gpt_timing is not None and user_timing is not None:
+            gap_time = max(0, user_timing - gpt_timing)  # פער קוד
+            notification_text += f"לGPT לקח לענות **{gpt_timing:.1f}** שניות - המשתמש קיבל תשובה תוך **{user_timing:.1f}** שניות - פער קוד **{gap_time:.1f}** שניות"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:

@@ -4,6 +4,7 @@ import os
 import re
 import traceback
 from simple_logger import logger
+from user_friendly_errors import safe_str
 import asyncio
 try:
     import telegram
@@ -145,15 +146,15 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
         if original_user_message and len(original_user_message.strip()) > 0:
             user_data["original_message"] = original_user_message.strip()
             user_data["message_processed"] = False  # וידוא שהמענה יישלח פעם אחת בלבד
-            print(f"💾 נשמרה הודעה מקורית למשתמש {chat_id}: '{original_user_message[:50]}...'")
+            print(f"💾 נשמרה הודעה מקורית למשתמש {safe_str(chat_id)}: '{original_user_message[:50]}...'")
         
-        users_data[str(chat_id)] = user_data
+        users_data[safe_str(chat_id)] = user_data
         _save_critical_error_users(users_data)
-        logger.info(f"Added user {chat_id} to critical error list", source="notifications")
-        print(f"✅ משתמש {chat_id} נוסף לרשימת המשתמשים הקריטיים")
+        logger.info(f"Added user {safe_str(chat_id)} to critical error list", source="notifications")
+        print(f"✅ משתמש {safe_str(chat_id)} נוסף לרשימת המשתמשים הקריטיים")
     except Exception as e:
         logger.error(f"Error adding user to critical error list: {e}", source="notifications")
-        print(f"🚨 שגיאה בהוספת משתמש {chat_id} לרשימת משתמשים קריטיים: {e}")
+        print(f"🚨 שגיאה בהוספת משתמש {safe_str(chat_id)} לרשימת משתמשים קריטיים: {e}")
         
         # 🔧 תיקון: ניסיון לשמור לפחות ברשימה זמנית
         try:
@@ -166,17 +167,17 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
                 temp_data["original_message"] = original_user_message.strip()
                 temp_data["message_processed"] = False
                 
-            temp_file = f"data/temp_critical_user_{chat_id}_{int(time.time())}.json"
+            temp_file = f"data/temp_critical_user_{safe_str(chat_id)}_{int(time.time())}.json"
             os.makedirs("data", exist_ok=True)
             with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump({str(chat_id): temp_data}, f, ensure_ascii=False, indent=2)
-            print(f"⚠️ נשמר משתמש {chat_id} בקובץ זמני: {temp_file}")
+                json.dump({safe_str(chat_id): temp_data}, f, ensure_ascii=False, indent=2)
+            print(f"⚠️ נשמר משתמש {safe_str(chat_id)} בקובץ זמני: {temp_file}")
         except Exception as temp_error:
             print(f"🚨 גם שמירה זמנית נכשלה: {temp_error}")
             # לפחות נשלח התראה לאדמין
             try:
                 send_admin_notification(
-                    f"🚨 CRITICAL: נכשל ברישום משתמש {chat_id} לרשימת התאוששות!\n"
+                    f"🚨 CRITICAL: נכשל ברישום משתמש {safe_str(chat_id)} לרשימת התאוששות!\n"
                     f"שגיאה: {e}\n"
                     f"הודעת שגיאה: {error_message[:100]}\n"
                     f"הודעה מקורית: {(original_user_message or 'אין')[:100]}\n"
@@ -195,8 +196,8 @@ def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown e
         if chat_id:
             # העברת ההודעה המקורית רק אם היא לא ריקה
             msg_to_save = original_message.strip() if original_message and original_message.strip() else None
-            _add_user_to_critical_error_list(str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
-            print(f"🛡️ משתמש {chat_id} נוסף לרשימת התאוששות ({error_context})")
+            _add_user_to_critical_error_list(safe_str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
+            print(f"🛡️ משתמש {safe_str(chat_id)} נוסף לרשימת התאוששות ({error_context})")
             if msg_to_save:
                 print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
             return True
@@ -204,8 +205,8 @@ def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown e
             print("⚠️ chat_id ריק - לא ניתן להוסיף לרשימת התאוששות")
             return False
     except Exception as e:
-        logger.error(f"Failed to add user {chat_id} to recovery list: {e}", source="notifications")
-        print(f"🚨 שגיאה ברישום משתמש {chat_id} לרשימת התאוששות: {e}")
+        logger.error(f"Failed to add user {safe_str(chat_id)} to recovery list: {e}", source="notifications")
+        print(f"🚨 שגיאה ברישום משתמש {safe_str(chat_id)} לרשימת התאוששות: {e}")
         return False
 
 async def _send_user_friendly_error_message(update, chat_id: str, original_message: str = None):
@@ -213,9 +214,9 @@ async def _send_user_friendly_error_message(update, chat_id: str, original_messa
     
     # מוודא שהמשתמש נרשם לרשימת התאוששות (אם יש צורך) אך ללא קריאה רקורסיבית
     try:
-        safe_add_user_to_recovery_list(chat_id, "user_friendly_error", original_message)
+        safe_add_user_to_recovery_list(safe_str(chat_id), "user_friendly_error", original_message)
     except Exception as e:
-        logger.error(f"Failed to add user {chat_id} to recovery list: {e}", source="notifications")
+        logger.error(f"Failed to add user {safe_str(chat_id)} to recovery list: {e}", source="notifications")
 
     log_error_stat("user_friendly_error")
     
@@ -232,18 +233,18 @@ async def _send_user_friendly_error_message(update, chat_id: str, original_messa
         else:
             # אם אין update זמין, ננסה לשלוח ישירות דרך bot API (ללא פורמטינג - רק תשובות GPT-A צריכות פורמטינג)
             bot = telegram.Bot(token=BOT_TOKEN)
-            await bot.send_message(chat_id=chat_id, text=user_friendly_message)
+            await bot.send_message(chat_id=safe_str(chat_id), text=user_friendly_message)
         
-        logger.info(f"Sent user-friendly error message to user {chat_id}", source="notifications")
-        print(f"✅ הודעת שגיאה נשלחה בהצלחה למשתמש {chat_id}")
+        logger.info(f"Sent user-friendly error message to user {safe_str(chat_id)}", source="notifications")
+        print(f"✅ הודעת שגיאה נשלחה בהצלחה למשתמש {safe_str(chat_id)}")
         return True
         
     except Exception as e:
-        logger.error(f"Failed to send user-friendly error message to {chat_id}: {e}", source="notifications")
-        print(f"⚠️ שליחת הודעה נכשלה למשתמש {chat_id}, אבל המשתמש כבר נרשם לרשימת התאוששות")
+        logger.error(f"Failed to send user-friendly error message to {safe_str(chat_id)}: {e}", source="notifications")
+        print(f"⚠️ שליחת הודעה נכשלה למשתמש {safe_str(chat_id)}, אבל המשתמש כבר נרשם לרשימת התאוששות")
         # 🔧 תיקון: ניסיון נוסף לרישום המשתמש אם השליחה נכשלה
         try:
-            _add_user_to_critical_error_list(chat_id, f"Message sending failed: {str(e)[:100]}", original_message)
+            _add_user_to_critical_error_list(safe_str(chat_id), f"Message sending failed: {str(e)[:100]}", original_message)
         except Exception:
             pass  # לא נעצור את התהליך בגלל זה
         return False
@@ -279,13 +280,13 @@ async def send_recovery_messages_to_affected_users():
             if not user_info.get("recovered", False):
                 try:
                     # הודעת התאוששות - ללא פורמטינג (רק תשובות GPT-A צריכות פורמטינג)
-                    await bot.send_message(chat_id=chat_id, text=recovery_message)
+                    await bot.send_message(chat_id=safe_str(chat_id), text=recovery_message)
                     
                     # 🚨 התראה לאדמין על שליחת הודעת התאוששות
                     try:
                         send_admin_notification(
                             f"✅ הודעת התאוששות נשלחה!\n"
-                            f"👤 Chat ID: {chat_id}\n"
+                            f"👤 Chat ID: {safe_str(chat_id)}\n"
                             f"⏰ זמן שגיאה: {user_info.get('timestamp', 'לא ידוע')}\n"
                             f"💬 הודעה מקורית: {(user_info.get('original_message', 'אין')[:50])}...\n"
                             f"🔧 סיבת שגיאה: {user_info.get('error_message', 'לא ידוע')[:100]}"
@@ -298,46 +299,46 @@ async def send_recovery_messages_to_affected_users():
                     message_processed = user_info.get("message_processed", False)
                     
                     if original_message and not message_processed:
-                        print(f"💬 נמצאה הודעה אבודה למשתמש {chat_id}: '{original_message[:50]}...'")
+                        print(f"💬 נמצאה הודעה אבודה למשתמש {safe_str(chat_id)}: '{original_message[:50]}...'")
                         
                         # מעט השהיה בין הודעות
                         await asyncio.sleep(1)
                         
                         # 🧠 עיבוד ההודעה האבודה
                         try:
-                            lost_message_response = await process_lost_message(original_message, chat_id)
+                            lost_message_response = await process_lost_message(original_message, safe_str(chat_id))
                             if lost_message_response:
-                                await bot.send_message(chat_id=chat_id, text=lost_message_response)
+                                await bot.send_message(chat_id=safe_str(chat_id), text=lost_message_response)
                                 user_info["message_processed"] = True
                                 processed_lost_messages.append({
-                                    "chat_id": chat_id, 
+                                    "chat_id": safe_str(chat_id), 
                                     "message": original_message[:100],
                                     "response_sent": True
                                 })
-                                print(f"✅ נענה על הודעה אבודה למשתמש {chat_id}")
+                                print(f"✅ נענה על הודעה אבודה למשתמש {safe_str(chat_id)}")
                             else:
-                                print(f"⚠️ לא הצליח לעבד הודעה אבודה למשתמש {chat_id}")
+                                print(f"⚠️ לא הצליח לעבד הודעה אבודה למשתמש {safe_str(chat_id)}")
                         except Exception as lost_msg_error:
-                            print(f"❌ שגיאה בעיבוד הודעה אבודה למשתמש {chat_id}: {lost_msg_error}")
+                            print(f"❌ שגיאה בעיבוד הודעה אבודה למשתמש {safe_str(chat_id)}: {lost_msg_error}")
                             processed_lost_messages.append({
-                                "chat_id": chat_id, 
+                                "chat_id": safe_str(chat_id), 
                                 "message": original_message[:100],
                                 "error": str(lost_msg_error)
                             })
                     
                     user_info["recovered"] = True
                     user_info["recovery_timestamp"] = get_israel_time().isoformat()
-                    recovered_users.append(chat_id)
-                    logger.info(f"Sent recovery message to user {chat_id}", source="notifications")
-                    print(f"✅ נשלחה הודעת התאוששות למשתמש {chat_id}")
+                    recovered_users.append(safe_str(chat_id))
+                    logger.info(f"Sent recovery message to user {safe_str(chat_id)}", source="notifications")
+                    print(f"✅ נשלחה הודעת התאוששות למשתמש {safe_str(chat_id)}")
                     
                     # מעט השהיה בין הודעות כדי לא לעמוס על טלגרם
                     await asyncio.sleep(0.5)
                     
                 except Exception as e:
-                    logger.error(f"Failed to send recovery message to {chat_id}: {e}", source="notifications")
-                    print(f"⚠️ נכשל בשליחת הודעת התאוששות למשתמש {chat_id}: {e}")
-                    failed_users.append({"chat_id": chat_id, "error": str(e)})
+                    logger.error(f"Failed to send recovery message to {safe_str(chat_id)}: {e}", source="notifications")
+                    print(f"⚠️ נכשל בשליחת הודעת התאוששות למשתמש {safe_str(chat_id)}: {e}")
+                    failed_users.append({"chat_id": safe_str(chat_id), "error": str(e)})
         
         # שמירת המצב המעודכן
         _save_critical_error_users(users_data)
@@ -401,7 +402,7 @@ async def process_lost_message(original_message: str, chat_id: str) -> str:
     בעיקר להודעות פשוטות כמו 'סיימתי את פרק X'
     """
     try:
-        print(f"🧠 מעבד הודעה אבודה: '{original_message}' למשתמש {chat_id}")
+        print(f"🧠 מעבד הודעה אבודה: '{original_message}' למשתמש {safe_str(chat_id)}")
         
         # זיהוי דפוסים נפוצים בהודעות
         message_lower = original_message.lower().strip()
@@ -518,12 +519,12 @@ def clear_old_critical_error_users(days_old: int = 7):
                 
                 # שומר רק אם זה פחות מהמספר ימים הנדרש או שעדיין לא התאושש
                 if days_diff < days_old or not user_info.get("recovered", False):
-                    cleaned_users[chat_id] = user_info
+                    cleaned_users[safe_str(chat_id)] = user_info
                     
             except Exception as e:
-                logger.error(f"Error processing user {chat_id} in cleanup: {e}", source="notifications")
+                logger.error(f"Error processing user {safe_str(chat_id)} in cleanup: {e}", source="notifications")
                 # במקרה של שגיאה, שומר את המשתמש
-                cleaned_users[chat_id] = user_info
+                cleaned_users[safe_str(chat_id)] = user_info
         
         _save_critical_error_users(cleaned_users)
         removed_count = len(users_data) - len(cleaned_users)
@@ -690,7 +691,7 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
         error_message = str(error_message)
     text = f"🚨 שגיאה קריטית בבוט:\n<pre>{sanitize(error_message)}</pre>"
     if chat_id:
-        text += f"\nchat_id: {chat_id}"
+        text += f"\nchat_id: {safe_str(chat_id)}"
     if user_msg:
         text += f"\nuser_msg: {user_msg[:200]}"
     try:
@@ -860,21 +861,21 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     if chat_id:
         try:
             # רישום למשתמש לרשימת התאוששות לפני ניסיון שליחת הודעה - עם ההודעה המקורית!
-            _add_user_to_critical_error_list(str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
+            _add_user_to_critical_error_list(safe_str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
             
             # ניסיון שליחת הודעה ידידותית למשתמש - עם ההודעה המקורית
-            await _send_user_friendly_error_message(update, str(chat_id), user_msg)
+            await _send_user_friendly_error_message(update, safe_str(chat_id), user_msg)
         except Exception as e:
             # גם אם שליחת ההודעה נכשלת - המשתמש כבר ברשימת ההתאוששות
             logger.error(f"Failed to send user-friendly error message: {e}", source="notifications")
-            print(f"⚠️ שליחת הודעה נכשלה, אבל המשתמש {chat_id} נרשם לרשימת התאוששות")
+            print(f"⚠️ שליחת הודעה נכשלה, אבל המשתמש {safe_str(chat_id)} נרשם לרשימת התאוששות")
     
     logger.info("critical_error", source="notifications")
     
     # התראה מפורטת לאדמין
     admin_error_message = f"🚨 שגיאה קריטית בבוט:\n{str(error)}"
     if chat_id:
-        admin_error_message += f"\nמשתמש: {chat_id}"
+        admin_error_message += f"\nמשתמש: {safe_str(chat_id)}"
     if user_msg:
         admin_error_message += f"\nהודעה: {user_msg[:200]}"
     admin_error_message += f"\n⚠️ המשתמש נרשם לרשימת התאוששות ויקבל התראה כשהבוט יחזור לעבוד"
@@ -883,14 +884,14 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     
     send_error_notification(
         error_message=admin_error_message,
-        chat_id=chat_id,
+        chat_id=safe_str(chat_id),
         user_msg=user_msg,
         error_type="שגיאה קריטית - הבוט לא הצליח לענות למשתמש"
     )
     log_error_to_file({
         "error_type": "critical_error",
         "error": str(error),
-        "chat_id": chat_id,
+        "chat_id": safe_str(chat_id),
         "user_msg": user_msg,
         "critical": True
     }, send_telegram=False)
@@ -905,14 +906,14 @@ def handle_non_critical_error(error, chat_id, user_msg, error_type):
     log_error_stat(error_type)
     send_error_notification(
         error_message=error,
-        chat_id=chat_id,
+        chat_id=safe_str(chat_id),
         user_msg=user_msg,
         error_type=error_type
     )
     log_error_to_file({
         "error_type": error_type.lower().replace(" ", "_"),
         "error": str(error),
-        "chat_id": chat_id,
+        "chat_id": safe_str(chat_id),
         "user_msg": user_msg,
         "critical": False
     })
@@ -1177,118 +1178,121 @@ def _save_reminder_state():
 
 def mark_user_active(chat_id: str):
     """
-    🟢 מסמן משתמש כפעיל ומאפס את מצב התזכורת שלו
-    
-    מטרה: כשמשתמש שולח הודעה, לאפס את מצב התזכורת שלו
-           כך שיוכל לקבל תזכורת חדשה בעתיד
-    
-    📥 קלט: 
-       - chat_id (str): מזהה הצ'אט של המשתמש
-    📤 פלט: אין
-    
-    🔄 תהליך:
-       1. בודק אם למשתמש יש מצב תזכורת שמור
-       2. אם כן - מוחק אותו מהמילון הגלובלי
-       3. שומר את המצב החדש לקובץ
-    
-    💡 נקרא מ-message_handler.py בכל הודעה מהמשתמש
+    מסמן שמשתמש פעיל (קיבל הודעה) - איפוס טיימר התזכורת
     """
     global _reminder_state
-    chat_id = str(chat_id)
-    
-    if chat_id in _reminder_state:
-        del _reminder_state[chat_id]
+    try:
+        current_time = get_israel_time()
+        _reminder_state[safe_str(chat_id)] = {
+            "last_activity": current_time.isoformat(),
+            "reminder_sent": False,
+            "reminder_delayed": False,
+            "inactive_since": None,
+            # רק לדיבאג - נוכחות המשתמש
+            "status": "active"
+        }
+        
+        # שמירה מידית של המצב החדש
         _save_reminder_state()
-        logger.info(f"[REMINDER] ✅ User {chat_id} became active, reminder state reset")
-    else:
-        logger.debug(f"[REMINDER] User {chat_id} was already active (no reminder state)")
+        
+        logger.debug(f"[REMINDER] User {safe_str(chat_id)} marked as active", source="notifications")
+        
+    except Exception as e:
+        logger.error(f"[REMINDER] Error marking user {safe_str(chat_id)} as active: {e}", source="notifications")
 
 def _is_allowed_time() -> bool:
-    """בודק אם השעה הנוכחית מותרת לשליחת הודעות (7:00-22:00)."""
-    return 7 <= get_israel_time().hour <= 22
+    """בודק אם זה זמן מתאים לשליחת תזכורות (לא מאוחר בלילה)"""
+    current_time = get_israel_time()
+    return 8 <= current_time.hour < 22  # בין 8:00 ל-22:00
 
 def _mark_reminder_delayed(chat_id: str) -> None:
-    """מסמן תזכורת כנדחית עד הבוקר."""
+    """מסמן שתזכורת נדחתה (בגלל שעה לא מתאימה)"""
     global _reminder_state
-    _reminder_state[str(chat_id)] = {
-        "reminder_delayed": True,
-        "delayed_at": get_israel_time().isoformat(),
-        "scheduled_for_morning": True
-    }
-    _save_reminder_state()
+    if safe_str(chat_id) in _reminder_state:
+        _reminder_state[safe_str(chat_id)]["reminder_delayed"] = True
+        _save_reminder_state()
+        logger.debug(f"[REMINDER] Reminder for user {safe_str(chat_id)} delayed due to time", source="notifications")
 
 def _mark_reminder_sent(chat_id: str) -> None:
-    """מסמן תזכורת כנשלחה וניקוי מצב דחייה."""
+    """מסמן שתזכורת נשלחה"""
     global _reminder_state
-    _reminder_state[str(chat_id)] = {"reminder_sent": True, "sent_at": get_israel_time().isoformat()}
-    _save_reminder_state()
+    if safe_str(chat_id) in _reminder_state:
+        _reminder_state[safe_str(chat_id)]["reminder_sent"] = True
+        _reminder_state[safe_str(chat_id)]["reminder_delayed"] = False
+        _save_reminder_state()
 
 def _log_to_chat_history(chat_id: str) -> None:
-    """מתעד הודעת תזכורת בהיסטוריית הצ'אט."""
+    """רושם הודעת תזכורת להיסטוריה"""
     try:
-        from utils import update_chat_history
-        # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
-        update_chat_history(chat_id, "", GENTLE_REMINDER_MESSAGE)  # הודעת מערכת - אין הודעת משתמש
+        from chat_utils import log_chat_message
+        log_chat_message(safe_str(chat_id), "תזכורת עדינה", "system", "gentle_reminder")
+        logger.debug(f"[REMINDER] Chat history logged for user {safe_str(chat_id)}", source="notifications")
     except Exception as e:
-        logger.error(f"[REMINDER] Failed to log reminder to chat history: {e}")
+        logger.error(f"[REMINDER] Error logging chat history for user {safe_str(chat_id)}: {e}", source="notifications")
 
 async def send_gentle_reminder(chat_id: str) -> bool:
-    """שולח תזכורת עדינה למשתמש רק בשעות מותרות (7:00-22:00)."""
+    """
+    שולח תזכורת עדינה למשתמש
+    מחזיר True אם נשלחה בהצלחה, False אחרת
+    """
     try:
-        if not _is_allowed_time():
-            current_hour = get_israel_time().hour
-            logger.info(f"[REMINDER] ⏰ Delaying reminder for {chat_id} - current time {current_hour:02d}:00 outside 07:00-22:00")
-            _mark_reminder_delayed(chat_id)
+        # בדיקת תקינות המשתמש לפני שליחה
+        is_valid = await validate_user_before_reminder(safe_str(chat_id))
+        if not is_valid:
+            logger.debug(f"[REMINDER] User {safe_str(chat_id)} is not valid for reminder", source="notifications")
             return False
         
-        # שליחת התזכורת (ללא פורמטינג - רק תשובות GPT-A צריכות פורמטינג)
+        # שליחת ההודעה
         bot = telegram.Bot(token=BOT_TOKEN)
-        await bot.send_message(chat_id=chat_id, text=GENTLE_REMINDER_MESSAGE)
+        await bot.send_message(
+            chat_id=safe_str(chat_id),
+            text=GENTLE_REMINDER_MESSAGE,
+            parse_mode=None  # ללא פורמטינג מיוחד
+        )
         
-        # תיעוד ועדכון מצב
-        _log_to_chat_history(chat_id)
-        _mark_reminder_sent(chat_id)
+        # סימון שהתזכורת נשלחה
+        _mark_reminder_sent(safe_str(chat_id))
         
-        # התראה לאדמין
-        admin_message = f"🫶 נשלחה תזכורת עדינה למשתמש {chat_id}"
-        try:
-            url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-            requests.post(url, data={"chat_id": ADMIN_NOTIFICATION_CHAT_ID, "text": admin_message}, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
-        except Exception:
-            pass  # לא קריטי אם התראת האדמין נכשלת
+        # רישום להיסטוריה
+        _log_to_chat_history(safe_str(chat_id))
         
-        logger.info(f"[REMINDER] 🫶 Gentle reminder sent to user {chat_id}")
+        logger.info(f"[REMINDER] Gentle reminder sent to user {safe_str(chat_id)}", source="notifications")
+        print(f"✅ [REMINDER] נשלחה תזכורת עדינה למשתמש {safe_str(chat_id)}")
+        
+        # התראה מוקטנת לאדמין (לא להציף)
+        send_admin_notification(
+            f"💌 תזכורת עדינה נשלחה למשתמש {safe_str(chat_id)[:8]}...",
+            urgent=False
+        )
+        
         return True
         
     except telegram.error.BadRequest as e:
-        if "chat not found" in str(e).lower():
-            # משתמש לא זמין - מסמנים כלא פעיל כדי לא לנסות שוב
-            _mark_user_inactive(chat_id)
-            logger.warning(f"[REMINDER] 🚫 User {chat_id} marked as inactive (chat not found)")
-            return False
-        else:
-            logger.error(f"[REMINDER] ❌ BadRequest error for {chat_id}: {e}")
-            return False
+        logger.warning(f"[REMINDER] BadRequest sending reminder to {safe_str(chat_id)}: {e}", source="notifications")
+        # משתמש חסם את הבוט או מחק את החשבון
+        _mark_user_inactive(safe_str(chat_id))
+        return False
+        
     except Exception as e:
-        if "chat not found" in str(e).lower():
-            # משתמש לא זמין - מסמנים כלא פעיל כדי לא לנסות שוב
-            _mark_user_inactive(chat_id)
-            logger.warning(f"[REMINDER] 🚫 User {chat_id} marked as inactive (chat not found)")
-            return False
-        else:
-            logger.error(f"[REMINDER] ❌ Failed to send reminder to {chat_id}: {e}")
-            return False
+        logger.error(f"[REMINDER] Error sending gentle reminder to {safe_str(chat_id)}: {e}", source="notifications")
+        return False
 
 def _mark_user_inactive(chat_id: str) -> None:
-    """מסמן משתמש כלא פעיל כדי שלא ינסה לשלוח לו תזכורות."""
+    """מסמן משתמש כלא פעיל (בעיקר אם חסם את הבוט)"""
     global _reminder_state
-    _reminder_state[str(chat_id)] = {
-        "user_inactive": True, 
-        "marked_inactive_at": get_israel_time().isoformat(),
-        "reason": "chat_not_found"
-    }
-    _save_reminder_state()
-    logger.info(f"[REMINDER] 🚫 User {chat_id} marked as inactive permanently")
+    try:
+        current_time = get_israel_time()
+        _reminder_state[safe_str(chat_id)] = {
+            "last_activity": _reminder_state.get(safe_str(chat_id), {}).get("last_activity"),
+            "reminder_sent": False,
+            "reminder_delayed": False,
+            "inactive_since": current_time.isoformat(),
+            "status": "inactive"
+        }
+        _save_reminder_state()
+        logger.info(f"[REMINDER] User {safe_str(chat_id)} marked as inactive", source="notifications")
+    except Exception as e:
+        logger.error(f"[REMINDER] Error marking user {safe_str(chat_id)} as inactive: {e}", source="notifications")
 
 def cleanup_inactive_users():
     """
@@ -1435,7 +1439,7 @@ async def validate_user_before_reminder(chat_id: str) -> bool:
     try:
         # בדיקה פשוטה - ניסיון לקבל מידע על הצ'אט
         bot = telegram.Bot(token=BOT_TOKEN)
-        chat_info = await bot.get_chat(chat_id)
+        chat_info = await bot.get_chat(safe_str(chat_id))
         
         # אם הצלחנו לקבל מידע, המשתמש תקף
         return True
@@ -1443,16 +1447,16 @@ async def validate_user_before_reminder(chat_id: str) -> bool:
     except telegram.error.BadRequest as e:
         if "chat not found" in str(e).lower():
             # המשתמש לא קיים - מסמנים כלא פעיל
-            _mark_user_inactive(chat_id)
-            logger.warning(f"[VALIDATION] User {chat_id} validation failed - marked inactive")
+            _mark_user_inactive(safe_str(chat_id))
+            logger.warning(f"[VALIDATION] User {safe_str(chat_id)} validation failed - marked inactive", source="notifications")
             return False
         else:
             # שגיאה אחרת - עדיין נותנים הזדמנות
-            logger.warning(f"[VALIDATION] Validation error for {chat_id}: {e}")
+            logger.warning(f"[VALIDATION] Validation error for {safe_str(chat_id)}: {e}", source="notifications")
             return True
     except Exception as e:
         # שגיאה כללית - עדיין נותנים הזדמנות
-        logger.warning(f"[VALIDATION] Unexpected validation error for {chat_id}: {e}")
+        logger.warning(f"[VALIDATION] Unexpected validation error for {safe_str(chat_id)}: {e}", source="notifications")
         return True
 
 async def check_and_send_gentle_reminders():
@@ -1463,7 +1467,7 @@ async def check_and_send_gentle_reminders():
         
         # 📂 בדיקת קיום קובץ ההיסטוריה
         if not os.path.exists(CHAT_HISTORY_PATH):
-            logger.debug(f"[REMINDER] Chat history file not found: {CHAT_HISTORY_PATH}")
+            logger.debug(f"[REMINDER] Chat history file not found: {CHAT_HISTORY_PATH}", source="notifications")
             return
         
         # 📖 קריאת היסטוריית כל המשתמשים
@@ -1474,7 +1478,7 @@ async def check_and_send_gentle_reminders():
         now = get_israel_time()
         total_users = len(history_data)
         
-        logger.debug(f"[REMINDER] Checking {total_users} users for gentle reminders")
+        logger.debug(f"[REMINDER] Checking {total_users} users for gentle reminders", source="notifications")
         
         # 🔄 לולאה על כל המשתמשים
         for chat_id, user_data in history_data.items():
@@ -1482,18 +1486,18 @@ async def check_and_send_gentle_reminders():
             if not user_data.get("history"):
                 continue
             
-            chat_id_str = str(chat_id)
+            chat_id_str = safe_str(chat_id)
             user_reminder_state = _reminder_state.get(chat_id_str, {})
             
             # ⏭️ דילוג על משתמשים שסומנו כלא פעילים
             if user_reminder_state.get("user_inactive"):
-                logger.debug(f"[REMINDER] Skipping inactive user {chat_id}")
+                logger.debug(f"[REMINDER] Skipping inactive user {safe_str(chat_id)}", source="notifications")
                 continue
             
             # בדיקה אם יש תזכורת נדחית שצריך לשלוח ב-7 בבוקר
             if user_reminder_state.get("scheduled_for_morning") and 7 <= now.hour <= 22:
-                logger.info(f"[REMINDER] 🌅 Sending delayed reminder to {chat_id} (scheduled for morning)")
-                success = await send_gentle_reminder(chat_id)
+                logger.info(f"[REMINDER] 🌅 Sending delayed reminder to {safe_str(chat_id)} (scheduled for morning)", source="notifications")
+                success = await send_gentle_reminder(safe_str(chat_id))
                 if success:
                     reminders_sent += 1
                 continue
@@ -1522,38 +1526,38 @@ async def check_and_send_gentle_reminders():
                 
                 # ✅ בדיקה: האם עברו מספיק שעות
                 if time_since_last >= timedelta(hours=REMINDER_INTERVAL_HOURS):
-                    logger.debug(f"[REMINDER] User {chat_id} needs reminder ({hours_since:.1f}h since last contact)")
+                    logger.debug(f"[REMINDER] User {safe_str(chat_id)} needs reminder ({hours_since:.1f}h since last contact)", source="notifications")
                     
                     # ✨ בדיקת תקפות המשתמש לפני שליחת תזכורת
-                    is_valid = await validate_user_before_reminder(chat_id)
+                    is_valid = await validate_user_before_reminder(safe_str(chat_id))
                     if not is_valid:
-                        logger.debug(f"[REMINDER] User {chat_id} validation failed - skipping")
+                        logger.debug(f"[REMINDER] User {safe_str(chat_id)} validation failed - skipping", source="notifications")
                         continue
                     
-                    success = await send_gentle_reminder(chat_id)
+                    success = await send_gentle_reminder(safe_str(chat_id))
                     if success:
                         reminders_sent += 1
                 else:
-                    logger.debug(f"[REMINDER] User {chat_id} too recent ({hours_since:.1f}h < {REMINDER_INTERVAL_HOURS}h)")
+                    logger.debug(f"[REMINDER] User {safe_str(chat_id)} too recent ({hours_since:.1f}h < {REMINDER_INTERVAL_HOURS}h)", source="notifications")
                         
             except ValueError as e:
-                logger.warning(f"[REMINDER] Invalid timestamp for user {chat_id}: {last_contact_str}")
+                logger.warning(f"[REMINDER] Invalid timestamp for user {safe_str(chat_id)}: {last_contact_str}", source="notifications")
                 continue
         
         # 📊 דיווח סיכום
         if reminders_sent > 0:
-            logger.info(f"[REMINDER] ✅ Sent {reminders_sent} gentle reminders out of {total_users} users")
+            logger.info(f"[REMINDER] ✅ Sent {reminders_sent} gentle reminders out of {total_users} users", source="notifications")
         else:
-            logger.debug(f"[REMINDER] No reminders needed for {total_users} users")
+            logger.debug(f"[REMINDER] No reminders needed for {total_users} users", source="notifications")
             
     except Exception as e:
         error_msg = f"[REMINDER] Critical error in check_and_send_gentle_reminders: {e}"
-        logger.error(error_msg)
+        logger.error(error_msg, source="notifications")
         send_error_notification(error_msg)
 
 async def gentle_reminder_background_task():
     """משימת רקע לבדיקת תזכורות כל שעה + ניקוי אוטומטי שבועי."""
-    logger.info("[REMINDER] 🚀 Starting gentle reminder background task")
+    logger.info("[REMINDER] 🚀 Starting gentle reminder background task", source="notifications")
     
     # 📂 טעינת מצב התזכורות בהתחלה
     _load_reminder_state()
@@ -1564,30 +1568,30 @@ async def gentle_reminder_background_task():
     # 🔄 לולאה אינסופית לבדיקה כל שעה
     while True:
         try:
-            logger.debug("[REMINDER] Running hourly reminder check...")
+            logger.debug("[REMINDER] Running hourly reminder check...", source="notifications")
             await check_and_send_gentle_reminders()
             
             # ניקוי אוטומטי פעם בשבוע (כל 168 שעות)
             hours_counter += 1
             if hours_counter >= 168:  # שבוע
-                logger.info("[REMINDER] 🧹 Running weekly auto cleanup...")
+                logger.info("[REMINDER] 🧹 Running weekly auto cleanup...", source="notifications")
                 try:
                     auto_cleanup_old_users()
-                    logger.info("[REMINDER] ✅ Weekly auto cleanup completed")
+                    logger.info("[REMINDER] ✅ Weekly auto cleanup completed", source="notifications")
                 except Exception as cleanup_error:
-                    logger.error(f"[REMINDER] ❌ Weekly cleanup failed: {cleanup_error}")
+                    logger.error(f"[REMINDER] ❌ Weekly cleanup failed: {cleanup_error}", source="notifications")
                 hours_counter = 0  # איפוס המונה
             
             # ⏰ המתנה של שעה עד הבדיקה הבאה
-            logger.debug("[REMINDER] ⏱️ Waiting 1 hour until next check...")
+            logger.debug("[REMINDER] ⏱️ Waiting 1 hour until next check...", source="notifications")
             await asyncio.sleep(3600)  # 3600 שניות = שעה
             
         except Exception as e:
             error_msg = f"[REMINDER] ❌ Error in background task: {e}"
-            logger.error(error_msg)
+            logger.error(error_msg, source="notifications")
             
             # 🛡️ ממשיך לרוץ גם אחרי שגיאה
-            logger.info("[REMINDER] 🔄 Continuing background task despite error...")
+            logger.info("[REMINDER] 🔄 Continuing background task despite error...", source="notifications")
             await asyncio.sleep(3600)  # ממתין שעה גם במקרה של שגיאה
 
 def diagnose_critical_users_system():
@@ -1764,22 +1768,22 @@ def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition
     """הוספה ידנית של משתמש לרשימת משתמשים קריטיים - לשימוש חירום"""
     try:
         print(f"🔧 הוספה ידנית של משתמש {chat_id} לרשימת התאוששות...")
-        _add_user_to_critical_error_list(str(chat_id), f"Manual: {error_context}")
-        print(f"✅ משתמש {chat_id} נוסף בהצלחה לרשימת התאוששות")
+        _add_user_to_critical_error_list(safe_str(chat_id), f"Manual: {error_context}")
+        print(f"✅ משתמש {safe_str(chat_id)} נוסף בהצלחה לרשימת התאוששות")
         
         # אימות שההוספה הצליחה
         users_data = _load_critical_error_users()
-        if str(chat_id) in users_data:
-            print(f"✅ אומת: משתמש {chat_id} נמצא ברשימה")
-            send_admin_notification(f"✅ הוספה ידנית הצליחה: משתמש {chat_id} נוסף לרשימת התאוששות")
+        if safe_str(chat_id) in users_data:
+            print(f"✅ אומת: משתמש {safe_str(chat_id)} נמצא ברשימה")
+            send_admin_notification(f"✅ הוספה ידנית הצליחה: משתמש {safe_str(chat_id)} נוסף לרשימת התאוששות")
             return True
         else:
-            print(f"⚠️ משתמש {chat_id} לא נמצא ברשימה אחרי ההוספה!")
-            send_admin_notification(f"⚠️ הוספה ידנית נכשלה: משתמש {chat_id} לא נמצא ברשימה", urgent=True)
+            print(f"⚠️ משתמש {safe_str(chat_id)} לא נמצא ברשימה אחרי ההוספה!")
+            send_admin_notification(f"⚠️ הוספה ידנית נכשלה: משתמש {safe_str(chat_id)} לא נמצא ברשימה", urgent=True)
             return False
             
     except Exception as e:
-        error_msg = f"🚨 שגיאה בהוספה ידנית של משתמש {chat_id}: {e}"
+        error_msg = f"🚨 שגיאה בהוספה ידנית של משתמש {safe_str(chat_id)}: {e}"
         print(error_msg)
         send_admin_notification(error_msg, urgent=True)
         return False

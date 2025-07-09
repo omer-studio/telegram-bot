@@ -5,14 +5,21 @@ import json
 import threading
 import queue
 
-# 🎯 מרכז ניהול טיפוסי שדות
+# 🎯 מרכז ניהול טיפוסי שדות - פתרון פשוט ויציב
+def safe_str(value):
+    """
+    🎯 פונקציה מרכזית להמרה בטוחה לטקסט
+    פותרת בעיות text=bigint ו-chat_id is None
+    """
+    if value is None:
+        raise ValueError("ערך לא יכול להיות None")
+    return str(value).strip()
+
 def normalize_chat_id(chat_id):
     """
     🎯 מנרמל chat_id לטיפוס אחיד (TEXT)
     מונע בעיות text=bigint
-    משתמש בפונקציה safe_str הקיימת לעקביות
     """
-    from user_friendly_errors import safe_str
     return safe_str(chat_id)
 
 def validate_chat_id(chat_id):
@@ -21,7 +28,7 @@ def validate_chat_id(chat_id):
     """
     if chat_id is None:
         raise ValueError("chat_id לא יכול להיות None")
-    return normalize_chat_id(chat_id)
+    return safe_str(chat_id)
 
 # ייבוא פונקציית debug logging
 try:

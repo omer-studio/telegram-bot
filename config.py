@@ -225,7 +225,8 @@ def get_config_file_path():
 def get_config():
     """
     🎯 פונקציה מרכזית לקבלת קונפיגורציה
-    כל קובץ שצריך config צריך לקרוא לפונקציה הזו במקום open ישיר
+    ⚠️ כל קובץ שצריך config צריך לקרוא לפונקציה הזו במקום open ישיר
+    ⚠️ אסור hardcode של נתיבים כמו 'etc/secrets/config.json' בקוד!
     """
     path = get_config_file_path()
     with open(path, encoding="utf-8") as f:

@@ -10,12 +10,11 @@ from pathlib import Path
 
 def load_project_config():
     """טעינת קונפיגורציה של הפרויקט"""
-    config_path = 'etc/secrets/config.json'
-    if os.path.exists(config_path):
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    else:
-        print("❌ לא נמצא קובץ קונפיגורציה!")
+    try:
+        from config import get_config
+        return get_config()
+    except Exception as e:
+        print(f"❌ שגיאה בטעינת קונפיגורציה: {e}")
         return None
 
 def update_mcp_config():
