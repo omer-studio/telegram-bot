@@ -68,12 +68,13 @@ async def send_daily_summary(days_back=1):
 import pytz
 from message_handler import handle_message
 from notifications import gentle_reminder_background_task
-from db_manager import create_tables, save_chat_message, save_user_profile, save_gpt_usage_log, save_gpt_call_log, save_critical_user_data, save_reminder_state, save_billing_usage_data, save_errors_stats_data, save_bot_error_log, save_bot_trace_log, save_sync_queue_data, save_rollback_data, save_free_model_limits_data, save_temp_critical_user_data
+from db_manager import create_tables, save_chat_message, save_gpt_usage_log, save_gpt_call_log, save_critical_user_data, save_reminder_state, save_billing_usage_data, save_errors_stats_data, save_bot_error_log, save_bot_trace_log, save_sync_queue_data, save_rollback_data, save_free_model_limits_data, save_temp_critical_user_data
+from profile_utils import save_user_profile
+from notifications import send_admin_notification
 import json
 import psycopg2
 import datetime
 import asyncio
-from admin_notifications import send_admin_notification
 
 # הגדרת DB_URL
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")

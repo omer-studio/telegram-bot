@@ -16,6 +16,7 @@
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import os
 from db_manager import safe_str
 from simple_logger import logger
 from admin_notifications import send_admin_notification_raw
@@ -47,6 +48,13 @@ def send_profile_update_notification(
         bool: True אם נשלח בהצלחה, False אחרת
     """
     try:
+        # בדיקת סביבת בדיקה
+        if (os.environ.get("CI") == "1" or 
+            os.environ.get("TESTING") == "1" or 
+            os.environ.get("PYTEST_CURRENT_TEST") is not None):
+            logger.info(f"📨 [PROFILE_NOTIFY] בסביבת בדיקה, לא שולח הודעת עדכון פרופיל למשתמש {safe_str(chat_id)}")
+            return True
+        
         safe_id = safe_str(chat_id)
         
         # בניית ההודעה לפי המפרט המדויק של עומר

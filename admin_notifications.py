@@ -25,6 +25,14 @@ try:
 except ImportError:
     TELEGRAM_AVAILABLE = False
 
+def is_test_environment():
+    """בודק אם אנחנו בסביבת בדיקה - אם כן, לא שולחים הודעות אדמין"""
+    return (
+        os.environ.get("CI") == "1" or 
+        os.environ.get("TESTING") == "1" or 
+        os.environ.get("PYTEST_CURRENT_TEST") is not None
+    )
+
 def write_deploy_commit_to_log(commit):
     """רושם commit של פריסה ללוג"""
     try:
@@ -124,6 +132,10 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
         return cleaned[:500] if len(cleaned) > 500 else cleaned
 
     try:
+        if is_test_environment():
+            logger.info(f"📨 [ERROR] בסביבת בדיקה, לא שולח התראת שגיאה: {error_message}")
+            return
+            
         clean_error = sanitize(error_message)
         clean_user_msg = sanitize(user_msg)
         
@@ -143,6 +155,10 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
 def send_admin_notification(message, urgent=False):
     """שולח התראה לאדמין דרך הבוט הייעודי"""
     try:
+        if is_test_environment():
+            logger.info(f"📨 [ADMIN] בסביבת בדיקה, לא שולח תראה לאדמין: {message}")
+            return
+
         if not TELEGRAM_AVAILABLE:
             logger.info(f"📨 [ADMIN] {message}")
             return
@@ -160,6 +176,10 @@ def send_admin_notification(message, urgent=False):
 def send_admin_notification_raw(message):
     """שולח התראה גולמית לאדמין ללא עיבוד"""
     try:
+        if is_test_environment():
+            logger.info(f"📨 [ADMIN_RAW] בסביבת בדיקה, לא שולח תראה לאדמין: {message}")
+            return
+
         if not TELEGRAM_AVAILABLE:
             logger.info(f"📨 [ADMIN_RAW] {message}")
             return
@@ -277,6 +297,10 @@ def send_recovery_notification(recovery_type: str, details: dict):
 def send_admin_alert(message, alert_level="info"):
     """שולח התראה כללית לאדמין"""
     try:
+        if is_test_environment():
+            logger.info(f"📨 [ALERT] בסביבת בדיקה, לא שולח התראה כללית: {message}")
+            return
+            
         level_icons = {
             "info": "ℹ️",
             "warning": "⚠️", 
@@ -366,6 +390,10 @@ def alert_system_status(message, level="info"):
 def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
     try:
+        if is_test_environment():
+            logger.info(f"📨 [ANONYMOUS_CHAT] בסביבת בדיקה, לא שולח תראה לאדמין: {user_message}")
+            return
+
         # יצירת כותרת עם 3 ספרות אחרונות של chat_id
         chat_suffix = ""
         if chat_id:

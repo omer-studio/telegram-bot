@@ -715,6 +715,13 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
 def send_admin_notification_raw(message):
     """שולח הודעה גולמית לאדמין ללא עיבוד"""
     try:
+        # בדיקת סביבת בדיקה
+        if (os.environ.get("CI") == "1" or 
+            os.environ.get("TESTING") == "1" or 
+            os.environ.get("PYTEST_CURRENT_TEST") is not None):
+            logger.info(f"📨 [ADMIN_RAW] בסביבת בדיקה, לא שולח הודעה גולמית לאדמין: {message}")
+            return
+            
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
         payload = {
             "chat_id": ADMIN_NOTIFICATION_CHAT_ID,

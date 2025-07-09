@@ -111,9 +111,8 @@ class TestAgeMessagePersistence(unittest.TestCase):
                             return {}
                     
                     # Patch SQL functions
-                    with patch("db_manager.save_user_profile", mock_save_user_profile, create=True), \
-                         patch("db_manager.get_user_profile", mock_get_user_profile, create=True), \
-                         patch("profile_utils.save_user_profile", mock_save_user_profile, create=True), \
+                    # ✅ תיקון מערכתי: החלפת פונקציות deprecated בפונקציות חדשות
+                    with patch("profile_utils.save_user_profile", mock_save_user_profile, create=True), \
                          patch("profile_utils.get_user_profile", mock_get_user_profile, create=True), \
                          patch("profile_utils.get_user_profile_fast", mock_get_user_profile_fast, create=True):
 

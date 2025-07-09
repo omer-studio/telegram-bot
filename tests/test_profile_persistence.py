@@ -77,8 +77,7 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
     mock_data_manager = MockDataManager()
     
     # Patch SQL functions
-    monkeypatch.setattr("db_manager.save_user_profile", mock_save_user_profile, raising=False)
-    monkeypatch.setattr("db_manager.get_user_profile", mock_get_user_profile, raising=False)
+    # ✅ תיקון מערכתי: החלפת פונקציות deprecated בפונקציות חדשות
     monkeypatch.setattr("profile_utils.save_user_profile", mock_save_user_profile, raising=False)
     monkeypatch.setattr("profile_utils.get_user_profile", mock_get_user_profile, raising=False)
     monkeypatch.setattr("profile_utils.get_user_profile_fast", mock_get_user_profile_fast, raising=False)

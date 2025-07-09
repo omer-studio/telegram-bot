@@ -102,6 +102,28 @@ def update_user_profile(chat_id: Any, updates: Dict) -> bool:
         logger.error(f"שגיאה בעדכון פרופיל: {exc}", source="profile_utils")
         return False
 
+def save_user_profile(chat_id: Any, profile_data: Dict) -> bool:
+    """שמירת פרופיל משתמש - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        # שמירה במסד נתונים
+        from simple_data_manager import data_manager
+        success = data_manager.save_user_profile(safe_id, profile_data)
+        
+        if success:
+            # עדכון cache
+            _profile_cache[safe_id] = profile_data
+            logger.info(f"✅ פרופיל נשמר בהצלחה למשתמש {safe_id}", source="profile_utils")
+            return True
+        else:
+            logger.error(f"שגיאה בשמירת פרופיל: {profile_data}", source="profile_utils")
+            return False
+            
+    except Exception as exc:
+        logger.error(f"שגיאה בשמירת פרופיל: {exc}", source="profile_utils")
+        return False
+
 def sync_profile_to_sheets(chat_id: Any) -> bool:
     """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
     safe_id = safe_str(chat_id)

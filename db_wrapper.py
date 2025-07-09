@@ -6,10 +6,10 @@ db_wrapper.py - מחליף את Google Sheets עם מסד נתונים מהיר
 import logging
 from typing import Dict, List, Any, Optional
 from db_manager import (
-    get_user_profile, save_user_profile,
-    increment_code_try_db_new, register_user_with_code_db, approve_user_db_new,
+    get_user_profile, increment_code_try_db_new, register_user_with_code_db, approve_user_db_new,
     check_user_approved_status_db
 )
+from profile_utils import save_user_profile
 
 # ================================
 # 🔄 פונקציות מחליפות ל-Google Sheets
@@ -35,12 +35,13 @@ def ensure_user_profile_exists(chat_id: str) -> bool:
         return False
 
 def update_user_profile_wrapper(chat_id: str, updates: Dict[str, Any]) -> bool:
-    """מעדכן פרופיל משתמש"""
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
+    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
+    """
     try:
-        existing_profile = get_user_profile(chat_id) or {}
-        updated_profile = {**existing_profile, **updates}
-        save_user_profile(chat_id, updated_profile)
-        return True
+        from profile_utils import update_user_profile_fast
+        return update_user_profile_fast(chat_id, updates)
     except Exception as e:
         logging.error(f"❌ שגיאה בעדכון פרופיל משתמש {chat_id}: {e}")
         return False
@@ -111,9 +112,13 @@ def get_user_summary_wrapper(chat_id: str) -> str:
         return ''
 
 def update_user_profile_data_wrapper(chat_id: str, profile_updates: Dict[str, Any]) -> bool:
-    """מעדכן נתוני פרופיל משתמש"""
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
+    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
+    """
     try:
-        return update_user_profile_wrapper(chat_id, profile_updates)
+        from profile_utils import update_user_profile_fast
+        return update_user_profile_fast(chat_id, profile_updates)
     except Exception as e:
         logging.error(f"❌ שגיאה בעדכון פרופיל משתמש {chat_id}: {e}")
         return False

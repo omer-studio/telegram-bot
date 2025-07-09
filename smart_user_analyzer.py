@@ -25,8 +25,9 @@ from typing import Dict, Any, List, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fields_dict import FIELDS_DICT, get_user_profile_fields, get_summary_fields
-from db_manager import get_user_message_count, update_user_profile_field
-from profile_utils import get_user_profile
+# ✅ תיקון מערכתי: החלפת פונקציות deprecated בפונקציות חדשות
+from db_manager import get_user_message_count  # זה לא deprecated
+from profile_utils import get_user_profile, update_user_profile_fast
 from chat_utils import get_chat_history_messages
 
 class SmartUserAnalyzer:
@@ -597,22 +598,29 @@ class SmartUserAnalyzer:
             chat_id = result['chat_id']
             field_mapping = result['field_mapping']
             
-            # עדכון שדה אחד בכל פעם
-            updated_count = 0
+            # ✅ תיקון מערכתי: עדכון כל השדות במכה אחת
+            updates = {}
             for field, value in field_mapping.items():
                 if field in self.user_profile_fields:
-                    success = update_user_profile_field(chat_id, field, value)
-                    if success:
-                        updated_count += 1
+                    updates[field] = value
             
-            # עדכון הסיכום
+            # הוספת הסיכום לעדכון
             summary = result['summary']
             if summary:
-                update_user_profile_field(chat_id, 'summary', summary)
-                updated_count += 1
+                updates['summary'] = summary
             
-            print(f"✅ עודכנו {updated_count} שדות בפרופיל")
-            return True
+            # עדכון הפרופיל במכה אחת
+            if updates:
+                success = update_user_profile_fast(chat_id, updates)
+                if success:
+                    print(f"✅ עודכנו {len(updates)} שדות בפרופיל")
+                    return True
+                else:
+                    print("❌ העדכון נכשל")
+                    return False
+            else:
+                print("⚠️ אין שדות לעדכון")
+                return False
             
         except Exception as e:
             print(f"❌ שגיאה בעדכון פרופיל: {e}")

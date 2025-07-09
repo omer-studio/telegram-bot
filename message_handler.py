@@ -515,21 +515,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log_payload["user_msg"] = user_msg
         logger.info(f"📩 התקבלה הודעה | chat_id={safe_str(chat_id)}, message_id={message_id}, תוכן={user_msg!r}", source="message_handler")
         
-        # 🔧 CRITICAL DEBUG: רישום כל הודעה נכנסת למסד נתונים למעקב
-        try:
-            with db_manager.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
-                    VALUES (%s, %s, %s, NOW())
-                ''', (
-                    f"INCOMING_{safe_str(chat_id)}",
-                    f"📥 הודעה נכנסת: {user_msg}",
-                    "INCOMING_MESSAGE_LOG"
-                ))
-                conn.commit()
-        except Exception as db_err:
-            pass  # אל תיכשל בגלל דיבאג
+        # ✅ תיקון מערכתי: הוחלף DEBUG כבד בלוגינג קליל
+        logger.info(f"📥 [INCOMING_MSG] {safe_str(chat_id)} | {message_id} | {user_msg[:50]}...", source="message_handler")
         
         print(f"[IN_MSG] chat_id={safe_str(chat_id)} | message_id={message_id} | text={user_msg.replace(chr(10), ' ')[:120]}")
     except Exception as ex:
@@ -643,25 +630,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"🔧 [DEBUG] מייבא get_chat_history_simple")
             from chat_utils import get_chat_history_simple
             
-            print(f"�� [DEBUG] קורא להיסטוריה עבור {safe_str(chat_id)}")
+            print(f"🔧 [DEBUG] קורא להיסטוריה עבור {safe_str(chat_id)}")
             history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
-            print(f"�� [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
+            print(f"🔧 [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
             
-            # DEBUG: שמירה במסד נתונים
-            try:
-                with db_manager.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
-                        VALUES (%s, %s, %s, NOW())
-                    ''', (
-                        f"DEBUG_{safe_str(chat_id)}",
-                        f"🔧 HISTORY_DEBUG: קיבלתי {len(history_messages) if history_messages else 0} הודעות היסטוריה",
-                        "DEBUG_ENTRY"
-                    ))
-                    conn.commit()
-            except Exception as db_err:
-                pass  # אל תיכשל בגלל דיבאג
+            # ✅ תיקון מערכתי: הוחלף DEBUG כבד בלוגינג קליל
+            logger.info(f"📚 [HISTORY_LOADED] {safe_str(chat_id)} | {len(history_messages) if history_messages else 0} messages", source="message_handler")
             
             print(f"🔧 [DEBUG] מייבא get_user_summary_fast")
             from profile_utils import get_user_summary_fast
@@ -678,21 +652,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"🚨 [HISTORY_DEBUG] full traceback:")
             traceback.print_exc()
             
-            # שמירת השגיאה במסד נתונים למעקב
-            try:
-                with db_manager.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT INTO chat_messages (chat_id, user_msg, gpt_response, timestamp)
-                        VALUES (%s, %s, %s, NOW())
-                    ''', (
-                        f"ERROR_{safe_str(chat_id)}",
-                        f"🚨 HISTORY_ERROR: {type(data_err).__name__}: {str(data_err)[:200]}",
-                        f"ERROR_TRACEBACK: {traceback.format_exc()[:500]}"
-                    ))
-                    conn.commit()
-            except Exception as db_err:
-                pass  # אל תיכשל בגלל דיבאג
+            # ✅ תיקון מערכתי: הוחלף DEBUG כבד בלוגינג קליל
+            logger.warning(f"🚨 [HISTORY_ERROR] {safe_str(chat_id)} | {type(data_err).__name__}: {str(data_err)[:100]}", source="message_handler")
             
             logger.warning(f"[FAST_DATA] שגיאה באיסוף נתונים מהיר: {data_err}", source="message_handler")
             # אין נתונים - ממשיכים בלי היסטוריה (מעדיפים מהירות על שלמות נתונים)
@@ -1084,6 +1045,15 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             update_chat_history(safe_str(chat_id), user_msg, bot_reply)
         except Exception as hist_err:
             logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
+        
+        # 🔧 תיקון: טעינת היסטוריה מחדש אחרי השמירה כדי שהמונה יעלה
+        try:
+            updated_history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
+            # עדכון ההיסטוריה לשליחת התראה עם המונה הנכון
+            history_messages = updated_history_messages if updated_history_messages else history_messages
+            print(f"🔄 [BACKGROUND] היסטוריה עודכנה: {len(history_messages)} הודעות")
+        except Exception as hist_reload_err:
+            logger.warning(f"[BACKGROUND] שגיאה בטעינת היסטוריה מחדש: {hist_reload_err}", source="message_handler")
         
         # שלב 2: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
         summary_result = None

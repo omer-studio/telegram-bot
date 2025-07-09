@@ -1510,3 +1510,27 @@ def approve_user_db_new(chat_id):
         return {"success": False}
 
 # === נקודת הכניסה לפונקציות המדריך ===
+
+def update_user_profile_fast(chat_id, updates):
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
+    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
+    """
+    from profile_utils import update_user_profile_fast as profile_update_fast
+    return profile_update_fast(chat_id, updates)
+
+def save_user_profile_forwarding(chat_id, profile_data):
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.save_user_profile במקום!
+    פונקציה זו מפנה ל-profile_utils.save_user_profile
+    """
+    from profile_utils import save_user_profile as profile_save
+    return profile_save(chat_id, profile_data)
+
+def update_user_profile_field(chat_id, field_name, field_value):
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
+    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
+    """
+    from profile_utils import update_user_profile_fast as profile_update_fast
+    return profile_update_fast(chat_id, {field_name: field_value})

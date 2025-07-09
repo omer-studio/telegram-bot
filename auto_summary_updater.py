@@ -25,11 +25,12 @@ import traceback
 
 # יבוא הפונקציות הנדרשות
 try:
-    from bot_setup import load_user_profile, save_user_profile, get_db_connection
+    from bot_setup import load_user_profile, get_db_connection
+    from profile_utils import save_user_profile
     from config import config
 except ImportError as e:
-    print(f"❌ שגיאה ביבוא: {e}")
-    print("💡 וודא שהקבצים bot_setup.py ו-config.py זמינים")
+    print(f"❌ שגיאה בייבוא: {e}")
+    print("🔧 ודא שכל הקבצים הנדרשים קיימים")
     exit(1)
 
 # נתוני המשתמשים והסיכומים שלהם
