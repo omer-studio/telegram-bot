@@ -1,4 +1,4 @@
-import logging
+from simple_logger import logger
 import lazy_litellm as litellm
 import time
 import os
@@ -20,11 +20,11 @@ def measure_llm_latency(model_name):
     finally:
         latency = time.time() - start_time
         # מדידה מפורטת יותר - כולל רמת לוגים גבוהה יותר
-        logging.info(f"⚡ [LATENCY] {model_name}: {latency:.3f}s")
+        logger.info(f"⚡ [LATENCY] {model_name}: {latency:.3f}s")
         if latency > 5:  # הורדנו את הסף ל-5 שניות
-            logging.warning(f"🐌 [SLOW_LATENCY] {model_name} איטי: {latency:.2f}s")
+            logger.warning(f"🐌 [SLOW_LATENCY] {model_name} איטי: {latency:.2f}s")
         if latency > 10:  # רק אם איטי מאוד
-            logging.error(f"🚨 [VERY_SLOW] {model_name} מאוד איטי: {latency:.2f}s")
+            logger.error(f"🚨 [VERY_SLOW] {model_name} מאוד איטי: {latency:.2f}s")
             # TODO: Implement performance metric logging if needed
             pass
 
@@ -587,7 +587,7 @@ def try_free_models_first(full_messages, **completion_params):
     # מעבר למודלים בתשלום
     if should_log_debug_prints():
         print("🔄 עובר למודלים בתשלום")
-    logging.info("💰 עובר למודלים בתשלום - שירות רציף!")
+    logger.info("💰 עובר למודלים בתשלום - שירות רציף!")
     
     for paid_model in paid_models:
         response, _ = _try_single_model(paid_model, full_messages, completion_params, is_paid=True)
@@ -653,7 +653,7 @@ def print_budget_status():
         if status['monthly_percent'] > 80:
             print("⚠️ אזהרה: שימוש חודשי גבוה!")
     except Exception as e:
-        logging.error(f"שגיאה בהדפסת סטטוס תקציב: {e}")
+        logger.error(f"שגיאה בהדפסת סטטוס תקציב: {e}")
 
 # יצירת instance גלובלי
 smart_manager = SmartGeminiManager()
