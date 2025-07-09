@@ -107,7 +107,7 @@ def check_recent_activity():
         print(f'\n🔍 {cmd}')
         
         try:
-            full_cmd = f'ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+            full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
             
             result = subprocess.run(
                 full_cmd,

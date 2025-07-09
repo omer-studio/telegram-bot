@@ -13,6 +13,8 @@ from typing import Any, Dict, Optional, List
 from simple_logger import logger
 from user_friendly_errors import safe_str, safe_operation
 import pytz
+from contextlib import contextmanager
+import time
 
 def save_log_to_file(content: str, filename: str = None) -> str:
     """שמירת לוג לקובץ - פונקציה אחת פשוטה"""
@@ -187,5 +189,49 @@ def health_check():
             "logger": True,
             "data_manager": True
         }
+
+@contextmanager
+def measure_timing(operation_name: str = "operation", log_result: bool = True):
+    """
+    ⏱️ Context manager למדידת זמנים נכונה
+    
+    שימוש:
+    ```python
+    with measure_timing("user_response") as timer:
+        await send_to_user(response)
+        timer.mark("user_got_response")  # מדידה מיד!
+        asyncio.create_task(background_task())  # ברקע לא נספר
+    
+    print(f"זמן אמיתי: {timer.get('user_got_response'):.2f}s")
+    ```
+    
+    🎯 עקרון: מדידה מיידית במקומות הנכונים, לא בסוף הכל
+    """
+    timings = {
+        "start": time.time(),
+        "operation_name": operation_name
+    }
+    
+    def mark(milestone: str):
+        """סמן זמן של נקודה מסוימת"""
+        timings[milestone] = time.time() - timings["start"]
+        if log_result:
+            logger.info(f"⏱️ [{operation_name.upper()}] {milestone}: {timings[milestone]:.2f}s", source="timing")
+    
+    def get(milestone: str) -> float:
+        """קבל זמן של נקודה מסוימת"""
+        return timings.get(milestone, 0.0)
+    
+    # הוסף methods ל-timings object
+    timings["mark"] = mark
+    timings["get"] = get
+    
+    try:
+        yield timings
+    finally:
+        if "end" not in timings:
+            timings["end"] = time.time() - timings["start"]
+            if log_result:
+                logger.info(f"⏱️ [{operation_name.upper()}] סה״כ: {timings['end']:.2f}s", source="timing")
 
 

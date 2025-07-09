@@ -12,7 +12,7 @@ import lazy_litellm as litellm
 from prompts import BOT_REPLY_SUMMARY_PROMPT
 from config import GPT_MODELS, GPT_PARAMS
 from gpt_utils import normalize_usage_dict, calculate_gpt_cost
-from db_manager import safe_str
+from user_friendly_errors import safe_str
 
 def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
     """

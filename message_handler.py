@@ -53,14 +53,12 @@ from chat_utils import get_weekday_context_instruction, get_holiday_system_messa
 
 def format_text_for_telegram(text):
     """
-    📀 כללי פורמטינג: גרסה רשמית ומתוקנת
-    מטרה: לטשטש את הפער בין שפה אנושית לשפה מודלית ולייצר טקסט טבעי, מדורג וקריא
+    🔧 פורמטינג פשוט וברור - כללים פשוטים ובלבד!
+    כל נקודה/שאלה/קריאה = מעבר שורה
+    אם יש אימוג'י, המעבר שורה אחרי האימוג'י
+    אם זה נקודה - מוחקים את הנקודה
     """
     import re
-    import time
-    
-    # 🛡️ הגנה נוספת: מעקב זמן לכל הריצה של הפונקציה
-    start_time = time.time()
     
     # רג'קס לזיהוי אימוג'ים
     emoji_pattern = re.compile(
@@ -76,144 +74,37 @@ def format_text_for_telegram(text):
         r"\U000024C2-\U0001F251]"
     )
     
-    original_text = text
-    debug_info = {
-        "removed_dots": 0,
-        "added_line_breaks": 0,
-        "total_emojis": 0,
-        "emojis_removed": 0,
-        "text_length_before": len(text),
-        "text_length_after": 0,
-        "formatting_applied": True
-    }
-
-    # 🔢 שלב 0 – ניקוי עיצוב קיים וסימני שאלה מיותרים
-    # מנקה תגיות HTML קיימות כדי למנוע בלבול
+    # שלב 1: ניקוי HTML קיים
     text = re.sub(r'<[^>]+>', '', text)
     
-    # תיקון: הסרת סימני שאלה בודדים בתחילת ובסוף הטקסט
-    text = re.sub(r'^[?]+', '', text)  # הסר סימני שאלה מתחילת הטקסט
-    text = re.sub(r'[?]{2,}$', '?', text)  # שמור רק סימן שאלה אחד בסוף
-    
-    # 🔢 שלב 1 – המרת סימני Markdown לתגיות HTML
-    # 🔁 המרות: תחילה ממירים הדגשה כפולה (bold), אחר כך הדגשה בודדת (underline), כדי למנוע חפיפות
+    # שלב 2: המרת Markdown לHTML
     text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
     text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
     text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
     text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
     
-    # 🔢 שלב 2 – ניקוי HTML בסיסי
-    # <br>, <br/>, <br /> → \n
-    text = re.sub(r'<br\s*/?>', '\n', text)
-    text = re.sub(r'<br\s*/>', '\n', text)
-    text = re.sub(r'<br\s*/\s*>', '\n', text)
-    # <i> → <b>
-    text = re.sub(r'<i>', '<b>', text)
-    text = re.sub(r'</i>', '</b>', text)
+    # שלב 3: הכללים הפשוטים - תיקון אימוג'ים!
     
-    # מנקה תגיות כפולות מקוננות (כמו <b><b>טקסט</b></b> או <u><u>טקסט</u></u>) עם הגבלת לולאה בטוחה
-    for tag in ['b', 'u']:
-        pattern = fr'(<{tag}>)+(.+?)(</{tag}>)+'
-        loop_limit = 10
-        for _ in range(loop_limit):
-            new_text = re.sub(pattern, fr'<{tag}>\2</{tag}>', text)
-            if new_text == text:
-                break
-            text = new_text
-
-    # 🔢 שלב 3 – ניקוי ראשוני של מעברי שורה
-    # שומר רק על מעברי שורה כפולים (\n\n) – כל שאר מעברי השורה נמחקים זמנית
-    text = re.sub(r'\n(?!\n)', ' ', text)
+    # אם יש נקודה + אימוג'י, מוחקים נקודה ומעבר שורה אחרי האימוג'י
+    text = re.sub(r'\.(\s*)(' + emoji_pattern.pattern + r')(\s*)', r' \2\n', text)
     
-    # 🔢 שלב 4 – נשימות: פיסוק → שורות (תיקון: שמירת פסקאות טבעיות)
-    # 🨁 כל משפט = נשימה → מסתיים במעבר שורה, אבל לא במידה שמפסיד פסקאות
+    # אם יש שאלה/קריאה + אימוג'י, המעבר שורה אחרי האימוג'י (שומרים סימן)
+    text = re.sub(r'([?!])(\s+)(' + emoji_pattern.pattern + r')', r'\1 \3\n', text)
     
-    # ספירת נקודות לפני העיבוד
-    debug_info["removed_dots"] = len(re.findall(r'\.(\s*)', text))
+    # כל נקודה = מוחקים ועושים מעבר שורה
+    text = re.sub(r'\.(\s*)', '\n', text)
     
-    # . 🧽 → 🧽\n (מעבר שורה רק אחרי האימוג'י)
-    text = re.sub(r'\.(\s*)(' + emoji_pattern.pattern + r')', r' \2\n', text)
+    # כל שאלה/קריאה = שומרים ועושים מעבר שורה
+    text = re.sub(r'([?!])(\s*)', r'\1\n', text)
     
-    # 🔧 תיקון מערכתי: נקודות → מעבר שורה רק אם מתאים (לא בתוך פסקה)
-    # נקודה + רווח/ים + אות גדולה או עברית = סוף משפט → מעבר שורה
-    text = re.sub(r'\.(\s*)([A-Z\u05D0-\u05EA])', r'.\n\2', text)
-    # נקודה בסוף הטקסט = סוף משפט → מעבר שורה
-    text = re.sub(r'\.(\s*)$', '.\n', text)
-    # נקודה שלא מחוברת למילה הבאה (רק רווחים/סוף) → מעבר שורה
-    text = re.sub(r'\.(\s+)(?![a-z\u05D0-\u05EA\u05B0-\u05BD])', r'.\n', text)
-    
-    # ? או ! → נשארים + \n, אלא אם אחריהם אימוג'י – ואז השבירה תבוא אחרי האימוג'י
-    # כלל קריטי: אין שבירה בין סימן שאלה/קריאה לאימוג'י. רק אחרי שניהם יחד
-    # תיקון: רק אם הסימן מגיע אחרי תו שאינו רווח (למנוע סימנים בודדים)
-    text = re.sub(r'([?!])\s*(' + emoji_pattern.pattern + r')', r'\1 \2\n', text)
-    text = re.sub(r'(\S[?!]+)(?!\s*' + emoji_pattern.pattern + r')', r'\1\n', text)
-    
-    # כלל חדש: אם יש אימוג'י באמצע משפט → נשמר + \n אחרי האימוג'י
-    # אבל רק אם אין פיסוק לפניו
-    text = re.sub(r'([^.!?])\s*(' + emoji_pattern.pattern + r')(?!\s*[.!?]|\s*\n)', r'\1 \2\n', text)
-
-    # 🔢 שלב 5 – ניקוי רווחים אחרי החלפת נקודות
+    # ניקוי: הסרת רווחים מיותרים אחרי מעברי שורה
     text = re.sub(r'\n\s+', '\n', text)
-
-    # 🔢 שלב 6 – מניעת אימוג'ים בתחילת שורה
-    # אין לאפשר מצב שבו שורה מתחילה באימוג'י (כולל אחרי פסקה)
-    # מחברים אימוג'י לשורה שלפניו, גם אם יש רווח/מעבר שורה ביניהם
-    # כולל מקרים כמו ?\n🤔 → ? 🤔\n
-    text = re.sub(r'\n(' + emoji_pattern.pattern + r')', r' \1', text)
-
-    # 🔢 שלב 7 – אימוג'י לפני תגיות <b> / <u>
-    # אם אימוג'י מופיע מיד לפני תגית (עם או בלי רווח/פיסוק) – נכניס אותו לתוך התגית
-    text = re.sub(r'(' + emoji_pattern.pattern + r')[\s.,]*(<(b|u)>)', r'\2\1 ', text)
-
-    # 🔢 שלב 8 – הגבלת אימוג'ים + רג'קס זיהוי
-    # יחס מקסימלי: 1 אימוג'י לכל 40 תווים
-    # שימור מבוקר לפי פיזור תווים
-    all_emojis = emoji_pattern.findall(text)
-    debug_info["total_emojis"] = len(all_emojis)
     
-    if len(all_emojis) > 0:
-        allowed = max(1, len(text) // 40)
-        if len(all_emojis) > allowed:
-            keep_every = len(all_emojis) // allowed if allowed < len(all_emojis) else 1
-            keep = {i for i in range(len(all_emojis)) if i % keep_every == 0}
-            
-            count = -1
-            def emoji_replacer(m):
-                nonlocal count
-                count += 1
-                return m.group(0) if count in keep else ''
-            
-            text = emoji_pattern.sub(emoji_replacer, text)
-            debug_info["emojis_removed"] = len(all_emojis) - len(emoji_pattern.findall(text))
-
-    # 🔢 שלב 9 – ניקוי סופי
-    # רצף של יותר מ־2 מעברי שורה → מצמצמים ל־2 בלבד
+    # ניקוי: מעברי שורה כפולים יתר
     text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # שורות שמכילות רק אימוג'ים או סימני שאלה בודדים → מחוברות לשורה שמעליה
-    lines = text.split('\n')
-    cleaned = []
-    for i, line in enumerate(lines):
-        line_stripped = line.strip()
-        # אם זו שורה עם אימוג'י בלבד, או סימן שאלה בודד - מחבר לשורה קודמת
-        if ((emoji_pattern.fullmatch(line_stripped) or line_stripped == '?') and i > 0 and cleaned):
-            # מוסיף לשורה הקודמת במקום ליצור שורה נפרדת
-            cleaned[-1] += ' ' + line_stripped if line_stripped != '?' else '?'
-        else:
-            cleaned.append(line_stripped)
-    text = '\n'.join(cleaned)
-
-    # 🛠️ שלב 10 – DEBUG INFO
-    debug_info["text_length_after"] = len(text)
-    debug_info["added_line_breaks"] = text.count('\n')
-    
-    # 🛡️ הגנה נוספת: בדיקת timeout
-    if time.time() - start_time > 2:
-        raise TimeoutError("format_text לקחה יותר מדי זמן — ייתכן לולאה אינסופית")
-    
-    # לצורך בדיקות: שמור גם את הטקסט לפני ואחרי הפורמטינג
-    debug_info["original_text"] = original_text
-    debug_info["formatted_text"] = text
+    # ניקוי: שורות ריקות בתחילה ובסוף
+    text = text.strip()
     
     return text
 
@@ -813,19 +704,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 print(f"❌ [HISTORY_DEBUG] לא הוספו הודעות היסטוריה - history_messages ריק!")
             
-            # 🆕 הוספת ההודעה החדשה עם טיימסטמפ
-            try:
-                from chat_utils import _format_timestamp_for_history
-                import utils
-                current_time = utils.get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
-                formatted_timestamp = _format_timestamp_for_history(current_time)
-                user_msg_with_timestamp = f"{formatted_timestamp} {user_msg}"
-                messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
-                print(f"✅ [USER_MSG] הודעה חדשה עם טיימסטמפ: {formatted_timestamp}")
-            except Exception as timestamp_err:
-                # אם יש שגיאה עם הטיימסטמפ, נשלח בלי
-                messages_for_gpt.append({"role": "user", "content": user_msg})
-                logger.warning(f"⚠️ שגיאה בטיימסטמפ: {timestamp_err}", source="message_handler")
+            # 🔧 תיקון: הוספת ההודעה החדשה ללא טיימסטמפ למשתמש
+            # טיימסטמפ רק לאדמין בלוגים, לא למשתמש!
+            messages_for_gpt.append({"role": "user", "content": user_msg})
+            print(f"✅ [USER_MSG] הודעה חדשה ללא טיימסטמפ למשתמש")
             
             print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A (מהיר)")
 

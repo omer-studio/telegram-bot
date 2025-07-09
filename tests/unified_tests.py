@@ -333,7 +333,7 @@ def test_send_admin_notification_raw(monkeypatch):
     class DummyResp:
         status_code = 200
 
-    def fake_post(url, data=None, timeout=10):
+    def fake_post(url, data=None, timeout=15):  # TimeoutConfig.HTTP_REQUEST_TIMEOUT
         captured['url'] = url
         captured['data'] = data
         return DummyResp()
@@ -353,7 +353,7 @@ def test_send_admin_notification(monkeypatch):
     class _Resp:
         status_code = 200
 
-    def fake_post(url, data=None, timeout=10):
+    def fake_post(url, data=None, timeout=15):  # TimeoutConfig.HTTP_REQUEST_TIMEOUT
         sent['data'] = data
         return _Resp()
 

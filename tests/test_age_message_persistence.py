@@ -83,8 +83,8 @@ class TestAgeMessagePersistence(unittest.TestCase):
                                 data = json.load(f)
                         except:
                             data = {}
-                        # Import safe_str to match real behavior
-                        from db_manager import safe_str
+                        # Import safe_str from central location
+                        from user_friendly_errors import safe_str
                         data[safe_str(chat_id)] = profile
                         with open(profiles_path, 'w', encoding='utf-8') as f:
                             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -94,7 +94,7 @@ class TestAgeMessagePersistence(unittest.TestCase):
                         try:
                             with open(profiles_path, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
-                            from db_manager import safe_str
+                            from user_friendly_errors import safe_str
                             return data.get(safe_str(chat_id), {})
                         except:
                             return {}
@@ -104,8 +104,8 @@ class TestAgeMessagePersistence(unittest.TestCase):
                         try:
                             with open(profiles_path, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
-                            # Import safe_str to match real behavior
-                            from db_manager import safe_str
+                            # Import safe_str from central location
+                            from user_friendly_errors import safe_str
                             return data.get(safe_str(chat_id), {})
                         except:
                             return {}
@@ -121,7 +121,7 @@ class TestAgeMessagePersistence(unittest.TestCase):
                         async def _fake_gpt_d_async(chat_id, *_a, **_k):
                             # Persist change directly via profile_utils to mimic real behaviour
                             # Use the mocked save function directly
-                            from db_manager import safe_str
+                            from user_friendly_errors import safe_str
                             mock_save_user_profile(safe_str(chat_id), {"age": 35})
                             return ({"age": "35"}, {})
 
@@ -155,21 +155,21 @@ class TestAgeMessagePersistence(unittest.TestCase):
             # After exiting context managers, verify persistence using the mock functions
             # instead of reading JSON file directly since we moved to database
             
-            # Use the mocked getter to verify the profile was saved
-            from db_manager import safe_str
-            retrieved_profile = mock_get_user_profile_fast(safe_str(chat_id))
-            
-            self.assertIsNotNone(retrieved_profile, "Profile not created in mock database")
-            self.assertIn("age", retrieved_profile, "Age field not found in saved profile")
-            self.assertEqual(retrieved_profile["age"], 35, "Age value not saved correctly to mock database")
+                                    # Use the mocked getter to verify the profile was saved
+                        from user_friendly_errors import safe_str
+                        retrieved_profile = mock_get_user_profile_fast(safe_str(chat_id))
+                        
+                        self.assertIsNotNone(retrieved_profile, "Profile not created in mock database")
+                        self.assertIn("age", retrieved_profile, "Age field not found in saved profile")
+                        self.assertEqual(retrieved_profile["age"], 35, "Age value not saved correctly to mock database")
 
-            # Also verify the JSON file was updated (since our mock writes to it)
-            with open(profiles_path, encoding="utf-8") as fh:
-                data = json.load(fh)
-            
-            safe_chat_id = safe_str(chat_id)
-            self.assertIn(safe_chat_id, data, "Profile not created on disk via mock")
-            self.assertEqual(data[safe_chat_id]["age"], 35, "Age value not saved correctly to JSON via mock")
+                        # Also verify the JSON file was updated (since our mock writes to it)
+                        with open(profiles_path, encoding="utf-8") as fh:
+                            data = json.load(fh)
+                        
+                        safe_chat_id = safe_str(chat_id)
+                        self.assertIn(safe_chat_id, data, "Profile not created on disk via mock")
+                        self.assertEqual(data[safe_chat_id]["age"], 35, "Age value not saved correctly to JSON via mock")
 
 
 if __name__ == "__main__":

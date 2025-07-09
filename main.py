@@ -74,7 +74,7 @@ import requests
 from simple_config import config, TimeoutConfig
 from simple_logger import logger
 from simple_data_manager import data_manager
-from db_manager import safe_str
+from user_friendly_errors import safe_str
 
 def clear_gpt_c_html_log():
     """פונקציה זמנית - יש ליצור את clear_gpt_c_html_log בעתיד"""

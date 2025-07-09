@@ -143,7 +143,7 @@ class ComprehensiveDeployChecker:
                 ["python", "import_health_checker.py"], 
                 capture_output=True, 
                 text=True, 
-                timeout=30
+                timeout=TimeoutConfig.SUBPROCESS_TIMEOUT
             )
             
             if result.returncode == 0:
@@ -288,14 +288,14 @@ class ComprehensiveDeployChecker:
                     capture_output=True,
                     encoding='utf-8',
                     errors='ignore',
-                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT
+                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_MEDIUM
                 )
             else:
                 result = subprocess.run(
                     [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"],
                     capture_output=True,
                     text=True,
-                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT
+                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_MEDIUM
                 )
             
             if result.returncode == 0:
@@ -805,6 +805,103 @@ class ComprehensiveDeployChecker:
             print("✅ עקביות מערכתית - עבר בהצלחה!")
             return True, []
     
+    def check_timing_measurement_patterns(self) -> Tuple[bool, List[str]]:
+        """
+        🔍 בדיקת דפוסי מדידת זמנים שגויים
+        מחפש מקומות שמודדים זמן אחרי background tasks במקום מיד אחרי תשובה למשתמש
+        """
+        print("🔍 מבצע בדיקה: דפוסי מדידת זמנים")
+        print("--------------------------------------------------")
+        
+        issues = []
+        
+        # רשימת קבצים לבדיקה
+        files_to_check = [
+            "message_handler.py",
+            "gpt_a_handler.py", 
+            "gpt_b_handler.py",
+            "gpt_c_handler.py",
+            "gpt_d_handler.py",
+            "concurrent_monitor.py"
+        ]
+        
+        dangerous_patterns = [
+            # מדידה אחרי background tasks
+            r"await.*background.*\n.*time\.time\(\).*user.*timing",
+            r"await.*process.*\n.*time\.time\(\).*response.*time",
+            r"await.*save.*\n.*time\.time\(\).*user.*time",
+            # מדידה כללית אחרי await calls
+            r"await.*\n.*time\.time\(\).*-.*start.*time",
+        ]
+        
+        for file_path in files_to_check:
+            if not os.path.exists(file_path):
+                continue
+                
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                for pattern in dangerous_patterns:
+                    matches = re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE)
+                    for match in matches:
+                        line_num = content[:match.start()].count('\n') + 1
+                        context = match.group(0).replace('\n', ' → ')
+                        issues.append({
+                            "file": file_path,
+                            "line": line_num,
+                            "issue": "מדידת זמן לא מדויקת",
+                            "context": context[:100] + "..." if len(context) > 100 else context,
+                            "fix": "מדוד זמן מיד אחרי send_to_user(), לא אחרי background tasks"
+                        })
+                        
+            except Exception as e:
+                issues.append({
+                    "file": file_path,
+                    "error": f"שגיאה בבדיקה: {e}"
+                })
+        
+        # בדיקה נוספת: מציאת measure_timing שלא משתמשים בו
+        good_timing_usage = 0
+        for file_path in files_to_check:
+            if not os.path.exists(file_path):
+                continue
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                if "measure_timing" in content:
+                    good_timing_usage += 1
+            except:
+                pass
+        
+        if good_timing_usage == 0:
+            issues.append({
+                "general": "לא נמצא שימוש ב-measure_timing context manager",
+                "fix": "השתמש ב-utils.measure_timing() למדידות זמן חדשות"
+            })
+        
+        if issues:
+            print("❌ נמצאו בעיות במדידת זמנים:")
+            errors_list = []
+            for issue in issues:
+                if "file" in issue and "line" in issue:
+                    print(f"   ❌ {issue['file']}:{issue['line']} - {issue['issue']}")
+                    print(f"      קונטקסט: {issue['context']}")
+                    print(f"      תיקון: {issue['fix']}")
+                    errors_list.append(f"{issue['file']}:{issue['line']} - {issue['issue']}")
+                elif "general" in issue:
+                    print(f"   ⚠️  {issue['general']}")
+                    print(f"      תיקון: {issue['fix']}")
+                    errors_list.append(issue['general'])
+                elif "error" in issue:
+                    print(f"   ⚠️  {issue['file']}: {issue['error']}")
+                    errors_list.append(f"{issue['file']}: {issue['error']}")
+            print("💡 עיקרון זהב: מדוד זמן מיד אחרי שליחה למשתמש, לא אחרי background tasks!")
+            return False, errors_list
+        else:
+            print("✅ דפוסי מדידת זמנים תקינים")
+            return True, []
+    
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🚀 מתחיל בדיקות מקיפות לפני deploy...")
@@ -826,6 +923,7 @@ class ComprehensiveDeployChecker:
             ("עקביות מערכתית", self.check_system_consistency),
             ("TimeoutConfig קשיחים", self.check_timeout_config_usage),
             ("TimeoutConfig ייבוא", self.check_timeout_config_imports),
+            ("דפוסי מדידת זמנים", self.check_timing_measurement_patterns),
         ]
         
         # הרצת כל הבדיקות

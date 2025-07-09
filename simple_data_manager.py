@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from simple_logger import logger
-from db_manager import safe_str, safe_operation  
+from user_friendly_errors import safe_str, safe_operation  
 from user_friendly_errors import safe_int, handle_database_error
 from simple_config import TimeoutConfig
 

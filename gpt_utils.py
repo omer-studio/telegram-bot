@@ -7,7 +7,8 @@ import traceback
 from contextlib import contextmanager
 from datetime import datetime
 from config import GEMINI_API_KEY, DATA_DIR, config, should_log_gpt_cost_debug, should_log_debug_prints, GPT_MODELS
-from db_manager import save_gpt_usage_log, safe_str
+from db_manager import save_gpt_usage_log
+from user_friendly_errors import safe_str
 
 USD_TO_ILS = 3.7  # שער הדולר-שקל (יש לעדכן לפי הצורך)
 

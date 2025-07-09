@@ -5,15 +5,8 @@ import json
 import threading
 import queue
 
-# 🎯 מרכז ניהול טיפוסי שדות - פתרון פשוט ויציב
-def safe_str(value):
-    """
-    🎯 פונקציה מרכזית להמרה בטוחה לטקסט
-    פותרת בעיות text=bigint ו-chat_id is None
-    """
-    if value is None:
-        raise ValueError("ערך לא יכול להיות None")
-    return str(value).strip()
+# 🎯 ייבוא מרכזי של פונקציות בטוחות
+from user_friendly_errors import safe_str, safe_operation
 
 def normalize_chat_id(chat_id):
     """

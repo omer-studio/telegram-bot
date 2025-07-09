@@ -13,7 +13,7 @@ import re
 from prompts import build_profile_extraction_enhanced_prompt
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_extraction_debug, should_log_gpt_cost_debug
 from gpt_utils import normalize_usage_dict, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
-from db_manager import safe_str
+from user_friendly_errors import safe_str
 
 def extract_user_info(user_msg, chat_id=None, message_id=None):
     """

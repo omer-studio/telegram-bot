@@ -248,7 +248,7 @@ def check_critical_functions() -> Dict[str, bool]:
     
     # Test user-friendly errors
     try:
-        from db_manager import safe_str
+        from user_friendly_errors import safe_str
         test_result = safe_str("12345")
         if test_result == "12345":
             results["safe_str_test"] = True

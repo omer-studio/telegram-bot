@@ -9,7 +9,7 @@ import json
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional
-from db_manager import safe_str
+from user_friendly_errors import safe_str
 
 class SimpleLogger:
     """מערכת לוגים אחידה - כל הלוגים במערכת עוברים דרך כאן"""

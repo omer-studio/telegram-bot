@@ -11,6 +11,7 @@ if pytest is not None and (os.getenv("CI") or os.getenv("GITHUB_ACTIONS")):
 # Only after potential skip – import heavy modules
 import json
 import importlib
+from utils import safe_str
 
 def _reload_module(mod_name):
     import sys
@@ -49,13 +50,31 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
     stored_profiles = {}
     
     def mock_save_user_profile(chat_id, profile):
-        stored_profiles[str(chat_id)] = profile
+        stored_profiles[safe_str(chat_id)] = profile
+        return True
     
     def mock_get_user_profile(chat_id):
-        return stored_profiles.get(str(chat_id), {})
+        return stored_profiles.get(safe_str(chat_id), {})
     
     def mock_get_user_profile_fast(chat_id):
-        return stored_profiles.get(str(chat_id), {})
+        return stored_profiles.get(safe_str(chat_id), {})
+    
+    def mock_update_user_profile_fast(chat_id, updates):
+        # סימולציה של פונקציה update_user_profile_fast
+        if safe_str(chat_id) not in stored_profiles:
+            stored_profiles[safe_str(chat_id)] = {}
+        stored_profiles[safe_str(chat_id)].update(updates)
+        return True
+    
+    # Mock simple_data_manager 
+    class MockDataManager:
+        def update_user_profile_fast(self, chat_id, updates):
+            return mock_update_user_profile_fast(chat_id, updates)
+        
+        def get_user_profile(self, chat_id):
+            return mock_get_user_profile(chat_id)
+    
+    mock_data_manager = MockDataManager()
     
     # Patch SQL functions
     monkeypatch.setattr("db_manager.save_user_profile", mock_save_user_profile, raising=False)
@@ -63,9 +82,12 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
     monkeypatch.setattr("profile_utils.save_user_profile", mock_save_user_profile, raising=False)
     monkeypatch.setattr("profile_utils.get_user_profile", mock_get_user_profile, raising=False)
     monkeypatch.setattr("profile_utils.get_user_profile_fast", mock_get_user_profile_fast, raising=False)
+    
+    # Patch simple_data_manager
+    monkeypatch.setattr("simple_data_manager.data_manager", mock_data_manager, raising=False)
 
     # -- Act ----------------------------------------------------------------------
-    success = profile_utils.update_user_profile_fast(chat_id, {"age": 35}, send_admin_notification=False)
+    success = profile_utils.update_user_profile_fast(chat_id, {"age": 35})
 
     # -- Assert -------------------------------------------------------------------
     assert success is True, "Profile update should return True"
@@ -137,11 +159,12 @@ def test_admin_notification_on_profile_update(monkeypatch):
     mock_context = MockContext()
     message_id = "test_msg_456"
     user_request_start_time = 0.0
+    user_response_actual_time = 2.0  # זמן תגובה אמיתי
     
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result, [], []))
+    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result, [], [], user_response_actual_time))
 
     assert sent_msgs, "Admin notification should have been sent"
     # Verify content includes chat id and GPT indication
@@ -160,7 +183,7 @@ def test_send_admin_notification_raw(monkeypatch):
     class DummyResp:  # simple stand-in for requests.Response
         status_code = 200
 
-    def fake_post(url, data=None, timeout=10):
+    def fake_post(url, data=None, timeout=15):  # TimeoutConfig.HTTP_REQUEST_TIMEOUT
         captured['url'] = url
         captured['data'] = data
         return DummyResp()
@@ -181,7 +204,7 @@ def test_send_admin_notification(monkeypatch):
     class _Resp:
         status_code = 200
 
-    def fake_post(url, data=None, timeout=10):
+    def fake_post(url, data=None, timeout=15):  # TimeoutConfig.HTTP_REQUEST_TIMEOUT
         sent['data'] = data
         return _Resp()
 
@@ -278,11 +301,12 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
     mock_context = MockContext()
     message_id = "test_msg_789"
     user_request_start_time = 0.0
+    user_response_actual_time = 1.3  # זמן תגובה אמיתי
     
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "דיון", message_id, user_request_start_time, mock_gpt_result, [], []))
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "דיון", message_id, user_request_start_time, mock_gpt_result, [], [], user_response_actual_time))
 
     assert captured, "Notification not sent"
     msg = captured['msg']
@@ -345,11 +369,12 @@ def test_admin_notification_age_update(monkeypatch):
     mock_context = MockContext()
     message_id = "test_msg_999"
     user_request_start_time = 0.0
+    user_response_actual_time = 1.7  # זמן תגובה אמיתי
     
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "תשובה", message_id, user_request_start_time, mock_gpt_result, [], []))
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "תשובה", message_id, user_request_start_time, mock_gpt_result, [], [], user_response_actual_time))
 
     assert captured, "Notification not sent"
     txt = captured['msg']

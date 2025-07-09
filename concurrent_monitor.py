@@ -47,7 +47,7 @@ import os
 import psutil  # לניטור זיכרון
 from utils import get_israel_time
 from simple_config import TimeoutConfig
-from db_manager import safe_str
+from user_friendly_errors import safe_str
 
 # 🔄 Progressive User Communication Integration
 # =================================================================

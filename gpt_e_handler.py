@@ -24,7 +24,7 @@ GPT_E_RUN_EVERY_MESSAGES = 10  # כל כמה הודעות להפעיל GPT-E
 GPT_E_SCAN_LAST_MESSAGES = 15  # כמה הודעות אחרונות לסרוק
 from gpt_utils import normalize_usage_dict, calculate_gpt_cost, extract_json_from_text
 from prompts import build_profile_extraction_enhanced_prompt
-from db_manager import safe_str
+from user_friendly_errors import safe_str
 
 # יבוא מותנה לפונקציות DB
 try:

@@ -19,7 +19,7 @@ from config import config
 # יבוא של FIELDS_DICT
 try:
     from fields_dict import FIELDS_DICT, get_user_profile_fields
-    from db_manager import safe_str  # יבוא של safe_str
+    from user_friendly_errors import safe_str  # ייבוא מרכזי
 except ImportError:
     # נגדיר באופן בסיסי אם אין גישה לקובץ
     FIELDS_DICT = {}

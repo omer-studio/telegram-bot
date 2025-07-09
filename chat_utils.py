@@ -27,7 +27,8 @@ from config import (
     MAX_TRACEBACK_LENGTH,
 )
 from config import should_log_debug_prints, should_log_message_debug
-from db_manager import save_chat_message, get_chat_history, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data, safe_str
+from db_manager import save_chat_message, get_chat_history, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data
+from user_friendly_errors import safe_str
 
 # NOTE: circular import is safe here – utils only contains the base primitives
 # we rely on (like `get_israel_time`).
