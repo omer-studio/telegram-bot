@@ -1,68 +1,70 @@
-#!/usr/bin/env python3
 """
-🔧 Simple Config - קונפיגורציה פשוטה ומרכזית
-מרכז את כל ההגדרות במקום אחד
+simple_config.py
+================
+קובץ תצורה פשוט לניהול timeouts ותכונות זמן
+נוצר כדי לפתור תלות חסרה במערכת
 """
 
-import os
-import json
-from typing import Any, Optional
+# ייבוא התצורה הקיימת
+from config import config as base_config
 
-class TimeoutConfig:
-    """🎯 הגדרות timeout מרכזיות"""
+# שימוש חוזר בתצורה הקיימת
+config = base_config
+
+class ProgressiveCommunication:
+    """מחלקה לניהול הודעות progressive בזמן המתנה"""
     
-    # Timeouts בסיסיים
-    DEFAULT_TIMEOUT = 30
-    QUICK_TIMEOUT = 10
-    LONG_TIMEOUT = 60
+    PROGRESSIVE_MESSAGES = {
+        5: "🤔 עוד רגע...",
+        10: "⏳ מעבד את בקשתך...", 
+        20: "🧠 חושב קשה על התשובה הטובה ביותר...",
+        30: "⚡ כמעט מוכן...",
+        45: "🔍 מחפש את התשובה המושלמת...",
+        60: "🎯 מכין תשובה מפורטת..."
+    }
     
-    # Timeouts לפעולות ספציפיות
-    DATABASE_TIMEOUT = 15
-    API_TIMEOUT = 25
-    WEBHOOK_TIMEOUT = 10
+    EMERGENCY_MESSAGES = {
+        90: "⚠️ לוקח יותר זמן מהרגיל...",
+        120: "🚨 יש עיכוב טכני, אנא המתן...",
+        180: "💔 משהו השתבש, אנא נסה שוב"
+    }
     
     @classmethod
-    def get_timeout(cls, operation: str) -> int:
-        """קבלת timeout לפעולה ספציפית"""
-        timeouts = {
-            'database': cls.DATABASE_TIMEOUT,
-            'api': cls.API_TIMEOUT,
-            'webhook': cls.WEBHOOK_TIMEOUT,
-            'quick': cls.QUICK_TIMEOUT,
-            'long': cls.LONG_TIMEOUT
-        }
-        return timeouts.get(operation, cls.DEFAULT_TIMEOUT)
+    def get_progressive_message(cls, elapsed_seconds):
+        """מחזיר הודעה מתאימה לפי זמן שעבר"""
+        all_messages = {**cls.PROGRESSIVE_MESSAGES, **cls.EMERGENCY_MESSAGES}
+        
+        # מוצא את ההודעה המתאימה לזמן שעבר
+        applicable_times = [t for t in all_messages.keys() if t <= elapsed_seconds]
+        if applicable_times:
+            latest_time = max(applicable_times)
+            return all_messages[latest_time]
+        
+        return "🤔 עוד רגע..."
 
-class SimpleConfig:
-    """🎯 מחלקת קונפיגורציה פשוטה"""
+class TimeoutConfig:
+    """מחלקה לניהול כל הזמנים וtimeouts במערכת"""
     
-    def __init__(self):
-        self._config = {}
-        self._load_config()
+    # Telegram timeouts
+    TELEGRAM_SEND_TIMEOUT = 10  # שניות לשליחת הודעה
+    TELEGRAM_API_TIMEOUT_PROGRESSIVE = [5, 10, 15, 20, 25]  # Progressive timeouts
     
-    def _load_config(self):
-        """טעינת קונפיגורציה"""
-        try:
-            # ניסיון טעינה מפונקציה מרכזית
-            from config import get_config
-            self._config = get_config()
-            
-        except Exception as e:
-            print(f"WARNING - שגיאה בטעינת קונפיגורציה: {e}")
-            # הגדרות ברירת מחדל בלבד
-            self._config = {
-                "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),
-                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
-                "DATABASE_URL": os.getenv("DATABASE_URL", ""),
-            }
+    # HTTP timeouts
+    HTTP_REQUEST_TIMEOUT = 15  # שניות לבקשות HTTP
     
-    def get(self, key: str, default: Any = None) -> Any:
-        """קבלת הגדרה"""
-        return self._config.get(key, default)
+    # GPT timeouts
+    GPT_PROCESSING_TIMEOUT = 120  # שניות לעיבוד GPT
     
-    def has(self, key: str) -> bool:
-        """בדיקה אם קיים"""
-        return key in self._config
-
-# יצירת instance גלובלי לתאימות לאחור
-config = SimpleConfig() 
+    # Concurrent session timeouts
+    CONCURRENT_SESSION_TIMEOUT = 300.0  # שניות (5 דקות)
+    CONCURRENT_CLEANUP_INTERVAL = 30  # שניות בין ניקוי סשנים
+    
+    # Subprocess timeouts
+    SUBPROCESS_TIMEOUT = 60  # שניות לפעולות subprocess
+    SUBPROCESS_TIMEOUT_SHORT = 30  # שניות לפעולות קצרות
+    
+    # Message delays
+    TEMP_MESSAGE_DELAY = 3  # שניות עד הודעת ביניים
+    
+    # Progressive communication
+    PROGRESSIVE_COMMUNICATION = ProgressiveCommunication() 

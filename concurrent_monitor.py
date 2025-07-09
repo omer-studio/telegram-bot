@@ -47,6 +47,7 @@ import os
 import psutil  # לניטור זיכרון
 from utils import get_israel_time
 from simple_config import TimeoutConfig
+from db_manager import safe_str
 
 # 🔄 Progressive User Communication Integration
 # =================================================================
@@ -455,7 +456,7 @@ class ConcurrentMonitor:
                 from db_manager import save_system_metrics
                 save_system_metrics(
                     metric_type="concurrent",
-                    chat_id=str(chat_id),
+                    chat_id=safe_str(chat_id),
                     response_time_seconds=response_time,
                     active_sessions=len(self.active_sessions),
                     max_concurrent_users=self.max_users,

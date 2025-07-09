@@ -74,6 +74,7 @@ import requests
 from simple_config import config, TimeoutConfig
 from simple_logger import logger
 from simple_data_manager import data_manager
+from db_manager import safe_str
 
 def clear_gpt_c_html_log():
     """פונקציה זמנית - יש ליצור את clear_gpt_c_html_log בעתיד"""
@@ -408,7 +409,7 @@ async def webhook(request: Request):
             
             # לוג הודעת משתמש
             log_info(f"Received message from user {chat_id}", 
-                    user_id=str(chat_id), 
+                    user_id=safe_str(chat_id), 
                     metadata={"message_preview": user_msg[:100] if user_msg else ""})
             
             # ℹ️  מנגנון deduplication כבר קיים ב-message_handler.py
