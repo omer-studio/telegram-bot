@@ -67,12 +67,12 @@ def check_configuration() -> Dict[str, bool]:
     try:
         from simple_config import config
         telegram_token = config.get("TELEGRAM_BOT_TOKEN")
-        if telegram_token and telegram_token.startswith("bot_"):
+        if telegram_token and len(telegram_token) > 20 and ":" in telegram_token:
             results["telegram_token"] = True
             print_result("Telegram Bot Token", True, "Token format valid")
         else:
             results["telegram_token"] = False
-            print_result("Telegram Bot Token", False, "Invalid or missing token")
+            print_result("Telegram Bot Token", False, f"Invalid token format: {telegram_token[:20] if telegram_token else 'None'}...")
     except Exception as e:
         results["telegram_token"] = False
         print_result("Telegram Bot Token", False, str(e))

@@ -273,6 +273,56 @@ class SimpleDataManager:
             handle_database_error("save", chat_id, f"gpt_call_{call_type}")
             return False
     
+    def execute_query(self, query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False) -> Any:
+        """ביצוע שאילתת SQL גנרית - לבדיקות ומקרים מיוחדים"""
+        try:
+            conn = self._get_connection()
+            if not conn:
+                return None
+            
+            cur = conn.cursor()
+            cur.execute(query, params)
+            
+            if fetch_one:
+                result = cur.fetchone()
+                cur.close()
+                if result:
+                    # Convert to dict if possible
+                    columns = [desc[0] for desc in cur.description] if hasattr(cur, 'description') and cur.description else None
+                    if columns and len(result) == len(columns):
+                        return dict(zip(columns, result))
+                    return {"result": result[0]} if len(result) == 1 else {"values": result}
+                return None
+            elif fetch_all:
+                results = cur.fetchall()
+                cur.close()
+                return [{"table_name": row[0]} for row in results] if results else []
+            else:
+                # For INSERT/UPDATE/DELETE - commit changes
+                conn.commit()
+                cur.close()
+                return True
+                
+        except Exception as e:
+            handle_database_error("query", "system", query)
+            return None
+
+    def update_user_profile_fast(self, chat_id: str, updates: Dict[str, Any]) -> bool:
+        """עדכון מהיר של פרופיל משתמש - מיזוג עם הנתונים הקיימים"""
+        try:
+            # קבלת הפרופיל הקיים
+            existing_profile = self.get_user_profile(chat_id) or {}
+            
+            # מיזוג העדכונים
+            existing_profile.update(updates)
+            
+            # שמירה חזרה
+            return self.save_user_profile(chat_id, existing_profile)
+            
+        except Exception as e:
+            handle_database_error("update", chat_id, f"profile_updates_{list(updates.keys())}")
+            return False
+
     def close(self):
         """סגירת חיבור למסד נתונים"""
         if self._connection:
