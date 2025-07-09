@@ -425,6 +425,51 @@ python pre_deploy_checks.py
 
 ---
 
+## 🔧 הנחיות פיתוח - חובה לכל מפתח!
+
+### שימוש נכון בטיפוסים בסיסיים
+```python
+# ✅ נכון - שימוש ב-safe_str מרכזי
+from user_friendly_errors import safe_str
+safe_chat_id = safe_str(chat_id)
+
+# ❌ לא נכון - המרה ישירה
+chat_id_str = str(chat_id)  # אל תעשה ככה!
+```
+
+### שימוש נכון ב-Timeouts
+```python
+# ✅ נכון - timeouts מרכזיים
+from simple_config import TimeoutConfig
+timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT
+
+# ❌ לא נכון - timeout קשיח
+timeout=10  # אל תעשה ככה!
+```
+
+### גישה למסד נתונים
+```python
+# ✅ נכון - דרך data_manager
+from simple_data_manager import data_manager
+profile = data_manager.get_user_profile(chat_id)
+
+# ❌ לא נכון - חיבור ישיר
+import psycopg2
+conn = psycopg2.connect(...)  # אל תעשה ככה!
+```
+
+### שימוש בשדות מרכזיים
+```python
+# ✅ נכון - שימוש ב-fields_dict
+from fields_dict import FIELDS_DICT
+field_name = FIELDS_DICT["age"]
+
+# ❌ לא נכון - שדה קשיח
+field_name = "age"  # אל תעשה ככה!
+```
+
+---
+
 ## 📦 התקנה והפעלה
 
 ### ⚠️ חשוב: הפעל את הבוט רק דרך sandbox.py!

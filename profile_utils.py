@@ -503,7 +503,7 @@ def _send_admin_profile_overview_notification(chat_id: str, user_msg: str, gpt_c
         safe_id = safe_str(chat_id)
         
         # בניית הודעה מפורטת
-        overview_message = f"📊 סקירת עדכון פרופיל למשתמש {safe_id[-6:]}...\n\n"
+        overview_message = f"📊 סקירת עדכון פרופיל למשתמש {safe_id}...\n\n"
         
         # הודעת המשתמש (קצרה)
         short_user_msg = user_msg[:50] + "..." if len(user_msg) > 50 else user_msg

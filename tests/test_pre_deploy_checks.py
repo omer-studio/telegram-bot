@@ -23,18 +23,30 @@ def test_pre_deploy_basic(monkeypatch):
     """Run lightweight versions of critical pre-deploy checks."""
     os.environ.setdefault("CI", "1")
 
-    # Reload to pick up CI flag
-    pd = _reload_module("comprehensive_deploy_check")
+    # שינוי תיקיית עבודה לשורש הפרויקט
+    original_cwd = os.getcwd()
+    
+    # אם אנחנו בתיקיית tests, נעבור לתיקיית ההורה
+    if os.path.basename(original_cwd) == 'tests':
+        os.chdir('..')
+    
+    try:
+        # Reload to pick up CI flag
+        pd = _reload_module("comprehensive_deploy_check")
 
-    # Stub the heavy GPT-A real call
-    monkeypatch.setattr(pd.ComprehensiveDeployChecker, "check_gpt_a_functionality", lambda self: (True, []), raising=False)
+        # Stub the heavy GPT-A real call
+        monkeypatch.setattr(pd.ComprehensiveDeployChecker, "check_gpt_a_functionality", lambda self: (True, []), raising=False)
 
-    # Create checker instance
-    checker = pd.ComprehensiveDeployChecker()
+        # Create checker instance
+        checker = pd.ComprehensiveDeployChecker()
 
-    # Run selected critical checks
-    ok_syntax, errs_syntax = checker.check_syntax_and_imports()
-    ok_config, errs_config = checker.check_critical_configuration()
+        # Run selected critical checks
+        ok_syntax, errs_syntax = checker.check_syntax_and_imports()
+        ok_config, errs_config = checker.check_critical_configuration()
 
-    assert ok_syntax, f"Syntax/import check failed: {errs_syntax}"
-    assert ok_config, f"Config check failed: {errs_config}"
+        assert ok_syntax, f"Syntax/import check failed: {errs_syntax}"
+        assert ok_config, f"Config check failed: {errs_config}"
+    
+    finally:
+        # החזרת תיקיית העבודה המקורית
+        os.chdir(original_cwd)

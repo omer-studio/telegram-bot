@@ -21,22 +21,26 @@ from simple_logger import logger
 
 def send_profile_update_notification(
     chat_id: str,
-    changes: Optional[Dict] = None,
-    user_message: Optional[str] = None,
-    detailed: bool = False,
-    cost: Optional[float] = None,
-    processing_time: Optional[float] = None
+    user_message: str,
+    gpt_c_changes: Optional[List[Dict]] = None,
+    gpt_d_changes: Optional[List[Dict]] = None,
+    gpt_e_changes: Optional[List[Dict]] = None,
+    gpt_e_counter: Optional[str] = None,
+    summary: Optional[str] = None,
+    table_name: str = "user_profiles"
 ) -> bool:
     """
-    🎯 פונקציה אחת לכל התראות עדכון פרופיל
+    🎯 פונקציה אחת לכל התראות עדכון פרופיל - לפי המפרט המדויק של עומר
     
     Args:
         chat_id: ID המשתמש
-        changes: שינויים שזוהו בפרופיל (Dict)
-        user_message: ההודעה המקורית של המשתמש (אופציונלי)
-        detailed: האם לשלוח דוח מפורט (True/False)
-        cost: עלות העיבוד (אופציונלי)
-        processing_time: זמן העיבוד בשניות (אופציונלי)
+        user_message: ההודעה המקורית של המשתמש במלואה (לא מצונזר!)
+        gpt_c_changes: שינויים מ-GPT-C (List[Dict])
+        gpt_d_changes: שינויים מ-GPT-D (List[Dict])  
+        gpt_e_changes: שינויים מ-GPT-E (List[Dict])
+        gpt_e_counter: מצב הקאונטר של GPT-E (למשל "5/12")
+        summary: תוכן שדה SUMMARY במלואו
+        table_name: שם הטבלה במסד הנתונים
     
     Returns:
         bool: True אם נשלח בהצלחה, False אחרת
@@ -44,54 +48,70 @@ def send_profile_update_notification(
     try:
         safe_id = safe_str(chat_id)
         
-        # בדיקה בסיסית
-        if not changes:
-            logger.debug(f"[PROFILE_NOTIFY] אין שינויים למשתמש {safe_id} - לא נשלחת הודעה", source="unified_profile_notifications")
-            return True
+        # בניית ההודעה לפי המפרט המדויק של עומר
+        notification = f"✅ עדכון פרופיל למשתמש {safe_id} ✅\n"
         
-        # בניית הודעה בסיסית
-        notification = f"✅ עדכון פרופיל למשתמש {safe_id[-6:]}... ✅\n\n"
+        # תוכן ההודעה של המשתמש במלואו (לא מצונזר!)
+        notification += f"{user_message}\n\n"
         
-        # ספירת שינויים
-        total_changes = len(changes)
-        notification += f"🔄 **סה״כ שינויים: {total_changes}**\n"
+        # GPT-C
+        notification += "*GPT-C:* "
+        if gpt_c_changes and len(gpt_c_changes) > 0:
+            notification += "\n"
+            for change in gpt_c_changes:
+                field = change.get('field', 'unknown')
+                old_val = change.get('old_value', 'ריק') or 'ריק'
+                new_val = change.get('new_value', '')
+                notification += f"  ➕ {field}: [{old_val}] → [{new_val}]\n"
+        else:
+            notification += "אין שינויים\n"
         
-        # פירוט שינויים (עד 5 ראשונים)
-        changes_list = list(changes.items())[:5]
-        for field, value in changes_list:
-            # קיצור ערכים ארוכים
-            display_value = str(value)[:50]
-            if len(str(value)) > 50:
-                display_value += "..."
-            notification += f"• **{field}:** {display_value}\n"
+        # GPT-D  
+        notification += "\n*GPT-D:* שדות "
+        if gpt_d_changes and len(gpt_d_changes) > 0:
+            notification += "\n"
+            for change in gpt_d_changes:
+                field = change.get('field', 'unknown')
+                old_val = change.get('old_value', 'ריק') or 'ריק'
+                new_val = change.get('new_value', '')
+                notification += f"  ➕ {field}: [{old_val}] → [{new_val}]\n"
+        else:
+            notification += "אין שינויים\n"
         
-        # אם יש יותר מ-5 שינויים
-        if total_changes > 5:
-            notification += f"• ...ועוד {total_changes - 5} שינויים\n"
-        
-        # הוספת פרטים נוספים אם התבקש דוח מפורט
-        if detailed:
-            notification += "\n📊 **פרטים נוספים:**\n"
+        # GPT-E
+        notification += "\nGPT-E: "
+        if gpt_e_changes and len(gpt_e_changes) > 0:
+            notification += "\n"
+            for change in gpt_e_changes:
+                field = change.get('field', 'unknown')
+                old_val = change.get('old_value', 'ריק') or 'ריק'
+                new_val = change.get('new_value', '')
+                notification += f"  ➕ {field}: [{old_val}] → [{new_val}]\n"
+        else:
+            notification += "אין שינויים"
             
-            if user_message:
-                short_msg = user_message[:100] + "..." if len(user_message) > 100 else user_message
-                notification += f"💬 הודעה: {short_msg}\n"
-            
-            if cost is not None:
-                notification += f"💰 עלות: ${cost:.4f}\n"
-            
-            if processing_time is not None:
-                notification += f"⏱️ זמן עיבוד: {processing_time:.2f} שניות\n"
+        # הוספת קאונטר GPT-E
+        if gpt_e_counter:
+            notification += f" {gpt_e_counter}"
+        notification += "\n"
         
-        # הוספת זמן
+        # שדה SUMMARY
+        notification += "\n\nשדה SUMMARY: "
+        if summary:
+            notification += f"{summary}\n"
+        else:
+            notification += "ריק\n"
+        
+        # זמן וטבלה
         current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        notification += f"\n⏰ {current_time}"
+        notification += f"\n⏰ {current_time} - עודכן במסד נתונים בטבלת {table_name}"
         
         # שליחה לאדמין דרך הפונקציה המרכזית
         from notifications import send_admin_notification_raw
         success = send_admin_notification_raw(notification)
         
         if success:
+            total_changes = len(gpt_c_changes or []) + len(gpt_d_changes or []) + len(gpt_e_changes or [])
             logger.info(f"[PROFILE_NOTIFY] ✅ הודעת עדכון פרופיל נשלחה למשתמש {safe_id} ({total_changes} שינויים)", source="unified_profile_notifications")
         else:
             logger.error(f"[PROFILE_NOTIFY] ❌ שגיאה בשליחת הודעת עדכון פרופיל למשתמש {safe_id}", source="unified_profile_notifications")
@@ -178,37 +198,49 @@ def create_compatibility_wrappers():
 # ========================================
 
 def main():
-    """דוגמה להשימוש בפונקציה החדשה"""
+    """דוגמה להשימוש בפונקציה החדשה - לפי המפרט של עומר"""
     
-    # דוגמה 1: עדכון פשוט
-    changes_basic = {
-        'age': 25,
-        'location': 'תל אביב'
-    }
-    
-    send_profile_update_notification(
-        chat_id="123456",
-        changes=changes_basic
-    )
-    
-    # דוגמה 2: עדכון מפורט
-    changes_detailed = {
-        'age': 25,
-        'location': 'תל אביב',
-        'occupation': 'מתכנת',
-        'interests': 'טכנולוגיה, ספורט'
-    }
+    # דוגמה 1: עדכון עם שינויים ב-GPT-C בלבד
+    gpt_c_changes = [
+        {'field': 'age', 'old_value': '30', 'new_value': '25'},
+        {'field': 'location', 'old_value': 'ריק', 'new_value': 'תל אביב'}
+    ]
     
     send_profile_update_notification(
         chat_id="123456",
-        changes=changes_detailed,
-        user_message="אני בן 25 ואני עובד כמתכנת בתל אביב",
-        detailed=True,
-        cost=0.0025,
-        processing_time=1.8
+        user_message="אני בן 25 ואני גר בתל אביב וזה הדבר החדש שקרה לי השבוע",
+        gpt_c_changes=gpt_c_changes,
+        summary="משתמש בן 25 מתל אביב שחילק פרטים אישיים",
+        table_name="user_profiles"
     )
     
-    print("✅ דוגמאות הושלמו!")
+    # דוגמה 2: עדכון מפורט עם כל ה-GPTs
+    gpt_c_changes_full = [
+        {'field': 'age', 'old_value': '30', 'new_value': '25'},
+        {'field': 'self_religiosity_level', 'old_value': 'ריק', 'new_value': 'חילוני'},
+        {'field': 'closet_status', 'old_value': 'ריק', 'new_value': 'חצי בחוץ'}
+    ]
+    
+    gpt_d_changes_full = [
+        {'field': 'occupation', 'old_value': 'ריק', 'new_value': 'מתכנת'}
+    ]
+    
+    gpt_e_changes_full = [
+        {'field': 'emotional_state', 'old_value': 'ריק', 'new_value': 'מעורב'}
+    ]
+    
+    send_profile_update_notification(
+        chat_id="5676571979",
+        user_message="היי, אני בן 25, חילוני, עובד כמתכנת בתל אביב. אני חצי בחוץ מהארון, רק אמא וכמה חברים יודעים. המטרה שלי בקורס זה לעבור תהליך שאני אשלים עם עצמי. הפחד הכי גדול שלי זה אשמה, ובעתיד אני רוצה לחיות ביושרה ואושר פנימי וחיצוני.",
+        gpt_c_changes=gpt_c_changes_full,
+        gpt_d_changes=gpt_d_changes_full,
+        gpt_e_changes=gpt_e_changes_full,
+        gpt_e_counter="7/12",
+        summary="משתמש גבר בן 25, חילוני, מתכנת מתל אביב. נמצא בחצי מהדרך מהארון. מטרתו בקורס: השלמה עם עצמו. פחד עיקרי: אשמה. חזון עתיד: חיים ביושרה ואושר.",
+        table_name="user_profiles"
+    )
+    
+    print("✅ דוגמאות הושלמו לפי המפרט של עומר!")
 
 if __name__ == "__main__":
     main() 
