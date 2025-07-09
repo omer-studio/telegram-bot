@@ -551,7 +551,116 @@ class ComprehensiveDeployChecker:
         
         return len(errors) == 0, errors
     
-    def check_system_consistency(self) -> bool:
+    def check_timeout_config_usage(self) -> Tuple[bool, List[str]]:
+        """🕐 בדיקת שימוש ב-TimeoutConfig במקום timeouts קשיחים"""
+        errors = []
+        
+        try:
+            print("🔍 בודק timeouts קשיחים...")
+            
+            # רשימת קבצים לבדיקה
+            python_files = glob.glob("*.py") + glob.glob("**/*.py", recursive=True)
+            
+            hardcoded_timeouts = []
+            for file_path in python_files:
+                # דילוג על קבצים מיוחדים
+                if file_path.startswith("venv/") or file_path.startswith("."):
+                    continue
+                if file_path == "simple_config.py":  # קובץ זה מותר להגדיר timeouts
+                    continue
+                    
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        lines = content.split('\n')
+                        
+                    # חיפוש timeout=<מספר> באמצעות regex
+                    timeout_pattern = r'timeout\s*=\s*(\d+)'
+                    matches = re.finditer(timeout_pattern, content)
+                    
+                    for match in matches:
+                        timeout_value = match.group(1)
+                        line_number = content[:match.start()].count('\n') + 1
+                        
+                        # בדיקה אם זה באמת timeout קשיח ולא TimeoutConfig
+                        line_content = lines[line_number - 1].strip()
+                        
+                        # אם השורה מכילה TimeoutConfig - זה בסדר
+                        if "TimeoutConfig" in line_content:
+                            continue
+                        
+                        # אם זה timeout קשיח - דיווח על זה
+                        hardcoded_timeouts.append({
+                            "file": file_path,
+                            "line": line_number,
+                            "timeout": timeout_value,
+                            "context": line_content
+                        })
+                        
+                except Exception as e:
+                    continue
+            
+            if hardcoded_timeouts:
+                errors.append(f"❌ נמצאו {len(hardcoded_timeouts)} timeouts קשיחים:")
+                for timeout in hardcoded_timeouts[:10]:  # הצג רק 10 ראשונים
+                    errors.append(f"   • {timeout['file']}:{timeout['line']} - timeout={timeout['timeout']}")
+                    errors.append(f"     Context: {timeout['context'][:80]}...")
+                
+                if len(hardcoded_timeouts) > 10:
+                    errors.append(f"   ... ועוד {len(hardcoded_timeouts) - 10} timeouts")
+                
+                errors.append("💡 פתרון: החלף timeout=<מספר> ב-TimeoutConfig.<TYPE>_TIMEOUT")
+                errors.append("   דוגמה: timeout=10 → timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT")
+                
+                return False, errors
+            else:
+                print("✅ כל הtimeouts משתמשים ב-TimeoutConfig")
+                return True, []
+                
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת timeouts: {e}")
+            return False, errors
+    
+    def check_timeout_config_imports(self) -> Tuple[bool, List[str]]:
+        """🔍 בדיקת ייבוא נכון של TimeoutConfig"""
+        warnings = []
+        
+        try:
+            # בדיקת ייבוא TimeoutConfig
+            from simple_config import TimeoutConfig
+            
+            # בדיקת קיום כל הtimeouts הנדרשים
+            required_timeouts = [
+                "HTTP_REQUEST_TIMEOUT",
+                "TELEGRAM_SEND_TIMEOUT", 
+                "GPT_PROCESSING_TIMEOUT",
+                "SUBPROCESS_TIMEOUT",
+                "DATABASE_QUERY_TIMEOUT"
+            ]
+            
+            missing_timeouts = []
+            for timeout_name in required_timeouts:
+                if not hasattr(TimeoutConfig, timeout_name):
+                    missing_timeouts.append(timeout_name)
+                else:
+                    timeout_value = getattr(TimeoutConfig, timeout_name)
+                    print(f"✅ {timeout_name} = {timeout_value}")
+            
+            if missing_timeouts:
+                warnings.append(f"⚠️ TimeoutConfig חסר timeouts: {', '.join(missing_timeouts)}")
+                return False, warnings
+            
+            print("✅ TimeoutConfig מוגדר נכון עם כל הtimeouts הנדרשים")
+            return True, []
+            
+        except ImportError as e:
+            warnings.append(f"❌ לא ניתן לייבא TimeoutConfig: {e}")
+            return False, warnings
+        except Exception as e:
+            warnings.append(f"❌ שגיאה בבדיקת TimeoutConfig: {e}")
+            return False, warnings
+    
+    def check_system_consistency(self) -> Tuple[bool, List[str]]:
         """🎯 בדיקת עקביות מערכתית - אין קריאות קשיחות ואין כפילויות"""
         print("🔍 מבצע בדיקה: עקביות מערכתית")
         print("-" * 50)
@@ -659,10 +768,10 @@ class ComprehensiveDeployChecker:
             print("   1. החלף קריאות open ישירות ב-get_config() מ-config.py")
             print("   2. החלף str(chat_id) ב-safe_str(chat_id) או normalize_chat_id()")
             print("   3. השתמש בשמות שדות מ-fields_dict.py")
-            return False
+            return False, issues
         else:
             print("✅ עקביות מערכתית - עבר בהצלחה!")
-            return True
+            return True, []
     
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
@@ -683,6 +792,8 @@ class ComprehensiveDeployChecker:
             ("מערכת Concurrent Handling", self.check_concurrent_system),
             ("שלמות requirements.txt", self.check_requirements_completeness),
             ("עקביות מערכתית", self.check_system_consistency),
+            ("TimeoutConfig קשיחים", self.check_timeout_config_usage),
+            ("TimeoutConfig ייבוא", self.check_timeout_config_imports),
         ]
         
         # הרצת כל הבדיקות

@@ -29,7 +29,7 @@ class ProgressiveUserCommunication:
     
     # 🚨 הודעות חירום
     EMERGENCY_MESSAGES = {
-        50: "🚨 מצטער, נתקלתי בבעיה טכנית. אני מנסה לפתור את זה...",
+        52: "🚨 מצטער, נתקלתי בבעיה טכנית. אני מנסה לפתור את זה...",
         55: "⚠️ הבעיה הטכנית נמשכת. נסה לשלוח לי הודעה חדשה בעוד דקה."
     }
     
@@ -165,7 +165,7 @@ if timeout_validation_errors:
     print("WARNING - שגיאות בתצורת Timeout:")
     for error in timeout_validation_errors:
         print(f"  - {error}")
-    print("📝 יש לתקן את התצורה לפני המשך!")
+    print("יש לתקן את התצורה לפני המשך!")
 
 
 class SimpleConfig:
