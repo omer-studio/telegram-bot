@@ -847,8 +847,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # שלב 3: שליחת התשובה למשתמש מיד!
             await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
+            # �� תיקון: מדידת זמן התגובה מיד אחרי שליחה למשתמש
+            user_response_actual_time = time.time() - user_request_start_time
+
             # 🔧 תיקון: כל השאר ברקע - המשתמש כבר קיבל תשובה!
-            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt))
+            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt, user_response_actual_time))
             
         except Exception as ex:
             logger.error(f"❌ שגיאה בטיפול בהודעה: {ex}", source="message_handler")
@@ -1080,7 +1083,7 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
     except Exception as e:
         logger.error(f"שליחת הודעת מערכת נכשלה: {e}", source="message_handler")
 
-async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt):
+async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt, user_response_actual_time):
     """
     🔧 פונקציה חדשה: מטפלת בכל המשימות ברקע אחרי שהמשתמש קיבל תשובה
     זה מבטיח שהמשתמש מקבל תשובה מהר, וכל השאר קורה ברקע
@@ -1097,9 +1100,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         # 📨 שליחת התכתבות אנונימית לאדמין (ברקע)
         try:
             from admin_notifications import send_anonymous_chat_notification
-            # חישוב זמני תגובה
-            current_time = time.time()
-            user_response_time = current_time - user_request_start_time
+            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
             gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
             
             send_anonymous_chat_notification(
@@ -1108,14 +1109,14 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 history_messages, 
                 messages_for_gpt,
                 gpt_timing=gpt_response_time,
-                user_timing=user_response_time,
+                user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
                 chat_id=chat_id
             )
         except Exception as admin_chat_err:
             logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
 
-        # חישוב זמן מענה
-        response_time = time.time() - user_request_start_time
+        # 🔧 תיקון: שימוש בזמן התגובה האמיתי
+        response_time = user_response_actual_time
         
         # 💾 שמירת זמן תגובה כולל למסד הנתונים
         try:
@@ -1144,7 +1145,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             "processing_stage": "background"
         }
         
-        logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה: {response_time:.2f}s", source="message_handler")
+        logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s", source="message_handler")
         
         # שלב 1: עדכון היסטוריה
         try:
@@ -1245,7 +1246,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             if ran_components:
                 print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={safe_str(chat_id)}")
         
-        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן כולל: {time.time() - user_request_start_time:.2f}s", source="message_handler")
+        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s | זמן כולל כולל רקע: {time.time() - user_request_start_time:.2f}s", source="message_handler")
         
         # שלב 5: התראות אדמין (אם יש שינויים)
         try:
@@ -1317,7 +1318,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         except Exception as admin_err:
             logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
         
-        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן כולל: {time.time() - user_request_start_time:.2f}s", source="message_handler")
+        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s | זמן כולל כולל רקע: {time.time() - user_request_start_time:.2f}s", source="message_handler")
         
     except Exception as ex:
         logger.error(f"❌ [BACKGROUND] שגיאה במשימות ברקע: {ex}", source="message_handler")

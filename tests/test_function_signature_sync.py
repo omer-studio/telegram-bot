@@ -6,7 +6,14 @@
 import inspect
 import importlib
 import sys
+import os
 from typing import Dict, List, Tuple
+
+# הוספת הנתיב הנוכחי למסלול הייבוא
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 def get_function_signature(module_name: str, function_name: str) -> str:
     """מחזיר את שמות וסדר הפרמטרים של פונקציה"""
@@ -25,7 +32,7 @@ def check_function_signatures() -> Dict[str, List[str]]:
     # פונקציות חשובות לבדיקה - שמות וסדר בלבד
     critical_functions = {
         "message_handler": {
-            "handle_background_tasks": ["update", "context", "chat_id", "user_msg", "bot_reply", "message_id", "user_request_start_time", "gpt_result", "history_messages", "messages_for_gpt"],
+            "handle_background_tasks": ["update", "context", "chat_id", "user_msg", "bot_reply", "message_id", "user_request_start_time", "gpt_result", "history_messages", "messages_for_gpt", "user_response_actual_time"],
             "handle_message": ["update", "context"],
             "run_background_processors": ["chat_id", "user_msg", "bot_reply"]
         },
