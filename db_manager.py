@@ -1006,7 +1006,7 @@ def get_reminder_states_data():
         
         if results:
             return {
-                str(chat_id): {
+                safe_str(chat_id): {
                     'last_activity': last_activity,
                     'reminder_sent': reminder_sent,
                     'reminder_count': reminder_count,
