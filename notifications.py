@@ -852,7 +852,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     """
     # הוספת לוג להודעה נכנסת גם בשגיאות קריטיות
     if chat_id and user_msg and update and update.message:
-        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (CRITICAL ERROR)")
+        print(f"[IN_MSG] chat_id={safe_str(chat_id)} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (CRITICAL ERROR)")
     
     print(f"🚨 שגיאה קריטית: {error}")
     # DEBUG הודעות הוסרו לטובת ביצועים

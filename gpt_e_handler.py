@@ -28,8 +28,8 @@ from user_friendly_errors import safe_str
 
 # יבוא מותנה לפונקציות DB
 try:
-    from profile_utils import get_user_summary_fast, reset_gpt_c_run_count_wrapper
-    from db_wrapper import update_user_summary_wrapper as update_user_summary_fast
+    from profile_utils import get_user_summary_fast
+    from db_wrapper import update_user_summary_wrapper as update_user_summary_fast, reset_gpt_c_run_count_wrapper
     from chat_utils import get_chat_history_messages, get_user_stats_and_history
 except ImportError as e:
     logger.error(f"[gpt_e] Failed to import required modules: {e}", source="gpt_e_handler")
