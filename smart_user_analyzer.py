@@ -25,7 +25,8 @@ from typing import Dict, Any, List, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fields_dict import FIELDS_DICT, get_user_profile_fields, get_summary_fields
-from db_manager import get_user_profile, get_user_message_count, update_user_profile_field
+from db_manager import get_user_message_count, update_user_profile_field
+from profile_utils import get_user_profile
 from chat_utils import get_chat_history_messages
 
 class SmartUserAnalyzer:

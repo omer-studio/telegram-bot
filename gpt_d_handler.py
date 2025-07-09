@@ -16,7 +16,7 @@ from config import GPT_MODELS, GPT_PARAMS, should_log_data_extraction_debug
 from gpt_utils import normalize_usage_dict, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from user_friendly_errors import safe_str
 
-def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, message_id=None):
+def merge_profile_data(existing_profile, new_extracted_fields, chat_id, message_id=None):
     """
     מיזוג נתונים חדשים עם פרופיל קיים באמצעות GPT-D
     """
@@ -117,64 +117,16 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         logger.error(f"[gpt_d] Error: {e}", source="gpt_d_handler")
         return {"merged_profile": existing_profile, "usage": {}, "model": model}
 
-def smart_update_profile_with_gpt_d(existing_profile, user_message, interaction_id=None, gpt_c_result=None):
-    """
-    מעדכן פרופיל רגשי קיים עם gpt_d על בסיס הודעת משתמש חדשה.
-    מחזיר tuple: (updated_profile, combined_usage)
-    """
-    # 1. חילוץ שדות חדשים מהודעת המשתמש (gpt_c)
-    extracted_fields = {}
-    gpt_c_usage = {}
-    
-    if gpt_c_result is not None and isinstance(gpt_c_result, dict):
-        # השתמש בתוצאת GPT-C שכבר קיימת
-        extracted_fields = gpt_c_result.get("extracted_fields", {})
-        gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
-    else:
-        # fallback - הפעל GPT-C רק אם לא קיבלנו תוצאה
-        from gpt_c_handler import extract_user_info
-        gpt_c_result = extract_user_info(user_message)
-        if isinstance(gpt_c_result, dict):
-            extracted_fields = gpt_c_result.get("extracted_fields", {})
-            gpt_c_usage = normalize_usage_dict(gpt_c_result.get("usage", {}), gpt_c_result.get("model", GPT_MODELS["gpt_c"]))
-    
-    # 2. אם אין שדות חדשים, מחזירים את הפרופיל הקיים
-    if not extracted_fields:
-        return existing_profile, gpt_c_usage
-    
-    # 3. בדיקה האם יש ערך קיים בשדות שהוחלפו (רק אז נפעיל GPT-D)
-    gpt_d_should_run = False
-    if not isinstance(existing_profile, dict):
-        existing_profile = {}
-    
-    for field, new_value in extracted_fields.items():
-        if field in existing_profile and existing_profile[field] and existing_profile[field] != "":
-            gpt_d_should_run = True
-            break
-    
-    # 4. מיזוג בסיסי: שדות חדשים מחליפים קיימים
-    merged_fields = existing_profile.copy()
-    merged_fields.update(extracted_fields)
-    
-    # 5. הפעלת GPT-D רק אם יש ערך קיים למיזוג
-    gpt_d_usage = {}
-    if gpt_d_should_run:
-        gpt_d_result = merge_profile_data(existing_profile, extracted_fields, message_id=interaction_id)
-        gpt_d_usage = normalize_usage_dict(gpt_d_result.get("usage", {}), gpt_d_result.get("model", GPT_MODELS["gpt_d"]))
-        # נסה לפרסר את התוצאה
-        updated_profile = gpt_d_result.get("merged_profile", merged_fields)
-    else:
-        updated_profile = merged_fields
-    
-    # 6. איחוד usage
-    combined_usage = {}
-    combined_usage.update(gpt_c_usage)
-    # הוספת השדות שחולצו מ-GPT-C
-    combined_usage["extracted_fields"] = extracted_fields
-    for k, v in gpt_d_usage.items():
-        combined_usage[f"gpt_d_{k}"] = v
-    
-    return updated_profile, combined_usage
+def combine_usage_dicts(usage1, usage2):
+    """מאחד שני dictionaries של usage"""
+    combined = {}
+    combined.update(usage1)
+    for k, v in usage2.items():
+        if k in combined:
+            combined[k] += v
+        else:
+            combined[k] = v
+    return combined
 
 # ---------------------------------------------------------------------------
 # 🧵 Async helper – run in thread & persist changes
@@ -195,17 +147,34 @@ def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_
     """
     safe_chat_id = safe_str(chat_id)
     try:
-        from db_manager import get_user_profile_fast, update_user_profile_fast
+        from profile_utils import get_user_profile_fast, update_user_profile_fast
         
         # Load existing profile
         existing_profile = get_user_profile_fast(safe_chat_id)
         
-        # Merge with GPT-D
-        merge_result = merge_profile_data(existing_profile, gpt_c_result.get("extracted_fields", {}), safe_chat_id, interaction_id)
-        updated_profile = merge_result["merged_profile"]
-        
-        # Persist to database
-        update_user_profile_fast(safe_chat_id, updated_profile)
+        # Only proceed if we have GPT-C results
+        if gpt_c_result and isinstance(gpt_c_result, dict):
+            extracted_fields = gpt_c_result.get("extracted_fields", {})
+            
+            # Check if we need GPT-D (only if there are conflicting fields)
+            if existing_profile and extracted_fields:
+                for field, new_value in extracted_fields.items():
+                    if field in existing_profile and existing_profile[field] and existing_profile[field] != new_value:
+                        # We have a conflict - use GPT-D to merge
+                        merge_result = merge_profile_data(existing_profile, extracted_fields, safe_chat_id, interaction_id)
+                        updated_profile = merge_result["merged_profile"]
+                        break
+                else:
+                    # No conflicts - simple merge
+                    updated_profile = existing_profile.copy()
+                    updated_profile.update(extracted_fields)
+            else:
+                # Simple merge
+                updated_profile = (existing_profile or {}).copy()
+                updated_profile.update(extracted_fields)
+            
+            # Persist to database
+            update_user_profile_fast(safe_chat_id, updated_profile)
         
     except Exception as exc:
         logger.error(f"[GPT_D] Error in profile merge/persist for {safe_chat_id}: {exc}\n{traceback.format_exc()}", source="gpt_d_handler")

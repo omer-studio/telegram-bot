@@ -15,18 +15,12 @@ from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_
 from gpt_utils import normalize_usage_dict, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
 from user_friendly_errors import safe_str
 
-def extract_user_info(user_msg, chat_id=None, message_id=None):
+def extract_user_info(user_msg, chat_id, message_id=None):
     """
     מחלץ מידע רלוונטי מהודעת המשתמש לעדכון הפרופיל שלו
     כולל מערכת fallback למקרה של rate limit ב-Gemini.
     """
     start_time = time.time()  # מדידת זמן התחלה
-    
-    # 🔧 תיקון מערכתי: טיפול בטוח בchat_id=None
-    if not chat_id:
-        logger.warning("[GPT_C] chat_id is None/empty - using fallback chat_id", source="gpt_c_handler")
-        print("⚠️ [GPT-C] chat_id is None/empty - using fallback chat_id")
-        chat_id = "unknown_user"  # ברירת מחדל במקום דחיית הפונקציה
     
     safe_chat_id = safe_str(chat_id)
     metadata = {"gpt_identifier": "gpt_c", "chat_id": safe_chat_id, "message_id": message_id}

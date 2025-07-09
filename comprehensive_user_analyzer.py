@@ -20,6 +20,7 @@ from config import config
 try:
     from fields_dict import FIELDS_DICT, get_user_profile_fields
     from user_friendly_errors import safe_str  # ייבוא מרכזי
+    from profile_utils import get_user_profile  # ייבוא מהמקום הנכון
 except ImportError:
     # נגדיר באופן בסיסי אם אין גישה לקובץ
     FIELDS_DICT = {}
@@ -27,6 +28,8 @@ except ImportError:
         return ['name', 'age', 'relationship_type', 'closet_status', 'primary_conflict', 'summary']
     def safe_str(value):
         return str(value) if value is not None else ""
+    def get_user_profile(chat_id):
+        return {}
 
 # הגדרת חיבור למסד הנתונים
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
@@ -78,37 +81,7 @@ class UserAnalyzer:
                 conn.close()
             return []
     
-    def get_user_profile(self, chat_id):
-        """קבלת פרופיל משתמש"""
-        conn = self.connect_db()
-        if not conn:
-            return None
-        
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT * FROM user_profiles 
-                WHERE chat_id = %s
-            """, (safe_str(chat_id),))
-            
-            profile_row = cur.fetchone()
-            
-            if profile_row and cur.description:
-                # קבלת שמות העמודות
-                column_names = [desc[0] for desc in cur.description]
-                profile = dict(zip(column_names, profile_row))
-                cur.close()
-                conn.close()
-                return profile
-            else:
-                cur.close()
-                conn.close()
-                return None
-        except Exception as e:
-            print(f"❌ שגיאה בקבלת פרופיל עבור {chat_id}: {e}")
-            if conn:
-                conn.close()
-            return None
+    # 🗑️ הפונקציה הוסרה - משתמשים בייבוא מ-profile_utils
     
     def extract_insights_from_text(self, text):
         """חילוץ תובנות מטקסט הודעות המשתמש"""
@@ -272,7 +245,7 @@ class UserAnalyzer:
         
         # שלב 2: קבלת פרופיל קיים
         print(f"  👤 קורא פרופיל קיים...")
-        profile = self.get_user_profile(chat_id)
+        profile = get_user_profile(chat_id)
         
         if profile:
             result['profile_data'] = {

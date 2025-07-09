@@ -235,3 +235,21 @@ def measure_timing(operation_name: str = "operation", log_result: bool = True):
                 logger.info(f"⏱️ [{operation_name.upper()}] סה״כ: {timings['end']:.2f}s", source="timing")
 
 
+def html_escape(text):
+    """
+    🛡️ פונקציה מרכזית לHTML escaping - מונעת כפילויות
+    משמשת את כל המודולים במערכת
+    """
+    if not text:
+        return ""
+    
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
+
+

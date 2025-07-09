@@ -445,6 +445,14 @@ def save_user_profile(chat_id, profile_data):
 # === שליפת פרופיל משתמש ===
 def get_user_profile(chat_id):
     """
+    🚨 DEPRECATED: השתמש ב-profile_utils.get_user_profile במקום!
+    
+    פונקציה זו קיימת לתאימות לאחור בלבד.
+    profile_utils.get_user_profile מספק:
+    - Cache לביצועים טובים יותר
+    - Error handling מתקדם יותר
+    - תמיכה בפונקציות נוספות
+    
     מחזיר פרופיל משתמשdict עם כל השדות
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
@@ -471,6 +479,23 @@ def get_user_profile(chat_id):
         return profile_dict
     
     return None
+
+# === תאימות לאחור - forwarding functions ל-profile_utils ===
+def get_user_profile_fast(chat_id):
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.get_user_profile_fast במקום!
+    פונקציה זו מפנה ל-profile_utils.get_user_profile_fast
+    """
+    from profile_utils import get_user_profile_fast as profile_fast
+    return profile_fast(chat_id)
+
+def update_user_profile_fast(chat_id, updates):
+    """
+    🚨 DEPRECATED: השתמש ב-profile_utils.update_user_profile_fast במקום!
+    פונקציה זו מפנה ל-profile_utils.update_user_profile_fast
+    """
+    from profile_utils import update_user_profile_fast as profile_update_fast
+    return profile_update_fast(chat_id, updates)
 
 # === שמירת לוג GPT ===
 def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp=None):

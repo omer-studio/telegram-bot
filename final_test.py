@@ -4,7 +4,7 @@ print('🧪 בדיקה אחרונה של הפתרון הפשוט:')
 print()
 
 from chat_utils import get_chat_history_messages_fast
-from db_manager import get_user_profile
+from profile_utils import get_user_profile
 
 # בדיקה עם משתמש אמיתי
 chat_id = 111709341

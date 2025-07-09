@@ -23,7 +23,7 @@ try:
     from fields_dict import FIELDS_DICT, get_user_profile_fields
     # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
     # from sheets_handler import update_user_profile, get_user_summary
-    from profile_utils import update_user_profile_fast, get_user_summary_fast
+    from profile_utils import update_user_profile_fast, get_user_summary_fast, get_user_profile
 except ImportError:
     print("⚠️ לא ניתן לייבא חלק מהמודולים - חלק מהפונקציות לא יעבדו")
 
@@ -60,36 +60,7 @@ class UserProfileUpdater:
             print(f"❌ שגיאה בחיבור למסד הנתונים: {e}")
             return None
     
-    def get_current_profile(self, chat_id):
-        """קבלת פרופיל נוכחי מהמסד"""
-        conn = self.connect_db()
-        if not conn:
-            return None
-        
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT * FROM user_profiles 
-                WHERE chat_id = %s
-            """, (safe_str(chat_id),))
-            
-            profile_row = cur.fetchone()
-            
-            if profile_row and cur.description:
-                column_names = [desc[0] for desc in cur.description]
-                profile = dict(zip(column_names, profile_row))
-                cur.close()
-                conn.close()
-                return profile
-            else:
-                cur.close()
-                conn.close()
-                return None
-        except Exception as e:
-            print(f"❌ שגיאה בקבלת פרופיל עבור {chat_id}: {e}")
-            if conn:
-                conn.close()
-            return None
+    # 🗑️ הפונקציה הוסרה - משתמשים בייבוא מ-profile_utils
     
     def update_profile_field(self, chat_id, field_name, new_value, old_value=None):
         """עדכון שדה בפרופיל"""

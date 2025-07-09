@@ -14,7 +14,7 @@ from config import GPT_MODELS, GPT_PARAMS
 from gpt_utils import normalize_usage_dict, calculate_gpt_cost
 from user_friendly_errors import safe_str
 
-def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
+def get_summary(user_msg, bot_reply, chat_id, message_id=None):
     """
     יוצר סיכום קצר של הקשר השיחה עבור היסטוריה
     משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.

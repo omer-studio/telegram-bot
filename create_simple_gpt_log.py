@@ -118,13 +118,8 @@ def create_sample_gpt_log():
 def create_html_from_data(data):
     """יצירת HTML מנתוני GPT"""
     
-    def html_escape(text):
-        return (
-            str(text).replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-        )
+    # html_escape moved to utils.py to prevent duplication
+    from utils import html_escape
     
     def format_datetime(ts_iso):
         try:

@@ -46,14 +46,13 @@ class TestBasicFunctionality(unittest.TestCase):
             user_count_occurrences = notification_text.count("מונה הודעות משתמש:")
             self.assertEqual(user_count_occurrences, 1, "צריך להיות רק מונה אחד של הודעות משתמש")
             
-            # בדיקה שהמונה נכון (2 הודעות היסטוריה + 1 חדשה = 3)
+            # בדיקה שהמונה נכון (2 הודעות היסטוריה בלבד)
             import re
             # בדיקה יותר פשוטה - מחפש בכל הטקסט את המונה
             if "מונה הודעות משתמש:" in notification_text:
                 # קיים המונה, בואי נוודא שהוא נכון
                 counter_part = notification_text.split("מונה הודעות משתמש:")[1].strip()
-                self.assertIn("3", counter_part, "המונה הכולל צריך להיות 3")
-                self.assertIn("היסטוריה: 2", counter_part, "מונה ההיסטוריה צריך להיות 2")
+                self.assertIn("2", counter_part, "המונה צריך להיות 2 (רק היסטוריה)")
             else:
                 self.fail("לא נמצא מונה הודעות משתמש כלל")
             

@@ -187,14 +187,8 @@ def get(data: Dict[str, Any], path: str, default: Any = None) -> Any:
 # HTML generation helpers
 # -----------------------------------------------------------------------------
 
-def html_escape(text: str) -> str:
-    """Minimal HTML escaping."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+# html_escape moved to utils.py to prevent duplication
+from utils import html_escape
 
 
 def render_messages_table(messages: List[Dict[str, str]]) -> str:

@@ -32,7 +32,7 @@ import profile_utils as _pu
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
-from gpt_d_handler import smart_update_profile_with_gpt_d, smart_update_profile_with_gpt_d_async
+from gpt_d_handler import smart_update_profile_with_gpt_d_async
 from gpt_utils import normalize_usage_dict
 try:
     from fields_dict import FIELDS_DICT
@@ -51,51 +51,69 @@ from db_manager import register_user_with_code_db, check_user_approved_status_db
 
 from chat_utils import get_weekday_context_instruction, get_holiday_system_message
 
+# 🎨 Constants - מניעת כפילויות
+EMOJI_PATTERN = r'[\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]'
+
 def format_text_for_telegram(text):
     """
-    📝 פורמטינג פשוט - הכללים של המשתמש:
-    נקודה/שאלה/קריאה + אימוג'י → אימוג'י באותה שורה + מעבר שורה
-    אם נקודה → מוחקים אותה
+    📝 פורמטינג פשוט וברור - הכללים של המשתמש:
+    • נקודה/שאלה/קריאה + אימוג'י → אימוג'י באותה שורה + מעבר שורה  
+    • אם נקודה בלבד → מוחקים אותה + מעבר שורה
+    • פיסוק רגיל → מעבר שורה
+    
+    ✅ פשוט, ברור, עמיד - בלי placeholders מסובכים
+    ✅ עם error handling מלא
     """
-    import re
-    
-    # שלב 1: ניקוי HTML
-    text = re.sub(r'<[^>]+>', '', text)
-    
-    # שלב 2: Markdown 
-    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
-    text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
-    text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
-    text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
-    
-    # שלב 3: פתרון עם placeholders - עובד מושלם!
-    
-    # 1. שמירת נקודה + אימוג'י ב-placeholder (מוחק נקודה)
-    text = re.sub(r'\.(\s*)([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r'<EMOJI_DOT>\2</EMOJI_DOT>', text)
-    
-    # 2. שמירת שאלה/קריאה + אימוג'י ב-placeholder
-    text = re.sub(r'([?!])(\s*)([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r'<EMOJI_PUNCT>\1 \3</EMOJI_PUNCT>', text)
-    
-    # 3. כל נקודה שנשארה → מעבר שורה (מוחק נקודה)
-    text = re.sub(r'\.(\s*)', '\n', text)
-    
-    # 4. כל שאלה/קריאה שנשארה (לא כוללת placeholders!) → פיסוק + מעבר שורה
-    text = re.sub(r'([?!])(\s*)(?!.*</EMOJI_PUNCT>)', r'\1\n', text)
-    
-    # 5. החזרת placeholders למעברי שורה
-    text = re.sub(r'<EMOJI_DOT>(.*?)</EMOJI_DOT>', r' \1\n', text, flags=re.DOTALL)
-    text = re.sub(r'<EMOJI_PUNCT>(.*?)</EMOJI_PUNCT>', r'\1\n', text, flags=re.DOTALL)
-    
-    # ניקוי בסיסי
-    text = re.sub(r'\n\s+', '\n', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    text = text.strip()
-    
-    # וידוא שיש \n בסוף (אלא אם הטקסט ריק)
-    if text and not text.endswith('\n'):
-        text += '\n'
-    
-    return text
+    try:
+        if not text:
+            return ""
+        
+        import re
+        
+        # שלב 1: ניקוי HTML בסיסי
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # שלב 2: Markdown → HTML
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        text = re.sub(r'__(.*?)__', r'<b>\1</b>', text)
+        text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
+        text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
+        
+        # שלב 3: פיסוק ואימוג'ים - פשוט וברור!
+        
+        # כלל 1: נקודה + אימוג'י → מוחק נקודה, שומר אימוג'י + מעבר שורה  
+        text = re.sub(fr'\.(\s*)({EMOJI_PATTERN})', r' \2\n', text)
+        
+        # כלל 2: שאלה/קריאה + אימוג'י → שומר הכל + מעבר שורה
+        text = re.sub(fr'([?!])(\s*)({EMOJI_PATTERN})', r'\1 \3\n', text)
+        
+        # כלל 3: נקודה בלבד → מוחק + מעבר שורה
+        text = re.sub(r'\.(\s*)', r'\n', text)
+        
+        # כלל 4: שאלה/קריאה בלבד (בלי אימוג'י) → מעבר שורה
+        text = re.sub(fr'([?!])(\s*)(?!.*{EMOJI_PATTERN})', r'\1\n', text)
+        
+        # ניקוי סופי
+        text = re.sub(r'\n\s+', '\n', text)  # מסיר רווחים אחרי מעבר שורה
+        text = re.sub(r'\n{3,}', '\n\n', text)  # מגביל מעברי שורה כפולים
+        text = text.strip()
+        
+        # וידוא מעבר שורה בסוף (אלא אם ריק)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        
+        return text
+        
+    except Exception as e:
+        # 🛡️ Error handling - המשתמש יקבל תשובה גם אם הפורמטינג נכשל
+        logger.error(f"🚨 שגיאה בפורמטינג: {e} | טקסט: {text[:50]}...", source="message_handler")
+        
+        # fallback פשוט - מחזיר את הטקסט המקורי עם \n בסוף
+        try:
+            fallback_text = str(text or "").strip()
+            return fallback_text + '\n' if fallback_text else ""
+        except:
+            return "שגיאה בפורמטינג - הודעה לא זמינה\n"
 
 async def _handle_holiday_check(update, chat_id, bot_reply):
     """
@@ -323,29 +341,38 @@ def safe_extract_message_info(update):
     """
     🔧 פונקציה מרכזית לחילוץ בטוח של chat_id, message_id ותוכן הודעה
     מחזירה: (chat_id, message_id, message_text, message_type, success)
+    
+    🎯 תיקון מערכתי: פונקציה זו מבטיחה טיפול עקבי בכל מקום שצריך לחלץ מידע מהודעות טלגרם
     """
     try:
         # בדיקות בטיחות מרכזיות
         if not update:
+            logger.warning("[SAFE_EXTRACT] Update is None", source="message_handler")
             return None, None, None, "unknown", False
         
         if not hasattr(update, 'message') or not update.message:
+            logger.warning("[SAFE_EXTRACT] Update has no message", source="message_handler")
             return None, None, None, "unknown", False
         
-        # חילוץ chat_id
+        # חילוץ chat_id עם fallback mechanisms
         chat_id = None
         if hasattr(update.message, 'chat_id'):
             chat_id = update.message.chat_id
         elif hasattr(update.message, 'chat') and hasattr(update.message.chat, 'id'):
             chat_id = update.message.chat.id
+        elif hasattr(update, 'effective_chat') and hasattr(update.effective_chat, 'id'):
+            chat_id = update.effective_chat.id
         
         if not chat_id:
+            logger.warning("[SAFE_EXTRACT] Could not extract chat_id", source="message_handler")
             return None, None, None, "unknown", False
         
-        # חילוץ message_id
+        # חילוץ message_id עם fallback mechanisms
         message_id = None
         if hasattr(update.message, 'message_id'):
             message_id = update.message.message_id
+        elif hasattr(update, 'message_id'):
+            message_id = update.message_id
         
         # חילוץ תוכן הודעה וסוג
         message_text = None

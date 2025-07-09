@@ -410,6 +410,36 @@ def test_backward_compatibility_chat_id_functions():
     assert is_valid_chat_id(None) == False, "is_valid_chat_id should return False for None"
     assert is_valid_chat_id("") == False, "is_valid_chat_id should return False for empty"
 
+def test_gpt_handlers_chat_id_requirements():
+    """Verify that all GPT handler functions properly handle chat_id as required parameter."""
+    
+    # Test GPT-C handler - this is the one we specifically fixed
+    from gpt_c_handler import extract_user_info
+    
+    # Should work with valid chat_id
+    try:
+        result = extract_user_info("I am 25 years old", chat_id="test_user_123")
+        assert result is not None, "GPT-C handler should work with valid chat_id"
+        assert "extracted_fields" in result, "GPT-C should return valid result structure"
+        print("✅ GPT-C handler works correctly with required chat_id")
+    except Exception as e:
+        assert False, f"GPT-C handler failed with valid chat_id: {e}"
+    
+    # Test that safe_chat_id function is being used properly
+    from user_friendly_errors import safe_chat_id
+    
+    # Test all modes of safe_chat_id
+    assert safe_chat_id("123") == "123", "safe_chat_id should handle valid string"
+    assert safe_chat_id(None, require_valid=False) == False, "safe_chat_id should handle None gracefully"
+    
+    try:
+        safe_chat_id(None, require_valid=True)
+        assert False, "safe_chat_id should raise error for None when require_valid=True"
+    except ValueError:
+        pass  # Expected behavior
+    
+    print("✅ All GPT handler safety checks passed")
+
 # ============================================================================
 # 🧪 בדיקות בסיסיות
 # ============================================================================

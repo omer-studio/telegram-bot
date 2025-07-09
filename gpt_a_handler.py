@@ -90,34 +90,36 @@ def get_profile_question_stats():
         "cooldowns": profile_question_cooldowns.copy()
     }
 
-def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
+def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id):
     """
-    בודק האם לפחות 2 מילים מתוך missing_text מופיעות בתשובת הבוט.
-    מוסיף לוגים מפורטים לצורך דיבאגינג.
+    בודק האם הבוט שאל שאלות על פרופיל במסר החזרה
     """
-    safe_chat_id = safe_str(chat_id) if chat_id else "unknown"
-    if not missing_text or not bot_reply:
-        logger.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={safe_str(chat_id) if chat_id else 'unknown'}", source="gpt_a_handler")
+    try:
+        if not bot_reply or not missing_text:
+            return False
+        
+        # בדיקה פשוטה: האם הבוט שאל שאלות על פרטים אישיים
+        profile_questions = [
+            "איך קוראים לך", "מה השם שלך", "בן כמה אתה", "מה הגיל שלך",
+            "איפה אתה גר", "מה העבודה שלך", "עם מי אתה גר"
+        ]
+        
+        for question in profile_questions:
+            if question in bot_reply:
+                return True
+        
         return False
-    
-    # מפרק את missing_text למילים בודדות (ללא סימני פיסוק)
-    import re
-    missing_words = re.findall(r'\b\w+\b', missing_text.lower())
-    bot_words = re.findall(r'\b\w+\b', bot_reply.lower())
-    
-    # מוצא מילים משותפות
-    matches = [word for word in missing_words if word in bot_words]
-    
-    logger.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={safe_str(chat_id) if chat_id else 'unknown'} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}", source="gpt_a_handler")
-    
-    return len(matches) >= 2
+        
+    except Exception as e:
+        logger.error(f"Error in did_bot_ask_profile_questions: {e}", source="gpt_a_handler")
+        return False
 
 def create_missing_fields_system_message(chat_id: str) -> tuple:
     """יוצר system message חכם עם שדות חסרים שכדאי לשאול עליהם
     מחזיר tuple: (system_message, missing_text)"""
     try:
         safe_chat_id = safe_str(chat_id)
-        from db_manager import get_user_profile
+        from profile_utils import get_user_profile
         try:
             from fields_dict import FIELDS_DICT
         except ImportError:
@@ -359,7 +361,7 @@ def _execute_gpt_call(completion_params, full_messages):
         logger.error(f"[gpt_a] שגיאה במודל {completion_params['model']}: {e}")
         raise e
 
-def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_extra_emotion=True, filter_reason="", match_type="unknown"):
+def get_main_response_sync(full_messages, chat_id, message_id=None, use_extra_emotion=True, filter_reason="", match_type="unknown"):
     """
     💎 מנוע gpt_a הראשי - גרסה סינכרונית
     """
@@ -531,7 +533,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             "error": str(e)
         }
 
-def process_gpt_a_background_tasks(gpt_result_data, chat_id=None, message_id=None):
+def process_gpt_a_background_tasks(gpt_result_data, chat_id, message_id=None):
     """
     🔄 מעבד את כל המשימות הכבדות של GPT-A ברקע אחרי שהמשתמש קיבל תשובה
     זה מבטיח שהמשתמש מקבל תגובה מיד, וכל העיבוד הכבד קורה ברקע
@@ -670,7 +672,7 @@ def process_gpt_a_background_tasks(gpt_result_data, chat_id=None, message_id=Non
     except Exception as ex:
         logger.error(f"❌ [GPT_A_BACKGROUND] שגיאה בעיבוד ברקע: {ex}", source="gpt_a_handler")
 
-async def get_main_response_with_timeout(full_messages, chat_id=None, message_id=None, update=None):
+async def get_main_response_with_timeout(full_messages, chat_id, message_id=None, update=None):
     """
     💎 שולח הודעה ל-gpt_a עם ניהול חכם של זמני תגובה
     """
@@ -798,7 +800,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
         }
 
 # פונקציה ישנה לתאימות לאחור
-def get_main_response(full_messages, chat_id=None, message_id=None):
+def get_main_response(full_messages, chat_id, message_id=None):
     """
     💎 גרסה סינכרונית ישנה - לתאימות לאחור
     """
