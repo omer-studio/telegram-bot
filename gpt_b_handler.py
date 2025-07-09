@@ -5,7 +5,7 @@ gpt_b_handler.py
 משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 """
 
-import logging
+from simple_logger import logger
 from datetime import datetime
 import json
 import lazy_litellm as litellm
@@ -68,7 +68,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
                 }
             )
         except Exception as save_err:
-            logging.warning(f"Could not save GPT-B timing metrics: {save_err}")
+            logger.warning(f"Could not save GPT-B timing metrics: {save_err}")
         
         # הוספת חישוב עלות ל-usage
         try:
@@ -81,7 +81,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             )
             usage.update(cost_info)
         except Exception as _cost_e:
-            logging.warning(f"[gpt_b] Cost calc failed: {_cost_e}")
+            logger.warning(f"[gpt_b] Cost calc failed: {_cost_e}")
         result = {"summary": summary, "usage": usage, "model": response.model}
         try:
             from gpt_jsonl_logger import GPTJSONLLogger
@@ -118,5 +118,5 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         return result
         
     except Exception as e:
-        logging.error(f"[gpt_b] Error: {e}")
+        logger.error(f"[gpt_b] Error: {e}")
         return {"summary": f"[סיכום: {user_msg[:50]}...]", "usage": {}, "model": model} 
