@@ -767,6 +767,24 @@ def send_admin_notification_raw(message):
         print(f"💥 שגיאה בשליחת הודעה: {e}")
         return None
 
+def send_admin_profile_change_notification(message):
+    """שולח הודעת עדכון פרופיל לאדמין - פונקציה פשוטה"""
+    try:
+        # המרת ההודעה לפורמט הנכון עם הכותרת המיוחדת
+        profile_notification = f"✅ עדכון פרופיל למשתמש ✅\n\n{message}"
+        
+        # שליחה דרך הפונקציה הכללית של התראות אדמין
+        send_admin_notification_raw(profile_notification)
+        
+        logger.info("Profile change notification sent to admin", source="notifications")
+        print(f"✅ הודעת עדכון פרופיל נשלחה לאדמין")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error sending profile change notification: {e}", source="notifications")
+        print(f"❌ שגיאה בשליחת הודעת עדכון פרופיל: {e}")
+        return False
+
 # === הוספה: שליחת התראת קוד סודי לאדמין ===
 def send_admin_secret_command_notification(message: str):
     """
