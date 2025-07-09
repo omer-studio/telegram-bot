@@ -447,10 +447,8 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         log_memory_usage("after_gpt_call")
         logger.info(f"⏱️ [GPT_TIMING] GPT הסתיים תוך {gpt_duration:.2f} שניות")
         
-        # שלב 3: עיבוד התשובה
+        # שלב 3: עיבוד התשובה המיידי בלבד
         processing_start_time = time.time()
-        
-        # 🔬 רישום הטוקן הראשון מבוטל זמנית
         
         bot_reply = gpt_result["bot_reply"]
         
@@ -465,89 +463,14 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         
         usage = gpt_result["usage"]
         
-        # הוספת נתוני עלות מדויקים ל-usage על סמך completion_response
-        try:
-            cost_info = calculate_gpt_cost(
-                prompt_tokens=usage.get("prompt_tokens", 0),
-                completion_tokens=usage.get("completion_tokens", 0),
-                cached_tokens=usage.get("cached_tokens", 0),
-                model_name=gpt_result["model"],
-                completion_response=gpt_result
-            )
-            usage.update(cost_info)
-        except Exception as _cost_e:
-            logger.warning(f"[gpt_a] לא הצלחתי לחשב עלות usage: {_cost_e}")
-        
         processing_time = time.time() - processing_start_time
-        print(f"⚡ [TIMING] Processing time: {processing_time:.3f}s")
-        
-        if should_log_debug_prints():
-            print(f"[GPT_A_RESPONSE] {len(bot_reply)} chars from {gpt_result['model']}")
-        print(f"⚡ [DETAILED_TIMING] GPT pure latency: {gpt_duration:.3f}s | Model: {gpt_result['model']}")
-        
-        # שלב 4: חישוב עלויות
-        billing_start_time = time.time()
-        
-        #  מעקב אחר חיוב
-        if 'cost_info' in locals():
-            cost_usd = cost_info.get("cost_total", 0.0)
-            if cost_usd and cost_usd > 0:
-                billing_status = billing_guard.add_cost(cost_usd, gpt_result["model"], "paid" if use_extra_emotion else "free")
-                
-                # התראות לאדמין
-                if billing_status.get("warnings"):
-                    for warning in billing_status["warnings"]:
-                        logger.warning(f"[💰 תקציב] {warning}")
-                
-                # התראה בטלגרם אם צריך
-                status = billing_guard.get_current_status()
-                alert_billing_issue(
-                    cost_usd=cost_usd,
-                    model_name=gpt_result["model"],
-                    tier="paid" if use_extra_emotion else "free",
-                    daily_usage=status["daily_usage"],
-                    monthly_usage=status["monthly_usage"],
-                    daily_limit=status["daily_limit"],
-                    monthly_limit=status["monthly_limit"]
-                )
-            
-        billing_time = time.time() - billing_start_time
-        print(f"⚡ [TIMING] Billing time: {billing_time:.3f}s")
-        
-        # סיכום זמנים
-        total_time = time.time() - total_start_time
-        print(f"📊 [TIMING_SUMMARY] Total: {total_time:.3f}s | GPT: {gpt_duration:.3f}s | Prep: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
-        
-        # 💾 שמירת מטריקות זמן מפורטות למסד הנתונים
-        try:
-            from db_manager import save_system_metrics
-            save_system_metrics(
-                metric_type="gpt_timing",
-                chat_id=safe_str(chat_id) if chat_id else None,
-                gpt_latency_seconds=gpt_duration,
-                prep_time_seconds=prep_time,
-                processing_time_seconds=processing_time,
-                billing_time_seconds=billing_time,
-                response_time_seconds=total_time,
-                additional_data={
-                    "message_id": message_id,
-                    "gpt_type": "A",
-                    "model": gpt_result["model"],
-                    "extra_emotion": use_extra_emotion,
-                    "filter_reason": filter_reason,
-                    "match_type": match_type,
-                    "tokens_used": usage.get("total_tokens", 0),
-                    "cost_usd": usage.get("cost_total", 0)
-                }
-            )
-        except Exception as save_err:
-            logger.warning(f"Could not save GPT timing metrics: {save_err}")
         
         # 🆕 בדיקה אם התשובה מכילה שאלת פרופיל והתחלת פסק זמן
         if chat_id and detect_profile_question_in_response(bot_reply):
             start_profile_question_cooldown(chat_id)
             logger.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
         
+        # 🚀 החזרת תשובה מיד - כל השאר יעבור לרקע!
         result = {
             "bot_reply": bot_reply, 
             "usage": usage, 
@@ -556,45 +479,18 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             "filter_reason": filter_reason,
             "match_type": match_type,
             "gpt_pure_latency": gpt_duration,
-            "total_time": total_time,
-            "prep_time": prep_time,
-            "processing_time": processing_time,
-            "billing_time": billing_time
-        }
-        try:
-            from gpt_jsonl_logger import GPTJSONLLogger
-            # בניית response מלא עם כל המידע הנדרש
-            response_data = {
-                "id": getattr(gpt_result.get("model_dump"), "id", ""),
-                "choices": [
-                    {
-                        "message": {
-                            "content": gpt_result["bot_reply"],
-                            "role": "assistant"
-                        }
-                    }
-                ],
-                "usage": gpt_result["usage"],
-                "model": gpt_result["model"]
-            }
-            GPTJSONLLogger.log_gpt_call(
-                log_path="data/openai_calls.jsonl",
-                gpt_type="A",
-                request=completion_params,
-                response=response_data,
-                cost_usd=usage.get("cost_total", 0),
-                extra={
-                    "chat_id": chat_id, 
-                    "message_id": message_id,
-                    "gpt_pure_latency": gpt_duration,
-                    "total_time": total_time,
-                    "prep_time": prep_time,
-                    "processing_time": processing_time,
-                    "billing_time": billing_time
+            "raw_gpt_result": gpt_result,  # נתונים גולמיים לעיבוד ברקע
+            "completion_params": completion_params,  # פרמטרים לרישום ברקע
+            "background_data": {  # נתונים לעיבוד ברקע
+                "prep_time": prep_time,
+                "processing_time": processing_time,
+                "start_times": {
+                    "total": total_start_time,
+                    "processing": processing_start_time
                 }
-            )
-        except Exception as log_exc:
-            print(f"[LOGGING_ERROR] Failed to log GPT-A call: {log_exc}")
+            }
+        }
+        
         return result
         
     except Exception as e:
@@ -634,6 +530,145 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
             "match_type": match_type,
             "error": str(e)
         }
+
+def process_gpt_a_background_tasks(gpt_result_data, chat_id=None, message_id=None):
+    """
+    🔄 מעבד את כל המשימות הכבדות של GPT-A ברקע אחרי שהמשתמש קיבל תשובה
+    זה מבטיח שהמשתמש מקבל תגובה מיד, וכל העיבוד הכבד קורה ברקע
+    """
+    try:
+        # חילוץ נתונים
+        raw_gpt_result = gpt_result_data.get("raw_gpt_result", {})
+        completion_params = gpt_result_data.get("completion_params", {})
+        background_data = gpt_result_data.get("background_data", {})
+        usage = gpt_result_data.get("usage", {})
+        
+        # זמנים
+        prep_time = background_data.get("prep_time", 0)
+        processing_time = background_data.get("processing_time", 0)
+        gpt_duration = gpt_result_data.get("gpt_pure_latency", 0)
+        total_start_time = background_data.get("start_times", {}).get("total", time.time())
+        
+        # שלב 1: חישוב עלויות
+        billing_start_time = time.time()
+        cost_info = {}
+        
+        try:
+            cost_info = calculate_gpt_cost(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cached_tokens=usage.get("cached_tokens", 0),
+                model_name=raw_gpt_result.get("model", "unknown"),
+                completion_response=raw_gpt_result
+            )
+            usage.update(cost_info)
+        except Exception as _cost_e:
+            logger.warning(f"[gpt_a_background] לא הצלחתי לחשב עלות usage: {_cost_e}")
+        
+        # מעקב אחר חיוב
+        if cost_info.get("cost_total", 0) > 0:
+            cost_usd = cost_info["cost_total"]
+            use_extra_emotion = gpt_result_data.get("used_extra_emotion", False)
+            
+            try:
+                billing_status = billing_guard.add_cost(cost_usd, raw_gpt_result.get("model", "unknown"), "paid" if use_extra_emotion else "free")
+                
+                # התראות לאדמין
+                if billing_status.get("warnings"):
+                    for warning in billing_status["warnings"]:
+                        logger.warning(f"[💰 תקציב] {warning}")
+                
+                # התראה בטלגרם אם צריך
+                status = billing_guard.get_current_status()
+                alert_billing_issue(
+                    cost_usd=cost_usd,
+                    model_name=raw_gpt_result.get("model", "unknown"),
+                    tier="paid" if use_extra_emotion else "free",
+                    daily_usage=status["daily_usage"],
+                    monthly_usage=status["monthly_usage"],
+                    daily_limit=status["daily_limit"],
+                    monthly_limit=status["monthly_limit"]
+                )
+            except Exception as billing_err:
+                logger.warning(f"[gpt_a_background] שגיאה בחישוב חיוב: {billing_err}")
+        
+        billing_time = time.time() - billing_start_time
+        
+        # שלב 2: שמירת מטריקות למסד הנתונים
+        total_time = time.time() - total_start_time
+        
+        try:
+            from db_manager import save_system_metrics
+            save_system_metrics(
+                metric_type="gpt_timing",
+                chat_id=safe_str(chat_id) if chat_id else None,
+                gpt_latency_seconds=gpt_duration,
+                prep_time_seconds=prep_time,
+                processing_time_seconds=processing_time,
+                billing_time_seconds=billing_time,
+                response_time_seconds=total_time,
+                additional_data={
+                    "message_id": message_id,
+                    "gpt_type": "A",
+                    "model": raw_gpt_result.get("model", "unknown"),
+                    "extra_emotion": gpt_result_data.get("used_extra_emotion", False),
+                    "filter_reason": gpt_result_data.get("filter_reason", ""),
+                    "match_type": gpt_result_data.get("match_type", "unknown"),
+                    "tokens_used": usage.get("total_tokens", 0),
+                    "cost_usd": usage.get("cost_total", 0)
+                }
+            )
+        except Exception as save_err:
+            logger.warning(f"[gpt_a_background] Could not save GPT timing metrics: {save_err}")
+        
+        # שלב 3: רישום GPT calls ללוגים
+        try:
+            from gpt_jsonl_logger import GPTJSONLLogger
+            # בניית response מלא עם כל המידע הנדרש
+            response_data = {
+                "id": getattr(raw_gpt_result.get("model_dump"), "id", ""),
+                "choices": [
+                    {
+                        "message": {
+                            "content": raw_gpt_result.get("bot_reply", ""),
+                            "role": "assistant"
+                        }
+                    }
+                ],
+                "usage": usage,
+                "model": raw_gpt_result.get("model", "unknown")
+            }
+            GPTJSONLLogger.log_gpt_call(
+                log_path="data/openai_calls.jsonl",
+                gpt_type="A",
+                request=completion_params,
+                response=response_data,
+                cost_usd=usage.get("cost_total", 0),
+                extra={
+                    "chat_id": chat_id, 
+                    "message_id": message_id,
+                    "gpt_pure_latency": gpt_duration,
+                    "total_time": total_time,
+                    "prep_time": prep_time,
+                    "processing_time": processing_time,
+                    "billing_time": billing_time
+                }
+            )
+        except Exception as log_exc:
+            logger.warning(f"[gpt_a_background] Failed to log GPT-A call: {log_exc}")
+        
+        # Debug prints רק אם נדרש
+        if should_log_debug_prints():
+            print(f"⚡ [BACKGROUND_TIMING] Processing time: {processing_time:.3f}s")
+            print(f"[GPT_A_RESPONSE] {len(gpt_result_data.get('bot_reply', ''))} chars from {raw_gpt_result.get('model', 'unknown')}")
+            print(f"⚡ [BACKGROUND_TIMING] GPT pure latency: {gpt_duration:.3f}s | Model: {raw_gpt_result.get('model', 'unknown')}")
+            print(f"⚡ [BACKGROUND_TIMING] Billing time: {billing_time:.3f}s")
+            print(f"📊 [BACKGROUND_TIMING_SUMMARY] Total: {total_time:.3f}s | GPT: {gpt_duration:.3f}s | Prep: {prep_time:.3f}s | Processing: {processing_time:.3f}s | Billing: {billing_time:.3f}s")
+        
+        logger.info(f"✅ [GPT_A_BACKGROUND] סיום עיבוד ברקע | chat_id={safe_str(chat_id)} | זמן: {time.time() - billing_start_time:.2f}s", source="gpt_a_handler")
+        
+    except Exception as ex:
+        logger.error(f"❌ [GPT_A_BACKGROUND] שגיאה בעיבוד ברקע: {ex}", source="gpt_a_handler")
 
 async def get_main_response_with_timeout(full_messages, chat_id=None, message_id=None, update=None):
     """

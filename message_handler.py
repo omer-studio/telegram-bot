@@ -1081,6 +1081,14 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
     זה מבטיח שהמשתמש מקבל תשובה מהר, וכל השאר קורה ברקע
     """
     try:
+        # 🚀 שלב 0: עיבוד GPT-A ברקע (עלויות, מטריקות, לוגים)
+        try:
+            if isinstance(gpt_result, dict) and gpt_result.get("background_data"):
+                from gpt_a_handler import process_gpt_a_background_tasks
+                process_gpt_a_background_tasks(gpt_result, chat_id, message_id)
+        except Exception as gpt_a_bg_err:
+            logger.warning(f"[BACKGROUND] שגיאה בעיבוד GPT-A ברקע: {gpt_a_bg_err}", source="message_handler")
+        
         # 📨 שליחת התכתבות אנונימית לאדמין (ברקע)
         try:
             from admin_notifications import send_anonymous_chat_notification

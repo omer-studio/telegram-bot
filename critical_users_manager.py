@@ -13,7 +13,9 @@ import asyncio
 from datetime import datetime, timedelta
 from telegram import Update # type: ignore
 from config import BOT_TOKEN
-from utils import log_error_stat, get_israel_time
+from utils import log_error_stat, get_israel_time, safe_str, get_logger
+
+logger = get_logger(__name__)
 
 # קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
 CRITICAL_ERROR_USERS_FILE = "data/critical_error_users.json"

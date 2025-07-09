@@ -14,13 +14,16 @@ import json
 import psycopg2
 from datetime import datetime
 from config import config
+from utils import safe_str, get_logger
+
+logger = get_logger(__name__)
 
 # יבוא של FIELDS_DICT
 try:
     from fields_dict import FIELDS_DICT, get_user_profile_fields
     # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
-# from sheets_handler import update_user_profile, get_user_summary
-from profile_utils import update_user_profile_fast, get_user_summary_fast
+    # from sheets_handler import update_user_profile, get_user_summary
+    from profile_utils import update_user_profile_fast, get_user_summary_fast
 except ImportError:
     print("⚠️ לא ניתן לייבא חלק מהמודולים - חלק מהפונקציות לא יעבדו")
 
@@ -68,7 +71,7 @@ class UserProfileUpdater:
             cur.execute("""
                 SELECT * FROM user_profiles 
                 WHERE chat_id = %s
-            """, (str(chat_id),))
+            """, (safe_str(chat_id),))
             
             profile_row = cur.fetchone()
             
@@ -98,7 +101,7 @@ class UserProfileUpdater:
             cur = conn.cursor()
             
             # בדיקה אם הפרופיל קיים
-            cur.execute("SELECT id FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            cur.execute("SELECT id FROM user_profiles WHERE chat_id = %s", (safe_str(chat_id),))
             profile_exists = cur.fetchone() is not None
             
             if profile_exists:
@@ -107,13 +110,13 @@ class UserProfileUpdater:
                     UPDATE user_profiles 
                     SET {field_name} = %s, updated_at = %s 
                     WHERE chat_id = %s
-                """, (new_value, datetime.utcnow(), str(chat_id)))
+                """, (new_value, datetime.utcnow(), safe_str(chat_id)))
             else:
                 # יצירת פרופיל חדש
                 cur.execute(f"""
                     INSERT INTO user_profiles (chat_id, {field_name}, updated_at) 
                     VALUES (%s, %s, %s)
-                """, (str(chat_id), new_value, datetime.utcnow()))
+                """, (safe_str(chat_id), new_value, datetime.utcnow()))
             
             conn.commit()
             cur.close()
