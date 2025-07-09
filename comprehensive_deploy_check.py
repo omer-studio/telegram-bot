@@ -113,7 +113,7 @@ class ComprehensiveDeployChecker:
             return False, errors
     
     def check_syntax_and_imports(self) -> Tuple[bool, List[str]]:
-        """בדיקת syntax וייבוא קבצים קריטיים"""
+        """בדיקת syntax וייבוא קבצים קריטיים + בדיקת בריאות מערכתית"""
         errors = []
         critical_files = [
             "config.py", "bot_setup.py", "message_handler.py", 
@@ -134,6 +134,38 @@ class ComprehensiveDeployChecker:
                 
             except Exception as e:
                 errors.append(f"❌ {filename} - שגיאה: {e}")
+        
+        # 🆕 בדיקת בריאות imports מערכתית
+        try:
+            print("\n🩺 מריץ בדיקת בריאות imports מערכתית...")
+            import subprocess
+            result = subprocess.run(
+                ["python", "import_health_checker.py"], 
+                capture_output=True, 
+                text=True, 
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                print("✅ בדיקת בריאות imports - מושלמת (100%)")
+            elif result.returncode == 1:
+                print("⚠️ בדיקת בריאות imports - יש אזהרות")
+                if result.stdout:
+                    print("פרטים:\n" + result.stdout[-500:])  # רק 500 תווים אחרונים
+            else:
+                error_msg = f"❌ בדיקת בריאות imports נכשלה (exit code: {result.returncode})"
+                if result.stdout:
+                    error_msg += f"\nפלט: {result.stdout[-300:]}"
+                if result.stderr:
+                    error_msg += f"\nשגיאה: {result.stderr[-300:]}"
+                errors.append(error_msg)
+                
+        except FileNotFoundError:
+            errors.append("❌ import_health_checker.py לא נמצא - בדיקת בריאות imports דילגה")
+        except subprocess.TimeoutExpired:
+            errors.append("❌ בדיקת בריאות imports תקעה (timeout)")
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת בריאות imports: {e}")
         
         return len(errors) == 0, errors
     
