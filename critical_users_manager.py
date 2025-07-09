@@ -141,7 +141,7 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
             user_data["message_processed"] = False  # וידוא שהמענה יישלח פעם אחת בלבד
             print(f"💾 נשמרה הודעה מקורית למשתמש {chat_id}: '{original_user_message[:50]}...'")
         
-        users_data[str(chat_id)] = user_data
+        users_data[safe_str(chat_id)] = user_data
         _save_critical_error_users(users_data)
         logging.info(f"Added user {chat_id} to critical error list")
         print(f"✅ משתמש {chat_id} נוסף לרשימת המשתמשים הקריטיים")
@@ -163,7 +163,7 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
             temp_file = f"data/temp_critical_user_{chat_id}_{int(time.time())}.json"
             os.makedirs("data", exist_ok=True)
             with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump({str(chat_id): temp_data}, f, ensure_ascii=False, indent=2)
+                json.dump({safe_str(chat_id): temp_data}, f, ensure_ascii=False, indent=2)
             print(f"⚠️ נשמר משתמש {chat_id} בקובץ זמני: {temp_file}")
         except Exception as temp_error:
             print(f"🚨 גם שמירה זמנית נכשלה: {temp_error}")
@@ -174,7 +174,7 @@ def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown e
         if chat_id:
             # העברת ההודעה המקורית רק אם היא לא ריקה
             msg_to_save = original_message.strip() if original_message and original_message.strip() else None
-            _add_user_to_critical_error_list(str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
+            _add_user_to_critical_error_list(safe_str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
             print(f"🛡️ משתמש {chat_id} נוסף לרשימת התאוששות ({error_context})")
             if msg_to_save:
                 print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
@@ -508,7 +508,7 @@ def diagnose_critical_users_system():
 def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition"):
     """מוסיף משתמש באופן ידני לרשימת המשתמשים הקריטיים"""
     try:
-        _add_user_to_critical_error_list(chat_id, f"Manual: {error_context}")
+        _add_user_to_critical_error_list(safe_str(chat_id), f"Manual: {error_context}")
         print(f"✅ משתמש {chat_id} נוסף ידנית לרשימת המשתמשים הקריטיים")
     except Exception as e:
         print(f"🚨 שגיאה בהוספה ידנית של משתמש {chat_id}: {e}") 
@@ -528,10 +528,10 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     if chat_id:
         try:
             # רישום למשתמש לרשימת התאוששות לפני ניסיון שליחת הודעה - עם ההודעה המקורית!
-            _add_user_to_critical_error_list(str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
+            _add_user_to_critical_error_list(safe_str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
             
             # ניסיון שליחת הודעה ידידותית למשתמש - עם ההודעה המקורית
-            await _send_user_friendly_error_message(update, str(chat_id), user_msg)
+            await _send_user_friendly_error_message(update, safe_str(chat_id), user_msg)
         except Exception as e:
             # גם אם שליחת ההודעה נכשלת - המשתמש כבר ברשימת ההתאוששות
             logging.error(f"Failed to send user-friendly error message: {e}")

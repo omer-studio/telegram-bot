@@ -419,6 +419,13 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"\n**מונה הודעות משתמש בהיסטוריה:** {user_messages_count}"
         else:
             notification_text += f"\n**מונה הודעות משתמש בהיסטוריה:** 0"
+
+        # מונה הודעות למשתמש: XXX
+        if history_messages:
+            user_messages_count = len([msg for msg in history_messages if msg.get("role") == "user"])
+            notification_text += f"\n**מונה הודעות למשתמש:** {user_messages_count + 1}"  # +1 להודעה הנוכחית
+        else:
+            notification_text += f"\n**מונה הודעות למשתמש:** 1"  # רק ההודעה הנוכחית
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:
@@ -427,5 +434,5 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         send_admin_notification_raw(notification_text)
         
     except Exception as e:
-        logger.error(f"�� שגיאה בשליחת התראת התכתבות אנונימית: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראת התכתבות אנונימית: {e}")
         logger.error(f"Error sending anonymous chat notification: {e}") 
