@@ -1091,22 +1091,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from db_manager import check_user_approved_status_db
         from messages import approval_text, approval_keyboard, get_welcome_messages, get_code_request_message
         
-        user_status = check_user_approved_status_db(safe_str(chat_id))
+        user_status_result = check_user_approved_status_db(safe_str(chat_id))
+        user_status = user_status_result.get("status", "error") if isinstance(user_status_result, dict) else "error"
         
-        if user_status == "new":
+        if user_status == "not_found":
             # משתמש חדש לגמרי
             await handle_new_user_background(update, context, chat_id, user_msg)
             await end_monitoring_user(safe_str(chat_id), True)
             return
-        elif user_status == "unregistered":
+        elif user_status == "pending_code":
             # משתמש שיש לו שורה זמנית אבל לא נתן קוד נכון
             await handle_unregistered_user_background(update, context, chat_id, user_msg)
             await end_monitoring_user(safe_str(chat_id), True)
             return
-        elif user_status == "pending":
+        elif user_status == "pending_approval":
             # משתמש שעדיין לא אישר תנאים
             await handle_pending_user_background(update, context, chat_id, user_msg)
             await end_monitoring_user(safe_str(chat_id), True)
+            return
+        elif user_status == "error":
+            # שגיאה בבדיקת הרשאות
+            await send_system_message(update, chat_id, "⚠️ שגיאה טכנית בבדיקת הרשאות. נסה שוב בעוד כמה שניות.")
+            await end_monitoring_user(safe_str(chat_id), False)
             return
 
         # משתמש מאושר - שולח תשובה מיד

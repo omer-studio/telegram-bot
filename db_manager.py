@@ -1350,19 +1350,31 @@ def approve_user_db_new(chat_id):
     """
     מאשר משתמש במסד הנתונים לאחר הזנת קוד תקין
     """
-    safe_chat_id = safe_str(chat_id)
-    def _approve_user():
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
+    try:
         conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
+        
+        # 🔧 תיקון: שימוש ב-TRUE במקום 1 
         cursor.execute(
-            "UPDATE user_profiles SET approved = 1 WHERE chat_id = %s",
-            (safe_chat_id,)
+            "UPDATE user_profiles SET approved = TRUE, updated_at = %s WHERE chat_id = %s",
+            (datetime.utcnow(), chat_id)
         )
+        
+        success = cursor.rowcount > 0
         conn.commit()
         conn.close()
-        return cursor.rowcount > 0
-    
-    return safe_operation(_approve_user)
+        
+        if should_log_debug_prints():
+            print(f"✅ [DB] approve_user_db_new: {chat_id} -> {'success' if success else 'failed'}")
+        
+        return {"success": success, "message": "אישור הצליח" if success else "אישור נכשל"}
+        
+    except Exception as e:
+        if should_log_debug_prints():
+            print(f"❌ [DB] שגיאה ב-approve_user_db_new: {e}")
+        return {"success": False, "message": f"שגיאה: {e}"}
 
 # DEPRECATED: תאימות לאחור בלבד
 def get_user_profile(chat_id):

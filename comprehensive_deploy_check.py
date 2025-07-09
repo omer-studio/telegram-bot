@@ -977,25 +977,31 @@ class ComprehensiveDeployChecker:
         except Exception as e:
             errors.append(f"❌ שגיאה בבדיקת הגנה: {e}")
         
-        # 5. בדיקת מערכת הגיבוי המסודר החדשה
-        print("\n🔍 בודק מערכת הגיבוי המסודר...")
+        # 5. בדיקת מערכת הגיבוי הפנימי החדשה
+        print("\n🔍 בודק מערכת הגיבוי הפנימי...")
         try:
-            from organized_backup_system import run_organized_backup, list_organized_backups
+            from internal_backup_system import run_internal_backup, list_internal_backups, cleanup_old_internal_backups
             from schedule_internal_backup import run_backup_scheduler_background
             
-            print("✅ מודולי הגיבוי המסודר מייבאים בהצלחה")
+            print("✅ מודולי הגיבוי הפנימי מייבאים בהצלחה")
             
             # בדיקה בסיסית של פונקציונליות
-            if not callable(run_organized_backup):
-                errors.append("❌ run_organized_backup לא ניתן לקריאה")
+            if not callable(run_internal_backup):
+                errors.append("❌ run_internal_backup לא ניתן לקריאה")
+            
+            if not callable(list_internal_backups):
+                errors.append("❌ list_internal_backups לא ניתן לקריאה")
+            
+            if not callable(cleanup_old_internal_backups):
+                errors.append("❌ cleanup_old_internal_backups לא ניתן לקריאה")
             
             if not callable(run_backup_scheduler_background):
                 errors.append("❌ run_backup_scheduler_background לא ניתן לקריאה")
             
         except ImportError as e:
-            errors.append(f"❌ שגיאה בייבוא מודולי הגיבוי המסודר: {e}")
+            errors.append(f"❌ שגיאה בייבוא מודולי הגיבוי הפנימי: {e}")
         except Exception as e:
-            errors.append(f"❌ שגיאה בבדיקת מערכת הגיבוי המסודר: {e}")
+            errors.append(f"❌ שגיאה בבדיקת מערכת הגיבוי הפנימי: {e}")
         
         # 6. בדיקת חיבור למסד הנתונים לגיבוי
         print("\n🔍 בודק חיבור למסד הנתונים לגיבוי...")
@@ -1021,18 +1027,18 @@ class ComprehensiveDeployChecker:
                         count = cur.fetchone()[0]
                         print(f"✅ טבלה {table}: {count} רשומות")
                     
-                    # בדיקת קבצי גיבוי מסודרים
-                    backup_root = "backups/organized_backups"
-                    if os.path.exists(backup_root):
-                        backup_folders = [f for f in os.listdir(backup_root) if os.path.isdir(os.path.join(backup_root, f))]
-                        if backup_folders:
-                            print(f"✅ נמצאו {len(backup_folders)} תיקיות גיבוי מסודרות")
-                            for folder in backup_folders[:3]:
-                                print(f"   📁 {folder}/")
+                    # בדיקת גיבויים פנימיים במסד הנתונים
+                    try:
+                        cur.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'backup_%'")
+                        backup_schemas = [row[0] for row in cur.fetchall()]
+                        if backup_schemas:
+                            print(f"✅ נמצאו {len(backup_schemas)} גיבויים פנימיים במסד הנתונים")
+                            for schema in backup_schemas[:3]:
+                                print(f"   📦 {schema}")
                         else:
-                            warnings.append("⚠️ אין תיקיות גיבוי מסודרות - מערכת הגיבוי המסודר עדיין לא רצה")
-                    else:
-                        warnings.append("⚠️ תיקיית גיבוי מסודר לא קיימת - מערכת הגיבוי המסודר עדיין לא רצה")
+                            warnings.append("⚠️ אין גיבויים פנימיים במסד הנתונים - מערכת הגיבוי הפנימי עדיין לא רצה")
+                    except Exception as e:
+                        warnings.append(f"⚠️ שגיאה בבדיקת גיבויים פנימיים: {e}")
                     
                     cur.close()
                     conn.close()
