@@ -76,41 +76,54 @@ class CodeEnforcer:
     
     def print_violations(self, violations):
         """מדפיס את ההפרות שנמצאו"""
-        if not violations:
-            print("✅ לא נמצאו הפרות")
-            return
-        
-        print(f"⚠️ נמצאו {len(violations)} הפרות:")
-        print("=" * 50)
-        
-        for violation in violations[:50]:  # מגביל ל-50 הפרות ראשונות
-            print(f"❌ בעיה: {violation['message']}")
-            print(f"🔧 קוד: {violation['code']}")
-            print(f"💡 תיקון: {violation['fix']}")
-            print("----------------------------------------")
-            print(f"📁 קובץ: {violation['file']}")
-            print(f"📍 שורה: {violation['line']}")
-        
-        if len(violations) > 50:
-            print(f"... ועוד {len(violations) - 50} הפרות נוספות")
-        
-        # הדפסת סיכום
-        problem_counts = {}
-        for v in violations:
-            problem_counts[v['message']] = problem_counts.get(v['message'], 0) + 1
-        
-        print("\n📊 סיכום הפרות:")
-        for problem, count in sorted(problem_counts.items(), key=lambda x: x[1], reverse=True):
-            print(f"  {count:3d} - {problem}")
+        try:
+            if not violations:
+                print("לא נמצאו הפרות")
+                return
+            
+            print(f"נמצאו {len(violations)} הפרות:")
+            print("=" * 50)
+            
+            for i, violation in enumerate(violations[:50]):  # מגביל ל-50 הפרות ראשונות
+                try:
+                    print(f"בעיה: {violation.get('message', 'לא ידוע')}")
+                    print(f"קוד: {violation.get('code', 'לא ידוע')}")
+                    print(f"תיקון: {violation.get('fix', 'לא ידוע')}")
+                    print("----------------------------------------")
+                    print(f"קובץ: {violation.get('file', 'לא ידוע')}")
+                    print(f"שורה: {violation.get('line', 'לא ידוע')}")
+                    print()
+                except Exception as e:
+                    print(f"שגיאה בהצגת הפרה {i}: {e}")
+            
+            if len(violations) > 50:
+                print(f"... ועוד {len(violations) - 50} הפרות נוספות")
+            
+            # הדפסת סיכום
+            try:
+                problem_counts = {}
+                for v in violations:
+                    msg = v.get('message', 'לא ידוע')
+                    problem_counts[msg] = problem_counts.get(msg, 0) + 1
+                
+                print("\nסיכום הפרות:")
+                for problem, count in sorted(problem_counts.items(), key=lambda x: x[1], reverse=True):
+                    print(f"  {count:3d} - {problem}")
+            except Exception as e:
+                print(f"שגיאה בסיכום: {e}")
+                
+        except Exception as e:
+            print(f"שגיאה כללית בהדפסת הפרות: {e}")
+            print(f"סה\"כ הפרות: {len(violations) if violations else 0}")
 
     def should_allow_commit(self, violations):
         """קובע האם לאפשר קומיט למרות הפרות"""
         if not violations:
-            return True, "✅ אין הפרות - קומיט מאושר"
+            return True, "אין הפרות - קומיט מאושר"
         
         # מצב מעבר: מאפשר קומיט עם הפרות אבל מתריע
-        print("⚠️ מצב מעבר: נמצאו", len(violations), "הפרות, אבל קומיט מותר")
-        print("📋 תיעוד מצב: violations במהלך מעבר למערכת אחידה")
+        print("מצב מעבר: נמצאו", len(violations), "הפרות, אבל קומיט מותר")
+        print("תיעוד מצב: violations במהלך מעבר למערכת אחידה")
         return True, "קוד תקין - קומיט מאושר"
 
 def create_pre_commit_hook():

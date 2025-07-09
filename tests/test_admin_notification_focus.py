@@ -86,7 +86,7 @@ def test_admin_notification_focus_age(monkeypatch):
     message_id = "test_msg_123"
     user_request_start_time = 0.0
     
-    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "bot reply", message_id, user_request_start_time, {"usage": {}}))
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "bot reply", message_id, user_request_start_time, {"usage": {}}, [], []))
 
     # ------------------------------------------------------------
     # 5. Assertions – ensure focused content is present

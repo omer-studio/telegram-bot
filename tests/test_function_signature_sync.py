@@ -25,7 +25,7 @@ def check_function_signatures() -> Dict[str, List[str]]:
     # פונקציות חשובות לבדיקה - שמות וסדר בלבד
     critical_functions = {
         "message_handler": {
-            "handle_background_tasks": ["update", "context", "chat_id", "user_msg", "bot_reply", "message_id", "user_request_start_time", "gpt_result"],
+            "handle_background_tasks": ["update", "context", "chat_id", "user_msg", "bot_reply", "message_id", "user_request_start_time", "gpt_result", "history_messages", "messages_for_gpt"],
             "handle_message": ["update", "context"],
             "run_background_processors": ["chat_id", "user_msg", "bot_reply"]
         },

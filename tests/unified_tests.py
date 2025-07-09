@@ -73,7 +73,7 @@ def check_function_signatures() -> Dict[str, List[str]]:
     
     critical_functions = {
         "message_handler": {
-            "handle_background_tasks": ["update", "context", "chat_id", "user_msg", "bot_reply", "message_id", "user_request_start_time", "gpt_result"],
+            "handle_background_tasks": ["update", "context", "chat_id", "user_msg", "bot_reply", "message_id", "user_request_start_time", "gpt_result", "history_messages", "messages_for_gpt"],
             "handle_message": ["update", "context"],
             "run_background_processors": ["chat_id", "user_msg", "bot_reply"]
         },
@@ -266,7 +266,7 @@ def test_admin_notification_focus_age(monkeypatch):
     message_id = "test_msg_123"
     user_request_start_time = 0.0
     
-    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "bot reply", message_id, user_request_start_time, {"usage": {}}))
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "bot reply", message_id, user_request_start_time, {"usage": {}}, [], []))
 
     print(f"[TEST] Background tasks completed for chat_id={chat_id}")
     assert True, "Background tasks completed successfully"
@@ -316,7 +316,7 @@ def test_admin_notification_on_profile_update(monkeypatch):
     user_request_start_time = 0.0
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result))
+    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result, [], []))
 
     assert sent_msgs, "Admin notification should have been sent"
     combined = "\n".join(sent_msgs)

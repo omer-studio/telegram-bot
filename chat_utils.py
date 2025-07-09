@@ -90,14 +90,14 @@ def update_chat_history(chat_id: str, user_msg: str, bot_msg: str, **kwargs) -> 
         )
         
         if success:
-            logger.info(f"chat_id={chat_id} | נשמר בהצלחה", source="HISTORY_SAVE")
+            logger.info(f"chat_id={safe_str(chat_id)} | נשמר בהצלחה", source="HISTORY_SAVE")
         else:
-            logger.error(f"chat_id={chat_id} | נכשל בשמירה", source="HISTORY_SAVE")
+            logger.error(f"chat_id={safe_str(chat_id)} | נכשל בשמירה", source="HISTORY_SAVE")
         
         return success
         
     except Exception as e:
-        logger.error(f"chat_id={chat_id} | שגיאה: {e}", source="HISTORY_SAVE_ERROR")
+        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה: {e}", source="HISTORY_SAVE_ERROR")
         return False
 
 def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
@@ -154,12 +154,12 @@ def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
                 assistant_count += 1
         
         # 5. לוג פשוט וברור
-        logger.info(f"chat_id={chat_id} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="HISTORY")
+        logger.info(f"chat_id={safe_str(chat_id)} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="HISTORY")
         
         return messages
         
     except Exception as e:
-        logger.error(f"chat_id={chat_id} | שגיאה: {e}", source="HISTORY_ERROR")
+        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה: {e}", source="HISTORY_ERROR")
         return []
 
 # ============================================================================
@@ -674,7 +674,7 @@ def update_last_bot_message(chat_id, bot_summary):
             save_chat_message(chat_id, "", bot_summary)
             
         if should_log_message_debug():
-            logger.info(f"הודעת בוט עודכנה למשתמש {chat_id} (SQL)", source="LAST_BOT_MESSAGE_UPDATE")
+            logger.info(f"הודעת בוט עודכנה למשתמש {safe_str(chat_id)} (SQL)", source="LAST_BOT_MESSAGE_UPDATE")
     except Exception as e:
         logger.error(f"❌ שגיאה בעדכון תשובת בוט: {e}", source="LAST_BOT_MESSAGE_UPDATE_ERROR")
 
@@ -737,7 +737,7 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
         if user_msg:
             basic_greeting_pattern = r'^(היי|שלום|אהלן|הי|שלום לך|אהלן לך).{0,2}$'
             if re.match(basic_greeting_pattern, user_msg.strip(), re.IGNORECASE):
-                logger.info(f"זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={chat_id}", source="GREETING_DEBUG")
+                logger.info(f"זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={safe_str(chat_id)}", source="GREETING_DEBUG")
                 return True
 
         # תנאי 3: בדיקה אם עברו יותר מ-2 שעות מההודעה האחרונה

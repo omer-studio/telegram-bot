@@ -780,27 +780,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # שלב 3: שליחת התשובה למשתמש מיד!
             await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
-            # 📨 שליחת התכתבות אנונימית לאדמין
-            try:
-                from admin_notifications import send_anonymous_chat_notification
-                # חישוב זמני תגובה
-                current_time = time.time()
-                user_response_time = current_time - user_request_start_time
-                gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
-                
-                send_anonymous_chat_notification(
-                    user_msg, 
-                    bot_reply, 
-                    history_messages, 
-                    messages_for_gpt,
-                    gpt_timing=gpt_response_time,
-                    user_timing=user_response_time
-                )
-            except Exception as admin_chat_err:
-                logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
-
             # 🔧 תיקון: כל השאר ברקע - המשתמש כבר קיבל תשובה!
-            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result))
+            asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt))
             
         except Exception as ex:
             logger.error(f"❌ שגיאה בטיפול בהודעה: {ex}", source="message_handler")
@@ -1032,12 +1013,31 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
     except Exception as e:
         logger.error(f"שליחת הודעת מערכת נכשלה: {e}", source="message_handler")
 
-async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result):
+async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt):
     """
     🔧 פונקציה חדשה: מטפלת בכל המשימות ברקע אחרי שהמשתמש קיבל תשובה
     זה מבטיח שהמשתמש מקבל תשובה מהר, וכל השאר קורה ברקע
     """
     try:
+        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע)
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            # חישוב זמני תגובה
+            current_time = time.time()
+            user_response_time = current_time - user_request_start_time
+            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
+            
+            send_anonymous_chat_notification(
+                user_msg, 
+                bot_reply, 
+                history_messages, 
+                messages_for_gpt,
+                gpt_timing=gpt_response_time,
+                user_timing=user_response_time
+            )
+        except Exception as admin_chat_err:
+            logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
+
         # חישוב זמן מענה
         response_time = time.time() - user_request_start_time
         

@@ -141,7 +141,7 @@ def test_admin_notification_on_profile_update(monkeypatch):
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result))
+    asyncio.run(message_handler.handle_background_tasks(mock_update, mock_context, chat_id_sample, "אני בן 35", "תודה", message_id, user_request_start_time, mock_gpt_result, [], []))
 
     assert sent_msgs, "Admin notification should have been sent"
     # Verify content includes chat id and GPT indication
@@ -282,7 +282,7 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "דיון", message_id, user_request_start_time, mock_gpt_result))
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "דיון", message_id, user_request_start_time, mock_gpt_result, [], []))
 
     assert captured, "Notification not sent"
     msg = captured['msg']
@@ -349,7 +349,7 @@ def test_admin_notification_age_update(monkeypatch):
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
-    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "תשובה", message_id, user_request_start_time, mock_gpt_result))
+    asyncio.run(mh.handle_background_tasks(mock_update, mock_context, chat_id, user_msg, "תשובה", message_id, user_request_start_time, mock_gpt_result, [], []))
 
     assert captured, "Notification not sent"
     txt = captured['msg']
