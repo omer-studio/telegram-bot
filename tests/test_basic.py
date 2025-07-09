@@ -39,7 +39,11 @@ class TestBasicFunctionality(unittest.TestCase):
         
         try:
             # מאחה שליחת הודעה לאדמין וליכוד התוכן
-            with patch('admin_notifications.send_admin_notification_raw') as mock_send:
+            with patch('admin_notifications.send_admin_notification_raw') as mock_send, \
+                 patch('db_manager.get_user_message_count') as mock_get_count:
+                
+                # הגדרת מספר הודעות משתמש אמיתי (מספר גבוה יותר מההיסטוריה)
+                mock_get_count.return_value = 25
                 send_anonymous_chat_notification(
                     user_message="הודעה חדשה",
                     bot_response="תשובה חדשה",
@@ -57,26 +61,23 @@ class TestBasicFunctionality(unittest.TestCase):
                 notification_text = mock_send.call_args[0][0]
                 
                 # בדיקה שמופיע רק מונה אחד של הודעות משתמש
-                user_count_occurrences = notification_text.count("מונה הודעות משתמש:")
-                self.assertEqual(user_count_occurrences, 1, "צריך להיות רק מונה אחד של הודעות משתמש")
+                total_count_occurrences = notification_text.count("סה״כ הודעות משתמש:")
+                self.assertEqual(total_count_occurrences, 1, "צריך להיות רק מונה אחד של סה״כ הודעות משתמש")
                 
-                # בדיקה שהמונה נכון (2 הודעות היסטוריה בלבד)
-                import re
-                # בדיקה יותר פשוטה - מחפש בכל הטקסט את המונה
-                if "מונה הודעות משתמש:" in notification_text:
-                    # קיים המונה, בואי נוודא שהוא נכון
-                    counter_part = notification_text.split("מונה הודעות משתמש:")[1].strip()
-                    self.assertIn("2", counter_part, "המונה צריך להיות 2 (רק היסטוריה)")
-                else:
-                    self.fail("לא נמצא מונה הודעות משתמש כלל")
+                # בדיקה שהמונה מציג את המספר האמיתי (25) ולא את המוגבל (2)
+                self.assertIn("סה״כ הודעות משתמש:** 25", notification_text, "המונה צריך להציג את המספר האמיתי מהמסד נתונים")
                 
-                # בדיקה שהסיסטם פרומפטים בשורה אחת
+                # בדיקה שההיסטוריה ל-GPT עדיין מוצגת נכון
+                self.assertIn("נשלחה היסטוריה ל-GPT:", notification_text, "צריך להציג היסטוריה ל-GPT")
+                self.assertIn("2 משתמש", notification_text, "צריך להציג 2 הודעות משתמש שנשלחו ל-GPT")
+                
+                # בדיקה שהסיסטם פרומפטים מוצגים כהלכה
                 system_prompt_lines = [line for line in notification_text.split('\n') if 'סיסטם פרומט' in line]
                 self.assertGreater(len(system_prompt_lines), 0, "צריך להיות לפחות סיסטם פרומט אחד")
                 
-                # בדיקה שהפרומפטים בשורה אחת (כל הפרומפטים ב-1 שורה בלבד)
-                combined_prompts_in_one_line = any('סיסטם פרומט 1:' in line and 'סיסטם פרומט 2:' in line for line in notification_text.split('\n'))
-                self.assertTrue(combined_prompts_in_one_line, "כל הסיסטם פרומפטים צריכים להיות בשורה אחת")
+                # בדיקה שהפרומפטים נמצאים בהודעה (בשורות נפרדות)
+                self.assertIn("סיסטם פרומט 1:", notification_text, "צריך להיות סיסטם פרומפט 1")
+                self.assertIn("סיסטם פרומט 2:", notification_text, "צריך להיות סיסטם פרומפט 2")
                 
         finally:
             # 🔧 החזרת הגדרת סביבת הבדיקה
