@@ -1033,7 +1033,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 history_messages, 
                 messages_for_gpt,
                 gpt_timing=gpt_response_time,
-                user_timing=user_response_time
+                user_timing=user_response_time,
+                chat_id=chat_id
             )
         except Exception as admin_chat_err:
             logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")

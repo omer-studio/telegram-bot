@@ -44,7 +44,8 @@ import subprocess
 import sys
 import time
 import requests
-import logging
+from simple_logger import logger
+from user_friendly_errors import safe_str
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 from config import TELEGRAM_BOT_TOKEN, config
 # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!

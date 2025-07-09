@@ -9,13 +9,13 @@ import os
 
 def check_gpt_table():
     try:
-        # טעינת קונפיגורציה
-        config_path = 'etc/secrets/config.json'
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+        # 🔧 תיקון מערכתי: שימוש ב-get_config() מרכזי במקום קריאה קשיחה
+        try:
+            from config import get_config
+            config = get_config()
             db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
-        else:
+        except Exception:
+            # fallback למשתנה סביבה אם get_config() נכשל
             db_url = os.getenv("DATABASE_URL")
         
         if not db_url:

@@ -12,8 +12,9 @@ def fetch_service_logs():
     print('🔍 חיפוש לוגי השירות ברנדר...')
     
     try:
-        with open('etc/secrets/config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        # 🔧 תיקון מערכתי: שימוש ב-get_config() מרכזי במקום קריאה קשיחה
+        from config import get_config
+        config = get_config()
     except Exception as e:
         print(f'❌ שגיאה בקריאת קונפיגורציה: {e}')
         return

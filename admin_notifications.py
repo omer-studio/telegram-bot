@@ -7,15 +7,16 @@ admin_notifications.py
 
 import json
 import os
-import logging
 import requests
 from datetime import datetime
+from simple_logger import logger
+from user_friendly_errors import safe_str
 from config import (
     ADMIN_NOTIFICATION_CHAT_ID, 
     ADMIN_BOT_TELEGRAM_TOKEN, 
     ADMIN_CHAT_ID
 )
-from simple_config import TimeoutConfig
+# from simple_config import TimeoutConfig  # התלות הוסרה - נשתמש בערכים ישירים
 from utils import get_israel_time
 
 try:
@@ -40,7 +41,7 @@ def write_deploy_commit_to_log(commit):
             json.dump(deploy_data, f, ensure_ascii=False, indent=2)
             
     except Exception as e:
-        logging.error(f"Error writing deploy commit to log: {e}")
+        logger.error(f"Error writing deploy commit to log: {e}")
 
 def get_last_deploy_commit_from_log():
     """קורא את ה-commit האחרון מהלוג"""
@@ -52,7 +53,7 @@ def get_last_deploy_commit_from_log():
                 return data.get("commit", "unknown")
         return "unknown"
     except Exception as e:
-        logging.error(f"Error reading deploy commit from log: {e}")
+        logger.error(f"Error reading deploy commit from log: {e}")
         return "unknown"
 
 def emoji_or_na(value):
@@ -108,11 +109,10 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         send_admin_notification(message)
         
         # לוג
-        print(f"📨 נשלחה התראת פריסה: {status}")
+        logger.info(f"📨 נשלחה התראת פריסה: {status}")
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת פריסה: {e}")
-        logging.error(f"Error sending deploy notification: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראת פריסה: {e}")
 
 def send_error_notification(error_message: str, chat_id: str = None, user_msg: str = None, error_type: str = "general_error") -> None:
     """שולח התראת שגיאה לאדמין (deprecated - השתמש בsend_admin_notification)"""
@@ -130,7 +130,7 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
         notification_text = f"🚨 **שגיאה במערכת**\n\n"
         notification_text += f"🔍 **סוג:** {error_type}\n"
         if chat_id:
-            notification_text += f"👤 **משתמש:** {chat_id}\n"
+            notification_text += f"👤 **משתמש:** {safe_str(chat_id)}\n"
         if clean_user_msg != "N/A":
             notification_text += f"💬 **הודעה:** {clean_user_msg}\n"
         notification_text += f"❌ **שגיאה:** {clean_error}"
@@ -138,13 +138,13 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
         send_admin_notification(notification_text, urgent=True)
         
     except Exception as e:
-        print(f"🚨 Failed to send error notification: {e}")
+        logger.error(f"🚨 Failed to send error notification: {e}")
 
 def send_admin_notification(message, urgent=False):
     """שולח התראה לאדמין דרך הבוט הייעודי"""
     try:
         if not TELEGRAM_AVAILABLE:
-            print(f"📨 [ADMIN] {message}")
+            logger.info(f"📨 [ADMIN] {message}")
             return
             
         # הוספת סימון דחיפות
@@ -155,21 +155,19 @@ def send_admin_notification(message, urgent=False):
         _send_telegram_message_admin_sync(ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, message)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראה לאדמין: {e}")
-        logging.error(f"Error sending admin notification: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראה לאדמין: {e}")
 
 def send_admin_notification_raw(message):
     """שולח התראה גולמית לאדמין ללא עיבוד"""
     try:
         if not TELEGRAM_AVAILABLE:
-            print(f"📨 [ADMIN_RAW] {message}")
+            logger.info(f"📨 [ADMIN_RAW] {message}")
             return
             
         _send_telegram_message_admin_sync(ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, message)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראה גולמית: {e}")
-        logging.error(f"Error sending raw admin notification: {e}")
+        logger.error(f"�� שגיאה בשליחת התראה גולמית: {e}")
 
 def send_admin_secret_command_notification(message: str):
     """שולח התראה מיוחדת לאדמין על הפעלת פקודה סודית"""
@@ -184,7 +182,7 @@ def send_admin_secret_command_notification(message: str):
         send_admin_notification(notification, urgent=True)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת פקודה סודית: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראת פקודה סודית: {e}")
 
 def log_error_to_file(error_data, send_telegram=True):
     """רושם שגיאה לקובץ ושולח התראה"""
@@ -205,7 +203,7 @@ def log_error_to_file(error_data, send_telegram=True):
             send_admin_notification(error_summary)
         
     except Exception as e:
-        print(f"🚨 שגיאה ברישום שגיאה לקובץ: {e}")
+        logger.error(f"🚨 שגיאה ברישום שגיאה לקובץ: {e}")
 
 def send_startup_notification():
     """שולח התראת הפעלה לאדמין"""
@@ -218,7 +216,7 @@ def send_startup_notification():
         send_admin_notification(startup_message)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת הפעלה: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראת הפעלה: {e}")
 
 def send_concurrent_alert(alert_type: str, details: dict):
     """שולח התראה על פעילות concurrent"""
@@ -248,7 +246,7 @@ def send_concurrent_alert(alert_type: str, details: dict):
         send_admin_notification(message, urgent=urgent)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת concurrent: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראת concurrent: {e}")
 
 def send_recovery_notification(recovery_type: str, details: dict):
     """שולח התראת התאוששות"""
@@ -274,7 +272,7 @@ def send_recovery_notification(recovery_type: str, details: dict):
         send_admin_notification(message)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת התאוששות: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראת התאוששות: {e}")
 
 def send_admin_alert(message, alert_level="info"):
     """שולח התראה כללית לאדמין"""
@@ -294,7 +292,7 @@ def send_admin_alert(message, alert_level="info"):
         send_admin_notification(formatted_message, urgent=urgent)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראה כללית: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראה כללית: {e}")
 
 async def _send_telegram_message_admin(bot_token, chat_id, text):
     """שולח הודעה אסינכרונית לאדמין"""
@@ -304,7 +302,7 @@ async def _send_telegram_message_admin(bot_token, chat_id, text):
         await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחה אסינכרונית לאדמין: {e}")
+        logger.error(f"🚨 שגיאה בשליחה אסינכרונית לאדמין: {e}")
 
 def _send_telegram_message_admin_sync(bot_token, chat_id, text):
     """שולח הודעה סינכרונית לאדמין"""
@@ -318,12 +316,12 @@ def _send_telegram_message_admin_sync(bot_token, chat_id, text):
         
         response = requests.post(url, data=data, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
         if response.status_code == 200:
-            print("✅ התראה נשלחה לאדמין")
+            logger.info("✅ התראה נשלחה לאדמין")
         else:
-            print(f"⚠️ שגיאה בשליחת התראה: {response.status_code}")
+            logger.warning(f"⚠️ שגיאה בשליחת התראה: {response.status_code}")
             
     except Exception as e:
-        print(f"🚨 שגיאה בשליחה סינכרונית לאדמין: {e}")
+        logger.error(f"🚨 שגיאה בשליחה סינכרונית לאדמין: {e}")
 
 def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, daily_limit, monthly_limit):
     """שולח התראה על בעיית חיוב"""
@@ -351,7 +349,7 @@ def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, 
         send_admin_notification(alert_message, urgent=urgent)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת חיוב: {e}")
+        logger.error(f"�� שגיאה בשליחת התראת חיוב: {e}")
 
 def alert_system_status(message, level="info"):
     """שולח התראת סטטוס מערכת"""
@@ -363,7 +361,7 @@ def alert_system_status(message, level="info"):
         send_admin_alert(status_message, level)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
+        logger.error(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
 def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
@@ -371,7 +369,8 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         # יצירת כותרת עם 3 ספרות אחרונות של chat_id
         chat_suffix = ""
         if chat_id:
-            last_3_digits = str(chat_id)[-3:]
+            safe_chat_id = safe_str(chat_id)
+            last_3_digits = str(safe_chat_id)[-3:]
             chat_suffix = f" (`{last_3_digits}`)"
         
         # יצירת הודעה מפורמטת ללא מזהה משתמש
@@ -428,5 +427,5 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         send_admin_notification_raw(notification_text)
         
     except Exception as e:
-        print(f"🚨 שגיאה בשליחת התראת התכתבות אנונימית: {e}")
-        logging.error(f"Error sending anonymous chat notification: {e}") 
+        logger.error(f"�� שגיאה בשליחת התראת התכתבות אנונימית: {e}")
+        logger.error(f"Error sending anonymous chat notification: {e}") 
