@@ -331,7 +331,7 @@ def connect_google_sheets(): # פונקציה ריקה - Google Sheets הוסר
         logger.info("🗑️ Google Sheets הוסר - עברנו למסד נתונים", source="bot_setup")
         print("🗑️ Google Sheets הוסר - עברנו למסד נתונים")
     except Exception as ex:
-        logging.info(f"🗑️ Google Sheets הוסר: {ex}")
+        logger.info(f"🗑️ Google Sheets הוסר: {ex}", source="bot_setup")
         print(f"🗑️ Google Sheets הוסר: {ex}")
 
 # === תזמון דוחות אוטומטיים לאדמין ===
@@ -434,18 +434,18 @@ def setup_gentle_reminders():
                 loop.run_until_complete(gentle_reminder_background_task())
             except Exception as e:
                 print(f"❌ שגיאה במשימת תזכורות רקע: {e}")
-                logging.error(f"Error in reminder background task: {e}")
+                logger.error(f"Error in reminder background task: {e}", source="bot_setup")
         
         # הפעלה ב-thread נפרד כדי לא לחסום את הבוט
         reminder_thread = threading.Thread(target=reminder_task, daemon=True)
         reminder_thread.start()
         
         print("✅ מערכת תזכורות עדינות הופעלה (בדיקה כל שעה)")
-        logging.info("Gentle reminder system started")
+        logger.info("Gentle reminder system started", source="bot_setup")
         
     except Exception as e:
         print(f"⚠️ בעיה בהתחלת מערכת תזכורות: {e}")
-        logging.error(f"Failed to start gentle reminder system: {e}")
+        logger.error(f"Failed to start gentle reminder system: {e}", source="bot_setup")
 
 @time_operation("הוספת handlers להודעות")
 def setup_message_handlers():
