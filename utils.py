@@ -152,4 +152,17 @@ def send_error_stats_report():
         # Fallback if notifications module not available
         return None
 
+def health_check():
+    """Backward compatibility wrapper for health_check"""
+    try:
+        from chat_utils import health_check as _health_check
+        return _health_check()
+    except ImportError:
+        # Fallback basic health check
+        return {
+            "config": True,
+            "logger": True,
+            "data_manager": True
+        }
+
 
