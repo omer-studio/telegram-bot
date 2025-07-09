@@ -1047,9 +1047,11 @@ def get_user_message_count(chat_id):
 def clear_user_from_database(chat_id):
     """
     מוחק את כל הודעות הצ'אט של המשתמש מטבלת chat_messages,
-    ומנקה את כל השדות של המשתמש ב-user_profiles (כולל chat_id),
-    ומשאיר אך ורק את code_approve (כל השאר NULL/ריק).
+    ומוחק את הרשומה לחלוטין מטבלת user_profiles.
     לא נוגע בכלל ב-gpt_calls_log!
+    
+    🔧 תיקון מערכתי: מוחק את השורה לחלוטין במקום לאפס אותה ל-NULL
+    למנוע הצטברות של "רשומות זומבי" בטבלה.
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -1061,50 +1063,18 @@ def clear_user_from_database(chat_id):
         cur.execute("DELETE FROM chat_messages WHERE chat_id = %s", (chat_id,))
         chat_deleted = cur.rowcount
         
-        # איפוס כל השדות ב-user_profiles חוץ מ-code_approve
-        cur.execute("""
-            UPDATE user_profiles
-            SET chat_id = NULL,
-                name = NULL,
-                age = NULL,
-                pronoun_preference = NULL,
-                occupation_or_role = NULL,
-                attracted_to = NULL,
-                relationship_type = NULL,
-                parental_status = NULL,
-                self_religious_affiliation = NULL,
-                self_religiosity_level = NULL,
-                family_religiosity = NULL,
-                closet_status = NULL,
-                who_knows = NULL,
-                who_doesnt_know = NULL,
-                attends_therapy = NULL,
-                primary_conflict = NULL,
-                trauma_history = NULL,
-                goal_in_course = NULL,
-                language_of_strength = NULL,
-                date_first_seen = NULL,
-                coping_strategies = NULL,
-                fears_concerns = NULL,
-                future_vision = NULL,
-                other_insights = NULL,
-                total_messages_count = NULL,
-                summary = NULL,
-                code_try = NULL,
-                approved = NULL,
-                updated_at = %s
-            WHERE chat_id = %s
-        """, (datetime.utcnow(), chat_id))
-        profile_updated = cur.rowcount
+        # 🔧 תיקון מערכתי: מחיקה מלאה של השורה במקום איפוס ל-NULL
+        cur.execute("DELETE FROM user_profiles WHERE chat_id = %s", (chat_id,))
+        profile_deleted = cur.rowcount
         
         conn.commit()
         cur.close()
         conn.close()
         
         if should_log_debug_prints():
-            print(f"🗑️ [DB] נמחקו {chat_deleted} הודעות צ'אט, פרופיל אופס (רק code_approve נשאר) עבור {chat_id}")
+            print(f"🗑️ [DB] נמחקו {chat_deleted} הודעות צ'אט, פרופיל נמחק לחלוטין עבור {chat_id}")
         
-        return chat_deleted > 0 or profile_updated > 0
+        return chat_deleted > 0 or profile_deleted > 0
         
     except Exception as e:
         if should_log_debug_prints():

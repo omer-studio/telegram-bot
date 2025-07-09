@@ -165,6 +165,75 @@ def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
         return []
 
 # ============================================================================
+# 🎯 מערכת ספירת הודעות מערכתית - Single Source of Truth
+# ============================================================================
+
+def get_total_user_messages_count(chat_id: str) -> int:
+    """
+    🎯 מחזיר מספר כולל של הודעות משתמש מהמסד נתונים
+    
+    ⚠️ זו הפונקציה הרשמית למספר הודעות כולל!
+    אל תסתמכו על ספירה מהיסטוריה מוגבלת.
+    
+    Args:
+        chat_id: מזהה המשתמש
+        
+    Returns:
+        int: מספר הודעות כולל מהמסד נתונים
+        
+    Example:
+        >>> total = get_total_user_messages_count("123456789")
+        >>> print(f"המשתמש שלח {total} הודעות")
+    """
+    try:
+        from db_manager import get_user_message_count
+        return get_user_message_count(safe_str(chat_id))
+    except Exception as e:
+        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בקבלת מספר הודעות: {e}", source="USER_COUNT_ERROR")
+        return 0
+
+def get_recent_history_for_gpt(chat_id: str, limit: int = 15) -> list:
+    """
+    🎯 מחזיר היסטוריה מוגבלת לשליחה ל-GPT
+    
+    ⚠️ אל תשתמשו בזה לספירת הודעות כולל!
+    זה רק להיסטוריה ל-GPT.
+    
+    Args:
+        chat_id: מזהה המשתמש
+        limit: מספר מקסימלי של הודעות
+        
+    Returns:
+        list: רשימת הודעות בפורמט GPT
+        
+    Example:
+        >>> history = get_recent_history_for_gpt("123456789", 10)
+        >>> print(f"נשלחו {len(history)} הודעות ל-GPT")
+    """
+    return get_chat_history_simple(chat_id, limit)
+
+def count_user_messages_in_history(history: list) -> int:
+    """
+    🎯 סופר הודעות משתמש בהיסטוריה נתונה
+    
+    ⚠️ זה רק לספירה מהיסטוריה שכבר יש!
+    לא להתמש בזה למספר הודעות כולל.
+    
+    Args:
+        history: רשימת הודעות בפורמט GPT
+        
+    Returns:
+        int: מספר הודעות משתמש בהיסטוריה הנתונה
+        
+    Example:
+        >>> count = count_user_messages_in_history(history_messages)
+        >>> print(f"בהיסטוריה יש {count} הודעות משתמש")
+    """
+    if not history:
+        return 0
+    return len([msg for msg in history if msg.get("role") == "user"])
+
+# ============================================================================
 # 🗑️ פונקציות ישנות - לתאימות לאחור (יוסרו בעתיד)
 # ============================================================================
 
@@ -240,10 +309,13 @@ def _extract_topics_from_text(text: str) -> dict:
 
 
 def _calculate_user_stats_from_history(history: list) -> dict:
-    # סופר רק הודעות משתמש (לא בוט)
+    # ⚠️ DEPRECATED: פונקציה זו מחשבת סטטיסטיקות מהיסטוריה מוגבלת!
+    # להשתמש ב-get_total_user_messages_count() למספר הודעות אמיתי
+    
+    # סופר רק הודעות משתמש (לא בוט) מההיסטוריה המוגבלת
     user_messages = [entry["user"] for entry in history if entry.get("user")]
     basic_stats = {
-        "total_messages": len(user_messages),  # רק הודעות משתמש
+        "total_messages": len(user_messages),  # ⚠️ זה מהיסטוריה מוגבלת בלבד!
         "first_contact": history[0]["timestamp"] if history else None,
         "last_contact": history[-1]["timestamp"] if history else None,
     }

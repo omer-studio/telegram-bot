@@ -408,8 +408,8 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         total_user_messages = 0
         if chat_id:
             try:
-                from db_manager import get_user_message_count
-                total_user_messages = get_user_message_count(safe_str(chat_id))
+                from chat_utils import get_total_user_messages_count
+                total_user_messages = get_total_user_messages_count(safe_str(chat_id))
             except Exception as e:
                 logger.warning(f"שגיאה בקבלת מספר הודעות משתמש: {e}")
                 total_user_messages = 0

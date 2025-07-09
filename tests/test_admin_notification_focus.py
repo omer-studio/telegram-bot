@@ -66,6 +66,9 @@ def test_admin_notification_focus_age(monkeypatch):
         captured["msg"] = msg
 
     monkeypatch.setattr(notifications, "send_admin_notification_raw", _fake_notify, raising=False)
+    
+    # ✅ תיקון: מוק המניע שליחה אמיתית
+    monkeypatch.setattr("admin_notifications.is_test_environment", lambda: True, raising=False)
 
     # ------------------------------------------------------------
     # 4. Run background processors
