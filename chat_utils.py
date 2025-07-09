@@ -48,6 +48,7 @@ __all__: List[str] = [
     "should_send_time_greeting",
     # holiday / system helpers
     "get_holiday_system_message",
+    "build_complete_system_messages",  # 🆕 פונקציה מרכזית לבניית סיסטם פרומפטים
     # log / admin / health helpers
     "clean_old_logs",
     "health_check",
@@ -767,3 +768,61 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
     except Exception as e:
         logger.error(f"שגיאה ב-should_send_time_greeting: {e}", source="GREETING_CHECK")
         return False 
+
+
+def build_complete_system_messages(chat_id: str, user_msg: str = "", include_main_prompt: bool = True) -> List[Dict[str, str]]:
+    """
+    🎯 פונקציה מרכזית שבונה את כל הסיסטם פרומפטים במקום אחד
+    
+    זה מבטיח שכל מנוע GPT יקבל את אותו הקשר, ושלא יהיו חוסרי עקביות
+    במקום לפזר את הלוגיקה במספר מקומות - הכל נמצא כאן.
+    
+    Args:
+        chat_id: מזהה המשתמש
+        user_msg: הודעת המשתמש (לצורך הקשר)
+        include_main_prompt: האם לכלול את הפרומפט הראשי של דניאל
+    
+    Returns:
+        רשימה של הודעות סיסטם מוכנות ל-GPT
+    """
+    system_messages = []
+    
+    # 1. הפרומפט הראשי של דניאל (אם נדרש)
+    if include_main_prompt:
+        from prompts import SYSTEM_PROMPT
+        system_messages.append({"role": "system", "content": SYSTEM_PROMPT})
+    
+    # 2. מידע על המשתמש
+    try:
+        from profile_utils import get_user_summary_fast
+        current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
+        if current_summary:
+            system_messages.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
+    except Exception as e:
+        logger.warning(f"[build_complete_system_messages] Could not get user summary: {e}", source="chat_utils")
+    
+    # 3. ברכות זמן
+    try:
+        time_greeting = get_time_greeting_instruction()
+        if time_greeting:
+            system_messages.append({"role": "system", "content": time_greeting})
+    except Exception as e:
+        logger.warning(f"[build_complete_system_messages] Could not get time greeting: {e}", source="chat_utils")
+    
+    # 4. הנחיות יום השבוע
+    try:
+        weekday_context = get_weekday_context_instruction(safe_str(chat_id), user_msg)
+        if weekday_context:
+            system_messages.append({"role": "system", "content": weekday_context})
+    except Exception as e:
+        logger.warning(f"[build_complete_system_messages] Could not get weekday context: {e}", source="chat_utils")
+    
+    # 5. הודעות חגים מיוחדים
+    try:
+        holiday_message = get_holiday_system_message(safe_str(chat_id), user_msg)
+        if holiday_message:
+            system_messages.append({"role": "system", "content": holiday_message})
+    except Exception as e:
+        logger.warning(f"[build_complete_system_messages] Could not get holiday message: {e}", source="chat_utils")
+    
+    return system_messages 
