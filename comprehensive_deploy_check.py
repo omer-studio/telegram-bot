@@ -4,15 +4,16 @@ comprehensive_deploy_check.py - בדיקות מקיפות לפני deploy
 מאחד את כל הבדיקות הנחוצות לקובץ אחד פשוט וברור
 """
 
-import os
 import sys
 import subprocess
-import json
-import re
-import inspect
-import platform
 import time
-from typing import Dict, List, Tuple
+import re
+import json
+import platform
+import os
+import glob
+from typing import Tuple, List
+from simple_config import TimeoutConfig
 
 class ComprehensiveDeployChecker:
     """בודק מקיף לפני deploy - מאחד את כל הבדיקות הנחוצות"""
@@ -224,14 +225,14 @@ class ComprehensiveDeployChecker:
                     capture_output=True,
                     encoding='utf-8',
                     errors='ignore',
-                    timeout=60
+                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT
                 )
             else:
                 result = subprocess.run(
                     [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
                     capture_output=True,
                     text=True,
-                    timeout=60
+                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT
                 )
             
             if result.returncode == 0:
@@ -255,14 +256,14 @@ class ComprehensiveDeployChecker:
                     capture_output=True,
                     encoding='utf-8',
                     errors='ignore',
-                    timeout=30
+                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT
                 )
             else:
                 result = subprocess.run(
                     [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"],
                     capture_output=True,
                     text=True,
-                    timeout=30
+                    timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT
                 )
             
             if result.returncode == 0:
@@ -550,6 +551,119 @@ class ComprehensiveDeployChecker:
         
         return len(errors) == 0, errors
     
+    def check_system_consistency(self) -> bool:
+        """🎯 בדיקת עקביות מערכתית - אין קריאות קשיחות ואין כפילויות"""
+        print("🔍 מבצע בדיקה: עקביות מערכתית")
+        print("-" * 50)
+        
+        issues = []
+        
+        # 1. בדיקת קריאות קשיחות ל-config.json
+        print("🔍 בודק קריאות קשיחות ל-config.json...")
+        
+        import glob
+        import re
+        
+        python_files = glob.glob("*.py") + glob.glob("**/*.py", recursive=True)
+        
+        hardcoded_config_files = []
+        for file_path in python_files:
+            if file_path.startswith("venv/") or file_path.startswith("."):
+                continue
+                
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                # חיפוש קריאות open ישירות ל-config.json
+                if re.search(r"open\s*\(\s*['\"].*config\.json['\"]", content):
+                    hardcoded_config_files.append(file_path)
+                    
+            except Exception:
+                continue
+        
+        if hardcoded_config_files:
+            issues.append(f"❌ נמצאו {len(hardcoded_config_files)} קבצים עם קריאות קשיחות ל-config.json")
+            for file_path in hardcoded_config_files[:5]:  # הצג רק 5 ראשונים
+                issues.append(f"   • {file_path}")
+            if len(hardcoded_config_files) > 5:
+                issues.append(f"   • ועוד {len(hardcoded_config_files) - 5} קבצים...")
+        else:
+            print("✅ אין קריאות קשיחות ל-config.json")
+        
+        # 2. בדיקת המרות chat_id מחוץ לפונקציה המרכזית
+        print("🔍 בודק המרות chat_id לא מרכזיות...")
+        
+        problematic_chat_id_files = []
+        for file_path in python_files:
+            if file_path.startswith("venv/") or file_path.startswith("."):
+                continue
+            if file_path in ["db_manager.py", "user_friendly_errors.py"]:  # קבצים שמותר להם
+                continue
+                
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                # חיפוש str(chat_id) או int(chat_id) שלא דרך safe_str או normalize_chat_id
+                if re.search(r"(?<!safe_)str\s*\(\s*chat_id\s*\)", content) or re.search(r"int\s*\(\s*chat_id\s*\)", content):
+                    problematic_chat_id_files.append(file_path)
+                    
+            except Exception:
+                continue
+        
+        if problematic_chat_id_files:
+            issues.append(f"❌ נמצאו {len(problematic_chat_id_files)} קבצים עם המרות chat_id לא מרכזיות")
+            for file_path in problematic_chat_id_files[:5]:
+                issues.append(f"   • {file_path}")
+            if len(problematic_chat_id_files) > 5:
+                issues.append(f"   • ועוד {len(problematic_chat_id_files) - 5} קבצים...")
+        else:
+            print("✅ כל המרות chat_id עוברות דרך הפונקציה המרכזית")
+        
+        # 3. בדיקת שימוש בfields_dict
+        print("🔍 בודק שימוש ב-fields_dict...")
+        
+        files_without_fields_dict = []
+        for file_path in python_files:
+            if file_path.startswith("venv/") or file_path.startswith("."):
+                continue
+            if file_path in ["fields_dict.py", "config.py", "comprehensive_deploy_check.py"]:
+                continue
+                
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                # אם הקובץ מגדיר שמות שדות קשיחים
+                if re.search(r"['\"](?:name|age|chat_id|user_id)['\"]", content) and "fields_dict" not in content:
+                    # בדיקה נוספת - האם זה באמת שדה של DB
+                    if "SELECT" in content or "INSERT" in content or "UPDATE" in content:
+                        files_without_fields_dict.append(file_path)
+                    
+            except Exception:
+                continue
+        
+        if files_without_fields_dict:
+            issues.append(f"⚠️  נמצאו {len(files_without_fields_dict)} קבצים שאולי צריכים להשתמש ב-fields_dict")
+            for file_path in files_without_fields_dict[:3]:
+                issues.append(f"   • {file_path}")
+        else:
+            print("✅ שימוש ב-fields_dict נראה עקבי")
+        
+        if issues:
+            print("\n❌ נמצאו בעיות עקביות מערכתית:")
+            for issue in issues:
+                print(f"   {issue}")
+            print("\n💡 המלצות תיקון:")
+            print("   1. החלף קריאות open ישירות ב-get_config() מ-config.py")
+            print("   2. החלף str(chat_id) ב-safe_str(chat_id) או normalize_chat_id()")
+            print("   3. השתמש בשמות שדות מ-fields_dict.py")
+            return False
+        else:
+            print("✅ עקביות מערכתית - עבר בהצלחה!")
+            return True
+    
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🚀 מתחיל בדיקות מקיפות לפני deploy...")
@@ -568,6 +682,7 @@ class ComprehensiveDeployChecker:
             ("רישום לוגים במסד נתונים", self.check_database_logging),
             ("מערכת Concurrent Handling", self.check_concurrent_system),
             ("שלמות requirements.txt", self.check_requirements_completeness),
+            ("עקביות מערכתית", self.check_system_consistency),
         ]
         
         # הרצת כל הבדיקות

@@ -11,7 +11,7 @@ import json
 import time
 
 # 🚀 יבוא המערכת החדשה - פשוטה ועקבית
-from simple_config import config
+from simple_config import config, TimeoutConfig
 from simple_logger import logger
 from simple_data_manager import data_manager
 from user_friendly_errors import safe_str, safe_operation
@@ -284,7 +284,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     # 🔧 תיקון קריטי: Progressive timeout אופטימלי ו-retry mechanism למניעת timeout errors
     try:
         max_retries = 5  # 6 ניסיונות סה"כ (0-5)
-        timeout_seconds = [1, 2, 3, 3, 4, 5]  # Progressive timeout אופטימלי! 🚀
+        timeout_seconds = TimeoutConfig.TELEGRAM_API_TIMEOUT_PROGRESSIVE  # Progressive timeout אופטימלי! 🚀
         
         for attempt in range(max_retries + 1):
             current_timeout = timeout_seconds[min(attempt, len(timeout_seconds) - 1)]
@@ -331,12 +331,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             print(f"[ERROR] שליחת הודעה נכשלה: {e}", flush=True)
         
         logger.error(f"[ERROR] שליחת הודעה נכשלה: {e}")
-        log_event_to_file({
-            "chat_id": chat_id,
-            "bot_message": formatted_text,
-            "timestamp": get_israel_time().isoformat(),
-            "error": str(e)
-        })
+        # 🗑️ הסרת log_event_to_file - עברנו למסד נתונים
         try:
             from notifications import send_error_notification
             send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=chat_id, user_msg=formatted_text)
@@ -369,7 +364,7 @@ async def send_approval_message(update, chat_id):
     try:
         # 🔧 תיקון קריטי: Progressive timeout אופטימלי גם להודעת אישור
         max_retries = 5  # 6 ניסיונות סה"כ (0-5)
-        timeout_seconds = [1, 2, 3, 3, 4, 5]  # Progressive timeout אופטימלי! 🚀
+        timeout_seconds = TimeoutConfig.TELEGRAM_API_TIMEOUT_PROGRESSIVE  # Progressive timeout אופטימלי! 🚀
         
         for attempt in range(max_retries + 1):
             current_timeout = timeout_seconds[min(attempt, len(timeout_seconds) - 1)]
@@ -565,9 +560,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await end_monitoring_user(str(chat_id), True)
                     return
 
-            # 🚀 התחלת ניטור concurrent
+            # 🚀 התחלת ניטור concurrent עם progressive notifications
             try:
-                monitoring_result = await start_monitoring_user(str(chat_id), str(message_id))
+                monitoring_result = await start_monitoring_user(str(chat_id), str(message_id), update)
                 if not monitoring_result:
                     await send_system_message(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
                     return
@@ -691,7 +686,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             async def send_temp_message():
                 nonlocal temp_message_sent
-                await asyncio.sleep(3)  # חכה 3 שניות
+                await asyncio.sleep(TimeoutConfig.TEMP_MESSAGE_DELAY)  # חכה לפי תצורה מרכזית
                 if not temp_message_sent:
                     try:
                         temp_msg = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך... 🚀"
@@ -1004,7 +999,7 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
     try:
         # 🔧 תיקון קריטי: Progressive timeout אופטימלי גם להודעות מערכת
         max_retries = 5  # 6 ניסיונות סה"כ (0-5)
-        timeout_seconds = [1, 2, 3, 3, 4, 5]  # Progressive timeout אופטימלי! 🚀
+        timeout_seconds = TimeoutConfig.TELEGRAM_API_TIMEOUT_PROGRESSIVE  # Progressive timeout אופטימלי! 🚀
         
         for attempt in range(max_retries + 1):
             current_timeout = timeout_seconds[min(attempt, len(timeout_seconds) - 1)]

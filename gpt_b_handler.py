@@ -12,6 +12,7 @@ import lazy_litellm as litellm
 from prompts import BOT_REPLY_SUMMARY_PROMPT
 from config import GPT_MODELS, GPT_PARAMS
 from gpt_utils import normalize_usage_dict, calculate_gpt_cost
+from user_friendly_errors import safe_str
 
 def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
     """
@@ -22,7 +23,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         import time
         start_time = time.time()
         
-        metadata = {"gpt_identifier": "gpt_b", "chat_id": chat_id, "message_id": message_id}
+        metadata = {"gpt_identifier": "gpt_b", "chat_id": safe_str(chat_id), "message_id": message_id}
         params = GPT_PARAMS["gpt_b"]
         model = GPT_MODELS["gpt_b"]
         
@@ -56,7 +57,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             from db_manager import save_system_metrics
             save_system_metrics(
                 metric_type="gpt_timing",
-                chat_id=str(chat_id) if chat_id else None,
+                chat_id=safe_str(chat_id),
                 gpt_latency_seconds=gpt_duration,
                 additional_data={
                     "message_id": message_id,
@@ -68,7 +69,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
                 }
             )
         except Exception as save_err:
-            logger.warning(f"Could not save GPT-B timing metrics: {save_err}")
+            logger.warning(f"Could not save GPT-B timing metrics: {save_err}", source="gpt_b_handler")
         
         # הוספת חישוב עלות ל-usage
         try:
@@ -81,7 +82,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
             )
             usage.update(cost_info)
         except Exception as _cost_e:
-            logger.warning(f"[gpt_b] Cost calc failed: {_cost_e}")
+            logger.warning(f"[gpt_b] Cost calc failed: {_cost_e}", source="gpt_b_handler")
         result = {"summary": summary, "usage": usage, "model": response.model}
         try:
             from gpt_jsonl_logger import GPTJSONLLogger
@@ -107,7 +108,7 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
                 response=response_data,
                 cost_usd=usage.get("cost_total", 0),
                 extra={
-                    "chat_id": chat_id, 
+                    "chat_id": safe_str(chat_id), 
                     "message_id": message_id,
                     "gpt_pure_latency": gpt_duration,
                     "processing_time_seconds": gpt_duration
@@ -118,5 +119,5 @@ def get_summary(user_msg, bot_reply, chat_id=None, message_id=None):
         return result
         
     except Exception as e:
-        logger.error(f"[gpt_b] Error: {e}")
+        logger.error(f"[gpt_b] Error: {e}", source="gpt_b_handler")
         return {"summary": f"[סיכום: {user_msg[:50]}...]", "usage": {}, "model": model} 

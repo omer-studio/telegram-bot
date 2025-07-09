@@ -26,10 +26,10 @@ except ImportError:
     sys.exit(1)
 
 def load_config():
-    """טעינת קונפיגורציה"""
+    """🎯 טעינת קונפיגורציה דרך הפונקציה המרכזית"""
     try:
-        with open('etc/secrets/config.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
+        from config import get_config
+        return get_config()
     except Exception as e:
         print(f"❌ שגיאה בטעינת קונפיגורציה: {e}")
         return {}

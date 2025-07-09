@@ -32,6 +32,7 @@ from config import (
     ADMIN_CHAT_ID,
     BOT_TOKEN
 )
+from simple_config import TimeoutConfig
 from utils import get_israel_time
 from chat_utils import log_error_stat
 import time
@@ -596,7 +597,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
                 commit_msg_out = subprocess.check_output(
                     ["git", "show", "-s", "--format=%s", commit_hash_for_lookup],
                     text=True,
-                    timeout=5
+                    timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT
                 ).strip()
                 if commit_msg_out:
                     git_commit_msg = commit_msg_out.split('\n')[0][:100]
@@ -673,7 +674,7 @@ def send_deploy_notification(success=True, error_message=None, deploy_duration=N
         "text": text
     }
     try:
-        requests.post(url, data=data, timeout=10)
+        requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
     except Exception as e:
         print(f"שגיאה בשליחת הודעת פריסה: {e}")
 
@@ -699,7 +700,7 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
             "text": text,
             "parse_mode": "HTML"
         }
-        requests.post(url, data=payload, timeout=10)
+        requests.post(url, data=payload, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
     except Exception as e:
         print(f"[ERROR] לא הצלחתי לשלוח שגיאה לאדמין: {e}")
 
@@ -716,7 +717,7 @@ def send_admin_notification(message, urgent=False):
             "parse_mode": "HTML"
         }
 
-        response = requests.post(url, data=data, timeout=10)
+        response = requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
         if response.status_code == 200:
             print(f"[DEBUG] admin_msg | chat={data.get('chat_id', 'N/A')} | status=sent")
         else:
@@ -737,7 +738,7 @@ def send_admin_notification_raw(message):
             "parse_mode": "HTML"
         }
 
-        response = requests.post(url, data=data, timeout=10)
+        response = requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
         if response.status_code == 200:
             print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=sent")
             try:
@@ -749,7 +750,7 @@ def send_admin_notification_raw(message):
                         "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
                         "message_id": msg_id
                     }
-                    del_resp = requests.post(del_url, data=del_data, timeout=10)
+                    del_resp = requests.post(del_url, data=del_data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
                     if del_resp.status_code == 200:
                         print(f"[DEBUG] הודעת הרצת מעבדי פרופיל נמחקה אוטומטית (message_id={msg_id})")
                     else:
@@ -784,7 +785,7 @@ def send_admin_secret_command_notification(message: str):
             "text": notification_text,
             "parse_mode": "Markdown"
         }
-        response = requests.post(url, data=data, timeout=10)
+        response = requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
         if response.status_code == 200:
             print("✅ התראת קוד סודי נשלחה לאדמין")
         else:
@@ -831,7 +832,7 @@ def log_error_to_file(error_data, send_telegram=True):
                 "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
                 "text": msg
             }
-            requests.post(url, data=data, timeout=10)
+            requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
     except Exception as e:
         print(f"💥 שגיאה ברישום שגיאה לקובץ: {e}")
 
@@ -1073,7 +1074,7 @@ def _send_telegram_message_admin_sync(bot_token, chat_id, text):
             "chat_id": chat_id, 
             "text": text,
             "parse_mode": "Markdown"
-        }, timeout=5)
+        }, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
     except Exception as e:
         logger.error(f"[טלגרם] שגיאה בשליחה: {e}")
 
@@ -1252,7 +1253,7 @@ async def send_gentle_reminder(chat_id: str) -> bool:
         admin_message = f"🫶 נשלחה תזכורת עדינה למשתמש {chat_id}"
         try:
             url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-            requests.post(url, data={"chat_id": ADMIN_NOTIFICATION_CHAT_ID, "text": admin_message}, timeout=5)
+            requests.post(url, data={"chat_id": ADMIN_NOTIFICATION_CHAT_ID, "text": admin_message}, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
         except Exception:
             pass  # לא קריטי אם התראת האדמין נכשלת
         

@@ -21,6 +21,7 @@ import requests
 import asyncio
 import os
 from typing import Dict, List, Any
+from simple_config import TimeoutConfig
 
 def print_header(title: str):
     """Print formatted header"""
@@ -158,7 +159,7 @@ def check_api_endpoints() -> Dict[str, bool]:
     
     for endpoint, description in endpoints:
         try:
-            response = requests.get(f"{base_url}{endpoint}", timeout=10)
+            response = requests.get(f"{base_url}{endpoint}", timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
             if response.status_code == 200:
                 results[endpoint] = True
                 print_result(description, True, f"Status: {response.status_code}")

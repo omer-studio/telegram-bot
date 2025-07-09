@@ -117,12 +117,35 @@ def is_valid_chat_id(chat_id: Any) -> bool:
         return False
 
 def log_event_to_file(*args, **kwargs):
-    """תאימות לאחור – פונקציה זו אינה בשימוש. יש לעבור ל-logger או data_manager."""
-    raise NotImplementedError("log_event_to_file הוסרה – יש להשתמש ב-logger או data_manager בלבד.")
+    """תאימות לאחור – פונקציה זו עברה ל-simple_logger"""
+    # TODO: מעבר זמני - להחליף בקוד הקורא ב-logger.info()
+    try:
+        # אם קיבלנו dict - נרשום אותו כ-JSON
+        if args and isinstance(args[0], dict):
+            log_data = args[0]
+            log_message = f"Event: {log_data.get('event_type', 'unknown')}"
+            if 'chat_id' in log_data:
+                log_message += f" | chat_id={log_data['chat_id']}"
+            if 'bot_message' in log_data:
+                log_message += f" | message={log_data['bot_message'][:100]}..."
+            logger.info(log_message, source="legacy_log_event")
+        else:
+            # רישום כללי
+            logger.info(f"Legacy log call: {args[:2]}", source="legacy_log_event")
+    except Exception as e:
+        logger.error(f"Error in legacy log_event_to_file: {e}", source="legacy_log_event")
 
 def handle_secret_command(*args, **kwargs):
-    """תאימות לאחור – פונקציה זו אינה בשימוש. יש לעבור למימוש החדש במערכת הפקודות."""
-    raise NotImplementedError("handle_secret_command הוסרה – יש להשתמש במימוש החדש בלבד.")
+    """תאימות לאחור – פונקציה זו עברה לפקודות טלגרם"""
+    # TODO: מעבר זמני - הפונקציונליות עברה ל-/migrate_all_data, /show_logs, /search_logs
+    try:
+        # פונקציה זו הוחלפה בפקודות טלגרם רגילות
+        # השתמש ב: /migrate_all_data SECRET_MIGRATION_2024, /show_logs, /search_logs
+        logger.info("Legacy handle_secret_command called - use telegram commands instead", source="legacy_secret")
+        return False, "🔐 פקודות סודיות עברו לפקודות טלגרם רגילות: /migrate_all_data, /show_logs, /search_logs"
+    except Exception as e:
+        logger.error(f"Error in legacy handle_secret_command: {e}", source="legacy_secret")
+        return False, "⚠️ שגיאה בפקודה סודית ישנה"
 
 def get_chat_history_messages(*args, **kwargs):
     """תאימות לאחור – פונקציה זו אינה בשימוש. יש לעבור ל-data_manager.get_chat_messages."""

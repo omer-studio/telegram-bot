@@ -13,6 +13,7 @@ import re
 from prompts import build_profile_extraction_enhanced_prompt
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_data_extraction_debug, should_log_gpt_cost_debug
 from gpt_utils import normalize_usage_dict, measure_llm_latency, calculate_gpt_cost, extract_json_from_text
+from user_friendly_errors import safe_str
 
 def extract_user_info(user_msg, chat_id=None, message_id=None):
     """
@@ -23,11 +24,12 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     
     # בדיקה קריטית - אם אין chat_id תקין, לא מפעילים GPT-C
     if not chat_id:
-        logger.error("[GPT_C] chat_id is None - skipping GPT-C execution")
+        logger.error("[GPT_C] chat_id is None - skipping GPT-C execution", source="gpt_c_handler")
         print("❌ [GPT-C] chat_id is None - skipping GPT-C execution")
         return {"extracted_fields": {}, "usage": {}, "model": "none"}
     
-    metadata = {"gpt_identifier": "gpt_c", "chat_id": chat_id, "message_id": message_id}
+    safe_chat_id = safe_str(chat_id)
+    metadata = {"gpt_identifier": "gpt_c", "chat_id": safe_chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_c"]
     model = GPT_MODELS["gpt_c"]
     
@@ -58,18 +60,18 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 if content_clean.startswith("{") and content_clean.endswith("}"):
                     extracted_fields = json.loads(content_clean)
                     if not isinstance(extracted_fields, dict):
-                        logger.warning(f"[GPT_C] JSON parsed but not a dict: {type(extracted_fields)}")
+                        logger.warning(f"[GPT_C] JSON parsed but not a dict: {type(extracted_fields)}", source="gpt_c_handler")
                         extracted_fields = {}
                 else:
-                    logger.warning(f"[GPT_C] Content doesn't look like JSON: {content_clean[:100]}...")
+                    logger.warning(f"[GPT_C] Content doesn't look like JSON: {content_clean[:100]}...", source="gpt_c_handler")
                     extracted_fields = {}
             else:
                 extracted_fields = {}
         except json.JSONDecodeError as e:
-            logger.error(f"[GPT_C] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...")
+            logger.error(f"[GPT_C] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...", source="gpt_c_handler")
             extracted_fields = {}
         except Exception as e:
-            logger.error(f"[GPT_C] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...")
+            logger.error(f"[GPT_C] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...", source="gpt_c_handler")
             extracted_fields = {}
         
         # הדפסת מידע חשוב על חילוץ נתונים (תמיד יופיע!)
@@ -89,7 +91,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
             )
             usage.update(cost_info)
         except Exception as _cost_e:
-            logger.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
+            logger.warning(f"[gpt_c] Cost calc failed: {_cost_e}", source="gpt_c_handler")
         
         # חישוב זמן עיבוד טהור
         gpt_duration = time.time() - start_time
@@ -99,7 +101,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
             from db_manager import save_system_metrics
             save_system_metrics(
                 metric_type="gpt_timing",
-                chat_id=str(chat_id) if chat_id else None,
+                chat_id=safe_chat_id,
                 gpt_latency_seconds=gpt_duration,
                 additional_data={
                     "message_id": message_id,
@@ -112,7 +114,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 }
             )
         except Exception as save_err:
-            logger.warning(f"Could not save GPT-C timing metrics: {save_err}")
+            logger.warning(f"Could not save GPT-C timing metrics: {save_err}", source="gpt_c_handler")
         
         result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model}
         try:
@@ -138,7 +140,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                 response=response_data,
                 cost_usd=usage.get("cost_total", 0),
                 extra={
-                    "chat_id": chat_id, 
+                    "chat_id": safe_chat_id, 
                     "message_id": message_id,
                     "gpt_pure_latency": time.time() - start_time,
                     "processing_time_seconds": time.time() - start_time
@@ -155,7 +157,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
         if is_rate_limit and "gpt_c" in GPT_FALLBACK_MODELS:
             # ניסיון עם מודל fallback
             fallback_model = GPT_FALLBACK_MODELS["gpt_c"]
-            logger.warning(f"[gpt_c] Rate limit for {model}, trying fallback: {fallback_model}")
+            logger.warning(f"[gpt_c] Rate limit for {model}, trying fallback: {fallback_model}", source="gpt_c_handler")
             
             try:
                 completion_params["model"] = fallback_model
@@ -175,21 +177,21 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                         if content_clean.startswith("{") and content_clean.endswith("}"):
                             extracted_fields = json.loads(content_clean)
                             if not isinstance(extracted_fields, dict):
-                                logger.warning(f"[GPT_C FALLBACK] JSON parsed but not a dict: {type(extracted_fields)}")
+                                logger.warning(f"[GPT_C FALLBACK] JSON parsed but not a dict: {type(extracted_fields)}", source="gpt_c_handler")
                                 extracted_fields = {}
                         else:
-                            logger.warning(f"[GPT_C FALLBACK] Content doesn't look like JSON: {content_clean[:100]}...")
+                            logger.warning(f"[GPT_C FALLBACK] Content doesn't look like JSON: {content_clean[:100]}...", source="gpt_c_handler")
                             extracted_fields = {}
                     else:
                         extracted_fields = {}
                 except json.JSONDecodeError as e:
-                    logger.error(f"[GPT_C FALLBACK] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...")
+                    logger.error(f"[GPT_C FALLBACK] JSON decode error: {e} | Content: {content[:200] if content else 'None'}...", source="gpt_c_handler")
                     extracted_fields = {}
                 except Exception as e:
-                    logger.error(f"[GPT_C FALLBACK] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...")
+                    logger.error(f"[GPT_C FALLBACK] Unexpected error parsing JSON: {e} | Content: {content[:200] if content else 'None'}...", source="gpt_c_handler")
                     extracted_fields = {}
                 
-                logger.info(f"[gpt_c] Fallback successful: {fallback_model}")
+                logger.info(f"[gpt_c] Fallback successful: {fallback_model}", source="gpt_c_handler")
                 
                 # הדפסת מידע חשוב על חילוץ נתונים (תמיד יופיע!)
                 print(f"🔍 [GPT-C FALLBACK] חולצו {len(extracted_fields)} שדות: {list(extracted_fields.keys())}")
@@ -208,7 +210,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                     )
                     usage.update(cost_info)
                 except Exception as _cost_e:
-                    logger.warning(f"[gpt_c] Cost calc failed: {_cost_e}")
+                    logger.warning(f"[gpt_c] Cost calc failed: {_cost_e}", source="gpt_c_handler")
                 
                 result = {"extracted_fields": extracted_fields, "usage": usage, "model": response.model, "fallback_used": True}
                 try:
@@ -233,19 +235,19 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                         request=completion_params,
                         response=response_data,
                         cost_usd=usage.get("cost_total", 0),
-                                                 extra={
-                             "chat_id": chat_id, 
-                             "message_id": message_id,
-                             "gpt_pure_latency": time.time() - start_time,
-                             "processing_time_seconds": time.time() - start_time
-                         }
+                        extra={
+                            "chat_id": safe_chat_id, 
+                            "message_id": message_id,
+                            "gpt_pure_latency": time.time() - start_time,
+                            "processing_time_seconds": time.time() - start_time
+                        }
                     )
                 except Exception as log_exc:
                     print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
                 return result
                 
             except Exception as fallback_error:
-                logger.error(f"[gpt_c] Fallback also failed: {fallback_error}")
+                logger.error(f"[gpt_c] Fallback also failed: {fallback_error}", source="gpt_c_handler")
                 print(f"❌ [GPT-C] שגיאה גם ב-fallback: {fallback_error}")
                 result = {"extracted_fields": {}, "usage": {}, "model": fallback_model}
                 try:
@@ -271,7 +273,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                         response=response_data,
                         cost_usd=0,
                         extra={
-                            "chat_id": chat_id, 
+                            "chat_id": safe_chat_id, 
                             "message_id": message_id,
                             "gpt_pure_latency": 0,
                             "processing_time_seconds": 0
@@ -281,7 +283,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                     print(f"[LOGGING_ERROR] Failed to log GPT-C call: {log_exc}")
                 return result
         else:
-            logger.error(f"[gpt_c] Error (not rate limit): {e}")
+            logger.error(f"[gpt_c] Error (not rate limit): {e}", source="gpt_c_handler")
             print(f"❌ [GPT-C] שגיאה: {e}")
             result = {"extracted_fields": {}, "usage": {}, "model": model}
             try:
@@ -307,7 +309,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
                     response=response_data,
                     cost_usd=0,
                     extra={
-                        "chat_id": chat_id, 
+                        "chat_id": safe_chat_id, 
                         "message_id": message_id,
                         "gpt_pure_latency": 0,
                         "processing_time_seconds": 0

@@ -15,6 +15,7 @@ from config import (
     ADMIN_BOT_TELEGRAM_TOKEN, 
     ADMIN_CHAT_ID
 )
+from simple_config import TimeoutConfig
 from utils import get_israel_time
 
 try:
@@ -315,7 +316,7 @@ def _send_telegram_message_admin_sync(bot_token, chat_id, text):
             "parse_mode": "Markdown"
         }
         
-        response = requests.post(url, data=data, timeout=10)
+        response = requests.post(url, data=data, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
         if response.status_code == 200:
             print("✅ התראה נשלחה לאדמין")
         else:

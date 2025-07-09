@@ -17,7 +17,9 @@ from prompts import SYSTEM_PROMPT
 from config import GPT_MODELS, GPT_PARAMS, GPT_FALLBACK_MODELS, should_log_debug_prints
 from gpt_utils import normalize_usage_dict, billing_guard, measure_llm_latency, calculate_gpt_cost
 from notifications import alert_billing_issue, send_error_notification
+from simple_config import TimeoutConfig
 from typing import TYPE_CHECKING
+from user_friendly_errors import safe_str
 if TYPE_CHECKING:
     from message_handler import format_text_for_telegram, send_message_with_retry  # for type checkers only
 # מערכת ביצועים מבוטלת זמנית
@@ -53,29 +55,32 @@ def should_ask_profile_question(chat_id: str) -> bool:
     Returns:
         bool: True אם צריך לשאול שאלה, False אחרת
     """
-    if chat_id not in profile_question_cooldowns:
-        profile_question_cooldowns[chat_id] = 0
+    safe_chat_id = safe_str(chat_id)
+    if safe_chat_id not in profile_question_cooldowns:
+        profile_question_cooldowns[safe_chat_id] = 0
     
     # אם המשתמש בפסק זמן - מקטינים את המונה
-    if profile_question_cooldowns[chat_id] > 0:
-        profile_question_cooldowns[chat_id] -= 1
-        logger.info(f"📊 [PROFILE_QUESTION] בפסק זמן | chat_id={chat_id} | cooldown_left={profile_question_cooldowns[chat_id]}")
+    if profile_question_cooldowns[safe_chat_id] > 0:
+        profile_question_cooldowns[safe_chat_id] -= 1
+        logger.info(f"📊 [PROFILE_QUESTION] בפסק זמן | chat_id={safe_chat_id} | cooldown_left={profile_question_cooldowns[safe_chat_id]}", source="gpt_a_handler")
         return False
     
     # לא בפסק זמן - אפשר לשאול
-    logger.info(f"📊 [PROFILE_QUESTION] הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
+    logger.info(f"📊 [PROFILE_QUESTION] הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_chat_id}", source="gpt_a_handler")
     return True
 
 def start_profile_question_cooldown(chat_id: str):
     """מתחיל פסק זמן של 3 הודעות אחרי ששאלה נשאלה"""
-    profile_question_cooldowns[chat_id] = 3
-    logger.info(f"📊 [PROFILE_QUESTION] פסק זמן התחיל | chat_id={chat_id} | cooldown=3")
+    safe_chat_id = safe_str(chat_id)
+    profile_question_cooldowns[safe_chat_id] = 3
+    logger.info(f"📊 [PROFILE_QUESTION] פסק זמן התחיל | chat_id={safe_chat_id} | cooldown=3", source="gpt_a_handler")
 
 def reset_profile_question_counter(chat_id: str):
     """מאפס את המונה למשתמש מסוים (למקרה של שאלה שנענתה)"""
-    if chat_id in profile_question_counters:
-        profile_question_counters[chat_id] = 0
-        logger.info(f"📊 [PROFILE_QUESTION] מונה אופס | chat_id={chat_id}")
+    safe_chat_id = safe_str(chat_id)
+    if safe_chat_id in profile_question_counters:
+        profile_question_counters[safe_chat_id] = 0
+        logger.info(f"📊 [PROFILE_QUESTION] מונה אופס | chat_id={safe_chat_id}", source="gpt_a_handler")
 
 def get_profile_question_stats():
     """מחזיר סטטיסטיקות של מוני השאלות"""
@@ -90,8 +95,9 @@ def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
     בודק האם לפחות 2 מילים מתוך missing_text מופיעות בתשובת הבוט.
     מוסיף לוגים מפורטים לצורך דיבאגינג.
     """
+    safe_chat_id = safe_str(chat_id) if chat_id else "unknown"
     if not missing_text or not bot_reply:
-        logger.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={chat_id}")
+        logger.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={safe_chat_id}", source="gpt_a_handler")
         return False
     
     # מפרק את missing_text למילים בודדות (ללא סימני פיסוק)
@@ -102,7 +108,7 @@ def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
     # מוצא מילים משותפות
     matches = [word for word in missing_words if word in bot_words]
     
-    logger.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={chat_id} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}")
+    logger.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={safe_chat_id} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}", source="gpt_a_handler")
     
     return len(matches) >= 2
 
@@ -110,15 +116,16 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
     """יוצר system message חכם עם שדות חסרים שכדאי לשאול עליהם
     מחזיר tuple: (system_message, missing_text)"""
     try:
+        safe_chat_id = safe_str(chat_id)
         from db_manager import get_user_profile
         try:
             from fields_dict import FIELDS_DICT
         except ImportError:
             FIELDS_DICT = {"dummy": "dummy"}
-        if not should_ask_profile_question(chat_id):
-            logger.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={chat_id}")
+        if not should_ask_profile_question(safe_chat_id):
+            logger.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_chat_id}", source="gpt_a_handler")
             return "", ""
-        profile_data = get_user_profile(chat_id) or {}
+        profile_data = get_user_profile(safe_chat_id) or {}
         key_fields = ["name", "age", "attracted_to", "relationship_type", "self_religious_affiliation", 
                      "closet_status", "pronoun_preference", "occupation_or_role", 
                      "self_religiosity_level", "primary_conflict", "goal_in_course"]
@@ -127,13 +134,13 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
                   and FIELDS_DICT[f].get("missing_question", "").strip()]
         if len(missing) >= 2:
             missing_text = ', '.join(missing[:4])
-            logger.info(f"📊 [PROFILE_QUESTION] שולח שאלת פרופיל | chat_id={chat_id} | missing_fields={len(missing)} | missing_text={missing_text}")
+            logger.info(f"📊 [PROFILE_QUESTION] שולח שאלת פרופיל | chat_id={safe_chat_id} | missing_fields={len(missing)} | missing_text={missing_text}", source="gpt_a_handler")
             return f"""פרטים שהמשתמש עדיין לא סיפר לך וחשוב מאוד לשאול אותו בעדינות וברגישות במטרה להכיר אותו יותר טוב: {missing_text}
 \nראשית תסביר לו את הרציונל, תסביר לו למה אתה שואל, תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו - תבחר אחד מהשאלות שנראית לך הכי מתאימה - ורק אם זה מרגיש לך מתאים אז תשאל אותו בעדינות וברגישות ותשלב את זה באלגנטיות. (את השאלות תעשה בכתב מודגש)""", missing_text
-        logger.info(f"📊 [PROFILE_QUESTION] אין מספיק שדות חסרים לשאלה | chat_id={chat_id} | missing_fields={len(missing)}")
+        logger.info(f"📊 [PROFILE_QUESTION] אין מספיק שדות חסרים לשאלה | chat_id={safe_chat_id} | missing_fields={len(missing)}", source="gpt_a_handler")
         return "", ""
     except Exception as e:
-        logger.error(f"שגיאה ביצירת הודעת שדות חסרים: {e}")
+        logger.error(f"שגיאה ביצירת הודעת שדות חסרים: {e}", source="gpt_a_handler")
         return "", ""
 
 # מילות מפתח שמצדיקות מודל מתקדם
@@ -291,7 +298,7 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=8):
         
         # בדיקה נוספת אחרי השינה - אם המשימה בוטלה, לא נשלח הודעה
         if asyncio.current_task().cancelled():
-            logger.info(f"📤 [TEMP_MSG] משימה בוטלה לפני שליחת הודעה זמנית | chat_id={chat_id}")
+            logger.info(f"📤 [TEMP_MSG] משימה בוטלה לפני שליחת הודעה זמנית | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
             return None
             
         from message_handler import send_system_message  # local import to avoid circular
@@ -299,10 +306,10 @@ async def send_temporary_message_after_delay(update, chat_id, delay_seconds=8):
         await send_system_message(update, chat_id, temp_message_text)
         
         # נחזיר None כי send_system_message לא מחזיר את האובייקט
-        logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
+        logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
         return None  # לא מחזירים אובייקט כי send_system_message לא מחזיר
     except asyncio.CancelledError:
-        logger.info(f"📤 [TEMP_MSG] משימה בוטלה בזמן שליחת הודעה זמנית | chat_id={chat_id}")
+        logger.info(f"📤 [TEMP_MSG] משימה בוטלה בזמן שליחת הודעה זמנית | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
         return None
     except Exception as e:
         logger.error(f"❌ [TEMP_MSG] שגיאה בשליחת הודעה זמנית: {e}")
@@ -324,7 +331,7 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
         await send_message(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
-        logger.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={chat_id}")
+        logger.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
         return True
 
     except Exception as send_err:
@@ -431,7 +438,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
     
     try:
         # 🚨 הגדלת timeout ל-45 שניות (במקום 30) לטיפול ב-latency גבוה
-        GPT_TIMEOUT_SECONDS = 45
+        GPT_TIMEOUT_SECONDS = TimeoutConfig.GPT_PROCESSING_TIMEOUT
         
         # הרצת GPT ישירות (ללא רקורסיה)
         gpt_result = _execute_gpt_call(completion_params, full_messages)
@@ -539,7 +546,7 @@ def get_main_response_sync(full_messages, chat_id=None, message_id=None, use_ext
         # 🆕 בדיקה אם התשובה מכילה שאלת פרופיל והתחלת פסק זמן
         if chat_id and detect_profile_question_in_response(bot_reply):
             start_profile_question_cooldown(chat_id)
-            logger.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={chat_id}")
+            logger.info(f"✅ [PROFILE_QUESTION] הופעל פסק זמן! | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
         
         result = {
             "bot_reply": bot_reply, 
@@ -657,7 +664,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
     
     try:
         # 🚨 הגדלת timeout ל-45 שניות (במקום 30) לטיפול ב-latency גבוה
-        GPT_TIMEOUT_SECONDS = 45
+        GPT_TIMEOUT_SECONDS = TimeoutConfig.GPT_PROCESSING_TIMEOUT
         
         # 🔧 תיקון קריטי: יישום timeout אמיתי במקום רק הגדרה
         # הרצת GPT ב-thread עם timeout מתקדם
@@ -702,7 +709,7 @@ async def get_main_response_with_timeout(full_messages, chat_id=None, message_id
                 from message_handler import send_system_message
                 temp_message_text = "⏳ אני עובד על תשובה בשבילך... זה מיד אצלך..."
                 await send_system_message(update, chat_id, temp_message_text)
-                logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={chat_id}")
+                logger.info(f"📤 [TEMP_MSG] נשלחה הודעה זמנית | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
             except Exception as temp_err:
                 logger.warning(f"⚠️ [TEMP_MSG] לא הצלחתי לשלוח הודעה זמנית: {temp_err}")
         

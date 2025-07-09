@@ -48,6 +48,118 @@ import psutil  # לניטור זיכרון
 from utils import get_israel_time
 from simple_config import TimeoutConfig
 
+# 🔄 Progressive User Communication Integration
+# =================================================================
+class ProgressiveUserNotifier:
+    """מנגנון להודעות מתדרגות למשתמש במהלך עיבוד"""
+    
+    def __init__(self):
+        self.active_notifications: Dict[str, List[float]] = {}  # chat_id -> [sent_times]
+        self.notification_tasks: Dict[str, asyncio.Task] = {}  # chat_id -> task
+    
+    async def start_progressive_notifications(self, chat_id: str, update_obj=None):
+        """מתחיל הודעות מתדרגות למשתמש"""
+        try:
+            # ביטול הודעות קיימות אם יש
+            await self.cancel_notifications(chat_id)
+            
+            # יצירת רשימת זמנים להודעות
+            self.active_notifications[chat_id] = []
+            
+            # התחלת task להודעות מתדרגות
+            self.notification_tasks[chat_id] = asyncio.create_task(
+                self._send_progressive_notifications(chat_id, update_obj)
+            )
+            
+            logging.debug(f"[ProgressiveNotifier] Started progressive notifications for {chat_id}")
+            
+        except Exception as e:
+            logging.error(f"[ProgressiveNotifier] Error starting notifications for {chat_id}: {e}")
+    
+    async def cancel_notifications(self, chat_id: str):
+        """מבטל הודעות מתדרגות למשתמש"""
+        try:
+            # ביטול task אם קיים
+            if chat_id in self.notification_tasks:
+                task = self.notification_tasks[chat_id]
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                del self.notification_tasks[chat_id]
+            
+            # ניקוי רשימת הודעות
+            if chat_id in self.active_notifications:
+                del self.active_notifications[chat_id]
+            
+            logging.debug(f"[ProgressiveNotifier] Cancelled notifications for {chat_id}")
+            
+        except Exception as e:
+            logging.error(f"[ProgressiveNotifier] Error cancelling notifications for {chat_id}: {e}")
+    
+    async def _send_progressive_notifications(self, chat_id: str, update_obj=None):
+        """שולח הודעות מתדרגות למשתמש"""
+        try:
+            start_time = time.time()
+            
+            # כל הזמנים שבהם צריך לשלוח הודעה
+            notification_times = sorted(
+                list(TimeoutConfig.PROGRESSIVE_COMMUNICATION.PROGRESSIVE_MESSAGES.keys()) +
+                list(TimeoutConfig.PROGRESSIVE_COMMUNICATION.EMERGENCY_MESSAGES.keys())
+            )
+            
+            for notification_time in notification_times:
+                elapsed = time.time() - start_time
+                
+                # המתן עד הזמן הנכון
+                if elapsed < notification_time:
+                    await asyncio.sleep(notification_time - elapsed)
+                
+                # בדיקה אם המשתמש עדיין פעיל
+                if chat_id not in self.active_notifications:
+                    logging.debug(f"[ProgressiveNotifier] User {chat_id} no longer active, stopping notifications")
+                    break
+                
+                # קבלת ההודעה המתאימה
+                elapsed_now = time.time() - start_time
+                message = TimeoutConfig.PROGRESSIVE_COMMUNICATION.get_progressive_message(elapsed_now)
+                
+                # שליחת ההודעה
+                await self._send_user_notification(chat_id, message, update_obj)
+                
+                # רישום הזמן שבו נשלחה ההודעה
+                self.active_notifications[chat_id].append(elapsed_now)
+                
+                logging.info(f"[ProgressiveNotifier] Sent progressive notification to {chat_id} after {elapsed_now:.1f}s")
+                
+        except asyncio.CancelledError:
+            logging.debug(f"[ProgressiveNotifier] Progressive notifications cancelled for {chat_id}")
+        except Exception as e:
+            logging.error(f"[ProgressiveNotifier] Error in progressive notifications for {chat_id}: {e}")
+    
+    async def _send_user_notification(self, chat_id: str, message: str, update_obj=None):
+        """שולח הודעה למשתמש"""
+        try:
+            if update_obj:
+                # שליחת הודעה דרך Telegram
+                try:
+                    # Dynamic import to avoid circular imports
+                    from message_handler import send_system_message
+                    await send_system_message(update_obj, chat_id, message)
+                    logging.debug(f"[ProgressiveNotifier] Sent message to {chat_id}: {message[:50]}...")
+                except Exception as e:
+                    logging.warning(f"[ProgressiveNotifier] Failed to send message to {chat_id}: {e}")
+            else:
+                logging.debug(f"[ProgressiveNotifier] No update object for {chat_id}, message: {message[:50]}...")
+                
+        except Exception as e:
+            logging.error(f"[ProgressiveNotifier] Error sending notification to {chat_id}: {e}")
+
+# יצירת instance גלובלי
+_progressive_notifier = ProgressiveUserNotifier()
+
 @dataclass
 class UserSession:
     """מייצג סשן משתמש פעיל עם נתוני בטיחות"""
@@ -239,7 +351,7 @@ class ConcurrentMonitor:
             except Exception as e:
                 logging.debug(f"[ConcurrentMonitor] Error removing task from active list: {e}")
         
-    async def start_user_session(self, chat_id: str, message_id: str) -> bool:
+    async def start_user_session(self, chat_id: str, message_id: str, update_obj=None) -> bool:
         """
         🚪 התחלת סשן משתמש חדש עם FIFO ובדיקות בטיחות
         
@@ -274,6 +386,13 @@ class ConcurrentMonitor:
             self.active_sessions[chat_id] = session
             self.next_queue_position += 1
             self.total_requests += 1
+            
+            # 🔄 התחלת הודעות מתדרגות למשתמש
+            try:
+                await _progressive_notifier.start_progressive_notifications(chat_id, update_obj)
+                logging.debug(f"[ConcurrentMonitor] Started progressive notifications for {chat_id}")
+            except Exception as notif_err:
+                logging.warning(f"[ConcurrentMonitor] Failed to start progressive notifications for {chat_id}: {notif_err}")
             
             logging.info(f"[ConcurrentMonitor] ✅ Started session for user {chat_id}. "
                         f"Queue position: {session.queue_position}, Active: {len(self.active_sessions)}")
@@ -323,6 +442,13 @@ class ConcurrentMonitor:
         try:
             session = self.active_sessions[chat_id]
             response_time = time.time() - session.start_time
+            
+            # 🔄 ביטול הודעות מתדרגות
+            try:
+                await _progressive_notifier.cancel_notifications(chat_id)
+                logging.debug(f"[ConcurrentMonitor] Cancelled progressive notifications for {chat_id}")
+            except Exception as notif_err:
+                logging.warning(f"[ConcurrentMonitor] Failed to cancel progressive notifications for {chat_id}: {notif_err}")
             
             # 💾 שמירת מטריקות concurrent למסד הנתונים
             try:
@@ -381,6 +507,8 @@ class ConcurrentMonitor:
             logging.error(f"[ConcurrentMonitor] Error ending session for {chat_id}: {e}")
             # ניסיון ניקוי ידני אם end_user_session נכשל
             try:
+                # ביטול הודעות מתדרגות גם במקרה שגיאה
+                await _progressive_notifier.cancel_notifications(chat_id)
                 self._remove_from_queue(chat_id)
                 if chat_id in self.active_sessions:
                     del self.active_sessions[chat_id]
@@ -438,7 +566,7 @@ class ConcurrentMonitor:
                         logging.error(f"[ConcurrentMonitor] Failed to send cleanup alert: {e}")
                 
                 # 🔧 תיקון: בדיקה תכופה יותר למניעת תקיעות
-                await asyncio.sleep(10)  # בדיקה כל 10 שניות במקום 15
+                await asyncio.sleep(TimeoutConfig.CONCURRENT_CLEANUP_INTERVAL)  # בדיקה לפי תצורה מרכזית
                 
             except asyncio.CancelledError:
                 # Task בוטל - יציאה נקייה
@@ -696,7 +824,7 @@ def get_concurrent_monitor():
     return _concurrent_monitor_instance
 
 # פונקציות עזר לשימוש בקוד
-async def start_monitoring_user(chat_id: str, message_id: str) -> bool:
+async def start_monitoring_user(chat_id: str, message_id: str, update_obj=None) -> bool:
     """התחלת ניטור משתמש"""
     try:
         logging.debug(f"[ConcurrentMonitor] Starting monitoring for user {chat_id}")
@@ -707,7 +835,7 @@ async def start_monitoring_user(chat_id: str, message_id: str) -> bool:
             logging.error(f"[ConcurrentMonitor] Monitor instance missing start_user_session method")
             return False
             
-        result = await monitor.start_user_session(chat_id, message_id)
+        result = await monitor.start_user_session(chat_id, message_id, update_obj)
         logging.debug(f"[ConcurrentMonitor] start_user_session returned: {result}")
         return result
     except Exception as e:

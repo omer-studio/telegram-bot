@@ -71,7 +71,7 @@ import os
 import requests
 
 # 🚀 יבוא המערכת החדשה - פשוטה ועקבית
-from simple_config import config
+from simple_config import config, TimeoutConfig
 from simple_logger import logger
 from simple_data_manager import data_manager
 
@@ -292,7 +292,7 @@ async def lifespan(app: FastAPI):
             for attempt in range(max_retries):
                 try:
                     set_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
-                    resp = requests.post(set_url, json={"url": webhook_url}, timeout=10)
+                    resp = requests.post(set_url, json={"url": webhook_url}, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
                     
                     if resp.status_code == 200 and resp.json().get('ok'):
                         print(f"✅ [STARTUP] Telegram webhook הוגדר בהצלחה!")

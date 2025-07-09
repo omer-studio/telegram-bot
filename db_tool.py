@@ -22,16 +22,10 @@ except ImportError:
     PSYCOPG2_AVAILABLE = False
 
 def load_config():
-    """טעינת קונפיגורציה מהקובץ הקיים"""
+    """🎯 טעינת קונפיגורציה דרך הפונקציה המרכזית"""
     try:
-        config_path = os.path.join(os.path.dirname(__file__), "etc", "secrets", "config.json")
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        else:
-            # fallback לנתיב אבסולוטי
-            with open("/etc/secrets/config.json", 'r', encoding='utf-8') as f:
-                return json.load(f)
+        from config import get_config
+        return get_config()
     except Exception as e:
         print(f"❌ שגיאה בטעינת קונפיגורציה: {e}")
         return {}

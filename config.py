@@ -222,6 +222,15 @@ def get_config_file_path():
     except Exception as e:
         raise FileNotFoundError(f"לא ניתן ליצור קובץ קונפיג: {e}")
 
+def get_config():
+    """
+    🎯 פונקציה מרכזית לקבלת קונפיגורציה
+    כל קובץ שצריך config צריך לקרוא לפונקציה הזו במקום open ישיר
+    """
+    path = get_config_file_path()
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
 # הגדרות גלובליות
 config = load_config()
 

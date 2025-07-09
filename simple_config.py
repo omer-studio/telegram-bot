@@ -15,6 +15,63 @@ from typing import Any, Optional
 # =================================================================
 # מטרה: סנכרון כל השכבות, הודעות מתדרגות למשתמש, מניעת session timeouts
 
+# 🔧 Progressive User Communication System
+# =================================================================
+class ProgressiveUserCommunication:
+    """מערכת הודעות מתדרגת למשתמש במקרה של עיכובים"""
+    
+    # 📨 הודעות מתדרגות לפי זמן
+    PROGRESSIVE_MESSAGES = {
+        15: "⏳ אני עובד על תשובה מותאמת אישית בשבילך... עוד רגע...",
+        30: "🔄 אני עדיין עובד על זה... הייתי עמוס קצת, אבל אני כמעט מסיים...",
+        45: "⚡ עוד כמה שניות ואני מסיים... תודה על הסבלנות! 🙏"
+    }
+    
+    # 🚨 הודעות חירום
+    EMERGENCY_MESSAGES = {
+        50: "🚨 מצטער, נתקלתי בבעיה טכנית. אני מנסה לפתור את זה...",
+        55: "⚠️ הבעיה הטכנית נמשכת. נסה לשלוח לי הודעה חדשה בעוד דקה."
+    }
+    
+    # 💡 הודעות עזרה
+    HELP_MESSAGES = {
+        "cancel": "אם אתה רוצה לבטל ולנסות שוב, שלח לי 'בטל' או 'עצור'",
+        "retry": "אם זה לוקח זמן, תוכל לנסות לשלוח הודעה קצרה יותר",
+        "technical": "אם זה ממשיך לקרות, ספר לי על זה ואני אעביר את הבעיה לעומר"
+    }
+    
+    @classmethod
+    def get_progressive_message(cls, elapsed_seconds: float) -> str:
+        """מחזיר הודעה מתאימה לפי הזמן שעבר"""
+        # בדיקה אם זה זמן חירום
+        for threshold, message in cls.EMERGENCY_MESSAGES.items():
+            if elapsed_seconds >= threshold:
+                return message
+        
+        # בדיקה אם זה זמן רגיל
+        for threshold, message in cls.PROGRESSIVE_MESSAGES.items():
+            if elapsed_seconds >= threshold:
+                return message
+        
+        # אם לא מצאנו הודעה מתאימה
+        return "⏳ אני עובד על התשובה... עוד רגע..."
+    
+    @classmethod
+    def should_send_message(cls, elapsed_seconds: float) -> bool:
+        """בודק אם צריך לשלוח הודעה בזמן הנתון"""
+        all_thresholds = list(cls.PROGRESSIVE_MESSAGES.keys()) + list(cls.EMERGENCY_MESSAGES.keys())
+        return elapsed_seconds in all_thresholds
+    
+    @classmethod
+    def get_cancel_instructions(cls) -> str:
+        """מחזיר הוראות ביטול"""
+        return cls.HELP_MESSAGES["cancel"]
+    
+    @classmethod
+    def get_retry_suggestion(cls) -> str:
+        """מחזיר הצעה לנסות שוב"""
+        return cls.HELP_MESSAGES["retry"]
+
 class TimeoutConfig:
     """מערכת timeout מתואמת לכל השכבות"""
     
@@ -40,6 +97,13 @@ class TimeoutConfig:
     TELEGRAM_SEND_TIMEOUT = 5  # שליחת הודעות Telegram
     HTTP_REQUEST_TIMEOUT = 10  # HTTP requests כללי
     DATABASE_QUERY_TIMEOUT = 30  # שאילתות DB
+    
+    # 🔧 System and Process Timeouts
+    SUBPROCESS_TIMEOUT = 60  # Subprocess execution timeout (unittest, pytest)
+    SUBPROCESS_TIMEOUT_SHORT = 30  # Shorter subprocess timeout
+    
+    # 🔄 Progressive Communication
+    PROGRESSIVE_COMMUNICATION = ProgressiveUserCommunication
     
     @classmethod
     def get_timeout_summary(cls):
@@ -75,6 +139,20 @@ class TimeoutConfig:
         if cls.EMERGENCY_RESPONSE_TIME <= cls.CONCURRENT_SESSION_TIMEOUT:
             errors.append("EMERGENCY_RESPONSE_TIME חייב להיות אחרי CONCURRENT_SESSION_TIMEOUT")
         
+        # Progressive messages validation
+        progressive_times = list(cls.PROGRESSIVE_COMMUNICATION.PROGRESSIVE_MESSAGES.keys())
+        emergency_times = list(cls.PROGRESSIVE_COMMUNICATION.EMERGENCY_MESSAGES.keys())
+        
+        # Progressive messages should be before concurrent timeout
+        for time_threshold in progressive_times:
+            if time_threshold >= cls.CONCURRENT_SESSION_TIMEOUT:
+                errors.append(f"Progressive message at {time_threshold}s חייב להיות לפני CONCURRENT_SESSION_TIMEOUT")
+        
+        # Emergency messages should be after concurrent timeout
+        for time_threshold in emergency_times:
+            if time_threshold <= cls.CONCURRENT_SESSION_TIMEOUT:
+                errors.append(f"Emergency message at {time_threshold}s חייב להיות אחרי CONCURRENT_SESSION_TIMEOUT")
+        
         return errors
 
 # 🔧 Legacy compatibility - מספק את הערכים הישנים
@@ -84,7 +162,7 @@ MAX_ALLOWED_TIME = TimeoutConfig.CONCURRENT_SESSION_TIMEOUT
 # 🧪 בדיקת תקינות התצורה
 timeout_validation_errors = TimeoutConfig.validate_timeout_hierarchy()
 if timeout_validation_errors:
-    print("⚠️ שגיאות בתצורת Timeout:")
+    print("WARNING - שגיאות בתצורת Timeout:")
     for error in timeout_validation_errors:
         print(f"  - {error}")
     print("📝 יש לתקן את התצורה לפני המשך!")
@@ -132,7 +210,7 @@ class SimpleConfig:
                     self._config[key] = env_value
             
         except Exception as e:
-            print(f"⚠️ שגיאה בטעינת קונפיגורציה: {e}")
+            print(f"WARNING - שגיאה בטעינת קונפיגורציה: {e}")
             # הגדרות ברירת מחדל בלבד
             self._config = {
                 "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),

@@ -10,10 +10,10 @@ def normalize_chat_id(chat_id):
     """
     🎯 מנרמל chat_id לטיפוס אחיד (TEXT)
     מונע בעיות text=bigint
+    משתמש בפונקציה safe_str הקיימת לעקביות
     """
-    if chat_id is None:
-        return None
-    return str(chat_id)
+    from user_friendly_errors import safe_str
+    return safe_str(chat_id)
 
 def validate_chat_id(chat_id):
     """
