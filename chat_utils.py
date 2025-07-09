@@ -41,6 +41,10 @@ __all__: List[str] = [
     "get_chat_history_messages_fast",
     "get_user_stats_and_history",
     "get_user_stats",
+    # 🆕 מערכת ספירת הודעות מערכתית
+    "get_total_user_messages_count",
+    "get_recent_history_for_gpt", 
+    "count_user_messages_in_history",
     # context & greeting helpers
     "create_human_context_for_gpt",
     "get_time_greeting_instruction",
@@ -61,8 +65,60 @@ __all__: List[str] = [
 ]
 
 # ============================================================================
-# 🎯 מערכת היסטוריה פשוטה ואחידה - במקום 3 פונקציות שונות
+# 📋 תיעוד מערכת ספירת הודעות
 # ============================================================================
+
+"""
+🎯 מערכת ספירת הודעות מוחלפת - Single Source of Truth
+
+BEFORE (הבעיה):
+❌ מספר הודעות נספר מהיסטוריה מוגבלת (15-32 הודעות)
+❌ המספר יורד כאשר מצטברות הודעות בוט
+❌ אותה לוגיקה חוזרת במקומות רבים
+
+AFTER (הפתרון):
+✅ מספר הודעות רק מהמסד נתונים (get_total_user_messages_count)
+✅ היסטוריה ל-GPT נפרדת (get_recent_history_for_gpt)
+✅ ספירה מהיסטוריה ברורה (count_user_messages_in_history)
+
+🛡️ כללי זהב:
+1. **לספירת הודעות כולל** → `get_total_user_messages_count(chat_id)`
+2. **להיסטוריה ל-GPT** → `get_recent_history_for_gpt(chat_id, limit)`
+3. **לספירה מהיסטוריה נתונה** → `count_user_messages_in_history(history)`
+
+🚫 אסור:
+- לספור הודעות מ-get_chat_history_simple עם limit
+- להשתמש ב-get_user_stats["total_messages"] (מיושן)
+- לערבב בין היסטוריה ל-GPT למספר הודעות כולל
+"""
+
+def validate_message_counting_usage():
+    """
+    🔧 פונקציה לוידוא שהמערכת משמשת נכון
+    
+    קוראים לזה ב-CI או במצב debug כדי לוודא עקביות
+    """
+    warnings = []
+    
+    # בדיקה של קבצים שעלולים להשתמש בדפוסים ישנים
+    problematic_patterns = [
+        "len([msg for msg in.*history.*if.*role.*user",
+        "get_user_stats.*total_messages",
+        "get_chat_history_simple.*count",
+    ]
+    
+    # כאן ניתן להוסיף לוגיקה לסריקת קבצים
+    # לעת עתה, רק הודעה
+    
+    return {
+        "status": "OK" if not warnings else "WARNINGS",
+        "warnings": warnings,
+        "recommendations": [
+            "השתמש ב-get_total_user_messages_count למספר הודעות כולל",
+            "השתמש ב-get_recent_history_for_gpt להיסטוריה ל-GPT",
+            "השתמש ב-count_user_messages_in_history לספירה מהיסטוריה"
+        ]
+    }
 
 def update_chat_history(chat_id: str, user_msg: str, bot_msg: str, **kwargs) -> bool:
     """

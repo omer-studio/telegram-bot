@@ -679,16 +679,15 @@ async def get_main_response_with_timeout(full_messages, chat_id, message_id=None
     # שלב 1: קביעת מודל לפי פילטר חכם
     user_message = full_messages[-1]["content"] if full_messages else ""
     
-    # 🆕 קבלת מספר ההודעות האמיתי מההיסטוריה
+    # 🆕 קבלת מספר ההודעות האמיתי מהמסד נתונים
     chat_history_length = 0
     if chat_id:
         try:
-            from chat_utils import get_user_stats
-            user_stats = get_user_stats(chat_id)
-            chat_history_length = user_stats.get("total_messages", 0)
+            from chat_utils import get_total_user_messages_count
+            chat_history_length = get_total_user_messages_count(chat_id)
         except Exception as e:
-            logger.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
-            # fallback לספירה מ-full_messages
+            logger.warning(f"שגיאה בקבלת מספר הודעות מהמסד נתונים: {e}")
+            # fallback לספירה מ-full_messages (רק במקרה חירום)
             chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     else:
         # אם אין chat_id, נשתמש בספירה מ-full_messages
@@ -806,16 +805,15 @@ def get_main_response(full_messages, chat_id, message_id=None):
     """
     user_message = full_messages[-1]["content"] if full_messages else ""
     
-    # 🆕 קבלת מספר ההודעות האמיתי מההיסטוריה
+    # 🆕 קבלת מספר ההודעות האמיתי מהמסד נתונים
     chat_history_length = 0
     if chat_id:
         try:
-            from chat_utils import get_user_stats
-            user_stats = get_user_stats(chat_id)
-            chat_history_length = user_stats.get("total_messages", 0)
+            from chat_utils import get_total_user_messages_count
+            chat_history_length = get_total_user_messages_count(chat_id)
         except Exception as e:
-            logger.warning(f"שגיאה בקבלת מספר הודעות מההיסטוריה: {e}")
-            # fallback לספירה מ-full_messages
+            logger.warning(f"שגיאה בקבלת מספר הודעות מהמסד נתונים: {e}")
+            # fallback לספירה מ-full_messages (רק במקרה חירום)
             chat_history_length = len([msg for msg in full_messages if msg["role"] in ["user", "assistant"]])
     else:
         # אם אין chat_id, נשתמש בספירה מ-full_messages

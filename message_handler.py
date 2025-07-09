@@ -1115,10 +1115,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # קבלת תשובה מ-GPT
         from gpt_a_handler import get_main_response
-        from chat_utils import get_chat_history_simple
+        from chat_utils import get_recent_history_for_gpt
         
         # בניית היסטוריה להקשר
-        history_messages = get_chat_history_simple(safe_str(chat_id), limit=15)
+        history_messages = get_recent_history_for_gpt(safe_str(chat_id), limit=15)
         
         # 🔧 בניית הודעות מלאות עם כל הסיסטם פרומפטים
         from chat_utils import build_complete_system_messages

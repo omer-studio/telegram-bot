@@ -33,10 +33,10 @@ def test_profile_age_persistence(tmp_path, monkeypatch):
 
     # Reload modules with patched paths
     config = _reload_module("config")
-    monkeypatch.setattr(config, "USER_PROFILES_PATH", str(profiles_file), raising=False)
+    monkeypatch.setattr(config, "USER_PROFILES_PATH", safe_str(profiles_file), raising=False)
 
     profile_utils = _reload_module("profile_utils")
-    monkeypatch.setattr(profile_utils, "USER_PROFILES_PATH", str(profiles_file), raising=False)
+    monkeypatch.setattr(profile_utils, "USER_PROFILES_PATH", safe_str(profiles_file), raising=False)
 
     # Stub heavy external interactions to keep test isolated
     monkeypatch.setattr(profile_utils, "_schedule_sheets_sync_safely", lambda _cid: None, raising=False)
@@ -182,8 +182,8 @@ def test_send_admin_notification_raw(monkeypatch):
 
     monkeypatch.setattr("requests.post", _fake_requests_post, raising=False)
     
-    # ✅ תיקון: מוק המניע שליחה אמיתית
-    monkeypatch.setattr("admin_notifications.is_test_environment", lambda: False, raising=False)
+    # ✅ תיקון: מוק המניע שליחה אמיתית ב-notifications.py
+    monkeypatch.setattr("notifications.os.environ.get", lambda key, default=None: None if key in ["CI", "TESTING", "PYTEST_CURRENT_TEST"] else default, raising=False)
     
     sent = {}
     notifications.send_admin_notification_raw("hello test")
@@ -231,20 +231,18 @@ def test_profile_overview_admin_notification(monkeypatch):
     
     # ✅ תיקון: במקום לכבות משתני סביבה, נשתמש במוק
     import unified_profile_notifications as upn
-    import notifications
 
     captured = {}
 
     def fake_raw(msg):
         captured['msg'] = msg
-        return 12345  # Mock message_id
+        return True  # Mock successful send
 
-    monkeypatch.setattr(notifications, "send_admin_notification_raw", fake_raw, raising=False)
+    # ✅ תיקון: מוק הפונקציה ב-unified_profile_notifications ישירות
+    monkeypatch.setattr("unified_profile_notifications.send_admin_notification_raw", fake_raw, raising=False)
     
-    # ✅ תיקון: מוק המניע שליחה אמיתית
-    monkeypatch.setattr("unified_profile_notifications.logger", 
-                       type('MockLogger', (), {'info': lambda *args, **kwargs: None}), 
-                       raising=False)
+    # ✅ תיקון: מוק המניע שליחה אמיתית ב-unified_profile_notifications.py
+    monkeypatch.setattr("unified_profile_notifications.os.environ.get", lambda key, default=None: None if key in ["CI", "TESTING", "PYTEST_CURRENT_TEST"] else default, raising=False)
 
     chat_id = "999999"
     gpt_c_changes = [{"field": "age", "old_value": "ריק", "new_value": "30"}]
