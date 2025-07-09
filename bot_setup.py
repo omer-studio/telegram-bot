@@ -44,6 +44,7 @@ import subprocess
 import sys
 import time
 import requests
+import logging
 from simple_logger import logger
 from user_friendly_errors import safe_str
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler

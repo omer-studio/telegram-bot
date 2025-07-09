@@ -207,11 +207,8 @@ def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_
         # Persist to database
         update_user_profile_fast(safe_chat_id, updated_profile)
         
-    except Exception as persist_exc:
-        logger.error(f"[GPT_D] Failed to persist profile for {safe_chat_id}: {persist_exc}", source="gpt_d_handler")
-        
     except Exception as exc:
-        logger.error(f"[GPT_D] Critical error in profile merge for {safe_chat_id}: {exc}\n{traceback.format_exc()}", source="gpt_d_handler")
+        logger.error(f"[GPT_D] Error in profile merge/persist for {safe_chat_id}: {exc}\n{traceback.format_exc()}", source="gpt_d_handler")
 
 def smart_update_profile_with_gpt_d_async(chat_id: str, user_message: str, interaction_id=None, gpt_c_result=None):
     """Public async wrapper – accepts chat_id (not profile).
