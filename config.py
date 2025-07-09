@@ -60,8 +60,9 @@ IS_CI_ENVIRONMENT = any([
 # imports תלויי dependencies - רק בסביבת ייצור/פיתוח
 if not IS_CI_ENVIRONMENT:
     try:
-        import gspread
-        from oauth2client.service_account import ServiceAccountCredentials
+        # 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+        # import gspread
+        # from oauth2client.service_account import ServiceAccountCredentials
         from lazy_litellm import completion
         try:
             from fields_dict import FIELDS_DICT
@@ -79,8 +80,9 @@ if not IS_CI_ENVIRONMENT:
             def __getattr__(self, name):
                 return lambda *args, **kwargs: None
         
-        gspread = DummyModule()
-        ServiceAccountCredentials = DummyModule()
+        # 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+        # gspread = DummyModule()
+        # ServiceAccountCredentials = DummyModule()
         completion = DummyModule()
         try:
             from fields_dict import FIELDS_DICT
@@ -97,8 +99,9 @@ else:
         def __getattr__(self, name):
             return lambda *args, **kwargs: None
     
-    gspread = DummyModule()
-    ServiceAccountCredentials = DummyModule()
+    # 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+    # gspread = DummyModule()
+    # ServiceAccountCredentials = DummyModule()
     completion = DummyModule()
     import sys as _sys, types as _types
     _lazy = _types.ModuleType("lazy_litellm")
@@ -159,24 +162,13 @@ def load_config():
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token"
             },
-            "SHEET_USER_TAB": "user_profiles",
-            "SHEET_LOG_TAB": "log", 
-            "SHEET_STATES_TAB": "user_states"
+            # 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+            "SHEET_USER_TAB": "dummy_user_tab",
+            "SHEET_LOG_TAB": "dummy_log_tab", 
+            "SHEET_STATES_TAB": "dummy_states_tab"
         }
     
-    env_path = os.getenv("CONFIG_PATH")
-    if env_path and os.path.exists(env_path):
-        path = env_path
-    else:
-        # שימוש במשתנה הגלובלי PROJECT_ROOT במקום חישוב מחדש
-        local_path = os.path.join(PROJECT_ROOT, "etc", "secrets", "config.json")
-        abs_path = "/etc/secrets/config.json"
-        if os.path.exists(local_path):
-            path = local_path
-        elif os.path.exists(abs_path):
-            path = abs_path
-        else:
-            raise FileNotFoundError("config.json לא נמצא בנתיבים הידועים")
+    path = get_config_file_path()
     print("DEBUG: using config path:", path)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
@@ -188,6 +180,48 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
+def get_config_file_path():
+    """
+    🎯 מרכז ניהול נתיבי קבצי קונפיג
+    מחזיר את הנתיב הנכון לקובץ config.json
+    """
+    # 1. בדיקת משתנה סביבה
+    env_path = os.getenv("CONFIG_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    
+    # 2. בדיקת נתיבים ידועים
+    possible_paths = [
+        os.path.join(PROJECT_ROOT, "etc", "secrets", "config.json"),  # נתיב יחסי
+        "/etc/secrets/config.json",  # נתיב אבסולוטי (Linux/Server)
+        "etc/secrets/config.json",   # נתיב יחסי פשוט
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    
+    # 3. אם לא נמצא - יצירת קובץ ברירת מחדל
+    default_path = os.path.join(PROJECT_ROOT, "etc", "secrets", "config.json")
+    os.makedirs(os.path.dirname(default_path), exist_ok=True)
+    
+    default_config = {
+        "TELEGRAM_BOT_TOKEN": "YOUR_BOT_TOKEN_HERE",
+        "OPENAI_API_KEY": "YOUR_OPENAI_KEY_HERE",
+        "GEMINI_API_KEY": "YOUR_GEMINI_KEY_HERE",
+        "RENDER_API_KEY": "YOUR_RENDER_KEY_HERE",
+        "RENDER_SERVICE_ID": "YOUR_SERVICE_ID_HERE"
+    }
+    
+    try:
+        with open(default_path, 'w', encoding='utf-8') as f:
+            json.dump(default_config, f, indent=2, ensure_ascii=False)
+        print(f"⚠️ [CONFIG] נוצר קובץ קונפיג ברירת מחדל: {default_path}")
+        print("   אנא ערוך את הקובץ עם הטוקנים האמיתיים שלך")
+        return default_path
+    except Exception as e:
+        raise FileNotFoundError(f"לא ניתן ליצור קובץ קונפיג: {e}")
+
 # הגדרות גלובליות
 config = load_config()
 
@@ -198,8 +232,8 @@ config = load_config()
 DEFAULT_LOG_LEVEL = "INFO"  # רמת לוגים כללית
 ENABLE_DEBUG_PRINTS = False  # DEBUG prints כלליים (False = רזה יותר)
 ENABLE_GPT_COST_DEBUG = True  # דיבאג עלויות GPT מפורט - חשוב לתפעול!
-# 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
-ENABLE_SHEETS_DEBUG = False  # תמיד False - עברנו למסד נתונים
+# 🗑️ Google Sheets הוסר - תמיד False
+ENABLE_SHEETS_DEBUG = False
 ENABLE_PERFORMANCE_DEBUG = True  # דיבאג ביצועים מפורט - חשוב לזמני תגובה!
 ENABLE_MESSAGE_DEBUG = True  # הודעות בסיסיות (מומלץ True)
 ENABLE_DATA_EXTRACTION_DEBUG = True  # מידע על חילוץ נתונים מ-GPT C,D,E
@@ -213,8 +247,8 @@ import os
 DEFAULT_LOG_LEVEL = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL)
 ENABLE_DEBUG_PRINTS = os.getenv("ENABLE_DEBUG_PRINTS", str(ENABLE_DEBUG_PRINTS)).lower() == "true"
 ENABLE_GPT_COST_DEBUG = os.getenv("ENABLE_GPT_COST_DEBUG", str(ENABLE_GPT_COST_DEBUG)).lower() == "true"
-# 🗑️ עברנו למסד נתונים - Google Sheets Debug תמיד False
-ENABLE_SHEETS_DEBUG = False  # קבוע - לא נדרש יותר
+# 🗑️ Google Sheets הוסר - תמיד False
+ENABLE_SHEETS_DEBUG = False
 ENABLE_PERFORMANCE_DEBUG = os.getenv("ENABLE_PERFORMANCE_DEBUG", str(ENABLE_PERFORMANCE_DEBUG)).lower() == "true"
 ENABLE_MESSAGE_DEBUG = os.getenv("ENABLE_MESSAGE_DEBUG", str(ENABLE_MESSAGE_DEBUG)).lower() == "true"
 ENABLE_DATA_EXTRACTION_DEBUG = os.getenv("ENABLE_DATA_EXTRACTION_DEBUG", str(ENABLE_DATA_EXTRACTION_DEBUG)).lower() == "true"
@@ -239,8 +273,8 @@ def should_log_gpt_cost_debug():
     return ENABLE_GPT_COST_DEBUG
 
 def should_log_sheets_debug():
-    """בודק האם להדפיס דיבאג גיליונות"""
-    return ENABLE_SHEETS_DEBUG
+    """🗑️ Google Sheets הוסר - תמיד False"""
+    return False
 
 def should_log_performance_debug():
     """בודק האם להדפיס דיבאג ביצועים"""
@@ -268,10 +302,11 @@ TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
 print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", _mask_sensitive(OPENAI_ADMIN_KEY, 5))
-GOOGLE_SHEET_ID = config["GOOGLE_SHEET_ID"]
+# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+GOOGLE_SHEET_ID = "dummy_sheet_id"
 
-# Service Account Dictionary for Google Drive uploads
-SERVICE_ACCOUNT_DICT = config.get("SERVICE_ACCOUNT_DICT", {})
+# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+SERVICE_ACCOUNT_DICT = {}
 
 # הגדרות התראות שגיאות (לבוט הניהולי החדש)
 ADMIN_BOT_TELEGRAM_TOKEN = config.get("ADMIN_BOT_TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
@@ -351,33 +386,20 @@ FREE_MODEL_DAILY_LIMIT = 100
 # except Exception as e:
 #     print(f"❌ [CONFIG] שגיאה בהגדרת אימות עבור Google Vertex AI: {e}")
 
-# 🗑️ עברנו למסד נתונים - Google Sheets cache לא נדרש יותר
-# _sheets_cache = None  # היה משמש לcache של Google Sheets
-# _cache_created_at = None  # היה משמש לזמן יצירת cache
-
+# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
 def reset_sheets_cache():
-    """🗑️ עברנו למסד נתונים - פונקציה לא נדרשת יותר"""
-    # Google Sheets cache לא קיים יותר - הפונקציה נשארת למען תאימות
-    print("[DEBUG] 🗑️ Google Sheets cache reset (deprecated - using database)")
+    """🗑️ Google Sheets הוסר - פונקציה ריקה"""
+    pass
 
 def get_sheets_cache_info():
-    """🗑️ עברנו למסד נתונים - מחזיר מידע על מצב מסד הנתונים"""
-    # במקום cache של Google Sheets, מחזירים מידע על מסד נתונים
+    """🗑️ Google Sheets הוסר - מחזיר מידע על מסד נתונים"""
     return {
         "status": "database_mode", 
-        "created_at": None, 
-        "age_seconds": 0,
-        "note": "עברנו למסד נתונים - Google Sheets לא בשימוש"
+        "note": "Google Sheets הוסר - עברנו למסד נתונים"
     }
 
 def setup_google_sheets():
-    """
-    🗑️ עברנו למסד נתונים - פונקציה לא נדרשת יותר
-    מחזירה None values למען תאימות עם קוד קיים
-    פלט: gs_client, sheet_users, sheet_log, sheet_states (כולם None)
-    """
-    # 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
-    print("[DEBUG] 🗑️ Google Sheets setup called (deprecated - using database)")
+    """🗑️ Google Sheets הוסר - פונקציה ריקה"""
     return None, None, None, None
 
 
@@ -435,7 +457,7 @@ def check_config_sanity():
     """
     missing = []
     sensitive_keys = [
-        "TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "GOOGLE_SHEET_ID", "ADMIN_BOT_TELEGRAM_TOKEN"
+        "TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "ADMIN_BOT_TELEGRAM_TOKEN"
     ]
     for key in sensitive_keys:
         val = globals().get(key, None)
@@ -453,7 +475,6 @@ def get_config_snapshot():
     """
     # מחזיר snapshot של קונפיגורציה ללא ערכים רגישים
     return {
-        "GOOGLE_SHEET_ID": "***",
         "DATA_DIR": DATA_DIR,
         "PROJECT_ROOT": PROJECT_ROOT,
         "LOG_FILE_PATH": BOT_TRACE_LOG_FILENAME,

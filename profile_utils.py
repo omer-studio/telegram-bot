@@ -1,630 +1,463 @@
-"""profile_utils.py
-====================
-ניהול תעודת הזהות הרגשית (פרופיל) – פונקציות שהועברו מ-utils.py לשמירה על קוד רזה.
-כל הפונקציות מיובאות חזרה ב-utils לצורך תאימות לאחור.
+#!/usr/bin/env python3
+"""
+profile_utils.py - ניהול פרופילים של משתמשים
+כל הפונקציות כאן - פשוטות, ברורות, ונגישות
 """
 
-from __future__ import annotations
-
-import asyncio
 import json
-import logging
-import os
-import traceback
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple
+import time
+from datetime import datetime
+from typing import Any, Dict, Optional, List
+from simple_logger import logger
+from user_friendly_errors import safe_str, safe_operation
 
-import utils  # time helpers + log_event_to_file live there
-from config import should_log_debug_prints, should_log_message_debug
-from db_manager import save_user_profile, get_user_profile
-from fields_dict import FIELDS_DICT
+# Cache פשוט לפרופילים
+_profile_cache = {}
 
-__all__: List[str] = [
-    # Main fast-path helpers
-    "get_user_profile_fast",
-    "update_user_profile_fast",
-    "get_user_summary_fast",
-    "update_user_summary_fast",
-    "increment_code_try_fast",
-    "increment_gpt_c_run_count_fast",
-    "clear_user_cache_profile",
-    # Emotional-identity API
-    "update_emotional_identity_fast",
-    "get_emotional_identity_fast",
-    "ensure_emotional_identity_consistency",
-    "get_all_emotional_identity_fields",
-    "validate_emotional_identity_data",
-    # Maintenance helpers
-    "force_sync_to_sheets",
-    "cleanup_old_profiles",
-    "get_profiles_stats",
-    "_send_admin_profile_overview_notification",
-    "_detect_profile_changes",
-]
-
-# 🚨 כל השימושים ב-USER_PROFILES_PATH הוסרו – הכל עובר דרך מסד הנתונים בלבד
-
-def clear_user_cache_profile(chat_id: str) -> Dict[str, Any]:
-    """
-    מנקה cache של פרופיל משתמש ספציפי.
-    מחזיר מידע על ההצלחה וכמות ה-cache keys שנוקו.
-    """
+def clear_profile_cache(chat_id: Any = None) -> None:
+    """ניקוי cache פרופילים - פונקציה אחת פשוטה"""
     try:
-        # במערכת הנוכחית אין cache file-based, אז זה placeholder
-        # שמחזיר תמיד הצלחה ללא ניקוי בפועל
-        logging.debug(f"[CACHE_CLEAR] ניסה לנקות cache עבור משתמש {chat_id}")
-        
-        return {
-            "success": True,
-            "cleared_count": 0,
-            "message": "No file-based cache to clear in current system"
-        }
+        if chat_id is None:
+            # ניקוי כל ה-cache
+            _profile_cache.clear()
+            logger.debug(f"[CACHE_CLEAR] ניקוי כל ה-cache", source="profile_utils")
+        else:
+            # ניקוי פרופיל ספציפי
+            safe_id = safe_str(chat_id)
+            if safe_id in _profile_cache:
+                del _profile_cache[safe_id]
+                logger.debug(f"[CACHE_CLEAR] ניסה לנקות cache עבור משתמש {safe_id}", source="profile_utils")
+                
     except Exception as e:
-        logging.error(f"שגיאה בניקוי cache למשתמש {chat_id}: {e}")
-        return {
-            "success": False,
-            "cleared_count": 0,
-            "error": str(e)
-        }
+        logger.error(f"שגיאה בניקוי cache למשתמש {safe_str(chat_id)}: {e}", source="profile_utils")
 
-
-def get_user_profile_fast(chat_id: str) -> Dict[str, Any]:
-    """טוען במהירות את הפרופיל מ-SQL database."""
+@safe_operation("get_user_profile", "לא ניתן לקבל פרופיל משתמש")
+def get_user_profile(chat_id: Any) -> Dict:
+    """קבלת פרופיל משתמש - פונקציה אחת פשוטה"""
     try:
-        profile_json = get_user_profile(chat_id)
-        if profile_json:
-            return profile_json
-        return {}
-    except Exception as e:
-        logging.error(f"שגיאה בשליפת פרופיל: {e}")
-        return {}
-
-
-def _update_user_profiles_file(chat_id: str, updates: Dict[str, Any]):
-    """Writes *updates* into SQL database (minimal logic only)."""
-    try:
-        # 🚦 Mini-sanity: convert numeric strings like "35" in the *age* field to int 35
-        if "age" in updates and isinstance(updates["age"], str) and updates["age"].isdigit():
-            updates = {**updates, "age": int(updates["age"])}  # shallow copy – keep immutability
-
-        # Load existing data (if any)
-        try:
-            existing_profile = get_user_profile(chat_id) or {}
-        except Exception:
-            existing_profile = {}
-
-        # Merge updates
-        updated_profile = {**existing_profile, **updates}
-        updated_profile["last_update"] = utils.get_israel_time().isoformat()
-
-        # Save to SQL
-        save_user_profile(chat_id, updated_profile)
+        safe_id = safe_str(chat_id)
         
-    except Exception as exc:
-        logging.error(f"שגיאה בעדכון פרופיל: {exc}")
-
-
-# ---------------------------------------------------------------------------
-# 🔄  Sync helpers – local profile ⇄ Google Sheets
-# ---------------------------------------------------------------------------
-
-async def _sync_to_sheet_by_headers(sheet, chat_id: str, local_profile: Dict[str, Any]):
-    """Synchronise fields by header names - 🗑️ עברנו למסד נתונים"""
-    try:
-        # 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
-        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
-        return  # פשוט מחזיר בלי לעשות כלום
-    except Exception as exc:
-        logging.error(f"שגיאה בסנכרון לפי כותרות: {exc}")
-
-
-async def _sync_local_to_sheets_background(chat_id: str):
-    """Background task - 🗑️ עברנו למסד נתונים"""
-    try:
-        # 🗑️ עברנו למסד נתונים - סנכרון Google Sheets לא נדרש יותר
-        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
-        return  # פשוט מחזיר בלי לעשות כלום
-    except Exception as exc:
-        logging.error(f"שגיאה בסנכרון ל-Google Sheets: {exc}")
-
-
-def _sync_local_to_sheets_sync(chat_id: str):
-    """Synchronous wrapper - 🗑️ עברנו למסד נתונים"""
-    try:
-        # 🗑️ עברנו למסד נתונים - סנכרון Google Sheets לא נדרש יותר
-        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
-        return  # פשוט מחזיר בלי לעשות כלום
-    except Exception as exc:
-        logging.error(f"שגיאה בסנכרון ל-Google Sheets: {exc}")
-
-
-def _sync_to_sheet_by_headers_sync(sheet, chat_id: str, local_profile: Dict[str, Any]):
-    """Synchronous version - 🗑️ עברנו למסד נתונים"""
-    try:
-        # 🗑️ עברנו למסד נתונים - Google Sheets לא נדרש יותר
-        logging.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {chat_id}")
-        return  # פשוט מחזיר בלי לעשות כלום
-    except Exception as exc:
-        logging.error(f"שגיאה בסנכרון לפי כותרות: {exc}")
-
-
-def _schedule_sheets_sync_safely(chat_id: str):
-    """🗑️ עברנו למסד נתונים - פונקציה deprecated"""
-    # 🗑️ עברנו למסד נתונים - אין צורך בסנכרון Google Sheets יותר
-    # במסד נתונים כל הנתונים כבר סונכרנו אוטומטית
-    logging.debug(f"🗑️ _schedule_sheets_sync_safely deprecated - using database for {chat_id}")
-    return  # לא עושה כלום
-
-
-# ---------------------------------------------------------------------------
-# ✏️  High-level profile update helpers
-# ---------------------------------------------------------------------------
-
-def _detect_profile_changes(old: Dict[str, Any], new: Dict[str, Any]) -> List[Dict[str, Any]]:
-    technical_fields = {
-        "gpt_c_run_count",
-        "code_try",
-        "last_update",
-        "date_first_seen",
-        "timestamp",
-        "created_at",
-        "updated_at",
-    }
-    numeric_fields = {"total_messages_count"}  # אפשר להרחיב בעתיד
-    changes: List[Dict[str, Any]] = []
-
-    for field, new_val in new.items():
-        if field in technical_fields:
-            continue
-        old_val = old.get(field)
-        # חריג: בשדות מספריים, 0 וריק נחשבים אותו דבר
-        if field in numeric_fields:
-            if (old_val in [None, "", 0] and new_val in [None, "", 0]):
-                continue  # לא שינוי אמיתי
-        if field not in old:
-            if new_val not in [None, ""]:
-                changes.append({"field": field, "old_value": None, "new_value": new_val, "change_type": "added"})
-                if field.lower() == "name":
-                    logging.info(f"[PROFILE_CHANGE] Added name for user: '{new_val}'")
-        elif old_val != new_val:
-            changes.append({"field": field, "old_value": old_val, "new_value": new_val, "change_type": "updated"})
-            if field.lower() == "name":
-                logging.info(f"[PROFILE_CHANGE] Updated name for user: '{old_val}' → '{new_val}'")
-
-    for field in old:
-        if field not in new and field not in technical_fields:
-            changes.append({"field": field, "old_value": old[field], "new_value": None, "change_type": "removed"})
-    return changes
-
-
-def _log_profile_changes_to_chat_history(chat_id: str, changes: List[Dict[str, Any]]):
-    """רושם שינויים בפרופיל להיסטוריה לצורכי מעקב (לא נשלח למשתמש)."""
-    
-    # 🚨 SECURITY FIX: לא מוסיף הודעות פרופיל להיסטוריה
-    # כדי למנוע חשיפה של מידע פרטי למשתמש דרך GPT context
-    
-    # רק לוג פנימי לקובץ debug
-    import logging
-    try:
-        msg_parts = []
-        for ch in changes:
-            match ch["change_type"]:
-                case "added":
-                    msg_parts.append(f"נוסף: {ch['field']} = {ch['new_value']}")
-                case "updated":
-                    msg_parts.append(f"עודכן: {ch['field']} מ-{ch['old_value']} ל-{ch['new_value']}")
-                case "removed":
-                    msg_parts.append(f"הוסר: {ch['field']} (היה: {ch['old_value']})")
+        # בדיקה ב-cache קודם
+        if safe_id in _profile_cache:
+            return _profile_cache[safe_id]
         
-        log_message = f"[PROFILE_CHANGE] chat_id={chat_id} | {' | '.join(msg_parts)}"
-        logging.info(log_message)
-        print(f"🔒 {log_message}")
+        # קבלה מהמסד נתונים
+        from simple_data_manager import data_manager
         
-    except Exception as e:
-        logging.error(f"שגיאה ברישום שינויים: {e}")
-
-
-# --- admin notification minimal (HTML formatted) --------------------------------
-
-def _pretty_val(val):
-    return "[ריק]" if val in [None, "", [], {}] else str(val)
-
-
-# --- overview admin notification (HTML) -----------------------------------
-
-def _send_admin_profile_overview_notification(
-    *,
-    chat_id: str,
-    user_msg: str,
-    gpt_c_changes: List[Dict[str, Any]],
-    gpt_d_changes: List[Dict[str, Any]],
-    gpt_e_changes: List[Dict[str, Any]],
-    gpt_c_info: str,
-    gpt_d_info: str,
-    gpt_e_info: str,
-    summary: str = "",
-):
-    """
-    🚨 CRITICAL: שליחת הודעת אדמין מרוכזת **אך ורק אם יש שינויים בפרופיל**
-    
-    עיקרון ברזל: ההודעה נשלחת רק כאשר יש שינוי אמיתי בשדות המשתמש.
-    אם אין שינויים - לא נשלחת הודעה כלל, כדי למנוע ספאם לאדמין.
-    
-    Args:
-        gpt_c_changes: רשימת שינויים מ-GPT-C (אם ריקה - לא היו שינויים)
-        gpt_d_changes: רשימת שינויים מ-GPT-D (אם ריקה - לא היו שינויים)  
-        gpt_e_changes: רשימת שינויים מ-GPT-E (אם ריקה - לא היו שינויים)
-    """
-    try:
-        from notifications import send_admin_notification_raw
-        from utils import get_israel_time
-
-        # 🚨 CRITICAL CHECK: שליחה אך ורק אם יש שינויים בשדות!
-        # זה מונע שליחת הודעות לא נחוצות לאדמין
-        if not (gpt_c_changes or gpt_d_changes or gpt_e_changes):
-            logging.debug(f"[ADMIN_NOTIFICATION] 🚫 לא נשלחת הודעה למשתמש {chat_id} - אין שינויים בפרופיל")
-            print(f"[ADMIN_NOTIFICATION] 🚫 לא נשלחת הודעה למשתמש {chat_id} - אין שינויים בפרופיל")
-            return
-
-        # 📊 רישום סטטיסטיקה: כמה שינויים בכל מודל
-        total_changes = len(gpt_c_changes) + len(gpt_d_changes) + len(gpt_e_changes)
-        logging.info(f"[ADMIN_NOTIFICATION] 📬 שולח הודעה למשתמש {chat_id} עם {total_changes} שינויים (C:{len(gpt_c_changes)}, D:{len(gpt_d_changes)}, E:{len(gpt_e_changes)})")
-
-        lines: List[str] = []
+        profile = data_manager.get_user_profile(safe_id)
         
-        # 🎯 כותרת פשוטה ויפה
-        lines.append("✅ עדכון פרופיל למשתמש " + str(chat_id) + " ✅")
-        lines.append("")
-        
-        # 💬 הודעת המשתמש
-        if user_msg and user_msg.strip():
-            lines.append("📝 הודעת המשתמש:")
-            lines.append(user_msg.strip())
-            lines.append("")
-        
-        lines.append("🔄 עדכוני מודלים:")
-        lines.append("")
-        
-        # 🧠 GPT-C
-        lines.append("🧠 GPT-C:")
-        if gpt_c_changes:
-            for ch in gpt_c_changes:
-                field = ch.get("field")
-                if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
-                    continue
-                old_val = _pretty_val(ch.get("old_value"))
-                new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
+        if profile:
+            # שמירה ב-cache
+            _profile_cache[safe_id] = profile
+            return profile
         else:
-            lines.append("  ➖ אין שינויים")
-        
-        lines.append("")
-        
-        # 🎯 GPT-D
-        lines.append("🎯 GPT-D (שדות מתקדמים):")
-        if gpt_d_changes:
-            for ch in gpt_d_changes:
-                field = ch.get("field")
-                if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
-                    continue
-                old_val = _pretty_val(ch.get("old_value"))
-                new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
-        else:
-            lines.append("  ➖ אין שינויים")
-        
-        lines.append("")
-        
-        # 🚀 GPT-E
-        lines.append("🚀 GPT-E (עדכון מתקדם):")
-        if gpt_e_changes:
-            for ch in gpt_e_changes:
-                field = ch.get("field")
-                if field in ["chat_id", "last_update", "date_first_seen", "code_try", "gpt_c_run_count"]:
-                    continue
-                old_val = _pretty_val(ch.get("old_value"))
-                new_val = _pretty_val(ch.get("new_value"))
-                lines.append(f"  ➕ {field}: {old_val} → {new_val}")
-        else:
-            # הוספת קאונטר עם עיצוב פשוט
-            try:
-                from chat_utils import get_user_stats_and_history
-                from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
-                stats, _ = get_user_stats_and_history(chat_id)
-                total_messages = stats.get("total_messages", 0)
-                lines.append(f"  ➖ אין שינויים {total_messages}/{GPT_E_RUN_EVERY_MESSAGES}")
-            except:
-                lines.append("  ➖ אין שינויים")
-        
-        lines.append("")
-        lines.append("═══════════════════════")
-        
-        # 📋 SUMMARY פשוט ויפה
-        lines.append("📋 SUMMARY (סיכום פרופיל):")
-        if summary and summary.strip():
-            # חלוקה לשורות קצרות אם הסיכום ארוך
-            summary_clean = summary.strip()
-            if len(summary_clean) > 80:
-                # חלוקה לשורות של 80 תווים מקסימום
-                words = summary_clean.split()
-                current_line = ""
-                for word in words:
-                    if len(current_line + " " + word) <= 80:
-                        current_line += (" " + word) if current_line else word
-                    else:
-                        if current_line:
-                            lines.append(f"  📝 {current_line}")
-                        current_line = word
-                if current_line:
-                    lines.append(f"  📝 {current_line}")
-            else:
-                lines.append(f"  📝 {summary_clean}")
-        else:
-            lines.append("  ❌ אין סיכום זמין")
-        
-        lines.append("")
-        lines.append("═══════════════════════")
-        
-        # ⏰ פרטי עדכון פשוטים
-        current_time = get_israel_time().strftime('%d/%m/%Y %H:%M:%S')
-        lines.append("💾 פרטי עדכון:")
-        lines.append(f"  ⏰ זמן: {current_time}")
-        lines.append(f"  🗄️ מיקום: user_profiles (מסד נתונים)")
-
-        # שליחת ההודעה הפשוטה והיפה
-        notification_text = "\n".join(lines)
-        send_admin_notification_raw(notification_text)
-        
-        logging.info(f"[ADMIN_NOTIFICATION] ✅ הודעה נשלחה בהצלחה למשתמש {chat_id}")
-        
-    except Exception as exc:
-        logging.error(f"[ADMIN_NOTIFICATION] ❌ שגיאה בשליחת הודעה למשתמש {chat_id}: {exc}")
-        # גיבוי - שליחת הודעה בסיסית במקרה של שגיאה
-        try:
-            from notifications import send_admin_notification_raw
-            send_admin_notification_raw(f"⚠️ שגיאה בהודעת עדכון פרופיל למשתמש {chat_id}: {exc}")
-        except:
-            pass
-
-
-# ---------------------------------------------------------------------------
-# 📝  Auto-summary generation (moved from sheets_core.py)
-# ---------------------------------------------------------------------------
-
-def generate_summary_from_profile_data(profile_data: Dict[str, Any]) -> str:
-    """
-    Generates an emotional summary string from a user's profile data dict.
-    This function is now independent of Google Sheets.
-    """
-    if not profile_data:
-        return ""
-
-    def get_field_priority(field_name):
-        # Default priority is high to ensure unknown fields are included
-        priority = FIELDS_DICT.get(field_name, {}).get("priority", 99)
-        # Ensure priority is a number, default to 99 if not
-        return priority if isinstance(priority, (int, float)) else 99
-
-    # Sort fields by priority (lower number = higher priority)
-    sorted_fields = sorted(profile_data.keys(), key=get_field_priority)
-
-    summary_parts = []
-    technical_fields = {"chat_id", "name", "last_update", "date_first_seen", "code", "code_try", "gpt_c_run_count", "summary"}
-
-    for field in sorted_fields:
-        if field in technical_fields:
-            continue
-        
-        value = profile_data.get(field)
-        
-        # Ensure value is a string and not empty/None
-        if isinstance(value, str) and value.strip() and value.strip() != 'לא צוין':
-            summary_parts.append(value.strip())
+            # יצירת פרופיל חדש
+            new_profile = {
+                'chat_id': safe_id,
+                'created_at': datetime.now().isoformat(),
+                'last_updated': datetime.now().isoformat(),
+                'message_count': 0,
+                'total_cost': 0.0,
+                'preferences': {},
+                'summary': ""
+            }
             
-    return " | ".join(summary_parts)
-
-# ---------------------------------------------------------------------------
-# 📌 Public API (continued)
-# ---------------------------------------------------------------------------
-
-def update_user_profile_fast(chat_id: str, updates: Dict[str, Any], send_admin_notification: bool = True):
-    try:
-        old_profile = get_user_profile_fast(chat_id)
-        new_profile = {**old_profile, **updates}
-
-        # auto-generate summary via Google-Sheets helper (optional)
-        try:
-            auto_summary = generate_summary_from_profile_data(new_profile)
-            logging.debug(f"[SUMMARY_DEBUG] Generated auto summary: '{auto_summary}' for user {chat_id}")
-            # ✅ תמיד מעדכנים את הסיכום אם יש שינוי בפרופיל
-            if auto_summary:
-                new_profile["summary"] = auto_summary
-                # הוספת הסיכום לעדכונים שנשלחים
-                updates["summary"] = auto_summary
-                logging.debug(f"[SUMMARY_DEBUG] Updated profile summary for user {chat_id}: '{auto_summary}'")
-            else:
-                logging.debug(f"[SUMMARY_DEBUG] Empty auto summary generated for user {chat_id}")
-        except Exception as e:
-            logging.debug(f"שגיאה ביצירת סיכום אוטומטי: {e}")
-
-        changes = _detect_profile_changes(old_profile, new_profile)
-        # ✅ הוסר _send_admin_profile_change_notification - משתמשים רק בהודעה המפורטת
-
-        _update_user_profiles_file(chat_id, updates)
-        if changes:
-            _log_profile_changes_to_chat_history(chat_id, changes)
-
-        # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
-        # _schedule_sheets_sync_safely(chat_id) # ⚠️ מנוטרל - עובדים רק עם מסד הנתונים
-
-        # ✅ ההודעה המפורטת נשלחת ממקום אחר - אין צורך בהודעה נוספת כאן
-
-        return True
+            # שמירה במסד נתונים
+            data_manager.save_user_profile(safe_id, new_profile)
+            
+            # שמירה ב-cache
+            _profile_cache[safe_id] = new_profile
+            
+            return new_profile
+            
     except Exception as e:
-        logging.error(f"Error updating profile for {chat_id}: {e}")
+        logger.error(f"שגיאה בשליפת פרופיל: {e}", source="profile_utils")
+        return {}
+
+@safe_operation("update_user_profile", "לא ניתן לעדכן פרופיל משתמש")
+def update_user_profile(chat_id: Any, updates: Dict) -> bool:
+    """עדכון פרופיל משתמש - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        # קבלת פרופיל נוכחי
+        current_profile = get_user_profile(safe_id)
+        
+        # עדכון הפרופיל
+        current_profile.update(updates)
+        current_profile['last_updated'] = datetime.now().isoformat()
+        
+        # שמירה במסד נתונים
+        from simple_data_manager import data_manager
+        success = data_manager.save_user_profile(safe_id, current_profile)
+        
+        if success:
+            # עדכון cache
+            _profile_cache[safe_id] = current_profile
+            logger.info(f"✅ פרופיל עודכן בהצלחה למשתמש {safe_id}", source="profile_utils")
+            return True
+        else:
+            logger.error(f"שגיאה בעדכון פרופיל: {updates}", source="profile_utils")
+            return False
+            
+    except Exception as exc:
+        logger.error(f"שגיאה בעדכון פרופיל: {exc}", source="profile_utils")
         return False
 
+def sync_profile_to_sheets(chat_id: Any) -> bool:
+    """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
+    safe_id = safe_str(chat_id)
+    logger.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {safe_id}", source="profile_utils")
+    return True
 
-def get_user_summary_fast(chat_id: str) -> str:
+def sync_profile_by_headers(chat_id: Any) -> bool:
+    """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
+    safe_id = safe_str(chat_id)
+    logger.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {safe_id}", source="profile_utils")
+    return True
+
+def sync_to_google_sheets(chat_id: Any) -> bool:
+    """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
+    safe_id = safe_str(chat_id)
+    logger.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {safe_id}", source="profile_utils")
+    return True
+
+def sync_to_sheets_by_headers(chat_id: Any) -> bool:
+    """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
+    safe_id = safe_str(chat_id)
+    logger.info(f"🗑️ פונקציה זו הוסרה - עברנו למסד נתונים עבור {safe_id}", source="profile_utils")
+    return True
+
+def schedule_sheets_sync_safely(chat_id: Any) -> None:
+    """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
+    safe_id = safe_str(chat_id)
+    logger.debug(f"🗑️ _schedule_sheets_sync_safely deprecated - using database for {safe_id}", source="profile_utils")
+
+def log_profile_change(chat_id: Any, field: str, old_val: Any, new_val: Any) -> None:
+    """רישום שינוי בפרופיל - פונקציה אחת פשוטה"""
     try:
-        # שימוש ישיר ב-profile_utils
-        profile = get_user_profile_fast(chat_id) or {}
-        return profile.get("summary", "")
+        safe_id = safe_str(chat_id)
+        
+        if old_val is None:
+            log_message = f"[PROFILE_CHANGE] Added {field} for user: '{new_val}'"
+            logger.info(log_message, source="profile_utils")
+        else:
+            log_message = f"[PROFILE_CHANGE] Updated {field} for user: '{old_val}' → '{new_val}'"
+            logger.info(log_message, source="profile_utils")
+        
+        # שמירה במסד נתונים
+        from simple_data_manager import data_manager
+        
+        change_data = {
+            'chat_id': safe_id,
+            'field': field,
+            'old_value': str(old_val) if old_val is not None else None,
+            'new_value': str(new_val),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        data_manager.save_profile_change(change_data)
+        
+    except Exception as e:
+        logger.error(f"שגיאה ברישום שינויים: {e}", source="profile_utils")
+
+def send_admin_profile_notification(chat_id: Any, changes: Dict) -> bool:
+    """שליחת התראה לאדמין על שינויי פרופיל - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        if not changes:
+            logger.debug(f"[ADMIN_NOTIFICATION] 🚫 לא נשלחת הודעה למשתמש {safe_id} - אין שינויים בפרופיל", source="profile_utils")
+            return True
+        
+        # הכנת הודעה לאדמין
+        total_changes = len(changes)
+        gpt_c_changes = len([c for c in changes if 'gpt_c' in str(c)])
+        gpt_d_changes = len([c for c in changes if 'gpt_d' in str(c)])
+        gpt_e_changes = len([c for c in changes if 'gpt_e' in str(c)])
+        
+        logger.info(f"[ADMIN_NOTIFICATION] 📬 שולח הודעה למשתמש {safe_id} עם {total_changes} שינויים (C:{gpt_c_changes}, D:{gpt_d_changes}, E:{gpt_e_changes})", source="profile_utils")
+        
+        # שליחת הודעה לאדמין
+        from notifications import send_admin_profile_change_notification
+        
+        message = f"📊 Profile changes for user {safe_id}:\n"
+        message += f"• Total changes: {total_changes}\n"
+        message += f"• GPT-C changes: {gpt_c_changes}\n"
+        message += f"• GPT-D changes: {gpt_d_changes}\n"
+        message += f"• GPT-E changes: {gpt_e_changes}\n\n"
+        
+        for field, value in changes.items():
+            message += f"• {field}: {value}\n"
+        
+        success = send_admin_profile_change_notification(message)
+        
+        if success:
+            logger.info(f"[ADMIN_NOTIFICATION] ✅ הודעה נשלחה בהצלחה למשתמש {safe_id}", source="profile_utils")
+            return True
+        else:
+            logger.error(f"[ADMIN_NOTIFICATION] ❌ שגיאה בשליחת הודעה למשתמש {safe_id}", source="profile_utils")
+            return False
+            
     except Exception as exc:
-        logging.debug(f"Error getting summary for {chat_id}: {exc}")
+        logger.error(f"[ADMIN_NOTIFICATION] ❌ שגיאה בשליחת הודעה למשתמש {safe_str(chat_id)}: {exc}", source="profile_utils")
+        return False
+
+def generate_auto_summary(chat_id: Any) -> str:
+    """יצירת סיכום אוטומטי - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        # קבלת היסטוריית הודעות
+        from simple_data_manager import data_manager
+        
+        messages = data_manager.get_chat_messages(safe_id, limit=50)
+        
+        if not messages:
+            return ""
+        
+        # יצירת סיכום פשוט
+        user_messages = [msg['user_msg'] for msg in messages if msg.get('user_msg')]
+        
+        if not user_messages:
+            return ""
+        
+        # סיכום בסיסי - 3 הנושאים העיקריים
+        topics = {}
+        for msg in user_messages:
+            words = msg.split()
+            for word in words:
+                if len(word) > 3:  # מילים משמעותיות בלבד
+                    topics[word] = topics.get(word, 0) + 1
+        
+        # מיון לפי תדירות
+        sorted_topics = sorted(topics.items(), key=lambda x: x[1], reverse=True)
+        
+        # יצירת סיכום
+        if sorted_topics:
+            main_topics = [topic for topic, count in sorted_topics[:3]]
+            auto_summary = f"נושאים עיקריים: {', '.join(main_topics)}"
+            
+            logger.debug(f"[SUMMARY_DEBUG] Generated auto summary: '{auto_summary}' for user {safe_id}", source="profile_utils")
+            
+            # עדכון הפרופיל
+            update_user_profile(safe_id, {'summary': auto_summary})
+            
+            logger.debug(f"[SUMMARY_DEBUG] Updated profile summary for user {safe_id}: '{auto_summary}'", source="profile_utils")
+            
+            return auto_summary
+        else:
+            logger.debug(f"[SUMMARY_DEBUG] Empty auto summary generated for user {safe_id}", source="profile_utils")
+            return ""
+            
+    except Exception as e:
+        logger.debug(f"שגיאה ביצירת סיכום אוטומטי: {e}", source="profile_utils")
         return ""
 
-
-def update_user_summary_fast(chat_id: str, summary: str):
-    update_user_profile_fast(chat_id, {"summary": summary})
-
-
-def increment_code_try_fast(chat_id: str) -> int:
+@safe_operation("update_user_profile_fast", "לא ניתן לעדכן פרופיל משתמש")
+def update_user_profile_fast(chat_id: Any, updates: Dict) -> bool:
+    """עדכון מהיר של פרופיל משתמש - פונקציה אחת פשוטה"""
     try:
-        profile = get_user_profile_fast(chat_id)
-        new_val = profile.get("code_try", 0) + 1
-        update_user_profile_fast(chat_id, {"code_try": new_val})
-        return new_val
-    except Exception:
-        return 1
-
-
-def increment_gpt_c_run_count_fast(chat_id: str) -> int:
-    try:
-        profile = get_user_profile_fast(chat_id)
-        new_val = profile.get("gpt_c_run_count", 0) + 1
-        update_user_profile_fast(chat_id, {"gpt_c_run_count": new_val})
-        return new_val
-    except Exception:
-        return 1
-
-
-# ---------------------------------------------------------------------------
-# 🌱  Emotional-identity helpers
-# ---------------------------------------------------------------------------
-
-def update_emotional_identity_fast(chat_id: str, emotional_data: Dict[str, Any]):
-    try:
-        # ✅ תיקון: הוספת timestamp לנתונים הרגשיים
-        emotional_data["last_update"] = utils.get_israel_time().isoformat()
+        safe_id = safe_str(chat_id)
         
-        # ✅ תיקון: שימוש ב-update_user_profile_fast במקום _update_user_profiles_file ישירות
-        # זה יבטיח שהסיכום יתעדכן אוטומטית
-        update_user_profile_fast(chat_id, emotional_data, send_admin_notification=False)
+        # עדכון ישיר במסד נתונים
+        from simple_data_manager import data_manager
         
-        logging.info(f"✅ תעודת זהות רגשית עודכנה עבור משתמש {chat_id}")
-        return True
-    except Exception as exc:
-        logging.error(f"שגיאה בעדכון תעודת זהות רגשית: {exc}")
-        # ✅ תיקון: גם במקרה של שגיאה, נשתמש ב-update_user_profile_fast
-        try:
-            emotional_data["last_update"] = utils.get_israel_time().isoformat()
-            update_user_profile_fast(chat_id, emotional_data, send_admin_notification=False)
-        except Exception as fallback_exc:
-            logging.error(f"שגיאה גם בניסיון הגיבוי: {fallback_exc}")
-        return False
-
-
-def get_emotional_identity_fast(chat_id: str) -> Dict[str, Any]:
-    return get_user_profile_fast(chat_id)
-
-
-def ensure_emotional_identity_consistency(chat_id: str) -> bool:
-    try:
-        # 🗑️ עברנו למסד נתונים - אין צורך לבדוק עקביות עם Google Sheets
-        local_profile = get_user_profile_fast(chat_id)
-        # במסד נתונים אין צורך להשוות - הכל במקום אחד
-        matched = True  # תמיד תואם כי זה אותו מקור
-        logging.info(
-            f"✅ תעודת זהות רגשית תואמת עבור משתמש {chat_id} (מסד נתונים)"
-        )
-        return matched
-    except Exception as exc:
-        logging.error(f"שגיאה בבדיקת עקביות תעודת זהות רגשית: {exc}")
-        return False
-
-
-def get_all_emotional_identity_fields() -> List[str]:
-    return [
-        "summary",
-        "name",
-        "age",
-        "pronoun_preference",
-        "occupation_or_role",
-        "attracted_to",
-        "relationship_type",
-        "self_religious_affiliation",
-        "self_religiosity_level",
-        "family_religiosity",
-        "closet_status",
-        "who_knows",
-        "who_doesnt_know",
-        "attends_therapy",
-        "primary_conflict",
-        "trauma_history",
-        "goal_in_course",
-        "language_of_strength",
-        "date_first_seen",
-        "coping_strategies",
-        "fears_concerns",
-        "future_vision",
-        "other_insights",
-        "last_update",
-        "code_try",
-        "gpt_c_run_count",
-    ]
-
-
-def validate_emotional_identity_data(emotional_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
-    errors: List[str] = []
-    for field in ["summary", "age", "last_update"]:
-        if not emotional_data.get(field):
-            errors.append(f"שדה חובה חסר: {field}")
-    if "age" in emotional_data:
-        try:
-            age = int(emotional_data["age"])
-            if age < 13 or age > 120:
-                errors.append("גיל לא תקין (חייב להיות בין 13 ל-120)")
-        except Exception:
-            errors.append("גיל חייב להיות מספר")
-    if "summary" in emotional_data and len(emotional_data["summary"]) > 1000:
-        errors.append("סיכום ארוך מדי (מקסימום 1000 תווים)")
-    return len(errors) == 0, errors
-
-
-# ---------------------------------------------------------------------------
-# 🛠️  Maintenance helpers
-# ---------------------------------------------------------------------------
-
-def force_sync_to_sheets(chat_id: str) -> bool:
-    """🗑️ עברנו למסד נתונים - פונקציה deprecated"""
-    try:
-        local_profile = get_user_profile_fast(chat_id)
-        if not local_profile:
-            logging.warning(f"אין נתונים למשתמש {chat_id}")
+        success = data_manager.update_user_profile_fast(safe_id, updates)
+        
+        if success:
+            # ניקוי cache
+            if safe_id in _profile_cache:
+                del _profile_cache[safe_id]
+            
+            logger.info(f"✅ פרופיל עודכן במהירות למשתמש {safe_id}", source="profile_utils")
+            return True
+        else:
+            logger.error(f"Error updating profile for {safe_id}: {updates}", source="profile_utils")
             return False
-        # 🗑️ עברנו למסד נתונים - אין צורך בסנכרון Google Sheets יותר
-        # במסד נתונים כל הנתונים כבר סונכרנו אוטומטית
-        logging.info(f"🗑️ force_sync_to_sheets deprecated - using database for {chat_id}")
-        return True  # תמיד מצליח כי במסד נתונים הכל כבר סונכרן
-    except Exception as exc:
-        logging.error(f"שגיאה בבדיקת נתונים: {exc}")
+            
+    except Exception as e:
+        logger.error(f"Error updating profile for {safe_str(chat_id)}: {e}", source="profile_utils")
         return False
 
+def get_user_summary_fast(chat_id):
+    """תאימות לאחור – מפנה ל-get_profile_summary"""
+    return get_profile_summary(chat_id)
 
-def cleanup_old_profiles(days_old: int = 90) -> int:
+def get_profile_summary(chat_id: Any) -> str:
+    """קבלת סיכום פרופיל - פונקציה אחת פשוטה"""
     try:
-        # Placeholder for DB cleanup if needed
-        pass
+        safe_id = safe_str(chat_id)
+        
+        profile = get_user_profile(safe_id)
+        return profile.get('summary', '')
+        
     except Exception as exc:
-        logging.error(f"שגיאה בניקוי פרופילים ישנים: {exc}")
+        logger.debug(f"Error getting summary for {safe_str(chat_id)}: {exc}", source="profile_utils")
+        return ""
+
+def update_emotional_identity(chat_id: Any, emotional_data: Dict) -> bool:
+    """עדכון תעודת זהות רגשית - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        # עדכון הפרופיל עם נתונים רגשיים
+        updates = {
+            'emotional_identity': emotional_data,
+            'last_emotional_update': datetime.now().isoformat()
+        }
+        
+        success = update_user_profile(safe_id, updates)
+        
+        if success:
+            logger.info(f"✅ תעודת זהות רגשית עודכנה עבור משתמש {safe_id}", source="profile_utils")
+            return True
+        else:
+            logger.error(f"שגיאה בעדכון תעודת זהות רגשית: {emotional_data}", source="profile_utils")
+            return False
+            
+    except Exception as exc:
+        logger.error(f"שגיאה בעדכון תעודת זהות רגשית: {exc}", source="profile_utils")
+        
+        # ניסיון גיבוי
+        try:
+            from simple_data_manager import data_manager
+            data_manager.save_emotional_backup(safe_str(chat_id), emotional_data)
+        except Exception as fallback_exc:
+            logger.error(f"שגיאה גם בניסיון הגיבוי: {fallback_exc}", source="profile_utils")
+        
+        return False
+
+def check_emotional_consistency(chat_id: Any) -> Dict:
+    """בדיקת עקביות תעודת זהות רגשית - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        profile = get_user_profile(safe_id)
+        emotional_data = profile.get('emotional_identity', {})
+        
+        if not emotional_data:
+            return {'consistent': True, 'message': 'אין נתונים רגשיים לבדיקה'}
+        
+        # בדיקות עקביות בסיסיות
+        consistency_checks = {
+            'has_personality': bool(emotional_data.get('personality')),
+            'has_emotions': bool(emotional_data.get('emotions')),
+            'has_preferences': bool(emotional_data.get('preferences')),
+            'recent_update': bool(emotional_data.get('last_update'))
+        }
+        
+        is_consistent = all(consistency_checks.values())
+        
+        result = {
+            'consistent': is_consistent,
+            'checks': consistency_checks,
+            'last_update': emotional_data.get('last_update'),
+            'message': 'תעודת זהות רגשית עקבית' if is_consistent else 'תעודת זהות רגשית לא עקבית'
+        }
+        
+        logger.info(
+            f"בדיקת עקביות תעודת זהות רגשית למשתמש {safe_id}: {'עקבית' if is_consistent else 'לא עקבית'}",
+            source="profile_utils"
+        )
+        
+        return result
+        
+    except Exception as exc:
+        logger.error(f"שגיאה בבדיקת עקביות תעודת זהות רגשית: {exc}", source="profile_utils")
+        return {'consistent': False, 'error': str(exc)}
+
+def get_user_statistics(chat_id: Any) -> Dict:
+    """קבלת סטטיסטיקות משתמש - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        profile = get_user_profile(safe_id)
+        
+        if not profile:
+            logger.warning(f"אין נתונים למשתמש {safe_id}", source="profile_utils")
+            return {}
+        
+        # חישוב סטטיסטיקות
+        stats = {
+            'message_count': profile.get('message_count', 0),
+            'total_cost': profile.get('total_cost', 0.0),
+            'created_at': profile.get('created_at'),
+            'last_updated': profile.get('last_updated'),
+            'has_summary': bool(profile.get('summary')),
+            'has_emotional_identity': bool(profile.get('emotional_identity'))
+        }
+        
+        return stats
+        
+    except Exception as exc:
+        logger.error(f"שגיאה בקבלת סטטיסטיקות: {exc}", source="profile_utils")
+        return {}
+
+def force_sync_to_sheets(chat_id: Any) -> bool:
+    """🗑️ פונקציה זו הוסרה - עברנו למסד נתונים"""
+    safe_id = safe_str(chat_id)
+    logger.info(f"🗑️ force_sync_to_sheets deprecated - using database for {safe_id}", source="profile_utils")
+    return True
+
+def check_user_data_consistency(chat_id: Any) -> Dict:
+    """בדיקת עקביות נתוני משתמש - פונקציה אחת פשוטה"""
+    try:
+        safe_id = safe_str(chat_id)
+        
+        # בדיקת פרופיל
+        profile = get_user_profile(safe_id)
+        
+        # בדיקת הודעות
+        from simple_data_manager import data_manager
+        messages = data_manager.get_chat_messages(safe_id, limit=10)
+        
+        consistency_report = {
+            'has_profile': bool(profile),
+            'profile_message_count': profile.get('message_count', 0) if profile else 0,
+            'actual_message_count': len(messages),
+            'profile_consistent': profile.get('message_count', 0) == len(messages) if profile else False,
+            'has_recent_activity': bool(messages),
+            'last_message_time': messages[-1].get('timestamp') if messages else None
+        }
+        
+        return consistency_report
+        
+    except Exception as exc:
+        logger.error(f"שגיאה בבדיקת נתונים: {exc}", source="profile_utils")
+        return {'error': str(exc)}
+
+def cleanup_old_profiles() -> int:
+    """ניקוי פרופילים ישנים - פונקציה אחת פשוטה"""
+    try:
+        from simple_data_manager import data_manager
+        
+        # מחיקת פרופילים ישנים (יותר מ-30 ימים ללא פעילות)
+        deleted_count = data_manager.cleanup_old_profiles(days=30)
+        
+        logger.info(f"✅ נמחקו {deleted_count} פרופילים ישנים", source="profile_utils")
+        return deleted_count
+        
+    except Exception as exc:
+        logger.error(f"שגיאה בניקוי פרופילים ישנים: {exc}", source="profile_utils")
         return 0
 
-
-def get_profiles_stats() -> Dict[str, Any]:
+def get_profile_statistics() -> Dict:
+    """קבלת סטטיסטיקות פרופילים - פונקציה אחת פשוטה"""
     try:
-        # Placeholder for DB stats if needed
-        pass
+        from simple_data_manager import data_manager
+        
+        stats = data_manager.get_profile_statistics()
+        
+        return {
+            'total_profiles': stats.get('total_profiles', 0),
+            'active_profiles': stats.get('active_profiles', 0),
+            'profiles_with_summary': stats.get('profiles_with_summary', 0),
+            'profiles_with_emotional_identity': stats.get('profiles_with_emotional_identity', 0),
+            'average_messages_per_profile': stats.get('average_messages', 0),
+            'total_cost': stats.get('total_cost', 0.0)
+        }
+        
     except Exception as exc:
-        logging.error(f"שגיאה בקבלת סטטיסטיקות פרופילים: {exc}")
+        logger.error(f"שגיאה בקבלת סטטיסטיקות פרופילים: {exc}", source="profile_utils")
         return {} 

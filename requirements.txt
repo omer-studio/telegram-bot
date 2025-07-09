@@ -17,8 +17,10 @@ google-generativeai>=0.8.0
 fastapi>=0.110.0
 uvicorn>=0.22.0
 # 🗑️ עברנו למסד נתונים - הסרת dependency של Google Sheets
+# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
 # gspread==5.12.0  # היה נדרש רק עבור Google Sheets
-oauth2client==4.1.3
+# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+# oauth2client==4.1.3  # היה נדרש רק עבור Google Sheets
 requests>=2.31.0
 Flask
 psutil>=5.9.0

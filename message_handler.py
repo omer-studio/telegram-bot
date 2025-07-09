@@ -5,21 +5,19 @@ message_handler.py
 הרציונל: ריכוז כל ניהול ההודעות, פורמטינג, שגיאות, וחוויית משתמש במקום אחד.
 """
 
-import logging
 import asyncio
 import re
 import json
 import time
-from config import (
-    BOT_TOKEN, 
-    ADMIN_NOTIFICATION_CHAT_ID, 
-    ADMIN_BOT_TELEGRAM_TOKEN,
-    MAX_MESSAGE_LENGTH,
-    ADMIN_CHAT_ID,
-    MAX_CODE_TRIES
-)
+
+# 🚀 יבוא המערכת החדשה - פשוטה ועקבית
+from simple_config import config
+from simple_logger import logger
+from simple_data_manager import data_manager
+from user_friendly_errors import safe_str, safe_operation
+
 from utils import get_israel_time
-from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, update_last_bot_message
+from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, get_chat_history_simple, update_last_bot_message
 # Telegram types (ignored if telegram package absent in testing env)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove  # type: ignore
 from telegram.ext import ContextTypes  # type: ignore
@@ -224,7 +222,7 @@ async def _handle_holiday_check(update, chat_id, bot_reply):
             await send_system_message(update, chat_id, holiday_message)
             
     except Exception as e:
-        logging.error(f"שגיאה בבדיקת חגים: {e}")
+        logger.error(f"שגיאה בבדיקת חגים: {e}", source="message_handler")
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_response=False):
@@ -300,13 +298,13 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
                 if should_log_message_debug():
                     print(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}", flush=True)
                 
-                logging.info(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={chat_id}")
+                logger.info(f"[TELEGRAM_REPLY] ✅ Success on attempt {attempt + 1} with {current_timeout}s timeout | message_id={getattr(sent_message, 'message_id', None)} | chat_id={safe_str(chat_id)}", source="message_handler")
                 break  # הצלחה - יוצאים מהלולאה
                 
             except asyncio.TimeoutError:
                 if attempt < max_retries:
                     next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
-                    logging.warning(f"[TELEGRAM_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={chat_id}, retrying with {next_timeout}s...")
+                    logger.warning(f"[TELEGRAM_TIMEOUT] ⏰ Timeout after {current_timeout}s on attempt {attempt + 1}/{max_retries + 1} for chat_id={safe_str(chat_id)}, retrying with {next_timeout}s...", source="message_handler")
                     print(f"⚠️ [TELEGRAM_TIMEOUT] ⏰ Timeout after {current_timeout}s - retrying with {next_timeout}s timeout...")
                     await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
@@ -317,7 +315,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             except Exception as e:
                 if attempt < max_retries and ("network" in str(e).lower() or "timeout" in str(e).lower() or "connection" in str(e).lower()):
                     next_timeout = timeout_seconds[min(attempt + 1, len(timeout_seconds) - 1)]
-                    logging.warning(f"[TELEGRAM_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}")
+                    logger.warning(f"[TELEGRAM_RETRY] 🌐 Network error on attempt {attempt + 1}/{max_retries + 1}: {e}", source="message_handler")
                     print(f"⚠️ [TELEGRAM_RETRY] 🌐 Network error - retrying with {next_timeout}s timeout...")
                     await asyncio.sleep(1)  # חכה רק שנייה אחת - מהיר יותר!
                     continue
@@ -714,11 +712,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"🔧 [DEBUG] מתחיל טעינת נתונים עבור {chat_id}")
             
             try:
-                print(f"🔧 [DEBUG] מייבא get_chat_history_messages_fast")
-                from chat_utils import get_chat_history_messages_fast
+                print(f"🔧 [DEBUG] מייבא get_chat_history_simple")
+                from chat_utils import get_chat_history_simple
                 
                 print(f"🔧 [DEBUG] קורא להיסטוריה עבור {chat_id}")
-                history_messages = get_chat_history_messages_fast(chat_id, limit=32)
+                history_messages = get_chat_history_simple(chat_id, limit=32)
                 print(f"🔧 [DEBUG] היסטוריה הוחזרה: {len(history_messages) if history_messages else 0} הודעות")
                 
                 # DEBUG: שמירה במסד נתונים
@@ -1121,13 +1119,13 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         results = await asyncio.gather(*all_tasks, return_exceptions=True)
         
-        # שלב 4: רישום לגיליונות Google Sheets
+        # שלב 4: רישום למסד נתונים
         try:
             # איסוף נתונים מלאים לרישום  
-            # 🗑️ השתמש בפונקציה מהמסד נתונים
+            # ✅ השתמש בפונקציה מהמסד נתונים
             from profile_utils import get_user_summary_fast
             current_summary = get_user_summary_fast(chat_id) or ""
-            history_messages = get_chat_history_messages(chat_id, limit=32)
+            history_messages = get_chat_history_simple(chat_id, limit=32)
             
             # בניית הודעות מלאות לרישום
             messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -1137,7 +1135,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 messages_for_log.extend(history_messages)
             messages_for_log.append({"role": "user", "content": user_msg})
             
-            # 🗑️ רישום למסד נתונים במקום Google Sheets
+            # ✅ רישום למסד נתונים
             save_gpt_chat_message(
                 chat_id=chat_id,
                 user_msg=user_msg,
@@ -1154,16 +1152,14 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 }
             )
             
-            logging.info(f"📊 [BACKGROUND] נשלח לגוגל שיטס | chat_id={chat_id}")
+            logging.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={chat_id}")
             
         except Exception as log_exc:
-            logging.error(f"❌ [BACKGROUND] שגיאה ברישום לגוגל שיטס: {log_exc}")
+            logging.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_exc}")
         
-        # שלב 5: רישום לקובץ לוג מקומי (לתחזוקת הדוחות היומיים)
+        # שלב 5: רישום למסד נתונים (לתחזוקת הדוחות היומיים)
         try:
-            # 🗑️ הסרנו תלות ב-Google Sheets - הלוגים נשמרים למסד נתונים
-            # from sheets_advanced import log_gpt_usage_to_file
-            
+            # ✅ הלוגים נשמרים אוטומטית למסד נתונים
             # חישוב עלות כוללת
             total_cost_ils = 0
             if isinstance(gpt_result, dict) and gpt_result.get("usage"):
@@ -1173,14 +1169,11 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             if gpt_c_result and isinstance(gpt_c_result, dict) and gpt_c_result.get("usage"):
                 total_cost_ils += gpt_c_result["usage"].get("cost_total_ils", 0)
             
-            # 🗑️ הרישום לקובץ הוסר - הכל נשמר למסד נתונים
-            # הלוגים נשמרים אוטומטית למסד הנתונים דרך log_interaction_to_db
-            pass
-            
-            logging.info(f"📝 [BACKGROUND] נשלח לקובץ לוג | chat_id={chat_id}")
+            # ✅ הלוגים נשמרים אוטומטית למסד הנתונים
+            logging.info(f"📝 [BACKGROUND] נשמר למסד נתונים | chat_id={chat_id}")
             
         except Exception as log_file_exc:
-            logging.error(f"❌ [BACKGROUND] שגיאה ברישום לקובץ לוג: {log_file_exc}")
+            logging.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_file_exc}")
         
         # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
         if should_log_debug_prints():

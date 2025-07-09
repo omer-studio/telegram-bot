@@ -43,7 +43,6 @@
 """
 
 import asyncio
-import logging
 import json
 import time
 import sys
@@ -70,13 +69,16 @@ from bot_setup import setup_bot, migrate_data_to_sql_with_safety
 from message_handler import handle_message
 import os
 import requests
-# from gpt_c_logger import clear_gpt_c_html_log  # זמנית מושבת - הפונקציה לא קיימת
+
+# 🚀 יבוא המערכת החדשה - פשוטה ועקבית
+from simple_config import config
+from simple_logger import logger
+from simple_data_manager import data_manager
 
 def clear_gpt_c_html_log():
     """פונקציה זמנית - יש ליצור את clear_gpt_c_html_log בעתיד"""
-    print("📝 [GPT_C_LOGGER] זמנית מושבת - צריך ליצור clear_gpt_c_html_log")
+    logger.info("📝 [GPT_C_LOGGER] זמנית מושבת - צריך ליצור clear_gpt_c_html_log", source="main")
     return True
-from config import PRODUCTION_PORT
 
 # 🚀 יבוא מערכת הלוגים החדשה
 try:
@@ -98,22 +100,25 @@ def log_memory_usage(stage: str):
         import os
         process = psutil.Process(os.getpid())
         memory_mb = process.memory_info().rss / 1024 / 1024
-        logging.info(f"[MEMORY] {stage}: {memory_mb:.1f} MB")
+        logger.info(f"[MEMORY] {stage}: {memory_mb:.1f} MB", source="main")
         
         # 💾 שמירת מדידת זיכרון למסד הנתונים
         try:
-            from db_manager import save_system_metrics
-            save_system_metrics(
-                metric_type="memory",
-                memory_mb=memory_mb,
-                memory_stage=f"main_{stage}",
-                additional_data={"component": "main", "stage": stage}
+            data_manager.save_gpt_call(
+                chat_id="system",
+                call_type="memory_metrics",
+                request_data={"stage": stage, "memory_mb": memory_mb},
+                response_data={"status": "logged"},
+                tokens_input=0,
+                tokens_output=0,
+                cost_usd=0.0,
+                processing_time=0.0
             )
         except Exception as save_err:
-            logging.warning(f"Could not save memory metrics: {save_err}")
+            logger.warning(f"Could not save memory metrics: {save_err}", source="main")
             
     except Exception as e:
-        logging.warning(f"Could not log memory usage: {e}")
+        logger.warning(f"Could not log memory usage: {e}", source="main")
 
 # 🚨 בדיקת post-deploy אוטומטית - הפעלת מערכת rollback
 def run_post_deploy_check():
@@ -515,14 +520,15 @@ if __name__ == "__main__":
     
     # 🚨 DATA_DIR and all data/ references fully removed
     
-    print(f"🤖 מריץ FastAPI server על פורט {PRODUCTION_PORT}!")
-    print(f"🌐 Webhook זמין ב: http://localhost:{PRODUCTION_PORT}/webhook")
+    production_port = int(os.getenv("PORT", 8000))
+    print(f"🤖 מריץ FastAPI server על פורט {production_port}!")
+    print(f"🌐 Webhook זמין ב: http://localhost:{production_port}/webhook")
     
     # הרצת FastAPI עם uvicorn
     uvicorn.run(
         app_fastapi,
         host="0.0.0.0",
-        port=PRODUCTION_PORT,
+        port=production_port,
         log_level="info"
     )
 # תודה1

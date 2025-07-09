@@ -314,95 +314,23 @@ def create_telegram_app():
             print(f"❌ כשל בכל ניסיונות יצירת אפליקציית טלגרם: {e3}")
             raise
 
+# 🗑️ Google Sheets הוסר - פונקציה ריקה
 def time_google_sheets_step(step_name, func):
-    """מודד זמן לשלב בחיבור Google Sheets"""
-    start_time = time.time()
-    print(f"⏱️  {step_name}...")
-    result = func()
-    elapsed_time = time.time() - start_time
-    execution_times[step_name] = elapsed_time
-    print(f"✅ {step_name} הושלם תוך {elapsed_time:.2f} שניות")
-    return result
+    """🗑️ Google Sheets הוסר - פונקציה ריקה"""
+    return None
 
-# חיבור ל-Google Sheets
-@time_operation("חיבור ל-Google Sheets - סה״כ")
-def connect_google_sheets(): # מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data
+# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
+def connect_google_sheets(): # פונקציה ריקה - Google Sheets הוסר
     """
-    מתחבר ל-Google Sheets, טוען גיליונות עיקריים, ושומר אותם ב-bot_data.
-    פלט: אין (מעדכן app.bot_data)
+    🗑️ Google Sheets הוסר - עברנו למסד נתונים
+    פונקציה ריקה לתאימות אחורה
     """
     try:
-        logging.info("🔗 מתחבר ל-Google Sheets...")
-        
-        # שלב 1: טעינת ספריות
-        def load_libraries():
-            try:
-                import gspread
-                from oauth2client.service_account import ServiceAccountCredentials
-                return gspread, ServiceAccountCredentials
-            except ImportError as e:
-                print(f"⚠️ Warning: Failed to import Google Sheets libraries: {e}")
-                # יצירת dummy classes
-                class DummyGspread:
-                    def authorize(self, creds):
-                        return self
-                    def open_by_key(self, key):
-                        return self
-                    def worksheet(self, name):
-                        return self
-                    def get_all_values(self):
-                        return []
-                
-                class DummyServiceAccountCredentials:
-                    @staticmethod
-                    def from_json_keyfile_dict(data, scope):
-                        return DummyServiceAccountCredentials()
-                
-                return DummyGspread(), DummyServiceAccountCredentials
-        
-        gspread, ServiceAccountCredentials = time_google_sheets_step("טעינת ספריות Google Sheets", load_libraries)
-        
-        # שלב 2: הגדרת הרשאות
-        def setup_credentials():
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            return ServiceAccountCredentials.from_json_keyfile_dict(config["SERVICE_ACCOUNT_DICT"], scope)
-        
-        creds = time_google_sheets_step("הגדרת הרשאות Google", setup_credentials)
-        
-        # שלב 3: התחברות ל-API
-        def authorize_client():
-            return gspread.authorize(creds)
-        
-        client = time_google_sheets_step("התחברות ל-Google Sheets API", authorize_client)
-        
-        # שלב 4: פתיחת הגיליון הראשי
-        def open_main_sheet():
-            return client.open_by_key(config["GOOGLE_SHEET_ID"])
-        
-        spreadsheet = time_google_sheets_step("פתיחת הגיליון הראשי", open_main_sheet)
-        
-        # שלב 5: טעינת גיליון משתמשים
-        def load_users_sheet():
-            return spreadsheet.worksheet(config["SHEET_USER_TAB"])
-        
-        sheet = time_google_sheets_step("טעינת גיליון משתמשים", load_users_sheet)
-        
-        # שלב 6: טעינת גיליון מצבים
-        def load_states_sheet():
-            return spreadsheet.worksheet(config["SHEET_STATES_TAB"])
-        
-        sheet_states = time_google_sheets_step("טעינת גיליון מצבים", load_states_sheet)
-        
-        # שמירה באפליקציה
-        app.bot_data["sheet"] = sheet
-        app.bot_data["sheet_states"] = sheet_states
-        
-        logging.info("✅ חיבור ל-Google Sheets בוצע בהצלחה")
-        print("✅ חיבור ל-Google Sheets בוצע בהצלחה")
+        logging.info("🗑️ Google Sheets הוסר - עברנו למסד נתונים")
+        print("🗑️ Google Sheets הוסר - עברנו למסד נתונים")
     except Exception as ex:
-        logging.critical(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
-        print(f"❌ שגיאה בהתחברות ל-Google Sheets: {ex}")
-        raise
+        logging.info(f"🗑️ Google Sheets הוסר: {ex}")
+        print(f"🗑️ Google Sheets הוסר: {ex}")
 
 # === תזמון דוחות אוטומטיים לאדמין ===
 def time_scheduler_step(step_name, func):

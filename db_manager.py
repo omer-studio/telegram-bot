@@ -5,6 +5,24 @@ import json
 import threading
 import queue
 
+# 🎯 מרכז ניהול טיפוסי שדות
+def normalize_chat_id(chat_id):
+    """
+    🎯 מנרמל chat_id לטיפוס אחיד (TEXT)
+    מונע בעיות text=bigint
+    """
+    if chat_id is None:
+        return None
+    return str(chat_id)
+
+def validate_chat_id(chat_id):
+    """
+    🎯 בודק תקינות chat_id
+    """
+    if chat_id is None:
+        raise ValueError("chat_id לא יכול להיות None")
+    return normalize_chat_id(chat_id)
+
 # ייבוא פונקציית debug logging
 try:
     from config import should_log_debug_prints
@@ -293,6 +311,8 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
     - gpt_request/response: בקשה ותגובה מלאה
     - metadata: מטה-דאטה כללי
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -345,7 +365,8 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
 
 
 def get_chat_history(chat_id, limit=100):
-    # שימוש ישיר ב-chat_id כמספר (BIGINT)
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     cur.execute(
@@ -363,6 +384,8 @@ def save_user_profile(chat_id, profile_data):
     שומר פרופיל משתמש במבנה החדש עם עמודות נפרדות
     profile_data יכול להיות dict או JSON string
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -409,7 +432,8 @@ def get_user_profile(chat_id):
     """
     מחזיר פרופיל משתמשdict עם כל השדות
     """
-    # שימוש ישיר ב-chat_id כמספר (BIGINT)
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -435,6 +459,8 @@ def get_user_profile(chat_id):
 
 # === שמירת לוג GPT ===
 def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp=None):
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -493,6 +519,8 @@ def save_critical_user_data(chat_id, user_info):
 
 def save_reminder_state(chat_id, reminder_info):
     """שומר מצב תזכורת ל-SQL"""
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
@@ -769,6 +797,8 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
     - tokens_input/output: טוקנים
     - request/response: בקשה ותגובה מלאה
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     kwargs = {'source_file': 'live_chat'}
     
     if gpt_data:
@@ -834,6 +864,8 @@ def get_chat_statistics():
 
 def get_chat_history_enhanced(chat_id, limit=50):
     """מחזיר היסטוריית צ'אט עם נתונים מורחבים"""
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -993,6 +1025,8 @@ def increment_user_message_count(chat_id):
     מעדכן את מונה ההודעות הכולל של המשתמש ב-+1
     אם המשתמש לא קיים בטבלה, יוצר רשומה חדשה עם מונה 1
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
@@ -1052,6 +1086,8 @@ def get_user_message_count(chat_id):
     """
     מחזיר את מספר ההודעות הכולל של המשתמש
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
@@ -1076,6 +1112,8 @@ def clear_user_from_database(chat_id):
     ומשאיר אך ורק את code_approve (כל השאר NULL/ריק).
     לא נוגע בכלל ב-gpt_calls_log!
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
@@ -1155,6 +1193,8 @@ def register_user_with_code_db(chat_id, code_input=None):
     :param code_input: קוד אישור (או None למשתמש חדש)
     :return: {"success": bool, "message": str, "attempt_num": int}
     """
+    # 🎯 נרמול chat_id לטיפוס אחיד
+    chat_id = validate_chat_id(chat_id)
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()

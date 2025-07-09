@@ -58,31 +58,71 @@ __all__: List[str] = [
     "cleanup_test_users",
 ]
 
-# ---------------------------------------------------------------------------
-# 📜 Chat-history helpers
-# ---------------------------------------------------------------------------
+# ============================================================================
+# 🎯 מערכת היסטוריה פשוטה ואחידה - במקום 3 פונקציות שונות
+# ============================================================================
 
-def update_chat_history(chat_id, user_msg, bot_summary):
-    """Update the persistent chat-history using SQL database."""
+def update_chat_history(chat_id: str, user_msg: str, bot_msg: str, **kwargs) -> bool:
+    """
+    🎯 פונקציה אחת פשוטה לעדכון היסטוריה - במקום פונקציות רבות
+    
+    עושה הכל:
+    - שומרת הודעה במסד נתונים
+    - מטפלת בשגיאות
+    - לוגים פשוטים
+    
+    Args:
+        chat_id: מזהה הצ'אט
+        user_msg: הודעת המשתמש
+        bot_msg: הודעת הבוט
+        **kwargs: פרמטרים נוספים (gpt_type, gpt_model, וכו')
+    
+    Returns:
+        True אם הצליח, False אם נכשל
+    """
     try:
-        # שמירה ל-SQL באמצעות db_manager
-        if (user_msg and user_msg.strip()) or (bot_summary and bot_summary.strip()):
-            save_chat_message(chat_id, user_msg or "", bot_summary or "")
-            
-        if should_log_message_debug():
-            logging.info(f"היסטוריה עודכנה למשתמש {chat_id} (SQL)")
-    except Exception as e:
-        logging.error(f"שגיאה בעדכון היסטוריה: {e}")
-
-
-def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list:
-    """Return the last `limit` messages from the chat history in a GPT-friendly
-    messages array using SQL database."""
-    try:
-        # שליפה מ-SQL באמצעות db_manager
-        rows = get_chat_history(chat_id, limit or 30)
+        # שמירה במסד נתונים
+        success = save_chat_message(
+            chat_id=chat_id,
+            user_msg=user_msg,
+            bot_msg=bot_msg,
+            **kwargs
+        )
         
-        messages: List[Dict[str, str]] = []
+        if success:
+            print(f"[HISTORY_SAVE] ✅ chat_id={chat_id} | נשמר בהצלחה")
+        else:
+            print(f"[HISTORY_SAVE] ❌ chat_id={chat_id} | נכשל בשמירה")
+        
+        return success
+        
+    except Exception as e:
+        print(f"[HISTORY_SAVE_ERROR] chat_id={chat_id} | שגיאה: {e}")
+        return False
+
+def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
+    """
+    🎯 פונקציה אחת פשוטה להיסטוריה - במקום 3 פונקציות שונות
+    
+    עושה הכל:
+    - מביאה היסטוריה מהמסד נתונים
+    - מסננת הודעות פנימיות
+    - מחזירה בפורמט GPT
+    - לוגים פשוטים
+    
+    Args:
+        chat_id: מזהה הצ'אט
+        limit: מספר מקסימלי של הודעות (ברירת מחדל: 32)
+    
+    Returns:
+        רשימת הודעות בפורמט GPT
+    """
+    try:
+        # 1. שליפה מהמסד נתונים
+        rows = get_chat_history(chat_id, limit)
+        
+        # 2. המרה לפורמט GPT
+        messages = []
         user_count = 0
         assistant_count = 0
         
@@ -91,86 +131,61 @@ def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list
             bot_content = row[1] or ""   # bot_msg
             timestamp = row[2]           # timestamp
             
-            # 🚨 SECURITY: מנע הודעות פנימיות מלהישלח ל-GPT
-            if bot_content and ("[עדכון פרופיל]" in bot_content or bot_content.startswith("[") and "]" in bot_content):
-                if should_log_message_debug():
-                    print(f"[SECURITY] מסנן הודעה פנימית: {bot_content[:50]}...")
+            # 3. סינון הודעות פנימיות (פשוט וברור)
+            if bot_content and any(marker in bot_content for marker in [
+                "[עדכון פרופיל]", "[הודעה אוטומטית מהבוט]", "[הודעה מערכת]", "[תשובת GPT-A]"
+            ]):
                 continue
             
-            # 🚨 SECURITY: מנע הודעות מערכת מלהישלח ל-GPT
             if user_content and user_content.startswith("[הודעה"):
-                if should_log_message_debug():
-                    print(f"[SECURITY] מסנן הודעת מערכת מהמשתמש: {user_content[:50]}...")
                 continue
             
-            # 🚨 SECURITY: מנע הודעות מערכת מהבוט מלהישלח ל-GPT
-            if bot_content and ("[הודעה אוטומטית מהבוט]" in bot_content or "[הודעה מערכת]" in bot_content):
-                if should_log_message_debug():
-                    print(f"[SECURITY] מסנן הודעת מערכת מהבוט: {bot_content[:50]}...")
-                continue
-            
-            # 🚨 SECURITY: מנע הודעות תשובה פנימיות מלהישלח ל-GPT
-            if bot_content and "[תשובת GPT-A]" in bot_content:
-                if should_log_message_debug():
-                    print(f"[SECURITY] מסנן הודעת תשובה פנימית: {bot_content[:50]}...")
-                continue
-            
-            # הוספת טיימסטמפ לכל הודעה בפורמט [01/07 18:03]
-            formatted_timestamp = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-            
-            # הוספת הודעות עם טיימסטמפ
+            # 4. הוספת הודעות עם טיימסטמפ
             if user_content.strip():
-                user_content_with_time = f"{formatted_timestamp} {user_content}" if formatted_timestamp else user_content
-                messages.append({"role": "user", "content": user_content_with_time})
+                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+                content = f"{formatted_time} {user_content}" if formatted_time else user_content
+                messages.append({"role": "user", "content": content})
                 user_count += 1
             
             if bot_content.strip():
-                bot_content_with_time = f"{formatted_timestamp} {bot_content}" if formatted_timestamp else bot_content
-                messages.append({"role": "assistant", "content": bot_content_with_time})
+                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+                content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
+                messages.append({"role": "assistant", "content": content})
                 assistant_count += 1
-            
-            # 🔧 הגבלה על מספר ההודעות הכולל
-            if limit and len(messages) >= limit:
-                break
-
-        if should_log_message_debug():
-            print(f"[HISTORY_DEBUG] נשלחה היסטוריה מ-SQL | chat_id={chat_id} | סה\"כ הודעות={len(messages)} | user={user_count} | assistant={assistant_count}")
+        
+        # 5. לוג פשוט וברור
+        print(f"[HISTORY] chat_id={chat_id} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})")
+        
         return messages
         
     except Exception as e:
-        logging.error(f"שגיאה בשליפת היסטוריה: {e}")
-        return []
-
-
-def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) -> list:
-    """
-    🔧 פונקציה מהירה לקריאת היסטוריה מ-SQL בלבד
-    ⚠️ תמיד מחזירה את 15 ההודעות האחרונות ללא סינון!
-    """
-    try:
-        # שליפה ישירה מ-SQL באמצעות db_manager - תמיד 15 הודעות מקסימום
-        rows = get_chat_history(chat_id, 15)
-        
-        messages: List[Dict[str, str]] = []
-        for row in rows:
-            user_content = row[0] or ""  # user_msg
-            bot_content = row[1] or ""   # bot_msg
-            
-            # הוספת הודעות - ללא שום סינון!
-            if user_content.strip():
-                messages.append({"role": "user", "content": user_content})
-            
-            if bot_content.strip():
-                messages.append({"role": "assistant", "content": bot_content})
-
-        print(f"[HISTORY_CRITICAL] chat_id={chat_id} | נשלפו {len(rows)} שורות מDB | נשלחו {len(messages)} הודעות ל-GPT")
-        return messages
-        
-    except Exception as e:
-        logging.error(f"שגיאה בשליפת היסטוריה מהירה: {e}")
         print(f"[HISTORY_ERROR] chat_id={chat_id} | שגיאה: {e}")
         return []
 
+# ============================================================================
+# 🗑️ פונקציות ישנות - לתאימות לאחור (יוסרו בעתיד)
+# ============================================================================
+
+def get_chat_history_messages(chat_id: str, limit: Optional[int] = None) -> list:
+    """🗑️ פונקציה ישנה - להשתמש ב-get_chat_history_simple במקום"""
+    return get_chat_history_simple(chat_id, limit or 30)
+
+def get_chat_history_messages_fast(chat_id: str, limit: Optional[int] = None) -> list:
+    """🗑️ פונקציה ישנה - להשתמש ב-get_chat_history_simple במקום"""
+    return get_chat_history_simple(chat_id, limit or 15)
+
+def get_chat_history_unified(chat_id: str, limit: int = 32, use_fast_mode: bool = True) -> list:
+    """🗑️ פונקציה ישנה - להשתמש ב-get_chat_history_simple במקום"""
+    return get_chat_history_simple(chat_id, limit)
+
+# ============================================================================
+# 🗑️ פונקציות מיותרות - יוסרו
+# ============================================================================
+
+# 🗑️ _HISTORY_CALLS_LOG = []
+# 🗑️ log_history_call()
+# 🗑️ get_history_calls_summary()
+# 🗑️ validate_history_integrity()
 
 # ---------------------------------------------------------------------------
 # 📊 Stats helpers
