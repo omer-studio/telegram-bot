@@ -365,19 +365,25 @@ def alert_system_status(message, level="info"):
     except Exception as e:
         print(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
-def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None):
+def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
     try:
+        # יצירת כותרת עם 3 ספרות אחרונות של chat_id
+        chat_suffix = ""
+        if chat_id:
+            last_3_digits = str(chat_id)[-3:]
+            chat_suffix = f" (`{last_3_digits}`)"
+        
         # יצירת הודעה מפורמטת ללא מזהה משתמש
-        notification_text = f"💬 **התכתבות חדשה**\n\n"
+        notification_text = f"💬 **התכתבות חדשה{chat_suffix}** 💬\n\n"
         
         # מידע על היסטוריה
         if history_messages:
             user_count = len([msg for msg in history_messages if msg.get("role") == "user"])
             bot_count = len([msg for msg in history_messages if msg.get("role") == "assistant"])
-            notification_text += f"נשלחה היסטוריה: {bot_count} בוט + {user_count} משתמש\n"
+            notification_text += f"**נשלחה היסטוריה:** {bot_count} בוט + {user_count} משתמש\n"
         else:
-            notification_text += f"נשלחה היסטוריה: 0 בוט + 0 משתמש\n"
+            notification_text += f"**נשלחה היסטוריה:** 0 בוט + 0 משתמש\n"
         
         # סיסטם פרומפטים
         if messages_for_gpt:
@@ -387,9 +393,9 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
                 if len(prompt_content) > 20:
                     prompt_preview = prompt_content[:20] + "..."
                     remaining_chars = len(prompt_content) - 20
-                    notification_text += f"סיסטם פרומט {i}: {prompt_preview} (+{remaining_chars})\n"
+                    notification_text += f"**סיסטם פרומט {i}:** {prompt_preview} (+{remaining_chars})\n"
                 else:
-                    notification_text += f"סיסטם פרומט {i}: {prompt_content}\n"
+                    notification_text += f"**סיסטם פרומט {i}:** {prompt_content}\n"
         
         notification_text += f"\n\n"
         
@@ -401,10 +407,19 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         notification_text += f"**➖➖➖➖תשובת הבוט➖➖➖➖**\n\n"
         notification_text += f"{bot_response}\n\n"
         
-        # זמני תגובה
+        # זמני תגובה - מפוצלים ל-3 שורות עם אימוג'י שעון
         if gpt_timing is not None and user_timing is not None:
             gap_time = max(0, user_timing - gpt_timing)  # פער קוד
-            notification_text += f"לGPT לקח לענות **{gpt_timing:.1f}** שניות - המשתמש קיבל תשובה תוך **{user_timing:.1f}** שניות - פער קוד **{gap_time:.1f}** שניות"
+            notification_text += f"⌛ לGPT לקח לענות {gpt_timing:.1f} שניות\n"
+            notification_text += f"⌛ המשתמש קיבל תשובה תוך {user_timing:.1f} שניות\n"
+            notification_text += f"⌛ **פער קוד {gap_time:.1f} שניות**\n"
+        
+        # מונה הודעות משתמש בהיסטוריה
+        if history_messages:
+            user_messages_count = len([msg for msg in history_messages if msg.get("role") == "user"])
+            notification_text += f"\n**מונה הודעות משתמש בהיסטוריה:** {user_messages_count}"
+        else:
+            notification_text += f"\n**מונה הודעות משתמש בהיסטוריה:** 0"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:
