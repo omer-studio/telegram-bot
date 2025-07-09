@@ -122,12 +122,17 @@ def format_text_for_telegram(text):
     • נקודה/שאלה/קריאה + אימוג'י → אימוג'י באותה שורה + מעבר שורה  
     • אם נקודה בלבד → מוחקים אותה + מעבר שורה
     • פיסוק רגיל → מעבר שורה
+    • שמירה על מעברי שורה כפולים - אם יש 2 מעברי שורה, נשמור אותם!
     
     🚀 אופטימיזציה: Pre-compiled regex patterns לביצועים מהירים
     """
     try:
         if not text:
             return ""
+        
+        # 🔧 STEP 0: הגנה על מעברי שורה כפולים - מחליפים אותם בסימן זמני
+        DOUBLE_NEWLINE_PLACEHOLDER = "<<<DOUBLE_NEWLINE_PLACEHOLDER>>>"
+        text = text.replace('\n\n', DOUBLE_NEWLINE_PLACEHOLDER)
         
         # שלב 1: ניקוי HTML בסיסי (מהיר יותר)
         text = _HTML_CLEAN_PATTERN.sub('', text)
@@ -154,6 +159,11 @@ def format_text_for_telegram(text):
         
         # ניקוי סופי (מהיר יותר)
         text = _NEWLINE_SPACES_PATTERN.sub('\n', text)  # מסיר רווחים אחרי מעבר שורה
+        
+        # 🔧 STEP 4: החזרת מעברי שורה כפולים מוגנים לפני גבלת מעברי שורה
+        text = text.replace(DOUBLE_NEWLINE_PLACEHOLDER, '\n\n')
+        
+        # רק אחרי החזרה - מגבילים מעברי שורה משולשים ומעלה
         text = _MULTIPLE_NEWLINES_PATTERN.sub('\n\n', text)  # מגביל מעברי שורה כפולים
         text = text.strip()
         
@@ -676,6 +686,12 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                     print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
                 await send_system_message(update, chat_id, full_access_message(), reply_markup=ReplyKeyboardRemove())
                 # לא שולחים מקלדת/הודעה נוספת – המשתמש יקבל תשובה מהבינה בלבד
+                return
+            else:
+                # 🔧 תיקון באג: טיפול בכשל אישור
+                error_msg = approval_result.get("message", "שגיאה לא ידועה באישור")
+                await send_system_message(update, chat_id, f"⚠️ שגיאה באישור: {error_msg}\n\nאנא נסה שוב או פנה לתמיכה.")
+                logger.error(f"[Permissions] כשל באישור משתמש {safe_str(chat_id)}: {error_msg}", source="message_handler")
                 return
 
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():

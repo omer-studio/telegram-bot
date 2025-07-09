@@ -65,7 +65,9 @@ def register_user_wrapper(chat_id: str, code_input: str) -> bool:
 def approve_user_wrapper(chat_id: str) -> bool:
     """מאשר משתמש"""
     try:
-        return approve_user_db_new(chat_id)
+        result = approve_user_db_new(chat_id)
+        # 🔧 תיקון: approve_user_db_new מחזיר dict, לא bool
+        return result.get("success", False) if isinstance(result, dict) else False
     except Exception as e:
         logging.error(f"❌ שגיאה באישור משתמש {chat_id}: {e}")
         return False

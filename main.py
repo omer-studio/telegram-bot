@@ -363,9 +363,9 @@ async def lifespan(app: FastAPI):
     # 🏠 הפעלת מתזמן גיבוי פנימי
     try:
         print("🏠 מפעיל מתזמן גיבוי פנימי...")
-        from schedule_internal_backup import run_backup_scheduler_background
-        backup_scheduler = run_backup_scheduler_background()
-        if backup_scheduler:
+        from schedule_internal_backup import start_backup_scheduler
+        success = start_backup_scheduler()
+        if success:
             print("✅ מתזמן גיבוי מסודר הופעל (יומי ב-01:00)")
         else:
             print("⚠️ שגיאה בהפעלת מתזמן גיבוי מסודר")
