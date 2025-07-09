@@ -152,16 +152,24 @@ class TestAgeMessagePersistence(unittest.TestCase):
                                 message_handler.run_background_processors(chat_id, user_msg, "bot reply")
                             )
 
-            # After exiting context managers, verify persistence on disk
+            # After exiting context managers, verify persistence using the mock functions
+            # instead of reading JSON file directly since we moved to database
+            
+            # Use the mocked getter to verify the profile was saved
+            from db_manager import safe_str
+            retrieved_profile = mock_get_user_profile_fast(safe_str(chat_id))
+            
+            self.assertIsNotNone(retrieved_profile, "Profile not created in mock database")
+            self.assertIn("age", retrieved_profile, "Age field not found in saved profile")
+            self.assertEqual(retrieved_profile["age"], 35, "Age value not saved correctly to mock database")
+
+            # Also verify the JSON file was updated (since our mock writes to it)
             with open(profiles_path, encoding="utf-8") as fh:
                 data = json.load(fh)
-
-            self.assertIn(chat_id, data, "Profile not created on disk")
-            self.assertEqual(data[chat_id]["age"], 35, "Age value not saved correctly to JSON")
-
-            # Verify getter returns aged profile using the mocked function
-            retrieved_age = mock_get_user_profile_fast(chat_id).get("age")
-            self.assertEqual(retrieved_age, 35, "Getter did not return age=35")
+            
+            safe_chat_id = safe_str(chat_id)
+            self.assertIn(safe_chat_id, data, "Profile not created on disk via mock")
+            self.assertEqual(data[safe_chat_id]["age"], 35, "Age value not saved correctly to JSON via mock")
 
 
 if __name__ == "__main__":
