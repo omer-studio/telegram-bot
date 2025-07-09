@@ -404,13 +404,23 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         # יצירת הודעה מפורמטת ללא מזהה משתמש
         notification_text = f"💬 **התכתבות חדשה{chat_suffix}** 💬\n\n"
         
-        # מידע על היסטוריה
+        # 🔧 מספר הודעות משתמש אמיתי מהמסד נתונים
+        total_user_messages = 0
+        if chat_id:
+            try:
+                from db_manager import get_user_message_count
+                total_user_messages = get_user_message_count(safe_str(chat_id))
+            except Exception as e:
+                logger.warning(f"שגיאה בקבלת מספר הודעות משתמש: {e}")
+                total_user_messages = 0
+        
+        # מידע על היסטוריה שנשלחה ל-GPT
         if history_messages:
             user_count = len([msg for msg in history_messages if msg.get("role") == "user"])
             bot_count = len([msg for msg in history_messages if msg.get("role") == "assistant"])
-            notification_text += f"**נשלחה היסטוריה:** {bot_count} בוט + {user_count} משתמש\n"
+            notification_text += f"**נשלחה היסטוריה ל-GPT:** {bot_count} בוט + {user_count} משתמש\n"
         else:
-            notification_text += f"**נשלחה היסטוריה:** 0 בוט + 0 משתמש\n"
+            notification_text += f"**נשלחה היסטוריה ל-GPT:** 0 בוט + 0 משתמש\n"
         
         # סיסטם פרומפטים
         if messages_for_gpt:
@@ -420,9 +430,9 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
                 if len(prompt_content) > 40:
                     prompt_preview = prompt_content[:40] + "..."
                     remaining_chars = len(prompt_content) - 40
-                    notification_text += f"**סיסטם פרומט {i}:** **{prompt_preview}** (+{remaining_chars}) "
+                    notification_text += f"**סיסטם פרומט {i}:** **{prompt_preview}** (+{remaining_chars})\n"
                 else:
-                    notification_text += f"**סיסטם פרומט {i}:** **{prompt_content}** "
+                    notification_text += f"**סיסטם פרומט {i}:** **{prompt_content}**\n"
             if system_prompts:
                 notification_text += f"\n"
         
@@ -443,11 +453,8 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"⌛ המשתמש קיבל תשובה תוך {user_timing:.1f} שניות\n"
             notification_text += f"⌛ **פער קוד {gap_time:.1f} שניות**\n"
         
-        # מונה הודעות משתמש קודמות
-        if history_messages:
-            notification_text += f"\n**מונה הודעות משתמש:** {user_count}"
-        else:
-            notification_text += f"\n**מונה הודעות משתמש:** 0"
+        # 🔧 מונה הודעות משתמש אמיתי מהמסד נתונים
+        notification_text += f"\n**📊 סה״כ הודעות משתמש:** {total_user_messages}"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:
