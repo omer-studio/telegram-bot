@@ -49,6 +49,8 @@ import traceback
 import db_manager
 from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new, save_gpt_chat_message
 
+from chat_utils import get_weekday_context_instruction, get_holiday_system_message
+
 def format_text_for_telegram(text):
     """
     📀 כללי פורמטינג: גרסה רשמית ומתוקנת
@@ -212,7 +214,7 @@ def format_text_for_telegram(text):
 
 async def _handle_holiday_check(update, chat_id, bot_reply):
     """
-    בודק אם יש חג או אירוע מיוחד היום ושולח הודעה מתאימה
+    🔧 בדיקה ושליחת הודעות חגים מיוחדים אם רלוונטי
     """
     try:
         from chat_utils import get_holiday_system_message
@@ -221,8 +223,8 @@ async def _handle_holiday_check(update, chat_id, bot_reply):
         if holiday_message:
             await send_system_message(update, chat_id, holiday_message)
             
-    except Exception as e:
-        logger.error(f"שגיאה בבדיקת חגים: {e}", source="message_handler")
+    except Exception as holiday_err:
+        logger.warning(f"⚠️ שגיאה בבדיקת חגים: {holiday_err}", source="message_handler")
 
 # פונקציה לשליחת הודעה למשתמש (הועתקה מ-main.py כדי למנוע לולאת ייבוא)
 async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_response=False):
@@ -745,9 +747,58 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # בניית ההודעות ל-gpt_a - מינימלי ומהיר
             messages_for_gpt = [{"role": "system", "content": SYSTEM_PROMPT}]
             
+            # 🆕 SYSTEM MESSAGE 2 - ברכת זמן (תנאי: הודעת ברכה או פער 2+ שעות)
+            try:
+                if should_send_time_greeting(safe_str(chat_id), user_msg):
+                    time_greeting_msg = get_time_greeting_instruction()
+                    if time_greeting_msg:
+                        messages_for_gpt.append({"role": "system", "content": time_greeting_msg})
+                        print(f"✅ [SYSTEM_MSG_2] ברכת זמן נוספה")
+            except Exception as greeting_err:
+                logger.warning(f"⚠️ שגיאה בברכת זמן: {greeting_err}", source="message_handler")
+            
+            # 🆕 SYSTEM MESSAGE 3 - יום השבוע (תנאי: לא לילה + לא הוזכר היום)
+            try:
+                weekday_msg = get_weekday_context_instruction(safe_str(chat_id), user_msg)
+                if weekday_msg:
+                    messages_for_gpt.append({"role": "system", "content": weekday_msg})
+                    print(f"✅ [SYSTEM_MSG_3] יום השבוע נוסף")
+            except Exception as weekday_err:
+                logger.warning(f"⚠️ שגיאה ביום השבוע: {weekday_err}", source="message_handler")
+            
+            # 🆕 SYSTEM MESSAGE 4 - חגים (תנאי: יש חג היום + שעות פעילות)
+            try:
+                holiday_msg = get_holiday_system_message(safe_str(chat_id), "")
+                if holiday_msg:
+                    messages_for_gpt.append({"role": "system", "content": holiday_msg})
+                    print(f"✅ [SYSTEM_MSG_4] חג נוסף")
+            except Exception as holiday_err:
+                logger.warning(f"⚠️ שגיאה בחגים: {holiday_err}", source="message_handler")
+            
+            # 🆕 SYSTEM MESSAGE 5 - שדות חסרים (תנאי: יש שדות חסרים)
+            try:
+                from gpt_a_handler import create_missing_fields_system_message
+                missing_fields_msg, missing_text = create_missing_fields_system_message(safe_str(chat_id))
+                if missing_fields_msg:
+                    messages_for_gpt.append({"role": "system", "content": missing_fields_msg})
+                    print(f"✅ [SYSTEM_MSG_5] שדות חסרים נוספו: {missing_text}")
+            except Exception as missing_err:
+                logger.warning(f"⚠️ שגיאה בשדות חסרים: {missing_err}", source="message_handler")
+            
             # הוספת סיכום משתמש אם יש (מהיר)
             if current_summary:
-                messages_for_gpt.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
+                # 🆕 SYSTEM MESSAGE 6 - סיכום האישי מחוזק (ממש לפני ההודעה החדשה)
+                enhanced_summary = f"""🎯 **מידע קריטי על המשתמש שמדבר מולך כרגע** - השתמש במידע הזה כדי להבין מי מדבר מולך ולהתאים את התשובה שלך:
+
+{current_summary}
+
+⚠️ **הנחיות חשובות לשימוש במידע:**
+• השתמש רק במידע שהמשתמש באמת סיפר לך
+• תראה לו שאתה מכיר אותו ונזכר בדברים שהוא אמר לך
+• התייחס למידע הזה בצורה טבעית ורלוונטית לשיחה
+• זה המידע שעוזר לך להיות דניאל המטפל שלו - תשתמש בו בחכמה"""
+                messages_for_gpt.append({"role": "system", "content": enhanced_summary})
+                print(f"✅ [SYSTEM_MSG_6] סיכום מחוזק נוסף")
             
             # הוספת היסטוריה (מהיר)
             print(f"🔍 [HISTORY_DEBUG] history_messages לאחר טעינה: {len(history_messages) if history_messages else 0} הודעות")
@@ -757,8 +808,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 print(f"❌ [HISTORY_DEBUG] לא הוספו הודעות היסטוריה - history_messages ריק!")
             
-            # הוספת ההודעה החדשה
-            messages_for_gpt.append({"role": "user", "content": user_msg})
+            # 🆕 הוספת ההודעה החדשה עם טיימסטמפ
+            try:
+                from chat_utils import _format_timestamp_for_history
+                import utils
+                current_time = utils.get_israel_time().strftime('%Y-%m-%d %H:%M:%S')
+                formatted_timestamp = _format_timestamp_for_history(current_time)
+                user_msg_with_timestamp = f"{formatted_timestamp} {user_msg}"
+                messages_for_gpt.append({"role": "user", "content": user_msg_with_timestamp})
+                print(f"✅ [USER_MSG] הודעה חדשה עם טיימסטמפ: {formatted_timestamp}")
+            except Exception as timestamp_err:
+                # אם יש שגיאה עם הטיימסטמפ, נשלח בלי
+                messages_for_gpt.append({"role": "user", "content": user_msg})
+                logger.warning(f"⚠️ שגיאה בטיימסטמפ: {timestamp_err}", source="message_handler")
             
             print(f"📤 [GPT_A] שולח {len(messages_for_gpt)} הודעות ל-GPT-A (מהיר)")
 

@@ -132,8 +132,9 @@ class DeploymentLogger:
     def _get_commit_hash(self) -> str:
         """קבלת hash של הcommit הנוכחי"""
         try:
+            from simple_config import TimeoutConfig
             result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
-                                 capture_output=True, text=True, timeout=5)
+                                 capture_output=True, text=True, timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT)
             return result.stdout.strip() if result.returncode == 0 else "unknown"
         except:
             return "unknown"
@@ -141,8 +142,9 @@ class DeploymentLogger:
     def _get_commit_message(self) -> str:
         """קבלת הודעת הcommit הנוכחי"""
         try:
+            from simple_config import TimeoutConfig
             result = subprocess.run(['git', 'log', '-1', '--pretty=%B'], 
-                                 capture_output=True, text=True, timeout=5)
+                                 capture_output=True, text=True, timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT)
             return result.stdout.strip() if result.returncode == 0 else "unknown"
         except:
             return "unknown"
@@ -150,8 +152,9 @@ class DeploymentLogger:
     def _get_branch_name(self) -> str:
         """קבלת שם הbranch הנוכחי"""
         try:
+            from simple_config import TimeoutConfig
             result = subprocess.run(['git', 'branch', '--show-current'], 
-                                 capture_output=True, text=True, timeout=5)
+                                 capture_output=True, text=True, timeout=TimeoutConfig.SUBPROCESS_TIMEOUT_SHORT)
             return result.stdout.strip() if result.returncode == 0 else "unknown"
         except:
             return "unknown"
@@ -253,7 +256,8 @@ class DeploymentLogger:
         """עיבוד לוגים ברקע"""
         while True:
             try:
-                log_entry = self.log_queue.get(timeout=1)
+                from simple_config import TimeoutConfig
+                log_entry = self.log_queue.get(timeout=TimeoutConfig.LOG_QUEUE_TIMEOUT)
                 self._save_to_db(log_entry)
                 self.log_queue.task_done()
             except queue.Empty:

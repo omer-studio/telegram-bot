@@ -6,40 +6,24 @@
 """
 
 import json
-import psycopg2
+from simple_data_manager import DataManager
+from utils import safe_str, get_logger
 
-def load_config():
-    """טעינת קונפיגורציה"""
-    try:
-        from config import get_config
-            return get_config()
-    except Exception as e:
-        print(f"❌ שגיאה בטעינת קונפיגורציה: {e}")
-        return {}
+logger = get_logger(__name__)
 
 def check_code_15689309():
     """
     בדיקה ישירה של קוד 15689309
     """
     try:
-        config = load_config()
-        if not config:
-            return
-            
-        db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
-        
-        if not db_url:
-            print("❌ לא נמצא URL למסד הנתונים")
-            return
-            
+        logger.info("בדיקת קוד אפרובל 15689309")
         print("🔍 בדיקת קוד אפרובל 15689309")
         print("=" * 50)
         
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
+        data_manager = DataManager()
         
         # בדיקה ישירה של הקוד
-        cur.execute("""
+        query = """
             SELECT 
                 chat_id, 
                 code_approve, 
@@ -49,9 +33,8 @@ def check_code_15689309():
                 name
             FROM user_profiles 
             WHERE code_approve = '15689309'
-        """)
-        
-        results = cur.fetchall()
+        """
+        results = data_manager.execute_query(query)
         
         if not results:
             print("❌ קוד 15689309 לא נמצא במסד הנתונים!")

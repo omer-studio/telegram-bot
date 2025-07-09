@@ -63,7 +63,8 @@ def _metrics_worker():
     while _metrics_worker_running:
         try:
             # קבלת מטריקה מהתור (עם timeout)
-            metrics_data = _metrics_queue.get(timeout=1)
+            from simple_config import TimeoutConfig
+            metrics_data = _metrics_queue.get(timeout=TimeoutConfig.DATABASE_QUEUE_TIMEOUT)
             
             if metrics_data is None:  # אות ליציאה
                 break
@@ -196,7 +197,8 @@ def stop_metrics_worker():
     _metrics_queue.put(None)  # אות ליציאה
     
     if _metrics_worker_thread and _metrics_worker_thread.is_alive():
-        _metrics_worker_thread.join(timeout=5)
+        from simple_config import TimeoutConfig
+        _metrics_worker_thread.join(timeout=TimeoutConfig.WORKER_THREAD_JOIN_TIMEOUT)
 
 def save_system_metrics(metric_type, chat_id=None, **metrics):
     """
@@ -219,7 +221,8 @@ def save_system_metrics(metric_type, chat_id=None, **metrics):
         }
         
         # ניסיון הוספה לתור (עם timeout קצר)
-        _metrics_queue.put(metrics_data, timeout=0.001)  # 1ms timeout
+        from simple_config import TimeoutConfig
+        _metrics_queue.put(metrics_data, timeout=TimeoutConfig.DATABASE_QUEUE_TIMEOUT_MICRO)  # מילישניות timeout
         
         return True
         
@@ -1269,10 +1272,10 @@ def register_user_with_code_db(chat_id, code_input=None):
                     UPDATE user_profiles 
                     SET code_try = code_try + 1, updated_at = %s 
                     WHERE chat_id = %s
-                """, (datetime.utcnow(), str(chat_id)))
+                """, (datetime.utcnow(), chat_id))
                 
                 # קבלת מספר הניסיון החדש
-                cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+                cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (chat_id,))
                 attempt_result = cur.fetchone()
                 attempt_num = attempt_result[0] if attempt_result else 1
                 
@@ -1287,17 +1290,17 @@ def register_user_with_code_db(chat_id, code_input=None):
             
             existing_chat_id, existing_code_try = code_row
             
-            if existing_chat_id and existing_chat_id != str(chat_id):
+            if existing_chat_id and existing_chat_id != chat_id:
                 # קוד כבר תפוס על ידי משתמש אחר
                 # הגדלת code_try למשתמש הנוכחי
                 cur.execute("""
                     UPDATE user_profiles 
                     SET code_try = code_try + 1, updated_at = %s 
                     WHERE chat_id = %s
-                """, (datetime.utcnow(), str(chat_id)))
+                """, (datetime.utcnow(), chat_id))
                 
                 # קבלת מספר הניסיון החדש
-                cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+                cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (chat_id,))
                 attempt_result = cur.fetchone()
                 attempt_num = attempt_result[0] if attempt_result else 1
                 
@@ -1313,19 +1316,19 @@ def register_user_with_code_db(chat_id, code_input=None):
             # קוד תקין ופנוי - מיזוג השורות!
             
             # 1. שמירת code_try מהשורה הזמנית
-            cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (chat_id,))
             temp_row = cur.fetchone()
             user_code_try = temp_row[0] if temp_row else 0
             
             # 2. מחיקת השורה הזמנית
-            cur.execute("DELETE FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            cur.execute("DELETE FROM user_profiles WHERE chat_id = %s", (chat_id,))
             
             # 3. עדכון השורה עם הקוד
             cur.execute("""
                 UPDATE user_profiles 
                 SET chat_id = %s, code_try = %s, approved = FALSE, updated_at = %s
                 WHERE code_approve = %s AND chat_id IS NULL
-            """, (str(chat_id), user_code_try, datetime.utcnow(), code_input))
+            """, (chat_id, user_code_try, datetime.utcnow(), code_input))
             
             # בדיקה שהעדכון הצליח
             if cur.rowcount == 0:
@@ -1417,18 +1420,18 @@ def increment_code_try_db_new(chat_id):
             UPDATE user_profiles 
             SET code_try = code_try + 1, updated_at = %s 
             WHERE chat_id = %s
-        """, (datetime.utcnow(), str(chat_id)))
+        """, (datetime.utcnow(), chat_id))
         
         if cur.rowcount == 0:
             # אין שורה כזאת - יוצר שורה זמנית עם code_try=1
             cur.execute("""
                 INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
                 VALUES (%s, 1, FALSE, %s)
-            """, (str(chat_id), datetime.utcnow()))
+            """, (chat_id, datetime.utcnow()))
             new_attempt = 1
         else:
             # קבלת הערך החדש
-            cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (str(chat_id),))
+            cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (chat_id,))
             result = cur.fetchone()
             new_attempt = result[0] if result else 1
         
@@ -1461,7 +1464,7 @@ def approve_user_db_new(chat_id):
             UPDATE user_profiles 
             SET approved = TRUE, updated_at = %s 
             WHERE chat_id = %s AND code_approve IS NOT NULL
-        """, (datetime.utcnow(), str(chat_id)))
+        """, (datetime.utcnow(), chat_id))
         
         success = cur.rowcount > 0
         conn.commit()

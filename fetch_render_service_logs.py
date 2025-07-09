@@ -37,7 +37,8 @@ def fetch_service_logs():
     try:
         # מידע על השירות
         service_url = f"https://api.render.com/v1/services/{service_id}"
-        service_response = requests.get(service_url, headers=headers, timeout=10)
+        from simple_config import TimeoutConfig
+        service_response = requests.get(service_url, headers=headers, timeout=TimeoutConfig.RENDER_API_TIMEOUT)
         
         if service_response.status_code == 200:
             service_data = service_response.json()
@@ -67,7 +68,7 @@ def fetch_service_logs():
             'limit': 1000
         }
         
-        logs_response = requests.get(logs_url, headers=headers, params=params, timeout=30)
+        logs_response = requests.get(logs_url, headers=headers, params=params, timeout=TimeoutConfig.RENDER_LOGS_TIMEOUT)
         
         if logs_response.status_code == 200:
             logs_data = logs_response.json()
