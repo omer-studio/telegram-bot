@@ -13,9 +13,9 @@ import asyncio
 from datetime import datetime, timedelta
 from telegram import Update # type: ignore
 from config import BOT_TOKEN
-from utils import log_error_stat, get_israel_time, safe_str, get_logger
-
-logger = get_logger(__name__)
+from utils import get_israel_time, safe_str
+from chat_utils import log_error_stat
+from simple_logger import logger
 
 # קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
 CRITICAL_ERROR_USERS_FILE = "data/critical_error_users.json"
@@ -519,7 +519,7 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     """
     # הוספת לוג להודעה נכנסת גם בשגיאות קריטיות
     if chat_id and user_msg and update and update.message:
-        print(f"[IN_MSG] chat_id={chat_id} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (CRITICAL ERROR)")
+        print(f"[IN_MSG] chat_id={safe_str(chat_id)} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (CRITICAL ERROR)")
     
     print(f"🚨 שגיאה קריטית: {error}")
     # DEBUG הודעות הוסרו לטובת ביצועים
