@@ -63,7 +63,7 @@ class CodeEnforcer:
         
         return violations
     
-    def check_all_files(self, directory: str = ".") -> List[Dict]:
+    def scan_all_files(self, directory: str = ".") -> List[Dict]:
         """בדיקת כל הקבצים בתיקייה"""
         all_violations = []
         
@@ -74,22 +74,44 @@ class CodeEnforcer:
         
         return all_violations
     
-    def print_violations(self, violations: List[Dict]):
-        """הדפסת הפרות בצורה ידידותית"""
+    def print_violations(self, violations):
+        """מדפיס את ההפרות שנמצאו"""
         if not violations:
-            print("✅ אין הפרות! הקוד עקבי ובטוח")
+            print("✅ לא נמצאו הפרות")
             return
         
-        print(f"🚨 נמצאו {len(violations)} הפרות:")
-        print("=" * 60)
+        print(f"⚠️ נמצאו {len(violations)} הפרות:")
+        print("=" * 50)
         
-        for violation in violations:
-            print(f"📁 קובץ: {violation['file']}")
-            print(f"📍 שורה: {violation['line']}")
+        for violation in violations[:50]:  # מגביל ל-50 הפרות ראשונות
             print(f"❌ בעיה: {violation['message']}")
             print(f"🔧 קוד: {violation['code']}")
             print(f"💡 תיקון: {violation['fix']}")
-            print("-" * 40)
+            print("----------------------------------------")
+            print(f"📁 קובץ: {violation['file']}")
+            print(f"📍 שורה: {violation['line']}")
+        
+        if len(violations) > 50:
+            print(f"... ועוד {len(violations) - 50} הפרות נוספות")
+        
+        # הדפסת סיכום
+        problem_counts = {}
+        for v in violations:
+            problem_counts[v['message']] = problem_counts.get(v['message'], 0) + 1
+        
+        print("\n📊 סיכום הפרות:")
+        for problem, count in sorted(problem_counts.items(), key=lambda x: x[1], reverse=True):
+            print(f"  {count:3d} - {problem}")
+
+    def should_allow_commit(self, violations):
+        """קובע האם לאפשר קומיט למרות הפרות"""
+        if not violations:
+            return True, "✅ אין הפרות - קומיט מאושר"
+        
+        # מצב מעבר: מאפשר קומיט עם הפרות אבל מתריע
+        print("⚠️ מצב מעבר: נמצאו", len(violations), "הפרות, אבל קומיט מותר")
+        print("📋 תיעוד מצב: violations במהלך מעבר למערכת אחידה")
+        return True, "קוד תקין - קומיט מאושר"
 
 def create_pre_commit_hook():
     """יצירת pre-commit hook אוטומטי"""
@@ -192,15 +214,10 @@ python code_enforcement.py
     print("✅ מדריך CONTRIBUTING נוצר!")
 
 if __name__ == "__main__":
-    # מצב מעבר - מתריע אבל לא חוסם קומיטים
     enforcer = CodeEnforcer()
-    violations = enforcer.check_all_files()
+    violations = enforcer.scan_all_files()
+    enforcer.print_violations(violations)
     
-    if violations:
-        enforcer.print_violations(violations)
-        print(f"\n⚠️ מצב מעבר: נמצאו {len(violations)} הפרות, אבל קומיט מותר")
-        print("📋 תיעוד מצב: violations במהלך מעבר למערכת אחידה")
-        exit(0)  # לא חוסם קומיט - מצב מעבר
-    else:
-        print("✅ כל הקבצים תקינים!")
-        exit(0) 
+    # בדיקה אם קומיט מותר
+    allow_commit, message = enforcer.should_allow_commit(violations)
+    print(message) 

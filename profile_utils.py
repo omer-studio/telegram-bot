@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from simple_logger import logger
 from db_manager import safe_str
-from user_friendly_errors import safe_operation
+from db_manager import safe_operation
 
 # Cache פשוט לפרופילים
 _profile_cache = {}
@@ -32,7 +32,6 @@ def clear_profile_cache(chat_id: Any = None) -> None:
     except Exception as e:
         logger.error(f"שגיאה בניקוי cache למשתמש {safe_str(chat_id)}: {e}", source="profile_utils")
 
-@safe_operation("get_user_profile", "לא ניתן לקבל פרופיל משתמש")
 def get_user_profile(chat_id: Any) -> Dict:
     """קבלת פרופיל משתמש - פונקציה אחת פשוטה"""
     try:
@@ -75,7 +74,6 @@ def get_user_profile(chat_id: Any) -> Dict:
         logger.error(f"שגיאה בשליפת פרופיל: {e}", source="profile_utils")
         return {}
 
-@safe_operation("update_user_profile", "לא ניתן לעדכן פרופיל משתמש")
 def update_user_profile(chat_id: Any, updates: Dict) -> bool:
     """עדכון פרופיל משתמש - פונקציה אחת פשוטה"""
     try:
@@ -255,7 +253,6 @@ def generate_auto_summary(chat_id: Any) -> str:
         logger.debug(f"שגיאה ביצירת סיכום אוטומטי: {e}", source="profile_utils")
         return ""
 
-@safe_operation("update_user_profile_fast", "לא ניתן לעדכן פרופיל משתמש")
 def update_user_profile_fast(chat_id: Any, updates: Dict) -> bool:
     """עדכון מהיר של פרופיל משתמש - פונקציה אחת פשוטה"""
     try:

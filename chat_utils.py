@@ -9,7 +9,6 @@ re-exported from utils).
 from __future__ import annotations
 
 import json
-import logging
 import os
 import traceback
 from datetime import datetime, timedelta
@@ -18,6 +17,7 @@ import re
 import asyncio
 import shutil
 
+from simple_logger import logger
 from config import (
     MAX_CHAT_HISTORY_MESSAGES,
     BOT_TRACE_LOG_FILENAME,
@@ -27,7 +27,7 @@ from config import (
     MAX_TRACEBACK_LENGTH,
 )
 from config import should_log_debug_prints, should_log_message_debug
-from db_manager import save_chat_message, get_chat_history, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data
+from db_manager import save_chat_message, get_chat_history, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data, safe_str
 
 # NOTE: circular import is safe here – utils only contains the base primitives
 # we rely on (like `get_israel_time`).
@@ -90,14 +90,14 @@ def update_chat_history(chat_id: str, user_msg: str, bot_msg: str, **kwargs) -> 
         )
         
         if success:
-            print(f"[HISTORY_SAVE] ✅ chat_id={chat_id} | נשמר בהצלחה")
+            logger.info(f"chat_id={chat_id} | נשמר בהצלחה", source="HISTORY_SAVE")
         else:
-            print(f"[HISTORY_SAVE] ❌ chat_id={chat_id} | נכשל בשמירה")
+            logger.error(f"chat_id={chat_id} | נכשל בשמירה", source="HISTORY_SAVE")
         
         return success
         
     except Exception as e:
-        print(f"[HISTORY_SAVE_ERROR] chat_id={chat_id} | שגיאה: {e}")
+        logger.error(f"chat_id={chat_id} | שגיאה: {e}", source="HISTORY_SAVE_ERROR")
         return False
 
 def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
@@ -154,12 +154,12 @@ def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
                 assistant_count += 1
         
         # 5. לוג פשוט וברור
-        print(f"[HISTORY] chat_id={chat_id} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})")
+        logger.info(f"chat_id={chat_id} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="HISTORY")
         
         return messages
         
     except Exception as e:
-        print(f"[HISTORY_ERROR] chat_id={chat_id} | שגיאה: {e}")
+        logger.error(f"chat_id={chat_id} | שגיאה: {e}", source="HISTORY_ERROR")
         return []
 
 # ============================================================================
@@ -208,7 +208,7 @@ def _format_timestamp_for_history(timestamp_str: str) -> str:
         # החזרת הפורמט הנדרש
         return f"[{dt.day:02d}/{dt.month:02d} {dt.hour:02d}:{dt.minute:02d}]"
     except Exception as e:
-        logging.warning(f"שגיאה בפרמוט טיימסטמפ: {e}")
+        logger.warning(f"שגיאה בפרמוט טיימסטמפ: {e}", source="HISTORY_TIMESTAMP_FORMAT")
         return ""
 
 def _get_time_of_day(hour: int) -> str:
@@ -293,7 +293,7 @@ def _calculate_user_stats_from_history(history: list) -> dict:
         )
         return basic_stats
     except Exception as e:
-        logging.error(f"שגיאה בחישוב סטטיסטיקות מההיסטוריה: {e}")
+        logger.error(f"שגיאה בחישוב סטטיסטיקות מההיסטוריה: {e}", source="USER_STATS_CALCULATION")
         return basic_stats  # מחזיר לפחות את הסטטיסטיקות הבסיסיות
 
 
@@ -316,7 +316,7 @@ def get_user_stats_and_history(chat_id: str) -> Tuple[dict, list]:
         stats = _calculate_user_stats_from_history(history)
         return stats, history
     except Exception as e:
-        logging.error(f"שגיאה בקבלת סטטיסטיקות: {e}")
+        logger.error(f"שגיאה בקבלת סטטיסטיקות: {e}", source="USER_STATS_FETCH")
         return {"total_messages": 0, "first_contact": None, "last_contact": None}, []
 
 
@@ -325,7 +325,7 @@ def get_user_stats(chat_id: str) -> dict:
         stats, _ = get_user_stats_and_history(chat_id)
         return stats
     except Exception as e:
-        logging.error(f"שגיאה בקבלת סטטיסטיקות: {e}")
+        logger.error(f"שגיאה בקבלת סטטיסטיקות: {e}", source="USER_STATS_FETCH")
         return {"total_messages": 0, "first_contact": None, "last_contact": None}
 
 
@@ -339,7 +339,7 @@ def is_active_hours() -> bool:
         current_hour = utils.get_israel_time().hour
         return 7 <= current_hour <= 22
     except Exception as e:
-        logging.error(f"שגיאה בבדיקת שעות פעילות: {e}")
+        logger.error(f"שגיאה בבדיקת שעות פעילות: {e}", source="ACTIVE_HOURS_CHECK")
         return True  # במקרה של שגיאה, נניח שזה שעות פעילות
 
 def create_human_context_for_gpt(chat_id: str) -> str:
@@ -347,7 +347,7 @@ def create_human_context_for_gpt(chat_id: str) -> str:
         now = utils.get_israel_time()
         return f"[{now.day}/{now.month} {now.hour:02d}:{now.minute:02d}]"
     except Exception as e:
-        logging.error(f"שגיאה ביצירת הקשר זמן: {e}")
+        logger.error(f"שגיאה ביצירת הקשר זמן: {e}", source="HUMAN_CONTEXT_CREATION")
         return ""
 
 
@@ -369,7 +369,7 @@ def get_time_greeting_instruction() -> str:
             greeting_guide = "מאוד חשוב שתפתח בברכה 'לילה טוב🤍' ותהיה מבין שזה שעת לילה מאוחרת אחרי חצות, שאל אם הכל בסדר"
         return f"{greeting_guide}. כן באמצע השיחה התייחס לזמן בצורה טבעית ורלוונטית."
     except Exception as e:
-        logging.error(f"שגיאה בהנחיות ברכה: {e}")
+        logger.error(f"שגיאה בהנחיות ברכה: {e}", source="GREETING_INSTRUCTIONS")
         return "תפתח בברכה מתאימה לזמן והתייחס לשעה בצורה טבעית."
 
 
@@ -439,7 +439,7 @@ def get_weekday_context_instruction(chat_id: Optional[str] = None, user_msg: Opt
         }
         return weekday_instructions.get(israel_weekday, "")
     except Exception as e:
-        logging.error(f"שגיאה ביצירת הנחיית יום השבוע: {e}")
+        logger.error(f"שגיאה ביצירת הנחיית יום השבוע: {e}", source="WEEKDAY_INSTRUCTIONS")
         return ""
 
 
@@ -477,7 +477,7 @@ def get_holiday_system_message(chat_id: str, bot_reply: str = "") -> str:
             f"{event.get('suggestion', '')}"
         )
     except Exception as e:
-        logging.error(f"שגיאה בפונקציה get_holiday_system_message: {e}")
+        logger.error(f"שגיאה בפונקציה get_holiday_system_message: {e}", source="HOLIDAY_SYSTEM_MESSAGE")
         return ""
 
 
@@ -497,9 +497,9 @@ def clean_old_logs() -> None:
                     with open(file_path, "w", encoding="utf-8") as f:
                         f.writelines(lines[-MAX_OLD_LOG_LINES:])
                 if should_log_debug_prints():
-                    logging.info(f"נוקה קובץ: {file_name}")
+                    logger.info(f"נוקה קובץ: {file_name}", source="CLEAN_OLD_LOGS")
     except Exception as e:
-        logging.error(f"שגיאה בניקוי לוגים: {e}")
+        logger.error(f"שגיאה בניקוי לוגים: {e}", source="CLEAN_OLD_LOGS_ERROR")
 
 
 # ---
@@ -543,7 +543,7 @@ def health_check() -> dict:
         os.remove("health_test.json")
         health["log_files_writable"] = True
     except Exception as e:
-        logging.error(f"⚕️ בעיה בבדיקת תקינות: {e}")
+        logger.error(f"⚕️ בעיה בבדיקת תקינות: {e}", source="HEALTH_CHECK_ERROR")
         try:
             send_error_notification(f"[HEALTH_CHECK] בעיה בבדיקת תקינות: {e}")
         except Exception:
@@ -580,7 +580,7 @@ def log_error_stat(error_type: str) -> None:
     try:
         # סטטיסטיקות שגיאות לא נשמרות - השגיאות עצמן נשמרות בלוגים הרגילים
         if should_log_debug_prints():
-            print(f"🔄 [DISABLED] errors_stats disabled - error '{error_type}' logged to regular logs")
+            logger.info(f"🔄 [DISABLED] errors_stats disabled - error '{error_type}' logged to regular logs", source="ERROR_STATS_LOGGING")
         return  # לא שומר סטטיסטיקות
         
         # הקוד הישן הושבת:
@@ -591,7 +591,7 @@ def log_error_stat(error_type: str) -> None:
         # save_errors_stats_data(stats)
         
     except Exception as e:
-        logging.error(f"שגיאה בעדכון סטטיסטיקת שגיאות: {e}")
+        logger.error(f"שגיאה בעדכון סטטיסטיקת שגיאות: {e}", source="ERROR_STATS_UPDATE")
 
 
 def send_error_stats_report():
@@ -603,7 +603,7 @@ def send_error_stats_report():
     try:
         # אין יותר סטטיסטיקות שגיאות - הטבלה הושבתה
         if should_log_debug_prints():
-            print(f"🔄 [DISABLED] errors_stats disabled - no error stats report available")
+            logger.info(f"🔄 [DISABLED] errors_stats disabled - no error stats report available", source="ERROR_STATS_REPORT")
         
         send_admin_notification("🚫 דוח שגיאות הושבת - הטבלה צומצמה לטובת ביצועים")
         return
@@ -617,7 +617,7 @@ def send_error_stats_report():
         # send_admin_notification("📊 דוח שגיאות מצטבר:\n" + "\n".join(lines))
         
     except Exception as e:
-        send_admin_notification(f"[send_error_stats_report] שגיאה בשליחת דוח שגיאות: {e}")
+        send_admin_notification(f"[send_error_stats_report] שגיאה בשליחת דוח שגיאות: {e}", source="ERROR_STATS_REPORT_ERROR")
 
 
 def send_usage_report(days_back: int = 1):
@@ -625,7 +625,7 @@ def send_usage_report(days_back: int = 1):
     effective_now = utils.get_effective_time("datetime")
     since = effective_now - timedelta(days=days_back)
     if not os.path.exists(gpt_log_path):
-        send_admin_notification("אין לוג usage זמין.")
+        send_admin_notification("אין לוג usage זמין.", source="USAGE_REPORT_NO_LOGS")
         return
     try:
         users = set()
@@ -656,9 +656,9 @@ def send_usage_report(days_back: int = 1):
             f"שגיאות: {errors}\n"
             f"ממוצע שגיאות להודעה: {avg_errors:.2%}"
         )
-        send_admin_notification(msg)
+        send_admin_notification(msg, source="USAGE_REPORT")
     except Exception as e:
-        send_admin_notification(f"[send_usage_report] שגיאה בשליחת דוח usage: {e}")
+        send_admin_notification(f"[send_usage_report] שגיאה בשליחת דוח usage: {e}", source="USAGE_REPORT_ERROR")
 
 
 # ---------------------------------------------------------------------------
@@ -674,9 +674,9 @@ def update_last_bot_message(chat_id, bot_summary):
             save_chat_message(chat_id, "", bot_summary)
             
         if should_log_message_debug():
-            logging.info(f"הודעת בוט עודכנה למשתמש {chat_id} (SQL)")
+            logger.info(f"הודעת בוט עודכנה למשתמש {chat_id} (SQL)", source="LAST_BOT_MESSAGE_UPDATE")
     except Exception as e:
-        logging.error(f"❌ שגיאה בעדכון תשובת בוט: {e}")
+        logger.error(f"❌ שגיאה בעדכון תשובת בוט: {e}", source="LAST_BOT_MESSAGE_UPDATE_ERROR")
 
 
 def cleanup_test_users():
@@ -685,9 +685,9 @@ def cleanup_test_users():
     try:
         # בשלב זה לא נתמך מחיקה מ-SQL
         # TODO: להוסיף פונקציית מחיקה ל-db_manager
-        logging.info(f"🗑️ ניקוי משתמשי בדיקה - לא נתמך ב-SQL בשלב זה")
+        logger.info(f"🗑️ ניקוי משתמשי בדיקה - לא נתמך ב-SQL בשלב זה", source="CLEANUP_TEST_USERS")
     except Exception as e:
-        logging.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}")
+        logger.error(f"❌ שגיאה בניקוי היסטוריית הצ'אט: {e}", source="CLEANUP_TEST_USERS_ERROR")
 
 
     try:
@@ -699,11 +699,11 @@ def cleanup_test_users():
                 if tu in reminders:
                     # למחוק תזכורת צריך לעדכן אותה עם סטטוס מחוק
                     # או להוסיף פונקציית מחיקה נפרדת למסד הנתונים
-                    logging.info(f"🗑️ נמצא משתמש בדיקה {tu} במערכת התזכורות (SQL)")
+                    logger.info(f"🗑️ נמצא משתמש בדיקה {tu} במערכת התזכורות (SQL)", source="CLEANUP_REMINDERS")
                     # TODO: להוסיף מחיקה אמיתית
                     
     except Exception as e:
-        logging.error(f"❌ שגיאה בניקוי מערכת התזכורות: {e}")
+        logger.error(f"❌ שגיאה בניקוי מערכת התזכורות: {e}", source="CLEANUP_REMINDERS_ERROR")
 
 
 # ---------------------------------------------------------------------------
@@ -737,7 +737,7 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
         if user_msg:
             basic_greeting_pattern = r'^(היי|שלום|אהלן|הי|שלום לך|אהלן לך).{0,2}$'
             if re.match(basic_greeting_pattern, user_msg.strip(), re.IGNORECASE):
-                print(f"[GREETING_DEBUG] זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={chat_id}")
+                logger.info(f"זוהתה הודעת ברכה: '{user_msg}' עבור chat_id={chat_id}", source="GREETING_DEBUG")
                 return True
 
         # תנאי 3: בדיקה אם עברו יותר מ-2 שעות מההודעה האחרונה
@@ -764,5 +764,5 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
         return hours_since >= 2
         
     except Exception as e:
-        logging.error(f"שגיאה ב-should_send_time_greeting: {e}")
+        logger.error(f"שגיאה ב-should_send_time_greeting: {e}", source="GREETING_CHECK")
         return False 
