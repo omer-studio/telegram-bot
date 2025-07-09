@@ -55,7 +55,7 @@ def send_profile_update_notification(
         notification += f"{user_message}\n\n"
         
         # GPT-C
-        notification += "*GPT-C:* "
+        notification += "<b>GPT-C:</b> "
         if gpt_c_changes and len(gpt_c_changes) > 0:
             notification += "\n"
             for change in gpt_c_changes:
@@ -67,7 +67,7 @@ def send_profile_update_notification(
             notification += "אין שינויים\n"
         
         # GPT-D  
-        notification += "\n*GPT-D:* שדות "
+        notification += "\n<b>GPT-D:</b> שדות "
         if gpt_d_changes and len(gpt_d_changes) > 0:
             notification += "\n"
             for change in gpt_d_changes:

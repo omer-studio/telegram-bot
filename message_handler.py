@@ -53,10 +53,10 @@ from chat_utils import get_weekday_context_instruction, get_holiday_system_messa
 
 def format_text_for_telegram(text):
     """
-    🔧 פורמטינג פשוט וברור - כללים פשוטים ובלבד!
-    כל נקודה/שאלה/קריאה = מעבר שורה
-    אם יש אימוג'י, המעבר שורה אחרי האימוג'י
-    אם זה נקודה - מוחקים את הנקודה
+    📝 פורמטינג פשוט וברור לפי כללי המשתמש:
+    1. כל נקודה/שאלה/קריאה = מעבר שורה
+    2. אם יש אימוג'י אחרי הפיסוק, האימוג'י נשאר באותה שורה ואז מעבר שורה
+    3. אם זה נקודה - מוחקים את הנקודה
     """
     import re
     
@@ -83,32 +83,59 @@ def format_text_for_telegram(text):
     text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
     text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
     
-    # שלב 3: הכללים של המשתמש - פשוט ויעיל!
+    # שלב 3: הכללים הפשוטים!
     
-    # רק הרג'קסים הדרושים: קודם פיסוק+אימוג'י, אחר כך פיסוק לבד
-    
-    # נקודה + אימוג'י → מעבר שורה אחרי האימוג'י (מוחקים נקודה)
-    text = re.sub(r'\.(\s*)(' + emoji_pattern.pattern + r')', r' \2\n', text)
-    
-    # שאלה/קריאה + אימוג'י → סימן + אימוג'י + מעבר שורה
-    text = re.sub(r'([?!])(\s*)(' + emoji_pattern.pattern + r')', r'\1 \3\n', text)
-    
-    # כל הנקודות שנשארו → מעבר שורה
-    text = re.sub(r'\.(\s*)', '\n', text)
-    
-    # כל השאלות/קריאות שנשארו → מעבר שורה
-    text = re.sub(r'([?!])(\s*)', r'\1\n', text)
+    # עוברים תו אחר תו ובונים טקסט חדש
+    result = ""
+    i = 0
+    while i < len(text):
+        char = text[i]
+        
+        if char in '.?!':
+            # מצאנו פיסוק - בודקים מה יש אחריו
+            rest_of_text = text[i+1:]
+            
+            # בודקים אם יש רווחים ואחר כך אימוג'י
+            emoji_match = re.match(r'(\s*)(' + emoji_pattern.pattern + r')', rest_of_text)
+            
+            if emoji_match:
+                # יש אימוג'י אחרי הפיסוק!
+                spaces = emoji_match.group(1)
+                emoji = emoji_match.group(2)
+                
+                if char == '.':
+                    # נקודה - מוחקים את הנקודה, שומרים אימוג'י ועושים מעבר שורה
+                    result += ' ' + emoji + '\n'
+                else:
+                    # שאלה/קריאה - שומרים פיסוק ואימוג'י ועושים מעבר שורה
+                    result += char + ' ' + emoji + '\n'
+                
+                # מדלגים על הרווחים והאימוג'י
+                i += 1 + len(spaces) + len(emoji)
+            else:
+                # אין אימוג'י אחרי הפיסוק
+                if char == '.':
+                    # נקודה - מוחקים ועושים מעבר שורה
+                    result += '\n'
+                else:
+                    # שאלה/קריאה - שומרים ועושים מעבר שורה
+                    result += char + '\n'
+                i += 1
+        else:
+            # תו רגיל - מעתיקים
+            result += char
+            i += 1
     
     # ניקוי: הסרת רווחים מיותרים אחרי מעברי שורה
-    text = re.sub(r'\n\s+', '\n', text)
+    result = re.sub(r'\n\s+', '\n', result)
     
     # ניקוי: מעברי שורה כפולים יתר
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    result = re.sub(r'\n{3,}', '\n\n', result)
     
     # ניקוי: שורות ריקות בתחילה ובסוף
-    text = text.strip()
+    result = result.strip()
     
-    return text
+    return result
 
 async def _handle_holiday_check(update, chat_id, bot_reply):
     """
