@@ -68,26 +68,32 @@ def format_text_for_telegram(text):
     text = re.sub(r'\*(.*?)\*', r'<u>\1</u>', text)
     text = re.sub(r'_(.*?)_', r'<u>\1</u>', text)
     
-    # שלב 3: הפתרון הכי פשוט שיש!
+    # שלב 3: פתרון עם placeholders - עובד מושלם!
     
-    # רק 4 רג'קסים פשוטים:
+    # 1. שמירת נקודה + אימוג'י ב-placeholder (מוחק נקודה)
+    text = re.sub(r'\.(\s*)([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r'<EMOJI_DOT>\2</EMOJI_DOT>', text)
     
-    # 1. נקודה + רווח + אימוג'י → אימוג'י + מעבר שורה (מוחק נקודה)
-    text = re.sub(r'\. ([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r' \1\n', text)
-    
-    # 2. שאלה/קריאה + רווח + אימוג'י → פיסוק + אימוג'י + מעבר שורה
-    text = re.sub(r'([?!]) ([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r'\1 \2\n', text)
+    # 2. שמירת שאלה/קריאה + אימוג'י ב-placeholder
+    text = re.sub(r'([?!])(\s*)([\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251])', r'<EMOJI_PUNCT>\1 \3</EMOJI_PUNCT>', text)
     
     # 3. כל נקודה שנשארה → מעבר שורה (מוחק נקודה)
     text = re.sub(r'\.(\s*)', '\n', text)
     
-    # 4. כל שאלה/קריאה שנשארה (רק אם אין \n אחרי) → פיסוק + מעבר שורה
-    text = re.sub(r'([?!])(\s*)(?!\n)', r'\1\n', text)
+    # 4. כל שאלה/קריאה שנשארה (לא כוללת placeholders!) → פיסוק + מעבר שורה
+    text = re.sub(r'([?!])(\s*)(?!.*</EMOJI_PUNCT>)', r'\1\n', text)
+    
+    # 5. החזרת placeholders למעברי שורה
+    text = re.sub(r'<EMOJI_DOT>(.*?)</EMOJI_DOT>', r' \1\n', text, flags=re.DOTALL)
+    text = re.sub(r'<EMOJI_PUNCT>(.*?)</EMOJI_PUNCT>', r'\1\n', text, flags=re.DOTALL)
     
     # ניקוי בסיסי
     text = re.sub(r'\n\s+', '\n', text)
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = text.strip()
+    
+    # וידוא שיש \n בסוף (אלא אם הטקסט ריק)
+    if text and not text.endswith('\n'):
+        text += '\n'
     
     return text
 

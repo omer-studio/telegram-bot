@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime, timedelta
 from config import BOT_TOKEN
 from utils import get_israel_time
+from user_friendly_errors import safe_str
 import pytz
 
 # 🚀 יבוא המערכת החדשה - פשוטה ועקבית
@@ -43,7 +44,7 @@ def mark_user_active(chat_id: str):
     """מסמן משתמש כפעיל (קיבל הודעה או שלח הודעה) ומאפס דגל תזכורת"""
     try:
         state = _load_reminder_state()
-        user_id = str(chat_id)
+        user_id = safe_str(chat_id)
         
         current_time = get_israel_time()
         
@@ -62,7 +63,7 @@ def mark_user_active(chat_id: str):
         _save_reminder_state(state)
         
     except Exception as e:
-        logger.error(f"Error marking user {chat_id} as active: {e}", source="gentle_reminders")
+        logger.error(f"Error marking user {safe_str(chat_id)} as active: {e}", source="gentle_reminders")
 
 def _is_allowed_time() -> bool:
     """בדיקה אם זה זמן מתאים לשליחת תזכורות (9:00-21:00)"""
@@ -74,20 +75,20 @@ def _mark_reminder_delayed(chat_id: str) -> None:
     """מסמן תזכורת כדחויה בגלל זמן לא מתאים"""
     try:
         state = _load_reminder_state()
-        user_id = str(chat_id)
+        user_id = safe_str(chat_id)
         
         if user_id in state:
             state[user_id]["reminder_delayed"] = True
             state[user_id]["delay_reason"] = "inappropriate_time"
             _save_reminder_state(state)
     except Exception as e:
-        logger.error(f"Error marking reminder delayed for {chat_id}: {e}", source="gentle_reminders")
+        logger.error(f"Error marking reminder delayed for {safe_str(chat_id)}: {e}", source="gentle_reminders")
 
 def _mark_reminder_sent(chat_id: str) -> None:
     """מסמן שתזכורת נשלחה למשתמש ואנחנו מחכים לתשובה"""
     try:
         state = _load_reminder_state()
-        user_id = str(chat_id)
+        user_id = safe_str(chat_id)
         
         if user_id in state:
             current_time = get_israel_time()
@@ -98,7 +99,7 @@ def _mark_reminder_sent(chat_id: str) -> None:
             state[user_id]["reminder_delayed"] = False
             _save_reminder_state(state)
     except Exception as e:
-        logger.error(f"Error marking reminder sent for {chat_id}: {e}", source="gentle_reminders")
+        logger.error(f"Error marking reminder sent for {safe_str(chat_id)}: {e}", source="gentle_reminders")
 
 def _log_to_chat_history(chat_id: str) -> None:
     """רושם את התזכורת להיסטוריית הצ'אט"""
@@ -115,7 +116,7 @@ def _log_to_chat_history(chat_id: str) -> None:
         update_chat_history(chat_id, reminder_message)
         
     except Exception as e:
-        logger.error(f"Error logging reminder to chat history for {chat_id}: {e}", source="gentle_reminders")
+        logger.error(f"Error logging reminder to chat history for {safe_str(chat_id)}: {e}", source="gentle_reminders")
 
 async def send_gentle_reminder(chat_id: str) -> bool:
     """שולח תזכורת עדינה למשתמש"""
@@ -160,7 +161,7 @@ def _mark_user_inactive(chat_id: str) -> None:
     """מסמן משתמש כלא פעיל"""
     try:
         state = _load_reminder_state()
-        user_id = str(chat_id)
+        user_id = safe_str(chat_id)
         
         if user_id in state:
             state[user_id]["inactive"] = True
@@ -169,7 +170,7 @@ def _mark_user_inactive(chat_id: str) -> None:
             _save_reminder_state(state)
             
     except Exception as e:
-        logger.error(f"Error marking user {chat_id} as inactive: {e}", source="gentle_reminders")
+        logger.error(f"Error marking user {safe_str(chat_id)} as inactive: {e}", source="gentle_reminders")
 
 def cleanup_inactive_users():
     """מנקה משתמשים לא פעילים מרשימת התזכורות"""

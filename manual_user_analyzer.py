@@ -21,6 +21,7 @@ import json
 import os
 from datetime import datetime
 import re
+from user_friendly_errors import safe_str
 
 def extract_user_info_from_text(text):
     """חילוץ מידע אישי מטקסט"""
@@ -97,7 +98,7 @@ def load_user_chat_history(chat_id):
             with open(main_file, 'r', encoding='utf-8') as f:
                 all_messages = json.load(f)
             
-            user_messages = [msg for msg in all_messages if str(msg.get('user_id')) == str(chat_id)]
+            user_messages = [msg for msg in all_messages if safe_str(msg.get('user_id')) == safe_str(chat_id)]
             if user_messages:
                 print(f"✅ נמצאו {len(user_messages)} הודעות ב-extracted_all_messages.json")
                 return user_messages
@@ -135,8 +136,8 @@ def load_user_chat_history(chat_id):
                         data = json.load(f)
                     
                     # אם זה אובייקט עם chat_id
-                    if str(chat_id) in data:
-                        user_data = data[str(chat_id)]
+                    if safe_str(chat_id) in data:
+                        user_data = data[safe_str(chat_id)]
                         if 'history' in user_data:
                             messages = user_data['history']
                             user_messages = [{'user_message': msg.get('user', ''), 'timestamp': msg.get('timestamp', '')} 

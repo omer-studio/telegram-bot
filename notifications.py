@@ -38,6 +38,13 @@ from utils import get_israel_time
 from chat_utils import log_error_stat
 import time
 
+# ייבוא פונקציות התראות אדמין שהועברו לadmin_notifications.py
+from admin_notifications import (
+    send_admin_notification,
+    send_admin_notification_raw,
+    send_admin_alert
+)
+
 # קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
 CRITICAL_ERROR_USERS_FILE = "data/critical_error_users.json"
 
@@ -705,96 +712,20 @@ def send_error_notification(error_message: str, chat_id: str = None, user_msg: s
     except Exception as e:
         print(f"[ERROR] לא הצלחתי לשלוח שגיאה לאדמין: {e}")
 
-def send_admin_notification(message, urgent=False):
-    """שולח הודעה כללית לאדמין."""
-    try:
-        prefix = "🚨 הודעה דחופה לאדמין: 🚨" if urgent else "ℹ️ הודעה לאדמין:"
-        notification_text = f"{prefix}\n\n{message}\n\n⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
-
-        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-        data = {
-            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
-            "text": notification_text,
-            "parse_mode": "HTML"
-        }
-
-        response = requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
-        if response.status_code == 200:
-            print(f"[DEBUG] admin_msg | chat={data.get('chat_id', 'N/A')} | status=sent")
-        else:
-            print(f"[DEBUG] admin_msg | chat={data.get('chat_id', 'N/A')} | status=fail | code={response.status_code}")
-
-    except Exception as e:
-        print(f"💥 שגיאה בשליחת הודעה: {e}")
-
 def send_admin_notification_raw(message):
-    """שולח הודעה לאדמין בלי הכותרת האוטומטית - רק עם זמן בסוף. מחזיר message_id ואם זו הודעת הרצת מעבדי פרופיל - מוחק אותה אוטומטית."""
+    """שולח הודעה גולמית לאדמין ללא עיבוד"""
     try:
-        notification_text = f"{message}\n\n⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
-
         url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-        data = {
+        payload = {
             "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
-            "text": notification_text,
+            "text": message,
             "parse_mode": "HTML"
         }
-
-        response = requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
-        if response.status_code == 200:
-            print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=sent")
-            try:
-                msg_id = response.json().get("result", {}).get("message_id")
-                # אם זו הודעת הרצת מעבדי פרופיל - מחק מיד
-                if message.strip().startswith("🛠️ הרצת מעבדי פרופיל") and msg_id:
-                    del_url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/deleteMessage"
-                    del_data = {
-                        "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
-                        "message_id": msg_id
-                    }
-                    del_resp = requests.post(del_url, data=del_data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
-                    if del_resp.status_code == 200:
-                        print(f"[DEBUG] הודעת הרצת מעבדי פרופיל נמחקה אוטומטית (message_id={msg_id})")
-                    else:
-                        print(f"[DEBUG] מחיקת הודעה נכשלה: {del_resp.status_code}")
-                return msg_id
-            except Exception as e:
-                print(f"[DEBUG] שגיאה בשליפת/מחיקת message_id: {e}")
-                return None
-        else:
-            print(f"[DEBUG] admin_msg_raw | chat={data.get('chat_id', 'N/A')} | status=fail | code={response.status_code}")
-            return None
+        requests.post(url, data=payload, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
     except Exception as e:
-        print(f"💥 שגיאה בשליחת הודעה: {e}")
-        return None
+        print(f"[ERROR] לא הצלחתי לשלוח הודעה גולמית לאדמין: {e}")
 
 # 🗑️ פונקציה זו הוחלפה ב-unified_profile_notifications.send_profile_update_notification
-
-# === הוספה: שליחת התראת קוד סודי לאדמין ===
-def send_admin_secret_command_notification(message: str):
-    """
-    שולח הודעה מיוחדת לאדמין על שימוש בקוד סודי.
-    קלט: message (str)
-    פלט: אין (שולח הודעה)
-    """
-    try:
-        notification_text = (
-            f"🔑 *הפעלה של קוד סודי בבוט!* 🔑\n\n"
-            f"{message}\n\n"
-            f"⏰ {get_israel_time().strftime('%d/%m/%Y %H:%M:%S')}"
-        )
-        url = f"https://api.telegram.org/bot{ADMIN_BOT_TELEGRAM_TOKEN}/sendMessage"
-        data = {
-            "chat_id": ADMIN_NOTIFICATION_CHAT_ID,
-            "text": notification_text,
-            "parse_mode": "Markdown"
-        }
-        response = requests.post(url, data=data, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
-        if response.status_code == 200:
-            print("✅ התראת קוד סודי נשלחה לאדמין")
-        else:
-            print(f"❌ שגיאה בשליחת התראת קוד סודי: {response.status_code}")
-    except Exception as e:
-        print(f"💥 שגיאה בשליחת התראת קוד סודי: {e}")
 
 def log_error_to_file(error_data, send_telegram=True):
     """
@@ -1026,60 +957,7 @@ def send_recovery_notification(recovery_type: str, details: dict):
     except Exception as e:
         print(f"[ERROR] Failed to send recovery notification: {e}")
 
-# 🚨 מערכת התראות אדמין
-
-def send_admin_alert(message, alert_level="info"):
-    """שולח התראה לאדמין בטלגרם"""
-    try:
-        # בחירת אייקון לפי רמת ההתראה
-        icon_map = {
-            "info": "ℹ️",
-            "warning": "⚠️", 
-            "critical": "🚨",
-            "success": "✅",
-            "error": "❌"
-        }
-        icon = icon_map.get(alert_level, "ℹ️")
-        
-        timestamp = get_israel_time().strftime("%H:%M:%S")
-        
-        alert_text = f"{icon} **התראת מערכת** ({timestamp})\n\n{message}"
-        
-        # 🔧 תיקון: שימוש בפונקציה סינכרונית בטוחה
-        _send_telegram_message_admin_sync(BOT_TOKEN, ADMIN_CHAT_ID, alert_text)
-        
-        # גם ללוג
-        logger.warning(f"[🚨 אדמין] {message}")
-        
-    except Exception as e:
-        # אם נכשל לשלוח - לפחות ללוג
-        logger.error(f"[🚨] נכשל לשלוח התראה לאדמין: {e}")
-        logger.warning(f"[🚨 לוג] {message}")
-
-async def _send_telegram_message_admin(bot_token, chat_id, text):
-    """שולח הודעה בטלגרם (אסינכרונית)"""
-    try:
-        bot = telegram.Bot(token=bot_token)
-        await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logger.error(f"[טלגרם] שגיאה בשליחה: {e}")
-
-def _send_telegram_message_admin_sync(bot_token, chat_id, text):
-    """שולח הודעה בטלגרם (סינכרונית) - תחליף בטוח ל-async"""
-    try:
-        import requests
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        requests.post(url, data={
-            "chat_id": chat_id, 
-            "text": text,
-            "parse_mode": "Markdown"
-        }, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
-    except Exception as e:
-        logger.error(f"[טלגרם] שגיאה בשליחה: {e}")
+# 🚨 מערכת התראות אדמין - הועברה לadmin_notifications.py
 
 def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, daily_limit, monthly_limit):
     """

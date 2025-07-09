@@ -392,9 +392,11 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
                 if len(prompt_content) > 20:
                     prompt_preview = prompt_content[:20] + "..."
                     remaining_chars = len(prompt_content) - 20
-                    notification_text += f"**סיסטם פרומט {i}:** {prompt_preview} (+{remaining_chars})\n"
+                    notification_text += f"**סיסטם פרומט {i}:** {prompt_preview} (+{remaining_chars}) "
                 else:
-                    notification_text += f"**סיסטם פרומט {i}:** {prompt_content}\n"
+                    notification_text += f"**סיסטם פרומט {i}:** {prompt_content} "
+            if system_prompts:
+                notification_text += f"\n"
         
         notification_text += f"\n\n"
         
@@ -413,19 +415,13 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"⌛ המשתמש קיבל תשובה תוך {user_timing:.1f} שניות\n"
             notification_text += f"⌛ **פער קוד {gap_time:.1f} שניות**\n"
         
-        # מונה הודעות משתמש בהיסטוריה
+        # מונה הודעות משתמש - מאוחד ומתוקן
         if history_messages:
-            user_messages_count = len([msg for msg in history_messages if msg.get("role") == "user"])
-            notification_text += f"\n**מונה הודעות משתמש בהיסטוריה:** {user_messages_count}"
+            user_messages_count_history = len([msg for msg in history_messages if msg.get("role") == "user"])
+            total_user_messages = user_messages_count_history + 1  # +1 להודעה הנוכחית
+            notification_text += f"\n**מונה הודעות משתמש:** {total_user_messages} (היסטוריה: {user_messages_count_history})"
         else:
-            notification_text += f"\n**מונה הודעות משתמש בהיסטוריה:** 0"
-
-        # מונה הודעות למשתמש: XXX
-        if history_messages:
-            user_messages_count = len([msg for msg in history_messages if msg.get("role") == "user"])
-            notification_text += f"\n**מונה הודעות למשתמש:** {user_messages_count + 1}"  # +1 להודעה הנוכחית
-        else:
-            notification_text += f"\n**מונה הודעות למשתמש:** 1"  # רק ההודעה הנוכחית
+            notification_text += f"\n**מונה הודעות משתמש:** 1 (היסטוריה: 0)"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:

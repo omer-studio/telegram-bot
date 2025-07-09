@@ -20,10 +20,15 @@ from simple_logger import logger
 # קובץ לעקוב אחרי משתמשים שקיבלו הודעת שגיאה
 CRITICAL_ERROR_USERS_FILE = "data/critical_error_users.json"
 
-# Mock classes for processing lost messages
+# Mock classes for processing lost messages  
 class MockChat:
     def __init__(self, chat_id):
-        self.id = int(chat_id)
+        # שימוש בטוח בhמרת chat_id לint
+        try:
+            self.id = int(safe_str(chat_id))
+        except (ValueError, TypeError):
+            # גיבוי במקרה של chat_id לא תקין
+            self.id = 0
 
 class MockUpdate:
     class MockMessage:
@@ -143,11 +148,11 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
         
         users_data[safe_str(chat_id)] = user_data
         _save_critical_error_users(users_data)
-        logging.info(f"Added user {chat_id} to critical error list")
-        print(f"✅ משתמש {chat_id} נוסף לרשימת המשתמשים הקריטיים")
+        logging.info(f"Added user {safe_str(chat_id)} to critical error list")
+        print(f"✅ משתמש {safe_str(chat_id)} נוסף לרשימת המשתמשים הקריטיים")
     except Exception as e:
         logging.error(f"Error adding user to critical error list: {e}")
-        print(f"🚨 שגיאה בהוספת משתמש {chat_id} לרשימת משתמשים קריטיים: {e}")
+        print(f"🚨 שגיאה בהוספת משתמש {safe_str(chat_id)} לרשימת משתמשים קריטיים: {e}")
         
         # 🔧 תיקון: ניסיון לשמור לפחות ברשימה זמנית
         try:
@@ -160,11 +165,11 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
                 temp_data["original_message"] = original_user_message.strip()
                 temp_data["message_processed"] = False
                 
-            temp_file = f"data/temp_critical_user_{chat_id}_{int(time.time())}.json"
+            temp_file = f"data/temp_critical_user_{safe_str(chat_id)}_{int(time.time())}.json"
             os.makedirs("data", exist_ok=True)
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump({safe_str(chat_id): temp_data}, f, ensure_ascii=False, indent=2)
-            print(f"⚠️ נשמר משתמש {chat_id} בקובץ זמני: {temp_file}")
+            print(f"⚠️ נשמר משתמש {safe_str(chat_id)} בקובץ זמני: {temp_file}")
         except Exception as temp_error:
             print(f"🚨 גם שמירה זמנית נכשלה: {temp_error}")
 
@@ -175,7 +180,7 @@ def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown e
             # העברת ההודעה המקורית רק אם היא לא ריקה
             msg_to_save = original_message.strip() if original_message and original_message.strip() else None
             _add_user_to_critical_error_list(safe_str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
-            print(f"🛡️ משתמש {chat_id} נוסף לרשימת התאוששות ({error_context})")
+            print(f"🛡️ משתמש {safe_str(chat_id)} נוסף לרשימת התאוששות ({error_context})")
             if msg_to_save:
                 print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
     except Exception as e:
@@ -509,9 +514,9 @@ def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition
     """מוסיף משתמש באופן ידני לרשימת המשתמשים הקריטיים"""
     try:
         _add_user_to_critical_error_list(safe_str(chat_id), f"Manual: {error_context}")
-        print(f"✅ משתמש {chat_id} נוסף ידנית לרשימת המשתמשים הקריטיים")
+        print(f"✅ משתמש {safe_str(chat_id)} נוסף ידנית לרשימת המשתמשים הקריטיים")
     except Exception as e:
-        print(f"🚨 שגיאה בהוספה ידנית של משתמש {chat_id}: {e}") 
+        print(f"🚨 שגיאה בהוספה ידנית של משתמש {safe_str(chat_id)}: {e}") 
 
 async def handle_critical_error(error, chat_id, user_msg, update: Update):
     """
@@ -535,14 +540,14 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
         except Exception as e:
             # גם אם שליחת ההודעה נכשלת - המשתמש כבר ברשימת ההתאוששות
             logging.error(f"Failed to send user-friendly error message: {e}")
-            print(f"⚠️ שליחת הודעה נכשלה, אבל המשתמש {chat_id} נרשם לרשימת התאוששות")
+            print(f"⚠️ שליחת הודעה נכשלה, אבל המשתמש {safe_str(chat_id)} נרשם לרשימת התאוששות")
     
     log_error_stat("critical_error")
     
     # התראה מפורטת לאדמין
     admin_error_message = f"🚨 שגיאה קריטית בבוט:\n{str(error)}"
     if chat_id:
-        admin_error_message += f"\nמשתמש: {chat_id}"
+        admin_error_message += f"\nמשתמש: {safe_str(chat_id)}"
     if user_msg:
         admin_error_message += f"\nהודעה: {user_msg[:200]}"
     admin_error_message += f"\n⚠️ המשתמש נרשם לרשימת התאוששות ויקבל התראה כשהבוט יחזור לעבוד"

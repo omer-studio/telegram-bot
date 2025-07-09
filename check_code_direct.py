@@ -73,7 +73,7 @@ def check_code_15689309():
                 print(f"   👤 name: {name}")
                 
                 # ניתוח המצב
-                if chat_id and str(chat_id).strip():
+                if chat_id and safe_str(chat_id).strip():
                     if approved:
                         print("\n🎯 המצב: המשתמש מאושר לחלוטין!")
                         print("🤖 הבוט אמור: לתת גישה מלאה")

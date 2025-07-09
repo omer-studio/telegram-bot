@@ -348,7 +348,7 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ בדיקת תפקוד קריטית נכשלה: {health_check_error}")
         # נשלח התראה לאדמין
         try:
-            from notifications import send_admin_notification
+            from admin_notifications import send_admin_notification
             send_admin_notification(
                 f"🚨 בדיקת תפקוד קריטית נכשלה בהפעלה!\n\n"
                 f"❌ שגיאה: {health_check_error}\n"

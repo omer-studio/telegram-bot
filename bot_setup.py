@@ -73,6 +73,7 @@ import json
 import psycopg2
 import datetime
 import asyncio
+from admin_notifications import send_admin_notification
 
 # הגדרת DB_URL
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
@@ -1360,7 +1361,7 @@ def verify_data_integrity(pre_counts, post_counts, migration_results):
 def print_detailed_summary(migration_results, verification_results):
     """מדפיס סיכום מפורט וגם שומר לקובץ לוג ושולח לאדמין"""
     import os
-    from notifications import send_admin_notification
+    from admin_notifications import send_admin_notification
     def log_to_file(msg):
         with open("migration_log.txt", "a", encoding="utf-8") as f:
             f.write(msg + "\n")

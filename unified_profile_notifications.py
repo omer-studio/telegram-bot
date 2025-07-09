@@ -18,6 +18,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from db_manager import safe_str
 from simple_logger import logger
+from admin_notifications import send_admin_notification_raw
 
 def send_profile_update_notification(
     chat_id: str,
@@ -107,7 +108,6 @@ def send_profile_update_notification(
         notification += f"\n⏰ {current_time} - עודכן במסד נתונים בטבלת {table_name}"
         
         # שליחה לאדמין דרך הפונקציה המרכזית
-        from notifications import send_admin_notification_raw
         success = send_admin_notification_raw(notification)
         
         if success:

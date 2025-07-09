@@ -22,14 +22,14 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
     """
     start_time = time.time()  # מדידת זמן התחלה
     
-    # בדיקה קריטית - אם אין chat_id תקין, לא מפעילים GPT-C
+    # 🔧 תיקון מערכתי: טיפול בטוח בchat_id=None
     if not chat_id:
-        logger.error("[GPT_C] chat_id is None - skipping GPT-C execution", source="gpt_c_handler")
-        print("❌ [GPT-C] chat_id is None - skipping GPT-C execution")
-        return {"extracted_fields": {}, "usage": {}, "model": "none"}
+        logger.warning("[GPT_C] chat_id is None/empty - using fallback chat_id", source="gpt_c_handler")
+        print("⚠️ [GPT-C] chat_id is None/empty - using fallback chat_id")
+        chat_id = "unknown_user"  # ברירת מחדל במקום דחיית הפונקציה
     
     safe_chat_id = safe_str(chat_id)
-    metadata = {"gpt_identifier": "gpt_c", "chat_id": safe_str(chat_id), "message_id": message_id}
+    metadata = {"gpt_identifier": "gpt_c", "chat_id": safe_chat_id, "message_id": message_id}
     params = GPT_PARAMS["gpt_c"]
     model = GPT_MODELS["gpt_c"]
     

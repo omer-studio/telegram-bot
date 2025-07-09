@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 import logging
 import psycopg2
+from user_friendly_errors import safe_str
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -69,7 +70,7 @@ class MinimalDataLoader:
                         continue
                     
                     # Convert chat_id to string
-                    chat_id = str(chat_id)
+                    chat_id = safe_str(chat_id)
                     
                     # Convert timestamp string to datetime if needed
                     if timestamp_start and isinstance(timestamp_start, str):

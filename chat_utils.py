@@ -599,7 +599,7 @@ def send_error_stats_report():
     """
     🚫 DISABLED: טבלת errors_stats הושבתה - אין דוח סטטיסטיקות שגיאות
     """
-    from notifications import send_admin_notification
+    from admin_notifications import send_admin_notification
     
     try:
         # אין יותר סטטיסטיקות שגיאות - הטבלה הושבתה
@@ -622,7 +622,7 @@ def send_error_stats_report():
 
 
 def send_usage_report(days_back: int = 1):
-    from notifications import send_admin_notification
+    from admin_notifications import send_admin_notification
     effective_now = utils.get_effective_time("datetime")
     since = effective_now - timedelta(days=days_back)
     if not os.path.exists(gpt_log_path):
