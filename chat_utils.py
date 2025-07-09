@@ -722,7 +722,7 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
         except Exception:
             return False
 
-        chat_id_str = str(chat_id)
+        chat_id_str = safe_str(chat_id)
         last_timestamp = None
         
         # בדיקת ההודעה האחרונה

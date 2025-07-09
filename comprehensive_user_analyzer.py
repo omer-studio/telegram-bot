@@ -19,11 +19,14 @@ from config import config
 # יבוא של FIELDS_DICT
 try:
     from fields_dict import FIELDS_DICT, get_user_profile_fields
+    from db_manager import safe_str  # יבוא של safe_str
 except ImportError:
     # נגדיר באופן בסיסי אם אין גישה לקובץ
     FIELDS_DICT = {}
     def get_user_profile_fields():
         return ['name', 'age', 'relationship_type', 'closet_status', 'primary_conflict', 'summary']
+    def safe_str(value):
+        return str(value) if value is not None else ""
 
 # הגדרת חיבור למסד הנתונים
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
@@ -63,7 +66,7 @@ class UserAnalyzer:
                 WHERE chat_id = %s 
                 ORDER BY timestamp ASC
                 LIMIT %s
-            """, (str(chat_id), limit))
+            """, (safe_str(chat_id), limit))
             
             history = cur.fetchall()
             cur.close()
@@ -86,7 +89,7 @@ class UserAnalyzer:
             cur.execute("""
                 SELECT * FROM user_profiles 
                 WHERE chat_id = %s
-            """, (str(chat_id),))
+            """, (safe_str(chat_id),))
             
             profile_row = cur.fetchone()
             
