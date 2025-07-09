@@ -29,7 +29,7 @@ def extract_user_info(user_msg, chat_id=None, message_id=None):
         return {"extracted_fields": {}, "usage": {}, "model": "none"}
     
     safe_chat_id = safe_str(chat_id)
-    metadata = {"gpt_identifier": "gpt_c", "chat_id": safe_chat_id, "message_id": message_id}
+    metadata = {"gpt_identifier": "gpt_c", "chat_id": safe_str(chat_id), "message_id": message_id}
     params = GPT_PARAMS["gpt_c"]
     model = GPT_MODELS["gpt_c"]
     

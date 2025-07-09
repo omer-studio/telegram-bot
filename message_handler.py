@@ -22,7 +22,7 @@ from chat_utils import log_error_stat, update_chat_history, get_chat_history_mes
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove  # type: ignore
 from telegram.ext import ContextTypes  # type: ignore
 from datetime import datetime
-from utils import handle_secret_command
+# 🗑️ handle_secret_command הוסרה - עברנו לפקודות טלגרם רגילות
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
 from notifications import handle_critical_error

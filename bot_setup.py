@@ -53,7 +53,7 @@ from db_manager import register_user_with_code_db, check_user_approved_status_db
 from profile_utils import get_user_summary_fast, update_user_profile_fast
 from notifications import send_startup_notification
 from messages import get_welcome_messages
-from utils import log_event_to_file, update_chat_history, get_chat_history_messages, send_error_stats_report, send_usage_report
+from utils import update_chat_history, get_chat_history_messages, send_error_stats_report, send_usage_report
 from gpt_a_handler import get_main_response
 from gpt_b_handler import get_summary
 from apscheduler.schedulers.background import BackgroundScheduler
