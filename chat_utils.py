@@ -642,7 +642,7 @@ def send_usage_report(days_back: int = 1):
                         continue
                     chat_id = entry.get("chat_id")
                     if chat_id:
-                        users.add(str(chat_id))
+                        users.add(safe_str(chat_id))
                     messages += 1
                     if entry.get("error"):
                         errors += 1

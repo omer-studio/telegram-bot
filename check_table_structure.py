@@ -12,7 +12,7 @@ def load_config():
     """טעינת קונפיגורציה"""
     try:
         from config import get_config
-            return get_config()
+        return get_config()
     except Exception as e:
         print(f"❌ שגיאה בטעינת קונפיגורציה: {e}")
         return {}

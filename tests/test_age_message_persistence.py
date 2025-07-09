@@ -77,31 +77,36 @@ class TestAgeMessagePersistence(unittest.TestCase):
 
                     # Mock SQL functions to avoid database connection
                     def mock_save_user_profile(chat_id, profile):
-                        # Simulate SQL save by writing to JSON file
+                        # Simulate SQL save by writing to JSON file - use safe_str for consistency
                         try:
                             with open(profiles_path, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
                         except:
                             data = {}
-                        data[chat_id] = profile
+                        # Import safe_str to match real behavior
+                        from db_manager import safe_str
+                        data[safe_str(chat_id)] = profile
                         with open(profiles_path, 'w', encoding='utf-8') as f:
                             json.dump(data, f, ensure_ascii=False, indent=2)
                     
                     def mock_get_user_profile(chat_id):
-                        # Simulate SQL get by reading from JSON file
+                        # Simulate SQL get by reading from JSON file - use safe_str for consistency
                         try:
                             with open(profiles_path, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
-                            return data.get(chat_id, {})
+                            from db_manager import safe_str
+                            return data.get(safe_str(chat_id), {})
                         except:
                             return {}
                     
                     def mock_get_user_profile_fast(chat_id):
-                        # Mock the fast getter to read from JSON file
+                        # Mock the fast getter to read from JSON file - use safe_str for consistency
                         try:
                             with open(profiles_path, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
-                            return data.get(str(chat_id), {})
+                            # Import safe_str to match real behavior
+                            from db_manager import safe_str
+                            return data.get(safe_str(chat_id), {})
                         except:
                             return {}
                     
@@ -115,7 +120,9 @@ class TestAgeMessagePersistence(unittest.TestCase):
                         # Stub GPT helper functions that run inside background processors
                         async def _fake_gpt_d_async(chat_id, *_a, **_k):
                             # Persist change directly via profile_utils to mimic real behaviour
-                            profile_utils.update_user_profile_fast(chat_id, {"age": 35}, send_admin_notification=False)
+                            # Use the mocked save function directly
+                            from db_manager import safe_str
+                            mock_save_user_profile(safe_str(chat_id), {"age": 35})
                             return ({"age": "35"}, {})
 
                         async def _fake_gpt_e_async(*_a, **_k):
@@ -126,7 +133,9 @@ class TestAgeMessagePersistence(unittest.TestCase):
 
                         with patch("gpt_c_handler.extract_user_info", _fake_extract, create=True), \
                              patch("gpt_d_handler.smart_update_profile_with_gpt_d_async", _fake_gpt_d_async, create=True), \
-                             patch("gpt_e_handler.execute_gpt_e_if_needed", _fake_gpt_e_async, create=True):
+                             patch("gpt_e_handler.execute_gpt_e_if_needed", _fake_gpt_e_async, create=True), \
+                             patch("simple_data_manager.data_manager.update_user_profile_fast", mock_save_user_profile, create=True), \
+                             patch("simple_data_manager.data_manager.save_user_profile", mock_save_user_profile, create=True):
 
                             # Import message_handler after stubs so it captures patched refs
                             message_handler = _reload_module("message_handler")
