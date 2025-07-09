@@ -103,15 +103,10 @@ def test_admin_notification_on_profile_update(monkeypatch):
 
     import asyncio
 
-    # Prepare environment
-    os.environ.setdefault("CI", "1")
-
-    # 🔧 כיבוי בדיקת סביבת בדיקה כך שהתראות יישלחו
-    def _fake_is_test_env():
-        return False
-    
-    monkeypatch.setattr("admin_notifications.is_test_environment", _fake_is_test_env, raising=False)
-    monkeypatch.setattr("unified_profile_notifications.is_test_environment", _fake_is_test_env, raising=False)
+    # 🔧 כיבוי מלא של משתני סביבת בדיקה
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TESTING", raising=False) 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
     # Reload base config & profile utils first
     config = _reload_module("config")
@@ -186,46 +181,78 @@ def test_admin_notification_on_profile_update(monkeypatch):
 
 def test_send_admin_notification_raw(monkeypatch):
     """Verify that notifications.send_admin_notification_raw uses requests.post correctly."""
-    import notifications
-    captured = {}
-    class DummyResp:  # simple stand-in for requests.Response
-        status_code = 200
 
-    def fake_post(url, data=None, timeout=15):  # TimeoutConfig.HTTP_REQUEST_TIMEOUT
+    # 🔧 כיבוי מלא של משתני סביבת בדיקה
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TESTING", raising=False) 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    
+    import notifications
+    import requests
+    
+    # mock של requests.post
+    def _fake_requests_post(url, data=None, timeout=15):
+        captured['requests_called'] = True
         captured['url'] = url
         captured['data'] = data
-        return DummyResp()
+        captured['timeout'] = timeout
+        
+        # Mock response object
+        class MockResponse:
+            status_code = 200
+        return MockResponse()
 
-    monkeypatch.setattr("notifications.requests.post", fake_post, raising=False)
+    monkeypatch.setattr("requests.post", _fake_requests_post, raising=False)
 
+    captured = {}
     notifications.send_admin_notification_raw("hello test")
 
     assert captured, "requests.post should have been called"
-    assert "chat_id" in captured['data'], "chat_id missing from payload"
-
+    assert "sendMessage" in captured['url'], "URL should contain sendMessage"
+    assert captured['data']['text'] == "hello test", "Message text should match"
 
 def test_send_admin_notification(monkeypatch):
     """Verify that notifications.send_admin_notification posts correctly."""
+    
+    # 🔧 כיבוי מלא של משתני סביבת בדיקה
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TESTING", raising=False) 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    
     import notifications
-    sent = {}
-
-    class _Resp:
-        status_code = 200
-
-    def fake_post(url, data=None, timeout=15):  # TimeoutConfig.HTTP_REQUEST_TIMEOUT
+    import requests
+    
+    # mock של requests.post
+    def _fake_requests_post(url, data=None, timeout=15):
+        sent['requests_called'] = True
+        sent['url'] = url
         sent['data'] = data
-        return _Resp()
+        sent['timeout'] = timeout
+        
+        # Mock response object
+        class MockResponse:
+            status_code = 200
+        return MockResponse()
 
-    monkeypatch.setattr("notifications.requests.post", fake_post, raising=False)
+    monkeypatch.setattr("requests.post", _fake_requests_post, raising=False)
 
+    sent = {}
     notifications.send_admin_notification("hello test msg")
 
-    assert sent, "requests.post not called"
-    assert sent['data']["parse_mode"], "parse_mode should exist"
+    assert sent, "requests.post should have been called"
+    assert "sendMessage" in sent['url'], "URL should contain sendMessage"
+    # הודעה צריכה להיות עם סימון דחיפות או ללא
+    assert "hello test msg" in sent['data']['text'], "Message text should contain original text"
 
 
 def test_profile_overview_admin_notification(monkeypatch):
     """Ensure unified profile notification system constructs correct content."""
+    
+    # 🔧 כיבוי מלא של משתני סביבת בדיקה
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TESTING", raising=False) 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
     import unified_profile_notifications as upn
     import notifications
 
@@ -236,6 +263,7 @@ def test_profile_overview_admin_notification(monkeypatch):
         return 12345  # Mock message_id
 
     monkeypatch.setattr(notifications, "send_admin_notification_raw", fake_raw, raising=False)
+
 
     chat_id = "999999"
     gpt_c_changes = [{"field": "age", "old_value": "ריק", "new_value": "30"}]
@@ -260,6 +288,11 @@ def test_profile_overview_admin_notification(monkeypatch):
 def test_admin_notification_content_on_profile_update(monkeypatch):
     """Minimal focused test – run_background_processors triggers notification with correct content."""
 
+    # 🔧 כיבוי מלא של משתני סביבת בדיקה
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TESTING", raising=False) 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
     import asyncio
     import message_handler as mh
     import notifications
@@ -279,6 +312,7 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
     def _fake_extract_loc(*_a, **_k):
         return {"extracted_fields": {"location": "תל אביב"}, "usage": {}, "model": "stub"}
 
+
     async def _fake_gpt_d_async_loc(*_a, **_k):
         return ({"location": "תל אביב"}, {})
 
@@ -286,6 +320,7 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
         return {"changes": {}}
 
     monkeypatch.setattr("gpt_c_handler.extract_user_info", _fake_extract_loc, raising=False)
+
     monkeypatch.setattr("gpt_d_handler.smart_update_profile_with_gpt_d_async", _fake_gpt_d_async_loc, raising=False)
     monkeypatch.setattr("gpt_e_handler.execute_gpt_e_if_needed", _fake_gpt_e_async_loc, raising=False)
 
@@ -294,22 +329,23 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
     monkeypatch.setattr(mh, "smart_update_profile_with_gpt_d_async", _fake_gpt_d_async_loc, raising=False)
     monkeypatch.setattr(mh, "execute_gpt_e_if_needed", _fake_gpt_e_async_loc, raising=False)
 
+
     # Run background processors
     # 🔧 תיקון: שימוש בפונקציה החדשה handle_background_tasks
     # יצירת mock objects נדרשים
     class MockUpdate:
         pass
-    
+
     class MockContext:
         def __init__(self):
             self.bot_data = {}
-    
+
     mock_update = MockUpdate()
     mock_context = MockContext()
     message_id = "test_msg_789"
     user_request_start_time = 0.0
     user_response_actual_time = 1.3  # זמן תגובה אמיתי
-    
+
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 
@@ -329,6 +365,11 @@ def test_admin_notification_content_on_profile_update(monkeypatch):
 
 def test_admin_notification_age_update(monkeypatch):
     """Ensure notification includes chat_id, 'age' field and GPT-C when age is updated."""
+
+    # 🔧 כיבוי מלא של משתני סביבת בדיקה
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("TESTING", raising=False) 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
     import asyncio
     import message_handler as mh
@@ -355,6 +396,7 @@ def test_admin_notification_age_update(monkeypatch):
         return {"extracted_fields": {"age": "35"}, "usage": {}, "model": "stub"}
 
     monkeypatch.setattr("gpt_c_handler.extract_user_info", _fake_extract_age, raising=False)
+
     monkeypatch.setattr("gpt_d_handler.smart_update_profile_with_gpt_d_async", _fake_gpt_d_async_age, raising=False)
     monkeypatch.setattr("gpt_e_handler.execute_gpt_e_if_needed", _fake_gpt_e_async_age, raising=False)
 
@@ -363,21 +405,22 @@ def test_admin_notification_age_update(monkeypatch):
     monkeypatch.setattr(mh, "smart_update_profile_with_gpt_d_async", _fake_gpt_d_async_age, raising=False)
     monkeypatch.setattr(mh, "execute_gpt_e_if_needed", _fake_gpt_e_async_age, raising=False)
 
+
     # 🔧 תיקון: שימוש בפונקציה החדשה handle_background_tasks
     # יצירת mock objects נדרשים
     class MockUpdate:
         pass
-    
+
     class MockContext:
         def __init__(self):
             self.bot_data = {}
-    
+
     mock_update = MockUpdate()
     mock_context = MockContext()
     message_id = "test_msg_999"
     user_request_start_time = 0.0
     user_response_actual_time = 1.7  # זמן תגובה אמיתי
-    
+
     # יצירת mock gpt_result
     mock_gpt_result = {"usage": {"cost_total_ils": 0.1}}
 

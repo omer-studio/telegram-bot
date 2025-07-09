@@ -1121,40 +1121,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         history_messages = get_chat_history_simple(safe_str(chat_id), limit=15)
         
         # 🔧 בניית הודעות מלאות עם כל הסיסטם פרומפטים
-        messages_for_gpt = []
+        from chat_utils import build_complete_system_messages
         
-        # 1. הוספת הסיסטם פרומפט הראשי
-        messages_for_gpt.append({"role": "system", "content": SYSTEM_PROMPT})
+        # בניית כל הסיסטם פרומפטים במקום אחד
+        system_messages = build_complete_system_messages(safe_str(chat_id), user_msg, include_main_prompt=True)
         
-        # 2. הוספת מידע על המשתמש
-        from profile_utils import get_user_summary_fast
-        current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
-        if current_summary:
-            messages_for_gpt.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
+        # בניית הודעות GPT מלאות
+        messages_for_gpt = system_messages.copy()
         
-        # 3. הוספת ברכות זמן
-        from chat_utils import get_time_greeting_instruction
-        time_greeting = get_time_greeting_instruction()
-        if time_greeting:
-            messages_for_gpt.append({"role": "system", "content": time_greeting})
-        
-        # 4. הוספת הנחיות יום השבוע
-        from chat_utils import get_weekday_context_instruction
-        weekday_context = get_weekday_context_instruction(safe_str(chat_id), user_msg)
-        if weekday_context:
-            messages_for_gpt.append({"role": "system", "content": weekday_context})
-        
-        # 5. הוספת הודעות חגים מיוחדים
-        from chat_utils import get_holiday_system_message
-        holiday_message = get_holiday_system_message(safe_str(chat_id), "")
-        if holiday_message:
-            messages_for_gpt.append({"role": "system", "content": holiday_message})
-        
-        # 6. הוספת הודעות היסטוריה
+        # הוספת הודעות היסטוריה
         if history_messages:
             messages_for_gpt.extend(history_messages)
         
-        # 7. הוספת הודעת המשתמש הנוכחית
+        # הוספת הודעת המשתמש הנוכחית
         messages_for_gpt.append({"role": "user", "content": user_msg})
         
         # קבלת תשובה מ-GPT

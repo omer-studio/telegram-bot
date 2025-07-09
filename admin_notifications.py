@@ -417,9 +417,9 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             system_prompts = [msg for msg in messages_for_gpt if msg.get("role") == "system"]
             for i, prompt in enumerate(system_prompts, 1):
                 prompt_content = prompt.get("content", "")
-                if len(prompt_content) > 20:
-                    prompt_preview = prompt_content[:20] + "..."
-                    remaining_chars = len(prompt_content) - 20
+                if len(prompt_content) > 40:
+                    prompt_preview = prompt_content[:40] + "..."
+                    remaining_chars = len(prompt_content) - 40
                     notification_text += f"**סיסטם פרומט {i}:** **{prompt_preview}** (+{remaining_chars}) "
                 else:
                     notification_text += f"**סיסטם פרומט {i}:** **{prompt_content}** "
