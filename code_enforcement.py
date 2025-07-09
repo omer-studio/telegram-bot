@@ -34,6 +34,11 @@ class CodeEnforcer:
                 "pattern": r"logging\.(info|error|warning|debug)\(",
                 "message": "❌ אסור להשתמש ב-logging ישירות! השתמש ב-logger",
                 "fix": "from simple_logger import logger"
+            },
+            "no_blocking_after_send_message": {
+                "pattern": r"await\s+send_message.*\n.*(?:requests\.|calculate_|save_|log_|send_admin_|update_metrics|time\.sleep)",
+                "message": "⚡ אסור לבצע פעולות blocking אחרי send_message! העבר לרקע",
+                "fix": "העבר הפעולה ל-asyncio.create_task(background_function())"
             }
         }
     
@@ -63,14 +68,88 @@ class CodeEnforcer:
         
         return violations
     
+    def check_blocking_after_send_message(self, file_path: str) -> List[Dict]:
+        """בדיקה מתוחכמת לפעולות blocking אחרי send_message"""
+        violations = []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            blocking_patterns = [
+                r'requests\.',
+                r'calculate_',
+                r'save_.*\(',
+                r'log_.*\(',
+                r'send_admin_',
+                r'update_metrics',
+                r'time\.sleep',
+                r'\.post\(',
+                r'\.get\(',
+                r'billing_guard\.',
+                r'save_system_metrics',
+                r'GPTJSONLLogger\.'
+            ]
+            
+            for i, line in enumerate(lines):
+                # מחפש send_message calls
+                if 'send_message' in line and ('await' in line or '.send' in line):
+                    # בודק את השורות הבאות (עד 10 שורות אחרי)
+                    for j in range(i + 1, min(i + 11, len(lines))):
+                        next_line = lines[j].strip()
+                        
+                        # מדלג על שורות ריקות וcomments
+                        if not next_line or next_line.startswith('#'):
+                            continue
+                            
+                        # אם מגיע לשורה של background task או return - זה בסדר
+                        if any(pattern in next_line for pattern in [
+                            'asyncio.create_task',
+                            'background_',
+                            'return',
+                            'async def',
+                            'def handle_background',
+                            'except',
+                            'finally',
+                            'else:'
+                        ]):
+                            break
+                            
+                        # בודק אם יש פעולה blocking
+                        for pattern in blocking_patterns:
+                            if re.search(pattern, next_line):
+                                violations.append({
+                                    "file": file_path,
+                                    "line": j + 1,
+                                    "rule": "blocking_after_send_message",
+                                    "message": f"⚡ פעולה blocking אחרי send_message (שורה {i+1}): {pattern}",
+                                    "fix": "העבר לפונקציה handle_background_tasks או asyncio.create_task()",
+                                    "code": next_line.strip(),
+                                    "send_message_line": i + 1
+                                })
+                                break
+                        else:
+                            continue
+                        break
+                        
+        except Exception as e:
+            print(f"⚠️ שגיאה בבדיקת blocking operations ב-{file_path}: {e}")
+        
+        return violations
+    
     def scan_all_files(self, directory: str = ".") -> List[Dict]:
         """בדיקת כל הקבצים בתיקייה"""
         all_violations = []
         
         for file_path in Path(directory).rglob("*.py"):
             if "venv" not in str(file_path) and "node_modules" not in str(file_path):
+                # בדיקות רגילות
                 violations = self.check_file(str(file_path))
                 all_violations.extend(violations)
+                
+                # בדיקה מיוחדת לפעולות blocking אחרי send_message
+                blocking_violations = self.check_blocking_after_send_message(str(file_path))
+                all_violations.extend(blocking_violations)
         
         return all_violations
     
@@ -226,11 +305,68 @@ python code_enforcement.py
     
     print("✅ מדריך CONTRIBUTING נוצר!")
 
-if __name__ == "__main__":
-    enforcer = CodeEnforcer()
-    violations = enforcer.scan_all_files()
-    enforcer.print_violations(violations)
+def test_blocking_detection():
+    """טסט לבדיקת זיהוי פעולות blocking"""
+    # יצירת קובץ טסט זמני
+    test_code_bad = '''
+async def bad_example():
+    await send_message(update, chat_id, "תשובה")
+    requests.post("http://example.com")  # blocking!
+    calculate_costs(result)  # blocking!
+    save_to_database(data)  # blocking!
+'''
     
-    # בדיקה אם קומיט מותר
-    allow_commit, message = enforcer.should_allow_commit(violations)
-    print(message) 
+    test_code_good = '''
+async def good_example():
+    await send_message(update, chat_id, "תשובה")
+    
+    # כל השאר ברקע
+    asyncio.create_task(background_processing())
+'''
+    
+    enforcer = CodeEnforcer()
+    
+    # כתיבת קובצי טסט זמניים
+    with open("test_bad.py", "w", encoding="utf-8") as f:
+        f.write(test_code_bad)
+    
+    with open("test_good.py", "w", encoding="utf-8") as f:
+        f.write(test_code_good)
+    
+    try:
+        # בדיקת קובץ עם בעיות
+        bad_violations = enforcer.check_blocking_after_send_message("test_bad.py")
+        print(f"🔍 דוגמה רעה: נמצאו {len(bad_violations)} הפרות")
+        
+        # בדיקת קובץ תקין
+        good_violations = enforcer.check_blocking_after_send_message("test_good.py")
+        print(f"✅ דוגמה טובה: נמצאו {len(good_violations)} הפרות")
+        
+        if len(bad_violations) > 0 and len(good_violations) == 0:
+            print("🎯 הטסט עבר! הכלל מזהה בעיות נכון")
+        else:
+            print("❌ הטסט נכשל!")
+            
+    finally:
+        # ניקוי קבצי טסט
+        import os
+        try:
+            os.remove("test_bad.py")
+            os.remove("test_good.py")
+        except:
+            pass
+
+if __name__ == "__main__":
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        print("🧪 מריץ טסט לזיהוי פעולות blocking...")
+        test_blocking_detection()
+    else:
+        enforcer = CodeEnforcer()
+        violations = enforcer.scan_all_files()
+        enforcer.print_violations(violations)
+        
+        # בדיקה אם קומיט מותר
+        allow_commit, message = enforcer.should_allow_commit(violations)
+        print(message) 
