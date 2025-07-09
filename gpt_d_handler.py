@@ -5,7 +5,7 @@ gpt_d_handler.py
 משתמש ב-Gemini 1.5 Pro (חינמי) - ללא צורך ב-fallback.
 """
 
-import logging
+from simple_logger import logger
 from datetime import datetime
 import json
 import lazy_litellm as litellm
@@ -57,13 +57,13 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
             )
             usage.update(cost_info)
         except Exception as _cost_e:
-            logging.warning(f"[gpt_d] Cost calc failed: {_cost_e}")
+            logger.warning(f"[gpt_d] Cost calc failed: {_cost_e}")
         
         # ניסיון לפרס JSON
         try:
             extracted_fields = json.loads(content) if content and content.strip().startswith("{") else {}
         except json.JSONDecodeError as json_err:
-            logging.error(f"[gpt_d] JSON parsing error: {json_err} | content: {content}")
+            logger.error(f"[gpt_d] JSON parsing error: {json_err} | content: {content}")
             extracted_fields = {}
         
         # הדפסת מידע חשוב על מיזוג נתונים (תמיד יופיע!)
@@ -103,7 +103,7 @@ def merge_profile_data(existing_profile, new_extracted_fields, chat_id=None, mes
         return result
         
     except Exception as e:
-        logging.error(f"[gpt_d] Error: {e}")
+        logger.error(f"[gpt_d] Error: {e}")
         print(f"❌ [GPT-D] שגיאה: {e}")
         return {"merged_profile": {}, "usage": {}, "model": model}
 
@@ -193,13 +193,13 @@ def _run_profile_merge_and_persist(chat_id: str, user_message: str, interaction_
                 update_user_profile_fast(chat_id, updated_profile)
         except Exception as persist_exc:  # pragma: no cover – just in case
             import logging
-            logging.error(f"[GPT_D] Failed to persist profile for {chat_id}: {persist_exc}")
+            logger.error(f"[GPT_D] Failed to persist profile for {chat_id}: {persist_exc}")
 
         return updated_profile, usage
 
     except Exception as exc:  # pragma: no cover – keep background thread alive
         import logging, traceback  # noqa: WPS433
-        logging.error(f"[GPT_D] Critical error in profile merge for {chat_id}: {exc}\n{traceback.format_exc()}")
+        logger.error(f"[GPT_D] Critical error in profile merge for {chat_id}: {exc}\n{traceback.format_exc()}")
         return {}, {}
 
 
