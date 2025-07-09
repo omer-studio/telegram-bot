@@ -554,11 +554,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_system_message(update, chat_id, "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות.")
                 return
 
-            did, reply = handle_secret_command(safe_str(chat_id), user_msg)
-            if did:
-                await send_system_message(update, chat_id, reply)
-                await end_monitoring_user(safe_str(chat_id), True)
-                return
+            # 🗑️ פקודות סודיות הוסרו - עברנו לפקודות טלגרם רגילות /show_logs, /search_logs
             log_payload["chat_id"] = safe_str(chat_id)
             log_payload["message_id"] = message_id
             log_payload["user_msg"] = user_msg

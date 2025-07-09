@@ -62,25 +62,25 @@ def should_ask_profile_question(chat_id: str) -> bool:
     # אם המשתמש בפסק זמן - מקטינים את המונה
     if profile_question_cooldowns[safe_chat_id] > 0:
         profile_question_cooldowns[safe_chat_id] -= 1
-        logger.info(f"📊 [PROFILE_QUESTION] בפסק זמן | chat_id={safe_chat_id} | cooldown_left={profile_question_cooldowns[safe_chat_id]}", source="gpt_a_handler")
+        logger.info(f"📊 [PROFILE_QUESTION] בפסק זמן | chat_id={safe_str(chat_id)} | cooldown_left={profile_question_cooldowns[safe_chat_id]}", source="gpt_a_handler")
         return False
     
     # לא בפסק זמן - אפשר לשאול
-    logger.info(f"📊 [PROFILE_QUESTION] הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_chat_id}", source="gpt_a_handler")
+    logger.info(f"📊 [PROFILE_QUESTION] הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
     return True
 
 def start_profile_question_cooldown(chat_id: str):
     """מתחיל פסק זמן של 3 הודעות אחרי ששאלה נשאלה"""
     safe_chat_id = safe_str(chat_id)
     profile_question_cooldowns[safe_chat_id] = 3
-    logger.info(f"📊 [PROFILE_QUESTION] פסק זמן התחיל | chat_id={safe_chat_id} | cooldown=3", source="gpt_a_handler")
+    logger.info(f"📊 [PROFILE_QUESTION] פסק זמן התחיל | chat_id={safe_str(chat_id)} | cooldown=3", source="gpt_a_handler")
 
 def reset_profile_question_counter(chat_id: str):
     """מאפס את המונה למשתמש מסוים (למקרה של שאלה שנענתה)"""
     safe_chat_id = safe_str(chat_id)
     if safe_chat_id in profile_question_counters:
         profile_question_counters[safe_chat_id] = 0
-        logger.info(f"📊 [PROFILE_QUESTION] מונה אופס | chat_id={safe_chat_id}", source="gpt_a_handler")
+        logger.info(f"📊 [PROFILE_QUESTION] מונה אופס | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
 
 def get_profile_question_stats():
     """מחזיר סטטיסטיקות של מוני השאלות"""
@@ -97,7 +97,7 @@ def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
     """
     safe_chat_id = safe_str(chat_id) if chat_id else "unknown"
     if not missing_text or not bot_reply:
-        logger.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={safe_chat_id}", source="gpt_a_handler")
+        logger.debug(f"[PROFILE_QUESTION][DEBUG] missing_text/bot_reply ריקים | chat_id={safe_str(chat_id) if chat_id else 'unknown'}", source="gpt_a_handler")
         return False
     
     # מפרק את missing_text למילים בודדות (ללא סימני פיסוק)
@@ -108,7 +108,7 @@ def did_bot_ask_profile_questions(missing_text, bot_reply, chat_id=None):
     # מוצא מילים משותפות
     matches = [word for word in missing_words if word in bot_words]
     
-    logger.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={safe_chat_id} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}", source="gpt_a_handler")
+    logger.debug(f"[PROFILE_QUESTION][DEBUG] בדיקת התאמה בין מילים | chat_id={safe_str(chat_id) if chat_id else 'unknown'} | missing_words={missing_words[:10]} | bot_words={bot_words[:10]} | matches={matches} | count={len(matches)}", source="gpt_a_handler")
     
     return len(matches) >= 2
 
@@ -123,7 +123,7 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
         except ImportError:
             FIELDS_DICT = {"dummy": "dummy"}
         if not should_ask_profile_question(safe_chat_id):
-            logger.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_chat_id}", source="gpt_a_handler")
+            logger.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
             return "", ""
         profile_data = get_user_profile(safe_chat_id) or {}
         key_fields = ["name", "age", "attracted_to", "relationship_type", "self_religious_affiliation", 
@@ -134,10 +134,10 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
                   and FIELDS_DICT[f].get("missing_question", "").strip()]
         if len(missing) >= 2:
             missing_text = ', '.join(missing[:4])
-            logger.info(f"📊 [PROFILE_QUESTION] שולח שאלת פרופיל | chat_id={safe_chat_id} | missing_fields={len(missing)} | missing_text={missing_text}", source="gpt_a_handler")
+            logger.info(f"📊 [PROFILE_QUESTION] שולח שאלת פרופיל | chat_id={safe_str(chat_id)} | missing_fields={len(missing)} | missing_text={missing_text}", source="gpt_a_handler")
             return f"""פרטים שהמשתמש עדיין לא סיפר לך וחשוב מאוד לשאול אותו בעדינות וברגישות במטרה להכיר אותו יותר טוב: {missing_text}
 \nראשית תסביר לו את הרציונל, תסביר לו למה אתה שואל, תגיד לו שחשוב לך להכיר אותו כדי להתאים את עצמך אליו. תתעניין בו - תבחר אחד מהשאלות שנראית לך הכי מתאימה - ורק אם זה מרגיש לך מתאים אז תשאל אותו בעדינות וברגישות ותשלב את זה באלגנטיות. (את השאלות תעשה בכתב מודגש)""", missing_text
-        logger.info(f"📊 [PROFILE_QUESTION] אין מספיק שדות חסרים לשאלה | chat_id={safe_chat_id} | missing_fields={len(missing)}", source="gpt_a_handler")
+        logger.info(f"📊 [PROFILE_QUESTION] אין מספיק שדות חסרים לשאלה | chat_id={safe_str(chat_id)} | missing_fields={len(missing)}", source="gpt_a_handler")
         return "", ""
     except Exception as e:
         logger.error(f"שגיאה ביצירת הודעת שדות חסרים: {e}", source="gpt_a_handler")
