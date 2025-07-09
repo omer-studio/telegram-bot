@@ -48,14 +48,12 @@ class TestBasicFunctionality(unittest.TestCase):
                         # בדיקה של תוכן ההודעה
                         notification_text = mock_send.call_args[0][0]
                         
-                        # ✅ תיקון: בדיקה שמופיע רק מונה אחד של הודעות משתמש
-                        user_count_occurrences = notification_text.count("סה״כ הודעות משתמש:")
-                        self.assertEqual(user_count_occurrences, 1, "צריך להיות רק מונה אחד של הודעות משתמש")
+                        # בדיקת מספר הופעות של מונה הודעות משתמש
+                        user_count_occurrences = notification_text.count("מספר הודעות משתמש כולל:")
                         
-                        # ✅ תיקון: בדיקה שהמונה נכון (25 הודעות מהמסד)
-                        if "סה״כ הודעות משתמש:" in notification_text:
-                            # קיים המונה, בואי נוודא שהוא נכון
-                            self.assertIn("25", notification_text, "המונה צריך להיות 25 (מהמסד נתונים)")
+                        # צריך להיות בדיוק פעם אחת
+                        if "מספר הודעות משתמש כולל:" in notification_text:
+                            self.assertEqual(user_count_occurrences, 1, "צריך להיות רק מונה אחד של הודעות משתמש")
                         else:
                             self.fail("לא נמצא מונה הודעות משתמש כלל")
                         

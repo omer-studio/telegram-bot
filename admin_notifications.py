@@ -418,18 +418,18 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         if history_messages:
             user_count = len([msg for msg in history_messages if msg.get("role") == "user"])
             bot_count = len([msg for msg in history_messages if msg.get("role") == "assistant"])
-            notification_text += f"**נשלחה היסטוריה ל-GPT:** {bot_count} בוט + {user_count} משתמש\n"
+            notification_text += f"**📜 היסטוריה שנשלחה ל-GPT:** {user_count} משתמש + {bot_count} בוט (סה״כ {len(history_messages)} הודעות)\n"
         else:
-            notification_text += f"**נשלחה היסטוריה ל-GPT:** 0 בוט + 0 משתמש\n"
+            notification_text += f"**📜 היסטוריה שנשלחה ל-GPT:** אין היסטוריה\n"
         
         # סיסטם פרומפטים
         if messages_for_gpt:
             system_prompts = [msg for msg in messages_for_gpt if msg.get("role") == "system"]
             for i, prompt in enumerate(system_prompts, 1):
                 prompt_content = prompt.get("content", "")
-                if len(prompt_content) > 40:
-                    prompt_preview = prompt_content[:40] + "..."
-                    remaining_chars = len(prompt_content) - 40
+                if len(prompt_content) > 30:
+                    prompt_preview = prompt_content[:30] + "..."
+                    remaining_chars = len(prompt_content) - 30
                     notification_text += f"**סיסטם פרומט {i}:** **{prompt_preview}** (+{remaining_chars})\n"
                 else:
                     notification_text += f"**סיסטם פרומט {i}:** **{prompt_content}**\n"
@@ -454,7 +454,13 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"⌛ **פער קוד {gap_time:.1f} שניות**\n"
         
         # 🔧 מונה הודעות משתמש אמיתי מהמסד נתונים
-        notification_text += f"\n**📊 סה״כ הודעות משתמש:** {total_user_messages}"
+        notification_text += f"\n**📊 מספר הודעות משתמש כולל:** {total_user_messages}"
+        
+        # 🔧 הוספת הבהרה אם יש פער בין היסטוריה למספר הכולל
+        if history_messages:
+            user_count_in_history = len([msg for msg in history_messages if msg.get("role") == "user"])
+            if user_count_in_history != total_user_messages:
+                notification_text += f" (בהיסטוריה: {user_count_in_history})"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:

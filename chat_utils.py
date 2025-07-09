@@ -229,7 +229,7 @@ def get_total_user_messages_count(chat_id: str) -> int:
     🎯 מחזיר מספר כולל של הודעות משתמש מהמסד נתונים
     
     ⚠️ זו הפונקציה הרשמית למספר הודעות כולל!
-    אל תסתמכו על ספירה מהיסטוריה מוגבלת.
+    עודכנה לחשב ישירות מהמסד נתונים במקום להסתמך על מונה שעלול להיות לא מעודכן.
     
     Args:
         chat_id: מזהה המשתמש
@@ -242,8 +242,27 @@ def get_total_user_messages_count(chat_id: str) -> int:
         >>> print(f"המשתמש שלח {total} הודעות")
     """
     try:
-        from db_manager import get_user_message_count
-        return get_user_message_count(safe_str(chat_id))
+        # 🔧 תיקון: חישוב ישיר מהמסד נתונים עם כל ההודעות (לא מוגבל)
+        import psycopg2
+        from config import config
+        
+        DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # ספירת כל הודעות המשתמש הלא ריקות
+        cur.execute("""
+            SELECT COUNT(*) FROM chat_messages 
+            WHERE chat_id = %s AND user_msg IS NOT NULL AND user_msg != ''
+        """, (safe_str(chat_id),))
+        
+        user_message_count = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+        
+        return user_message_count
+        
     except Exception as e:
         logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בקבלת מספר הודעות: {e}", source="USER_COUNT_ERROR")
         return 0

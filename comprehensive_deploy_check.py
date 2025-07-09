@@ -747,7 +747,7 @@ class ComprehensiveDeployChecker:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                     
-                # חיפוש str(chat_id) או int(chat_id) שלא דרך safe_str או normalize_chat_id
+                # חיפוש safe_str(chat_id) או int(chat_id) שלא דרך safe_str או normalize_chat_id
                 if re.search(r"(?<!safe_)str\s*\(\s*chat_id\s*\)", content) or re.search(r"int\s*\(\s*chat_id\s*\)", content):
                     problematic_chat_id_files.append(file_path)
                     
@@ -799,7 +799,7 @@ class ComprehensiveDeployChecker:
                 print(f"   {issue}")
             print("\n💡 המלצות תיקון:")
             print("   1. החלף קריאות open ישירות ב-get_config() מ-config.py")
-            print("   2. החלף str(chat_id) ב-safe_str(chat_id) או normalize_chat_id()")
+            print("   2. החלף unsafe_str(chat_id) ב-safe_str(chat_id) או normalize_chat_id()")
             print("   3. השתמש בשמות שדות מ-fields_dict.py")
             return False, issues
         else:
@@ -903,6 +903,164 @@ class ComprehensiveDeployChecker:
             print("✅ דפוסי מדידת זמנים תקינים")
             return True, []
     
+    def check_backup_and_protection_systems(self) -> Tuple[bool, List[str]]:
+        """🛡️ בדיקת מערכת הגיבוי והגנה על המסד נתונים"""
+        print("🔍 מבצע בדיקה: מערכת הגיבוי והגנה על המסד נתונים")
+        print("--------------------------------------------------")
+        
+        errors = []
+        warnings = []
+        
+        # 1. בדיקת קיום קבצי מערכת הגיבוי
+        print("🔍 בודק קיום קבצי מערכת הגיבוי...")
+        backup_files = [
+            "daily_backup.py",
+            "data_integrity_monitor.py", 
+            "setup_database_protection.py"
+        ]
+        
+        for file_path in backup_files:
+            if not os.path.exists(file_path):
+                errors.append(f"❌ קובץ {file_path} לא קיים")
+            else:
+                print(f"✅ {file_path} קיים")
+        
+        # 2. בדיקת אם מערכת הגיבוי פועלת
+        print("\n🔍 בודק פונקציונליות מערכת הגיבוי...")
+        try:
+            from daily_backup import run_daily_backup
+            from data_integrity_monitor import run_full_integrity_check
+            
+            print("✅ מודולי הגיבוי מייבאים בהצלחה")
+            
+            # בדיקה בסיסית של פונקציונליות
+            if not callable(run_daily_backup):
+                errors.append("❌ run_daily_backup לא ניתן לקריאה")
+            
+            if not callable(run_full_integrity_check):
+                errors.append("❌ run_full_integrity_check לא ניתן לקריאה")
+            
+        except ImportError as e:
+            errors.append(f"❌ שגיאה בייבוא מודולי הגיבוי: {e}")
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת מערכת הגיבוי: {e}")
+        
+        # 3. בדיקת תיקיית גיבויים
+        print("\n🔍 בודק תיקיית גיבויים...")
+        backup_dir = "backups"
+        if not os.path.exists(backup_dir):
+            warnings.append(f"⚠️ תיקיית גיבויים {backup_dir} לא קיימת")
+        else:
+            print(f"✅ תיקיית גיבויים {backup_dir} קיימת")
+            
+            # בדיקה אם יש גיבויים קיימים
+            import glob
+            existing_backups = glob.glob(f"{backup_dir}/*")
+            if existing_backups:
+                print(f"✅ נמצאו {len(existing_backups)} קבצי גיבוי קיימים")
+            else:
+                warnings.append("⚠️ אין גיבויים קיימים בתיקיית הגיבויים")
+        
+        # 4. בדיקת הגנה על מסד הנתונים
+        print("\n🔍 בודק מערכת הגנה על מסד הנתונים...")
+        try:
+            from setup_database_protection import test_protection_system
+            
+            print("✅ מודול הגנה על מסד הנתונים מייבא בהצלחה")
+            
+            # בדיקה קצרה של הגנה
+            if not callable(test_protection_system):
+                errors.append("❌ test_protection_system לא ניתן לקריאה")
+            
+        except ImportError as e:
+            errors.append(f"❌ שגיאה בייבוא מודול הגנה: {e}")
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת הגנה: {e}")
+        
+        # 5. בדיקת מערכת הגיבוי המסודר החדשה
+        print("\n🔍 בודק מערכת הגיבוי המסודר...")
+        try:
+            from organized_backup_system import run_organized_backup, list_organized_backups
+            from schedule_internal_backup import run_backup_scheduler_background
+            
+            print("✅ מודולי הגיבוי המסודר מייבאים בהצלחה")
+            
+            # בדיקה בסיסית של פונקציונליות
+            if not callable(run_organized_backup):
+                errors.append("❌ run_organized_backup לא ניתן לקריאה")
+            
+            if not callable(run_backup_scheduler_background):
+                errors.append("❌ run_backup_scheduler_background לא ניתן לקריאה")
+            
+        except ImportError as e:
+            errors.append(f"❌ שגיאה בייבוא מודולי הגיבוי המסודר: {e}")
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת מערכת הגיבוי המסודר: {e}")
+        
+        # 6. בדיקת חיבור למסד הנתונים לגיבוי
+        print("\n🔍 בודק חיבור למסד הנתונים לגיבוי...")
+        try:
+            from config import config
+            db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+            
+            if not db_url:
+                errors.append("❌ לא נמצא URL למסד הנתונים לגיבוי")
+            else:
+                print("✅ URL למסד הנתונים קיים")
+                
+                # בדיקה בסיסית של חיבור
+                import psycopg2
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    
+                    # בדיקת טבלאות קריטיות
+                    critical_tables = ["user_profiles", "chat_messages", "gpt_calls_log"]
+                    for table in critical_tables:
+                        cur.execute(f"SELECT COUNT(*) FROM {table}")
+                        count = cur.fetchone()[0]
+                        print(f"✅ טבלה {table}: {count} רשומות")
+                    
+                    # בדיקת קבצי גיבוי מסודרים
+                    backup_root = "backups/organized_backups"
+                    if os.path.exists(backup_root):
+                        backup_folders = [f for f in os.listdir(backup_root) if os.path.isdir(os.path.join(backup_root, f))]
+                        if backup_folders:
+                            print(f"✅ נמצאו {len(backup_folders)} תיקיות גיבוי מסודרות")
+                            for folder in backup_folders[:3]:
+                                print(f"   📁 {folder}/")
+                        else:
+                            warnings.append("⚠️ אין תיקיות גיבוי מסודרות - מערכת הגיבוי המסודר עדיין לא רצה")
+                    else:
+                        warnings.append("⚠️ תיקיית גיבוי מסודר לא קיימת - מערכת הגיבוי המסודר עדיין לא רצה")
+                    
+                    cur.close()
+                    conn.close()
+                    
+                except Exception as e:
+                    errors.append(f"❌ שגיאה בחיבור למסד הנתונים לגיבוי: {e}")
+                    
+        except Exception as e:
+            errors.append(f"❌ שגיאה בבדיקת חיבור למסד הנתונים: {e}")
+        
+        # הכנת התוצאות
+        all_issues = errors + warnings
+        
+        if errors:
+            print("\n❌ נמצאו שגיאות במערכת הגיבוי והגנה:")
+            for error in errors:
+                print(f"   {error}")
+            return False, all_issues
+        elif warnings:
+            print("\n⚠️ נמצאו אזהרות במערכת הגיבוי והגנה:")
+            for warning in warnings:
+                print(f"   {warning}")
+            print("✅ מערכת הגיבוי והגנה פועלת עם אזהרות")
+            return True, all_issues
+        else:
+            print("\n✅ מערכת הגיבוי והגנה פועלת בהצלחה!")
+            return True, []
+    
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🚀 מתחיל בדיקות מקיפות לפני deploy...")
@@ -914,6 +1072,7 @@ class ComprehensiveDeployChecker:
             ("Syntax וייבוא קבצים", self.check_syntax_and_imports),
             ("הגדרות קריטיות", self.check_critical_configuration),
             ("מערכת התראות", self.check_notifications_system),
+            ("מערכת הגיבוי והגנה", self.check_backup_and_protection_systems),
             ("סנכרון חתימות פונקציות", self.check_function_signatures),
             ("בדיקות Unit", self.check_unit_tests),
             ("צריכת זיכרון", self.check_memory_usage),

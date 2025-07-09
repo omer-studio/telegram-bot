@@ -963,6 +963,8 @@ def increment_user_message_count(chat_id):
     """
     מעדכן את מונה ההודעות הכולל של המשתמש ב-+1
     אם המשתמש לא קיים בטבלה, יוצר רשומה חדשה עם מונה 1
+    
+    🔧 עודכן לסנכרן את המונה עם המספר האמיתי מטבלת chat_messages
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -970,26 +972,32 @@ def increment_user_message_count(chat_id):
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
+        # 🔧 תיקון: חישוב המספר האמיתי מטבלת chat_messages
+        cur.execute("""
+            SELECT COUNT(*) FROM chat_messages 
+            WHERE chat_id = %s AND user_msg IS NOT NULL AND user_msg != ''
+        """, (chat_id,))
+        actual_count = cur.fetchone()[0]
+        
         # בדיקה אם המשתמש כבר קיים
         cur.execute("SELECT total_messages_count FROM user_profiles WHERE chat_id = %s", (chat_id,))
         result = cur.fetchone()
         
         if result:
-            # משתמש קיים - מעדכן את המונה
-            current_count = result[0] if result[0] is not None else 0
-            new_count = current_count + 1
+            # משתמש קיים - מעדכן את המונה למספר האמיתי
             cur.execute(
                 "UPDATE user_profiles SET total_messages_count = %s, updated_at = %s WHERE chat_id = %s",
-                (new_count, datetime.utcnow(), chat_id)
+                (actual_count, datetime.utcnow(), chat_id)
             )
             if should_log_debug_prints():
-                print(f"📊 [DB] Updated message count for {chat_id}: {current_count} → {new_count}")
+                old_count = result[0] if result[0] is not None else 0
+                print(f"📊 [DB] Synced message count for {chat_id}: {old_count} → {actual_count}")
         else:
-            # משתמש חדש - יוצר רשומה עם מונה 1
+            # משתמש חדש - יוצר רשומה עם המספר האמיתי
             from fields_dict import get_user_profile_fields
             
             # יצירת dict עם כל השדות (ברירת מחדל)
-            insert_data = {'chat_id': chat_id, 'total_messages_count': 1}
+            insert_data = {'chat_id': chat_id, 'total_messages_count': actual_count}
             for field in get_user_profile_fields():
                 if field != 'total_messages_count':  # כבר הוספנו אותו
                     insert_data[field] = None
@@ -1009,7 +1017,7 @@ def increment_user_message_count(chat_id):
             
             cur.execute(insert_sql, values)
             if should_log_debug_prints():
-                print(f"📊 [DB] Created new user profile with message count 1 for {chat_id}")
+                print(f"📊 [DB] Created new user profile with synced message count {actual_count} for {chat_id}")
         
         conn.commit()
         cur.close()
