@@ -456,12 +456,6 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         # 🔧 מונה הודעות משתמש אמיתי מהמסד נתונים
         notification_text += f"\n**📊 מספר הודעות משתמש כולל:** {total_user_messages}"
         
-        # 🔧 הוספת הבהרה אם יש פער בין היסטוריה למספר הכולל
-        if history_messages:
-            user_count_in_history = len([msg for msg in history_messages if msg.get("role") == "user"])
-            if user_count_in_history != total_user_messages:
-                notification_text += f" (בהיסטוריה: {user_count_in_history})"
-        
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:
             notification_text = notification_text[:3900] + "\n\n... (הודעה קוצרה)"
