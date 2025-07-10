@@ -1,53 +1,53 @@
 """
-🔄 Lazy LiteLLM Wrapper - חוסך 1GB+ זיכרון!
-===========================================
+Lazy LiteLLM Wrapper - saves 1GB+ memory!
+=========================================
 
-במקום לטעון LiteLLM 7 פעמים, טוען פעם אחת ומשתף
+Instead of loading LiteLLM 7 times, load once and share
 """
 
 class LazyLiteLLM:
-    """Lazy wrapper ל-LiteLLM - טוען רק בפעם הראשונה"""
+    """Lazy wrapper for LiteLLM - loads only on first use"""
     
     def __init__(self):
         self._litellm = None
         self._loaded = False
     
     def _ensure_loaded(self):
-        """טוען LiteLLM רק אם עוד לא נטען"""
+        """Load LiteLLM only if not loaded yet"""
         if not self._loaded:
             print("Loading LiteLLM for the first time (saving 1GB+ memory)...")
             try:
-                import litellm as _litellm  # ייבוא האמיתי
+                import litellm as _litellm  # Real import
                 self._litellm = _litellm
                 self._loaded = True
-                print("✅ LiteLLM loaded successfully!")
+                print("LiteLLM loaded successfully!")
             except ImportError as e:
-                print(f"❌ Failed to import LiteLLM: {e}")
+                print(f"[ERROR] Failed to import LiteLLM: {e}")
                 raise
     
     def __getattr__(self, name):
-        """מעביר את כל הפונקציות ל-LiteLLM האמיתי"""
+        """Forward all functions to real LiteLLM"""
         self._ensure_loaded()
         return getattr(self._litellm, name)
     
     def completion(self, *args, **kwargs):
-        """פונקציה עיקרית - completion"""
+        """Main function - completion"""
         self._ensure_loaded()
         return self._litellm.completion(*args, **kwargs)
     
     def embedding(self, *args, **kwargs):
-        """פונקציית embedding"""
+        """Embedding function"""
         self._ensure_loaded()
         return self._litellm.embedding(*args, **kwargs)
 
-# יצירת instance גלובלי אחד
+# Create single global instance
 _lazy_litellm_instance = LazyLiteLLM()
 
-# Export של כל הפונקציות החשובות
+# Export all important functions
 completion = _lazy_litellm_instance.completion
 embedding = _lazy_litellm_instance.embedding
 
-# Export של exceptions (אם צריך)
+# Export exceptions (if needed)
 def __getattr__(name):
-    """מעביר כל attribute אחר ל-LiteLLM"""
-    return getattr(_lazy_litellm_instance, name)
+    """Forward any other attribute to LiteLLM"""
+    return getattr(_lazy_litellm_instance, name) 

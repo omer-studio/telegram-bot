@@ -504,6 +504,45 @@ def get_profile_statistics() -> Dict:
         logger.error(f"שגיאה בקבלת סטטיסטיקות פרופילים: {exc}", source="profile_utils")
         return {}
 
+def get_all_users_with_condition(condition: str) -> List[Dict]:
+    """קבלת כל המשתמשים עם תנאי מסויים - פונקציה אחת פשוטה"""
+    try:
+        import psycopg2
+        from config import DB_URL
+        
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # שאילתה עם תנאי
+        query = f"SELECT * FROM user_profiles WHERE {condition}"
+        cur.execute(query)
+        
+        # קבלת כל השורות
+        rows = cur.fetchall()
+        
+        # קבלת שמות עמודות
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        
+        # המרה לרשימת dictionaries
+        users = []
+        for row in rows:
+            if columns:
+                user_dict = dict(zip(columns, row))
+                users.append(user_dict)
+            else:
+                # גיבוי אם אין שמות עמודות
+                users.append({})
+        
+        cur.close()
+        conn.close()
+        
+        logger.info(f"✅ נמצאו {len(users)} משתמשים עם תנאי: {condition}", source="profile_utils")
+        return users
+        
+    except Exception as exc:
+        logger.error(f"שגיאה בקבלת משתמשים עם תנאי '{condition}': {exc}", source="profile_utils")
+        return []
+
 def _detect_profile_changes(old_profile: Dict, new_profile: Dict) -> List[Dict]:
     """זיהוי שינויים בפרופיל - פונקציה פשוטה"""
     try:

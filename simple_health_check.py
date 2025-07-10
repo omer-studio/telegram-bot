@@ -4,8 +4,7 @@
 4 בדיקות בסיסיות בלבד - לא overengineering
 """
 
-from utils import get_logger
-logger = get_logger(__name__)
+from simple_logger import logger
 
 def check_config():
     """בדיקה 1: קובץ config.json נגיש"""

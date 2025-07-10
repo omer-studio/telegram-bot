@@ -17,7 +17,7 @@ from simple_data_manager import data_manager
 from db_manager import safe_str, safe_operation
 
 from utils import get_israel_time
-from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, get_chat_history_simple, update_last_bot_message
+from chat_utils import log_error_stat, update_chat_history, get_chat_history_messages, get_chat_history_for_users, get_chat_history_for_gpt, update_last_bot_message
 # Telegram types (ignored if telegram package absent in testing env)
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove  # type: ignore
 from telegram.ext import ContextTypes  # type: ignore
@@ -43,7 +43,6 @@ from concurrent_monitor import start_monitoring_user, update_user_processing_sta
 from notifications import mark_user_active
 from chat_utils import should_send_time_greeting, get_time_greeting_instruction
 from prompts import SYSTEM_PROMPT
-import profile_utils as _pu
 import traceback
 # 🆕 פונקציות חדשות למסד נתונים - לפי המדריך!
 import db_manager
@@ -269,7 +268,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         # 🔧 תיקון: טעינת היסטוריה מחדש אחרי השמירה כדי שהמונה יעלה
         try:
-            updated_history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
+            from chat_utils import get_chat_history_for_users
+            updated_history_messages = get_chat_history_for_users(safe_str(chat_id), limit=32)
             # עדכון ההיסטוריה לשליחת התראה עם המונה הנכון
             history_messages = updated_history_messages if updated_history_messages else history_messages
             print(f"🔄 [BACKGROUND] היסטוריה עודכנה: {len(history_messages)} הודעות")
@@ -346,7 +346,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             # ✅ השתמש בפונקציה מהמסד נתונים
             from profile_utils import get_user_summary_fast
             current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
-            history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
+            from chat_utils import get_chat_history_for_users
+            history_messages = get_chat_history_for_users(safe_str(chat_id), limit=32)
             
             # בניית הודעות מלאות לרישום
             messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -1091,7 +1092,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_reply = gpt_result.get("bot_reply") if isinstance(gpt_result, dict) else gpt_result
         
         if not bot_reply:
-            from user_friendly_errors import error_human_funny_message
             error_msg = error_human_funny_message()
             await send_system_message(update, chat_id, error_msg)
             await end_monitoring_user(safe_str(chat_id), False)

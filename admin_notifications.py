@@ -323,7 +323,7 @@ async def _send_telegram_message_admin(bot_token, chat_id, text):
     try:
         from telegram import Bot
         bot = Bot(token=bot_token)
-        await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+        await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"🚨 שגיאה בשליחה אסינכרונית לאדמין: {e}")
@@ -335,7 +335,7 @@ def _send_telegram_message_admin_sync(bot_token, chat_id, text):
         data = {
             "chat_id": chat_id,
             "text": text,
-            "parse_mode": "Markdown"
+            "parse_mode": "HTML"
         }
         
         response = requests.post(url, data=data, timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT)
@@ -394,15 +394,22 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             logger.info(f"📨 [ANONYMOUS_CHAT] בסביבת בדיקה, לא שולח תראה לאדמין: {user_message}")
             return
 
-        # יצירת כותרת עם 3 ספרות אחרונות של chat_id
+        # יצירת כותרת עם 4 ספרות אחרונות של chat_id ומיסוך השאר
         chat_suffix = ""
         if chat_id:
             safe_chat_id = safe_str(chat_id)
-            last_3_digits = safe_chat_id[-3:]
-            chat_suffix = f" (`{last_3_digits}`)"
+            if len(safe_chat_id) > 4:
+                # מיסוך כל הספרות חוץ מ-4 האחרונות
+                masked_part = "X" * (len(safe_chat_id) - 4)
+                last_4_digits = safe_chat_id[-4:]
+                masked_chat_id = masked_part + last_4_digits
+                chat_suffix = f" (`{masked_chat_id}`)"
+            else:
+                # אם המספר קצר מ-4 ספרות, הצג אותו כמו שהוא
+                chat_suffix = f" (`{safe_chat_id}`)"
         
         # יצירת הודעה מעוצבת ללא מזהה משתמש
-        notification_text = f"💬 **התכתבות חדשה{chat_suffix}** 💬\n\n"
+        notification_text = f"💬 <b>התכתבות חדשה{chat_suffix}</b> 💬\n\n"
         
         # 🔧 מספר הודעות משתמש אמיתי מהמסד נתונים
         total_user_messages = 0
@@ -418,9 +425,9 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         if history_messages:
             user_count = len([msg for msg in history_messages if msg.get("role") == "user"])
             bot_count = len([msg for msg in history_messages if msg.get("role") == "assistant"])
-            notification_text += f"**📜 היסטוריה שנשלחה ל-GPT:** {user_count} משתמש + {bot_count} בוט (סה״כ {len(history_messages)} הודעות)\n"
+            notification_text += f"<b>📜 היסטוריה שנשלחה ל-GPT:</b> {user_count} משתמש + {bot_count} בוט (סה״כ {len(history_messages)} הודעות)\n"
         else:
-            notification_text += f"**📜 היסטוריה שנשלחה ל-GPT:** אין היסטוריה\n"
+            notification_text += f"<b>📜 היסטוריה שנשלחה ל-GPT:</b> אין היסטוריה\n"
         
         # סיסטם פרומפטים
         if messages_for_gpt:
@@ -430,20 +437,20 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
                 if len(prompt_content) > 30:
                     prompt_preview = prompt_content[:30] + "..."
                     remaining_chars = len(prompt_content) - 30
-                    notification_text += f"**סיסטם פרומט {i}:** {prompt_preview} (+{remaining_chars})\n"
+                    notification_text += f"<b>סיסטם פרומט {i}:</b> {prompt_preview} (+{remaining_chars})\n"
                 else:
-                    notification_text += f"**סיסטם פרומט {i}:** {prompt_content}\n"
+                    notification_text += f"<b>סיסטם פרומט {i}:</b> {prompt_content}\n"
             if system_prompts:
                 notification_text += f"\n"
         
         notification_text += f"\n\n"
         
         # הודעת המשתמש
-        notification_text += f"**➖➖➖➖הודעת משתמש➖➖➖➖**\n\n"
+        notification_text += f"<b>➖➖➖➖הודעת משתמש➖➖➖➖</b>\n\n"
         notification_text += f"{user_message}\n\n"
         
         # תשובת הבוט
-        notification_text += f"**➖➖➖➖תשובת הבוט➖➖➖➖**\n\n"
+        notification_text += f"<b>➖➖➖➖תשובת הבוט➖➖➖➖</b>\n\n"
         notification_text += f"{bot_response}\n\n"
         
         # זמני תגובה - מפוצלים ל-3 שורות עם אימוג'י שעון
@@ -451,16 +458,16 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             gap_time = max(0, user_timing - gpt_timing)  # פער קוד
             notification_text += f"⌛ לGPT לקח לענות {gpt_timing:.1f} שניות\n"
             notification_text += f"⌛ המשתמש קיבל תשובה תוך {user_timing:.1f} שניות\n"
-            notification_text += f"⌛ **פער קוד {gap_time:.1f} שניות**\n"
+            notification_text += f"⌛ <b>פער קוד {gap_time:.1f} שניות</b>\n"
         
         # 🔧 מונה הודעות משתמש אמיתי מהמסד נתונים
-        notification_text += f"\n**📊 מספר הודעות משתמש כולל:** {total_user_messages}"
+        notification_text += f"\n<b>📊 מספר הודעות משתמש כולל:</b> {total_user_messages}"
         
         # 🆕 מידע על GPT האחרים
-        notification_text += f"\n\n**➖➖➖➖מצב GPT האחרים➖➖➖➖**\n\n"
+        notification_text += f"\n\n<b>➖➖➖➖מצב GPT האחרים➖➖➖➖</b>\n\n"
         
         # GPT-B (סיכום)
-        notification_text += f"**gpt_b:**\n"
+        notification_text += f"<b>gpt_b:</b>\n"
         if gpt_b_result and isinstance(gpt_b_result, dict) and gpt_b_result.get("summary"):
             summary = gpt_b_result["summary"]
             if len(summary) > 100:
@@ -470,7 +477,7 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"לא הופעל\n\n"
         
         # GPT-C (חילוץ פרופיל)
-        notification_text += f"**gpt_c:**\n"
+        notification_text += f"<b>gpt_c:</b>\n"
         if gpt_c_result and isinstance(gpt_c_result, dict) and gpt_c_result.get("extracted_fields"):
             extracted_fields = gpt_c_result["extracted_fields"]
             if extracted_fields:
@@ -485,7 +492,7 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"לא הופעל\n\n"
         
         # GPT-D (מיזוג פרופיל)
-        notification_text += f"**gpt_d:**\n"
+        notification_text += f"<b>gpt_d:</b>\n"
         if gpt_d_result and isinstance(gpt_d_result, dict) and gpt_d_result.get("merged_profile"):
             merged_profile = gpt_d_result["merged_profile"]
             if isinstance(merged_profile, dict) and merged_profile:
@@ -500,7 +507,7 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             notification_text += f"לא הופעל\n\n"
         
         # GPT-E (עדכון פרופיל מתקדם)
-        notification_text += f"**gpt_e:**\n"
+        notification_text += f"<b>gpt_e:</b>\n"
         if gpt_e_result and isinstance(gpt_e_result, dict) and gpt_e_result.get("success"):
             changes = gpt_e_result.get("changes", {})
             if changes and isinstance(changes, dict):

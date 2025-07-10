@@ -160,65 +160,15 @@ def update_chat_history(chat_id: str, user_msg: str, bot_msg: str, **kwargs) -> 
 
 def get_chat_history_simple(chat_id: str, limit: int = 32) -> list:
     """
-    🎯 פונקציה אחת פשוטה להיסטוריה - במקום 3 פונקציות שונות
+    🔄 DEPRECATED: יש להשתמש בפונקציות הנפרדות החדשות
     
-    עושה הכל:
-    - מביאה היסטוריה מהמסד נתונים
-    - מסננת הודעות פנימיות
-    - מחזירה בפורמט GPT
-    - לוגים פשוטים
+    - get_chat_history_for_gpt() - עבור GPT (עם טיימסטאפ בתוכן)
+    - get_chat_history_for_users() - עבור משתמשים (בלי טיימסטאפ בתוכן)
     
-    Args:
-        chat_id: מזהה הצ'אט
-        limit: מספר מקסימלי של הודעות (ברירת מחדל: 32)
-    
-    Returns:
-        רשימת הודעות בפורמט GPT
+    לתאימות לאחור, פונקציה זו מחזירה היסטוריה עם טיימסטאפ (GPT)
     """
-    try:
-        # 1. שליפה מהמסד נתונים
-        rows = get_chat_history(chat_id, limit)
-        
-        # 2. המרה לפורמט GPT
-        messages = []
-        user_count = 0
-        assistant_count = 0
-        
-        for row in rows:
-            user_content = row[0] or ""  # user_msg
-            bot_content = row[1] or ""   # bot_msg
-            timestamp = row[2]           # timestamp
-            
-            # 3. סינון הודעות פנימיות (פשוט וברור)
-            if bot_content and any(marker in bot_content for marker in [
-                "[עדכון פרופיל]", "[הודעה אוטומטית מהבוט]", "[הודעה מערכת]", "[תשובת GPT-A]"
-            ]):
-                continue
-            
-            if user_content and user_content.startswith("[הודעה"):
-                continue
-            
-            # 4. הוספת הודעות עם טיימסטמפ
-            if user_content.strip():
-                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                content = f"{formatted_time} {user_content}" if formatted_time else user_content
-                messages.append({"role": "user", "content": content})
-                user_count += 1
-            
-            if bot_content.strip():
-                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
-                messages.append({"role": "assistant", "content": content})
-                assistant_count += 1
-        
-        # 5. לוג פשוט וברור
-        logger.info(f"chat_id={safe_str(chat_id)} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="HISTORY")
-        
-        return messages
-        
-    except Exception as e:
-        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה: {e}", source="HISTORY_ERROR")
-        return []
+    logger.warning(f"get_chat_history_simple is deprecated - use get_chat_history_for_gpt/users instead", source="DEPRECATED_FUNCTION")
+    return get_chat_history_for_gpt(chat_id, limit)
 
 # ============================================================================
 # 🎯 מערכת ספירת הודעות מערכתית - Single Source of Truth
@@ -365,22 +315,10 @@ def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: in
 
 def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> List[Dict[str, str]]:
     """
-    🎯 מחזיר היסטוריה מאוזנת בדיוק לפי המספרים שצויינו
+    🎯 מחזיר בדיוק user_limit הודעות משתמש + bot_limit הודעות בוט
+    עם סיכומי GPT-B במקום התשובות המלאות (אם יש סיכום)
     
-    מביא בדיוק user_limit הודעות משתמש ו-bot_limit הודעות בוט.
-    ממשיך לקרוא מהמסד נתונים עד שמקבל את המספרים הנדרשים.
-    
-    Args:
-        chat_id: מזהה המשתמש
-        user_limit: כמה הודעות משתמש דרושות (ברירת מחדל: 20)
-        bot_limit: כמה הודעות בוט דרושות (ברירת מחדל: 20)
-        
-    Returns:
-        list: רשימת הודעות בפורמט GPT
-        
-    Example:
-        >>> history = get_balanced_history_for_gpt("123456789", 20, 20)
-        >>> print(f"נשלחו {len(history)} הודעות ל-GPT")
+    🔧 מתוקן: לא מוסיף טיימסטאפ לתוכן ההודעה
     """
     try:
         messages = []
@@ -415,44 +353,53 @@ def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: 
                 if user_content and user_content.startswith("[הודעה"):
                     continue
                 
-                # הוספת הודעות משתמש עד למגבלה
+                # הוספת הודעות משתמש עד למגבלה - בלי טיימסטאפ בתוכן
                 if user_content.strip() and temp_user_count < user_limit:
-                    formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                    content = f"{formatted_time} {user_content}" if formatted_time else user_content
-                    temp_messages.append({"role": "user", "content": content})
+                    temp_messages.append({
+                        "role": "user", 
+                        "content": user_content.strip(),
+                        "timestamp": timestamp
+                    })
                     temp_user_count += 1
                 
-                # הוספת הודעות בוט עד למגבלה
+                # הוספת הודעות בוט עד למגבלה - בלי טיימסטאפ בתוכן
                 if bot_content.strip() and temp_bot_count < bot_limit:
-                    formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                    content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
-                    temp_messages.append({"role": "assistant", "content": content})
+                    temp_messages.append({
+                        "role": "assistant", 
+                        "content": bot_content.strip(),
+                        "timestamp": timestamp
+                    })
                     temp_bot_count += 1
-                
-                # אם הגענו למספרים שרצינו, נעצור
-                if temp_user_count >= user_limit and temp_bot_count >= bot_limit:
-                    break
             
-            # עדכון התוצאות
+            # עדכון המונים והודעות
             messages = temp_messages
             user_count = temp_user_count
             bot_count = temp_bot_count
             
-            # אם לא הגענו למספרים שרצינו, ננסה לקרוא יותר הודעות
-            if user_count < user_limit or bot_count < bot_limit:
-                current_limit += batch_size
-            else:
+            # אם יש לנו מספיק הודעות משני הסוגים - יוצאים
+            if user_count >= user_limit and bot_count >= bot_limit:
                 break
+            
+            # הגדלת הגבלה לקריאה הבאה
+            current_limit += batch_size
         
-        # הודעות כבר מגיעות מסודרות מהמסד נתונים (מהישן לחדש)
-        # לא צריך מיון נוסף כי get_chat_history כבר מחזיר אותן בסדר הנכון
+        # מיון לפי זמן (הישנות ביותר קודם)
+        messages.sort(key=lambda x: x["timestamp"] if x["timestamp"] else datetime.min)
         
-        logger.info(f"chat_id={safe_str(chat_id)} | בקשה: {user_limit}+{bot_limit} | קיבל: {len(messages)} (user={user_count}, assistant={bot_count})", source="BALANCED_HISTORY")
+        # החזרת הודעות בלי טיימסטאפ בתוכן - רק content ו-role
+        result = []
+        for msg in messages:
+            result.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
         
-        return messages
+        logger.info(f"Balanced History: chat_id={safe_str(chat_id)} | user={user_count}/{user_limit} | bot={bot_count}/{bot_limit} | total={len(result)}", source="BALANCED_HISTORY")
+        
+        return result
         
     except Exception as e:
-        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בהיסטוריה מאוזנת: {e}", source="BALANCED_HISTORY_ERROR")
+        logger.error(f"❌ שגיאה בקריאת היסטוריה מאוזנת: {e}", source="BALANCED_HISTORY_ERROR")
         return []
 
 def count_user_messages_in_history(history: list) -> int:
@@ -506,7 +453,7 @@ def get_chat_history_unified(chat_id: str, limit: int = 32, use_fast_mode: bool 
 # ---------------------------------------------------------------------------
 
 def _format_timestamp_for_history(timestamp_str: str) -> str:
-    """המרת טיימסטמפ לפורמט הנדרש: [01/07 18:03]"""
+    """המרת טיימסטמפ לפורמט הנדרש: [01/07 18:03] בזמן ישראל"""
     try:
         if not timestamp_str:
             return ""
@@ -519,8 +466,22 @@ def _format_timestamp_for_history(timestamp_str: str) -> str:
             # פורמט רגיל
             dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
         
-        # החזרת הפורמט הנדרש
-        return f"[{dt.day:02d}/{dt.month:02d} {dt.hour:02d}:{dt.minute:02d}]"
+        # 🔧 תיקון: המרה לזמן ישראל
+        import pytz
+        israel_tz = pytz.timezone('Asia/Jerusalem')
+        
+        # אם הטיימסטאפ כבר עם timezone, נתרגם לזמן ישראל
+        if dt.tzinfo is not None:
+            dt_israel = dt.astimezone(israel_tz)
+        else:
+            # אם אין timezone, נניח שזה UTC ונתרגם לזמן ישראל
+            utc_tz = pytz.timezone('UTC')
+            dt_utc = utc_tz.localize(dt)
+            dt_israel = dt_utc.astimezone(israel_tz)
+        
+        # החזרת הפורמט הנדרש בזמן ישראל
+        return f"[{dt_israel.day:02d}/{dt_israel.month:02d} {dt_israel.hour:02d}:{dt_israel.minute:02d}]"
+        
     except Exception as e:
         logger.warning(f"שגיאה בפרמוט טיימסטמפ: {e}", source="HISTORY_TIMESTAMP_FORMAT")
         return ""
@@ -1365,3 +1326,123 @@ def build_complete_system_messages(chat_id: str, user_msg: str = "", include_mai
             except Exception:
                 return []
         return [] 
+
+def get_chat_history_for_gpt(chat_id: str, limit: int = 32) -> list:
+    """
+    🎯 מחזיר היסטוריה עם טיימסטאפ בתוכן ההודעה - רק עבור GPT
+    
+    Args:
+        chat_id: מזהה הצ'אט
+        limit: מספר הודעות מקסימלי (ברירת מחדל: 32)
+    
+    Returns:
+        list: רשימת הודעות בפורמט GPT עם טיימסטאפ בתוכן
+    """
+    try:
+        # 1. שליפת נתונים מהמסד נתונים
+        rows = get_chat_history(chat_id, limit)
+        if not rows:
+            return []
+        
+        # 2. איפוס מונים
+        messages = []
+        user_count = 0
+        assistant_count = 0
+        
+        for row in rows:
+            user_content = row[0] or ""  # user_msg
+            bot_content = row[1] or ""   # bot_msg
+            timestamp = row[2]           # timestamp
+            
+            # 3. סינון הודעות פנימיות
+            if bot_content and any(marker in bot_content for marker in [
+                "[עדכון פרופיל]", "[הודעה אוטומטית מהבוט]", "[הודעה מערכת]", "[תשובת GPT-A]"
+            ]):
+                continue
+            
+            if user_content and user_content.startswith("[הודעה"):
+                continue
+            
+            # 4. הוספת הודעות עם טיימסטמפ בתוכן ההודעה - רק עבור GPT
+            if user_content.strip():
+                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+                content = f"{formatted_time} {user_content}" if formatted_time else user_content
+                messages.append({"role": "user", "content": content})
+                user_count += 1
+            
+            if bot_content.strip():
+                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+                content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
+                messages.append({"role": "assistant", "content": content})
+                assistant_count += 1
+        
+        # 5. לוג
+        logger.info(f"GPT History: chat_id={safe_str(chat_id)} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="GPT_HISTORY")
+        
+        return messages
+        
+    except Exception as e:
+        logger.error(f"GPT History Error: chat_id={safe_str(chat_id)} | שגיאה: {e}", source="GPT_HISTORY_ERROR")
+        return []
+
+def get_chat_history_for_users(chat_id: str, limit: int = 32) -> list:
+    """
+    🎯 מחזיר היסטוריה בלי טיימסטאפ בתוכן ההודעה - עבור משתמשים ואדמין
+    
+    Args:
+        chat_id: מזהה הצ'אט
+        limit: מספר הודעות מקסימלי (ברירת מחדל: 32)
+    
+    Returns:
+        list: רשימת הודעות בפורמט רגיל בלי טיימסטאפ בתוכן
+    """
+    try:
+        # 1. שליפת נתונים מהמסד נתונים
+        rows = get_chat_history(chat_id, limit)
+        if not rows:
+            return []
+        
+        # 2. איפוס מונים
+        messages = []
+        user_count = 0
+        assistant_count = 0
+        
+        for row in rows:
+            user_content = row[0] or ""  # user_msg
+            bot_content = row[1] or ""   # bot_msg
+            timestamp = row[2]           # timestamp
+            
+            # 3. סינון הודעות פנימיות
+            if bot_content and any(marker in bot_content for marker in [
+                "[עדכון פרופיל]", "[הודעה אוטומטית מהבוט]", "[הודעה מערכת]", "[תשובת GPT-A]"
+            ]):
+                continue
+            
+            if user_content and user_content.startswith("[הודעה"):
+                continue
+            
+            # 4. הוספת הודעות בלי טיימסטמפ בתוכן ההודעה - עבור משתמשים
+            if user_content.strip():
+                messages.append({
+                    "role": "user", 
+                    "content": user_content.strip(),
+                    "timestamp": timestamp.isoformat() if timestamp else None
+                })
+                user_count += 1
+            
+            if bot_content.strip():
+                messages.append({
+                    "role": "assistant", 
+                    "content": bot_content.strip(),
+                    "timestamp": timestamp.isoformat() if timestamp else None
+                })
+                assistant_count += 1
+        
+        # 5. לוג
+        logger.info(f"User History: chat_id={safe_str(chat_id)} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="USER_HISTORY")
+        
+        return messages
+        
+    except Exception as e:
+        logger.error(f"User History Error: chat_id={safe_str(chat_id)} | שגיאה: {e}", source="USER_HISTORY_ERROR")
+        return []
