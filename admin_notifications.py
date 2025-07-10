@@ -394,12 +394,19 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             logger.info(f"📨 [ANONYMOUS_CHAT] בסביבת בדיקה, לא שולח תראה לאדמין: {user_message}")
             return
 
-        # יצירת כותרת עם 3 ספרות אחרונות של chat_id
+        # יצירת כותרת עם 4 ספרות אחרונות של chat_id ומיסוך השאר
         chat_suffix = ""
         if chat_id:
             safe_chat_id = safe_str(chat_id)
-            last_3_digits = safe_chat_id[-3:]
-            chat_suffix = f" (`{last_3_digits}`)"
+            if len(safe_chat_id) > 4:
+                # מיסוך כל הספרות חוץ מ-4 האחרונות
+                masked_part = "X" * (len(safe_chat_id) - 4)
+                last_4_digits = safe_chat_id[-4:]
+                masked_chat_id = masked_part + last_4_digits
+                chat_suffix = f" (`{masked_chat_id}`)"
+            else:
+                # אם המספר קצר מ-4 ספרות, הצג אותו כמו שהוא
+                chat_suffix = f" (`{safe_chat_id}`)"
         
         # יצירת הודעה מעוצבת ללא מזהה משתמש
         notification_text = f"💬 **התכתבות חדשה{chat_suffix}** 💬\n\n"
