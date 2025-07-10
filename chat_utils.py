@@ -27,7 +27,7 @@ from config import (
     MAX_TRACEBACK_LENGTH,
 )
 from config import should_log_debug_prints, should_log_message_debug
-from db_manager import save_chat_message, get_chat_history, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data
+from db_manager import save_chat_message, get_chat_history, get_chat_history_enhanced, get_reminder_states_data, save_reminder_state, get_errors_stats_data, save_errors_stats_data
 from user_friendly_errors import safe_str
 
 # NOTE: circular import is safe here – utils only contains the base primitives
@@ -43,9 +43,7 @@ __all__: List[str] = [
     "get_user_stats",
     # 🆕 מערכת ספירת הודעות מערכתית
     "get_total_user_messages_count",
-    "get_recent_history_for_gpt", 
-    "get_balanced_history_for_gpt",  # 🆕 פונקציה חדשה לקבלת 20+20 הודעות
-    "get_balanced_history_with_summaries",  # 🆕 פונקציה חדשה לקבלת הודעות עם סיכומי GPT-B
+        "get_recent_history_for_gpt", 
     "count_user_messages_in_history",
     # context & greeting helpers
     "create_human_context_for_gpt",
@@ -1131,15 +1129,114 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
         
     except Exception as e:
         logger.error(f"שגיאה ב-should_send_time_greeting: {e}", source="GREETING_CHECK")
-        return False 
+        return False
+
+
+# ---------------------------------------------------------------------------
+# 🎯 SYSTEM PROMPTS REGISTRY - מרכז אחד לכל הסיסטם פרומפטים
+# ---------------------------------------------------------------------------
+
+def get_system_prompts_registry():
+    """
+    🎯 מרכז אחד לכל הסיסטם פרומפטים - פשוט, ברור, ניתן לתחזוקה
+    
+    כל פרומפט מוגדר במקום אחד עם:
+    - תנאי: מתי לשלוח
+    - תוכן: מה לשלוח
+    - סדר: באיזה סדר לשלוח
+    
+    זה מבטיח שלא יהיו הפתעות, כפילויות או לוגיקה מוסתרת
+    """
+    from prompts import SYSTEM_PROMPT
+    from profile_utils import get_user_summary_fast
+    
+    def always_true(chat_id, user_msg):
+        return True
+    
+    def should_send_time_greeting_check(chat_id, user_msg):
+        """בדיקה אם יש לשלוח ברכה לפי זמן"""
+        return should_send_time_greeting(chat_id, user_msg)
+
+    def should_send_weekday_check(chat_id, user_msg):
+        """בדיקה אם יש לשלוח הקשר יום השבוע"""
+        return should_send_weekday_context(chat_id, user_msg)
+
+    def should_send_holiday_check(chat_id, user_msg):
+        """בדיקה אם יש לשלוח הודעת חג"""
+        return should_send_holiday_message(chat_id, user_msg)
+
+    def get_time_greeting_content(chat_id, user_msg):
+        """מחזיר תוכן ברכת זמן"""
+        return get_time_greeting_instruction()
+
+    def get_weekday_content_wrapper(chat_id, user_msg):
+        """מחזיר תוכן יום השבוע"""
+        return get_weekday_content()
+
+    def get_holiday_content_wrapper(chat_id, user_msg):
+        """מחזיר תוכן חג"""
+        return get_holiday_content()
+
+    def get_user_summary_content(chat_id, user_msg):
+        """מחזיר סיכום המשתמש"""
+        try:
+            current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
+            if current_summary:
+                logger.info(f"[SUMMARY_DEBUG] Added summary system prompt for user {safe_str(chat_id)}: '{current_summary[:50]}{'...' if len(current_summary) > 50 else ''}'", source="chat_utils")
+                return f"🎯 מידע על המשתמש: {current_summary}"
+            else:
+                logger.info(f"[SUMMARY_DEBUG] No summary found for user {safe_str(chat_id)}", source="chat_utils")
+                return ""
+        except Exception as e:
+            logger.error(f"שגיאה בסיכום משתמש: {e}", source="USER_SUMMARY_CONTENT")
+            return ""
+
+    # 🎯 הרישום המרכזי - כל פרומפט במקום אחד עם סדר ברור
+    return [
+        {
+            "name": "main_prompt",
+            "condition": always_true,
+            "content": lambda chat_id, user_msg: SYSTEM_PROMPT,
+            "order": 1,
+            "description": "הפרומפט הראשי של דניאל - תמיד נשלח"
+        },
+        {
+            "name": "user_summary", 
+            "condition": always_true,
+            "content": get_user_summary_content,
+            "order": 2,
+            "description": "סיכום המשתמש - תמיד נשלח אם יש"
+        },
+        {
+            "name": "time_greeting",
+            "condition": should_send_time_greeting_check,
+            "content": get_time_greeting_content,
+            "order": 3,
+            "description": "ברכות זמן - רק אם הודעת ברכה או עברו 3+ שעות"
+        },
+        {
+            "name": "weekday_context",
+            "condition": should_send_weekday_check, 
+            "content": get_weekday_content_wrapper,
+            "order": 4,
+            "description": "יום השבוע - רק בשעות 05:00-21:00 ואם לא הוזכר כבר"
+        },
+        {
+            "name": "holiday_message",
+            "condition": should_send_holiday_check,
+            "content": get_holiday_content_wrapper, 
+            "order": 5,
+            "description": "הודעות חגים - רק בשעות פעילות ואם יש חג היום"
+        }
+    ] 
 
 
 def build_complete_system_messages(chat_id: str, user_msg: str = "", include_main_prompt: bool = True) -> List[Dict[str, str]]:
     """
     🎯 פונקציה מרכזית שבונה את כל הסיסטם פרומפטים במקום אחד
     
-    זה מבטיח שכל מנוע GPT יקבל את אותו הקשר, ושלא יהיו חוסרי עקביות
-    במקום לפזר את הלוגיקה במספר מקומות - הכל נמצא כאן.
+    עובד עם הרישום המרכזי - פשוט, ברור, ניתן לתחזוקה.
+    כל פרומפט מוגדר במקום אחד עם תנאי ותוכן ברורים.
     
     Args:
         chat_id: מזהה המשתמש
@@ -1151,48 +1248,44 @@ def build_complete_system_messages(chat_id: str, user_msg: str = "", include_mai
     """
     system_messages = []
     
-    # 1. הפרומפט הראשי של דניאל (אם נדרש)
-    if include_main_prompt:
-        from prompts import SYSTEM_PROMPT
-        system_messages.append({"role": "system", "content": SYSTEM_PROMPT})
-    
-    # 2. מידע על המשתמש
     try:
-        from profile_utils import get_user_summary_fast
-        current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
-        if current_summary:
-            system_messages.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
-            logger.info(f"[SUMMARY_DEBUG] Added summary system prompt for user {safe_str(chat_id)}: '{current_summary[:50]}{'...' if len(current_summary) > 50 else ''}'", source="chat_utils")
-        else:
-            logger.info(f"[SUMMARY_DEBUG] No summary found for user {safe_str(chat_id)}", source="chat_utils")
+        # קבלת הרישום המרכזי של כל הפרומפטים
+        prompts_registry = get_system_prompts_registry()
+        
+        # מעבר על כל פרומפט לפי הסדר
+        for prompt_config in sorted(prompts_registry, key=lambda x: x["order"]):
+            try:
+                # דילוג על הפרומפט הראשי אם לא נדרש
+                if prompt_config["name"] == "main_prompt" and not include_main_prompt:
+                    continue
+                
+                # בדיקת התנאי
+                if prompt_config["condition"](safe_str(chat_id), user_msg):
+                    # קבלת התוכן
+                    content = prompt_config["content"](safe_str(chat_id), user_msg)
+                    
+                    # הוספה לרשימה אם יש תוכן
+                    if content and content.strip():
+                        system_messages.append({"role": "system", "content": content})
+                        logger.debug(f"[SYSTEM_PROMPTS] Added '{prompt_config['name']}' for user {safe_str(chat_id)}", source="chat_utils")
+                    else:
+                        logger.debug(f"[SYSTEM_PROMPTS] Skipped '{prompt_config['name']}' - empty content for user {safe_str(chat_id)}", source="chat_utils")
+                else:
+                    logger.debug(f"[SYSTEM_PROMPTS] Skipped '{prompt_config['name']}' - condition failed for user {safe_str(chat_id)}", source="chat_utils")
+                    
+            except Exception as e:
+                logger.warning(f"[SYSTEM_PROMPTS] Error processing '{prompt_config['name']}': {e}", source="chat_utils")
+                
+        logger.info(f"[SYSTEM_PROMPTS] Built {len(system_messages)} system messages for user {safe_str(chat_id)}", source="chat_utils")
+        return system_messages
+        
     except Exception as e:
-        logger.warning(f"[build_complete_system_messages] Could not get user summary: {e}", source="chat_utils")
-    
-    # 3. ברכות זמן (רק אם צריך לפי הלוגיקה)
-    try:
-        if should_send_time_greeting(safe_str(chat_id), user_msg):
-            time_greeting = get_time_greeting_instruction()
-            if time_greeting:
-                system_messages.append({"role": "system", "content": time_greeting})
-    except Exception as e:
-        logger.warning(f"[build_complete_system_messages] Could not get time greeting: {e}", source="chat_utils")
-    
-    # 4. הנחיות יום השבוע (רק אם צריך לפי הלוגיקה)
-    try:
-        if should_send_weekday_context(safe_str(chat_id), user_msg):
-            weekday_context = get_weekday_content()
-            if weekday_context:
-                system_messages.append({"role": "system", "content": weekday_context})
-    except Exception as e:
-        logger.warning(f"[build_complete_system_messages] Could not get weekday context: {e}", source="chat_utils")
-    
-    # 5. הודעות חגים מיוחדים (רק אם צריך לפי הלוגיקה)
-    try:
-        if should_send_holiday_message(safe_str(chat_id), user_msg):
-            holiday_message = get_holiday_content()
-            if holiday_message:
-                system_messages.append({"role": "system", "content": holiday_message})
-    except Exception as e:
-        logger.warning(f"[build_complete_system_messages] Could not get holiday message: {e}", source="chat_utils")
-    
-    return system_messages 
+        logger.error(f"[SYSTEM_PROMPTS] Critical error building system messages: {e}", source="chat_utils")
+        # fallback - לפחות הפרומפט הראשי
+        if include_main_prompt:
+            try:
+                from prompts import SYSTEM_PROMPT
+                return [{"role": "system", "content": SYSTEM_PROMPT}]
+            except Exception:
+                return []
+        return [] 

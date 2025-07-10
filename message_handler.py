@@ -208,18 +208,14 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם סיכומי GPT-B
         try:
             from admin_notifications import send_anonymous_chat_notification
-            from chat_utils import get_balanced_history_with_summaries
             
             # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
             gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
             
-            # קבלת היסטוריה עם סיכומי GPT-B לאדמין
-            admin_history_messages = get_balanced_history_with_summaries(safe_str(chat_id), user_limit=20, bot_limit=20)
-            
             send_anonymous_chat_notification(
                 user_msg, 
                 bot_reply, 
-                admin_history_messages,  # 🆕 שימוש בסיכומים במקום תשובות מלאות
+                history_messages,  # משתמש באותה היסטוריה שנשלחה ל-GPT (עם סיכומים)
                 messages_for_gpt,
                 gpt_timing=gpt_response_time,
                 user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
@@ -526,8 +522,10 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         if register_result.get("success"):
             # שליחת 3 הודעות קבלת פנים למשתמש חדש
             welcome_messages = get_welcome_messages()
+            bot_reply = ""
             for i, msg in enumerate(welcome_messages):
                 await send_system_message(update, chat_id, msg)
+                bot_reply += msg + "\n\n"
                 if i < len(welcome_messages) - 1:  # לא לחכות אחרי ההודעה האחרונה
                     await asyncio.sleep(0.5)
             
@@ -537,6 +535,22 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         else:
             error_msg = "מצטער, הייתה בעיה ברישום. אנא נסה שוב."
             await send_system_message(update, chat_id, error_msg)
+            bot_reply = error_msg
+            
+        # 🔧 תיקון: הוספת התראת אדמין למשתמש חדש
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_reply,
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+        except Exception as admin_err:
+            logger.warning(f"[NEW_USER] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
             
     except Exception as e:
         logger.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}", source="message_handler")
@@ -552,6 +566,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         print("[Permissions] משתמש עם שורה זמנית - תהליך קבלת קוד")
 
         user_input = user_msg.strip()
+        bot_reply = ""
 
         # אם המשתמש שלח רק ספרות – מניח שזה קוד האישור
         if user_input.isdigit():
@@ -562,10 +577,27 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
 
             if register_success.get("success", False):
                 # קוד אושר - מיזוג השורות הצליח
-                await send_system_message(update, chat_id, code_approved_message(), reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
+                bot_reply = code_approved_message()
+                await send_system_message(update, chat_id, bot_reply, reply_markup=ReplyKeyboardMarkup(nice_keyboard(), one_time_keyboard=True, resize_keyboard=True))
 
                 # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
                 await send_approval_message(update, chat_id)
+                
+                # 🔧 תיקון: הוספת התראת אדמין למשתמש עם קוד מאושר
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[CODE_APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
 
             else:
@@ -574,10 +606,43 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
 
                 retry_msg = get_retry_message_by_attempt(attempt_num if attempt_num and attempt_num > 0 else 1)
                 await send_system_message(update, chat_id, retry_msg)
+                bot_reply = retry_msg
+                
+                # 🔧 תיקון: הוספת התראת אדמין למשתמש עם קוד לא תקין
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[CODE_INVALID] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
 
         # אם לא קיבלנו קוד – שולחים בקשה ברורה להזין קוד
-        await send_system_message(update, chat_id, get_code_request_message())
+        bot_reply = get_code_request_message()
+        await send_system_message(update, chat_id, bot_reply)
+        
+        # 🔧 תיקון: הוספת התראת אדמין למשתמש שלא נתן קוד
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_reply,
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+        except Exception as admin_err:
+            logger.warning(f"[NO_CODE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
@@ -587,6 +652,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
     טיפול במשתמש שעדיין לא אישר תנאים ברקע
     """
     try:
+        bot_reply = ""
+        
         if user_msg.strip() == APPROVE_BUTTON_TEXT():
             # אישור תנאים
             # 🔨 ניקוי cache לפני האישור - עברנו למסד נתונים
@@ -603,14 +670,48 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 if clear_result2.get("success"):
                     print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
                 # 🔧 החליפו ReplyKeyboardRemove במקלדת עם כפתור "אהלן" מוסתר למניעת קפיצת מקלדת
-                await send_system_message(update, chat_id, full_access_message(), reply_markup=ReplyKeyboardMarkup([["אהלן"]], one_time_keyboard=True, resize_keyboard=True))
+                bot_reply = full_access_message()
+                await send_system_message(update, chat_id, bot_reply, reply_markup=ReplyKeyboardMarkup([["אהלן"]], one_time_keyboard=True, resize_keyboard=True))
                 # לא שולחים מקלדת/הודעה נוספת – המשתמש יקבל תשובה מהבינה בלבד
+                
+                # 🔧 תיקון: הוספת התראת אדמין למשתמש שאישר תנאים
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
             else:
                 # 🔧 תיקון באג: טיפול בכשל אישור
                 error_msg = approval_result.get("message", "שגיאה לא ידועה באישור")
-                await send_system_message(update, chat_id, f"⚠️ שגיאה באישור: {error_msg}\n\nאנא נסה שוב או פנה לתמיכה.")
+                bot_reply = f"⚠️ שגיאה באישור: {error_msg}\n\nאנא נסה שוב או פנה לתמיכה."
+                await send_system_message(update, chat_id, bot_reply)
                 logger.error(f"[Permissions] כשל באישור משתמש {safe_str(chat_id)}: {error_msg}", source="message_handler")
+                
+                # 🔧 תיקון: הוספת התראת אדמין למשתמש עם כשל אישור
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[APPROVAL_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
 
         elif user_msg.strip() == DECLINE_BUTTON_TEXT():
@@ -618,11 +719,45 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             # במקום להחזיר את המשתמש לשלב הקוד (שעלול ליצור מבוי סתום),
             # נשלח שוב את הודעת האישור עם המקלדת כדי שיוכל לאשר במידת הצורך.
             await send_approval_message(update, chat_id)
+            bot_reply = "דחיית תנאים - הודעת אישור נשלחה מחדש"
+            
+            # 🔧 תיקון: הוספת התראת אדמין למשתמש שדחה תנאים
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    bot_reply,
+                    history_messages=None,
+                    messages_for_gpt=None,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[DECLINED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            
             return
 
         else:
             # כל הודעה אחרת – להזכיר את הצורך באישור תנאי השימוש
             await send_approval_message(update, chat_id)
+            bot_reply = "הודעה אחרת - הודעת אישור נשלחה"
+            
+            # 🔧 תיקון: הוספת התראת אדמין למשתמש שלא אישר תנאים
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    bot_reply,
+                    history_messages=None,
+                    messages_for_gpt=None,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[PENDING] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            
             return
 
     except Exception as e:
@@ -739,12 +874,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"🎤 התקבלה הודעה קולית (לא נתמכת כרגע) | chat_id={safe_str(chat_id)}", source="message_handler")
                 voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
                 await send_system_message(update, chat_id, voice_message)
+                
+                # 🔧 תיקון: הוספת התראת אדמין להודעה קולית
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        voice_message,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[VOICE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
             else:
                 # הודעות לא-טקסט אחרות
                 from messages import get_unsupported_message_response
                 appropriate_response = get_unsupported_message_response(message_type)
                 await send_system_message(update, chat_id, appropriate_response)
+                
+                # 🔧 תיקון: הוספת התראת אדמין להודעות לא נתמכות
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        appropriate_response,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[UNSUPPORTED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
 
         # 🚀 התחלת ניטור concurrent
@@ -752,11 +919,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from concurrent_monitor import start_monitoring_user, end_monitoring_user
             monitoring_result = await start_monitoring_user(safe_str(chat_id), str(message_id), update)
             if not monitoring_result:
-                await send_system_message(update, chat_id, "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות.")
+                overload_message = "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות."
+                await send_system_message(update, chat_id, overload_message)
+                
+                # 🔧 תיקון: הוספת התראת אדמין למצב עומס
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        overload_message,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[OVERLOAD] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                
                 return
         except Exception as e:
             logger.error(f"[MESSAGE_HANDLER] Error starting monitoring: {e}", source="message_handler")
-            await send_system_message(update, chat_id, "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות.")
+            tech_error_message = "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות."
+            await send_system_message(update, chat_id, tech_error_message)
+            
+            # 🔧 תיקון: הוספת התראת אדמין לשגיאה טכנית
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    tech_error_message,
+                    history_messages=None,
+                    messages_for_gpt=None,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[TECH_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            
             return
 
         logger.info(f"📩 התקבלה הודעה | chat_id={safe_str(chat_id)}, message_id={message_id}, תוכן={user_msg!r}", source="message_handler")
@@ -785,8 +986,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         elif user_status == "error":
             # שגיאה בבדיקת הרשאות
-            await send_system_message(update, chat_id, "⚠️ שגיאה טכנית בבדיקת הרשאות. נסה שוב בעוד כמה שניות.")
+            permission_error_message = "⚠️ שגיאה טכנית בבדיקת הרשאות. נסה שוב בעוד כמה שניות."
+            await send_system_message(update, chat_id, permission_error_message)
             await end_monitoring_user(safe_str(chat_id), False)
+            
+            # 🔧 תיקון: הוספת התראת אדמין לשגיאת הרשאות
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    permission_error_message,
+                    history_messages=None,
+                    messages_for_gpt=None,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[PERMISSION_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            
             return
 
         # משתמש מאושר - שולח תשובה מיד
@@ -795,10 +1013,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # קבלת תשובה מ-GPT
         from gpt_a_handler import get_main_response
-        from chat_utils import get_balanced_history_for_gpt
+        from chat_utils import get_recent_history_for_gpt
         
-        # בניית היסטוריה להקשר - 20 הודעות משתמש + 20 הודעות בוט
-        history_messages = get_balanced_history_for_gpt(safe_str(chat_id), user_limit=20, bot_limit=20)
+        # בניית היסטוריה להקשר - 20 הודעות משתמש + 20 הודעות בוט עם סיכומי GPT-B
+        history_messages = get_recent_history_for_gpt(safe_str(chat_id), user_limit=20, bot_limit=20)
         
         # 🔧 בניית הודעות מלאות עם כל הסיסטם פרומפטים
         from chat_utils import build_complete_system_messages
@@ -825,9 +1043,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_msg = error_human_funny_message()
             await send_system_message(update, chat_id, error_msg)
             await end_monitoring_user(safe_str(chat_id), False)
+            
+            # 🔧 תיקון: הוספת התראת אדמין למשתמש מאושר שלא קיבל תגובה מGPT
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    error_msg,
+                    history_messages=history_messages,
+                    messages_for_gpt=messages_for_gpt,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[NO_GPT_REPLY] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            
             return
 
-        # 🚀 שליחת התשובה למשתמש מיד!
+        # �� שליחת התשובה למשתמש מיד!
         telegram_send_time = await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
         # 🔧 מדידת זמן תגובה אמיתי מיד אחרי שליחה בפועל לטלגרם - זה הזמן האמיתי!
