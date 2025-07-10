@@ -25,18 +25,19 @@ def run_scheduled_organized_backup():
     try:
         logger.info("🕐 מתחיל גיבוי מסודר מתוזמן...")
         
-        # ייבוא מותנה של המערכת המסודרת
-        from organized_backup_system import run_organized_backup, cleanup_old_organized_backups
+        # ייבוא מותנה של המערכת הפנימית המסודרת
+        from organized_internal_backup import run_organized_internal_backup, cleanup_old_organized_internal_backups
         
-        # ניקוי קבצים ישנים (30 ימים)
-        cleanup_old_organized_backups(30)
+        # ניקוי טבלאות ישנות (30 ימים)
+        cleanup_old_organized_internal_backups(30)
         
-        # הרצת גיבוי מסודר
-        success = run_organized_backup()
+        # הרצת גיבוי פנימי מסודר
+        success = run_organized_internal_backup()
         
         if success:
             logger.info("✅ גיבוי מסודר מתוזמן הושלם בהצלחה")
-            send_admin_notification("✅ **גיבוי מסודר יומי** הושלם בהצלחה")
+            # 🔧 הסרת הודעה כללית - הפונקציה עצמה כבר שולחת הודעה מפורטת
+            # send_admin_notification("✅ **גיבוי מסודר יומי** הושלם בהצלחה")
         else:
             logger.error("❌ גיבוי מסודר מתוזמן נכשל")
             send_admin_notification("❌ **גיבוי מסודר יומי** נכשל!", urgent=True)
