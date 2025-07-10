@@ -118,56 +118,50 @@ async def send_approval_message(update, chat_id):
 
 def format_text_for_telegram(text):
     """
-    📝 פורמטינג מהיר ואופטימלי - הכללים של המשתמש:
-    • נקודה/שאלה/קריאה + אימוג'י → אימוג'י באותה שורה + מעבר שורה  
-    • אם נקודה בלבד → מוחקים אותה + מעבר שורה
-    • פיסוק רגיל → מעבר שורה
-    • שמירה על מעברי שורה כפולים - אם יש 2 מעברי שורה, נשמור אותם!
-    
-    🚀 אופטימיזציה: Pre-compiled regex patterns לביצועים מהירים
+    📝 פורמטינג פשוט וברור:
+    • כל נקודה/שאלה/קריאה → מעבר שורה (נקודה נמחקת)
+    • מעבר שורה קורה לפני המילה הראשונה בשורה הבאה (אימוג'ים נשארים)
+    • שמירה על מעברי פסקאות (מעברי שורה כפולים)
+    • כל השאר נשאר אותו דבר
     """
     try:
         if not text:
             return ""
         
-        # 🔧 STEP 0: הגנה על מעברי שורה כפולים - מחליפים אותם בסימן זמני
-        DOUBLE_NEWLINE_PLACEHOLDER = "<<<DOUBLE_NEWLINE_PLACEHOLDER>>>"
-        text = text.replace('\n\n', DOUBLE_NEWLINE_PLACEHOLDER)
+        # שלב 1: שמירת מעברי פסקאות (מעברי שורה כפולים)
+        PARAGRAPH_PLACEHOLDER = "§§§PARAGRAPH_BREAK§§§"
+        text = text.replace('\n\n', PARAGRAPH_PLACEHOLDER)
         
-        # שלב 1: ניקוי HTML בסיסי (מהיר יותר)
-        text = _HTML_CLEAN_PATTERN.sub('', text)
+        # שלב 2: פיסוק - כללים פשוטים
+        # נקודה → מעבר שורה (מחיקת הנקודה)
+        text = text.replace('.', '\n')
         
-        # שלב 2: Markdown → HTML (מהיר יותר)
-        text = _BOLD_PATTERN.sub(r'<b>\1</b>', text)
-        text = _BOLD_UNDERSCORE_PATTERN.sub(r'<b>\1</b>', text)
-        text = _UNDERLINE_PATTERN.sub(r'<u>\1</u>', text)
-        text = _UNDERLINE_UNDERSCORE_PATTERN.sub(r'<u>\1</u>', text)
+        # שאלה/קריאה → מעבר שורה (שמירת הסימן)
+        text = text.replace('?', '?\n')
+        text = text.replace('!', '!\n')
         
-        # שלב 3: פיסוק ואימוג'ים - מהיר ברק! 🚀
+        # שלב 3: החזרת מעברי פסקאות לפני Markdown
+        text = text.replace(PARAGRAPH_PLACEHOLDER, '\n\n')
         
-        # כלל 1: נקודה + אימוג'י → מוחק נקודה, שומר אימוג'י + מעבר שורה  
-        text = _DOT_EMOJI_PATTERN.sub(r' \2\n', text)
+        # שלב 4: Markdown → HTML (אחרי החזרת הפלייסהולדרים)
+        text = text.replace('**', '<b>').replace('**', '</b>')
+        text = text.replace('__', '<b>').replace('__', '</b>')
+        text = text.replace('*', '<u>').replace('*', '</u>')
+        text = text.replace('_', '<u>').replace('_', '</u>')
         
-        # כלל 2: שאלה/קריאה + אימוג'י → שומר הכל + מעבר שורה
-        text = _PUNCT_EMOJI_PATTERN.sub(r'\1 \3\n', text)
+        # שלב 5: ניקוי
+        # מסיר רווחים בתחילת שורות
+        lines = text.split('\n')
+        cleaned_lines = [line.strip() for line in lines]
+        text = '\n'.join(cleaned_lines)
         
-        # כלל 3: נקודה בלבד → מוחק + מעבר שורה
-        text = _DOT_ONLY_PATTERN.sub(r'\n', text)
+        # מסיר שורות ריקות מיותרות (משאיר רק כפולים)
+        while '\n\n\n' in text:
+            text = text.replace('\n\n\n', '\n\n')
         
-        # כלל 4: שאלה/קריאה בלבד (בלי אימוג'י) → מעבר שורה
-        text = _PUNCT_ONLY_PATTERN.sub(r'\1\n', text)
-        
-        # ניקוי סופי (מהיר יותר)
-        text = _NEWLINE_SPACES_PATTERN.sub('\n', text)  # מסיר רווחים אחרי מעבר שורה
-        
-        # 🔧 STEP 4: החזרת מעברי שורה כפולים מוגנים לפני גבלת מעברי שורה
-        text = text.replace(DOUBLE_NEWLINE_PLACEHOLDER, '\n\n')
-        
-        # רק אחרי החזרה - מגבילים מעברי שורה משולשים ומעלה
-        text = _MULTIPLE_NEWLINES_PATTERN.sub('\n\n', text)  # מגביל מעברי שורה כפולים
         text = text.strip()
         
-        # וידוא מעבר שורה בסוף (אלא אם ריק)
+        # וידוא מעבר שורה בסוף
         if text and not text.endswith('\n'):
             text += '\n'
         
