@@ -36,10 +36,10 @@ def run_scheduled_organized_backup():
         logger.info("🕐 מתחיל גיבוי מסודר מתוזמן במסד נתונים...")
         
         # 🔒 ייבוא המערכת הפנימי במסד נתונים - אבטח לחלוטין!
-        from organized_internal_backup import run_organized_internal_backup, cleanup_old_organized_internal_backups
+        from organized_internal_backup import run_organized_internal_backup, safe_backup_cleanup
         
-        # ניקוי טבלאות ישנות במסד נתונים (30 ימים)
-        cleanup_old_organized_internal_backups(30)
+        # ניקוי טבלאות ישנות במסד נתונים (30 ימים) - מוגן!
+        safe_backup_cleanup(30, force=False)  # רק סימולציה בscheduler - ביטחון מקסימלי!
         
         # הרצת גיבוי מסודר במסד נתונים
         success = run_organized_internal_backup()

@@ -587,7 +587,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 clear_result2 = {"success": True, "cleared_count": 0}
                 if clear_result2.get("success"):
                     print(f"🔨 נוקו {clear_result2.get('cleared_count', 0)} cache keys אחרי אישור")
-                await send_system_message(update, chat_id, full_access_message(), reply_markup=ReplyKeyboardRemove())
+                # 🔧 החליפו ReplyKeyboardRemove במקלדת עם כפתור "אהלן" מוסתר למניעת קפיצת מקלדת
+                await send_system_message(update, chat_id, full_access_message(), reply_markup=ReplyKeyboardMarkup([["אהלן"]], one_time_keyboard=True, resize_keyboard=True))
                 # לא שולחים מקלדת/הודעה נוספת – המשתמש יקבל תשובה מהבינה בלבד
                 return
             else:

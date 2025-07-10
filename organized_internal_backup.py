@@ -415,62 +415,335 @@ def list_organized_internal_backups():
         print(f"❌ שגיאה בצפייה בגיבויים: {e}")
         logger.error(f"❌ שגיאה בצפייה בגיבויים: {e}")
 
-def cleanup_old_organized_internal_backups(days_to_keep=30):
-    """מנקה גיבויים פנימיים מסודרים ישנים"""
+def cleanup_old_organized_internal_backups(days_to_keep=30, force_cleanup=False, dry_run=False):
+    """מנקה גיבויים פנימיים מסודרים ישנים עם הגנות מרובות רבדים"""
     try:
+        # 🛡️ LAYER 1: הגנה מפני מחיקה מוקדמת מדי
+        MINIMUM_RETENTION_DAYS = 7  # מינימום 7 ימים שמירה - אסור למחוק!
+        if days_to_keep < MINIMUM_RETENTION_DAYS:
+            logger.error(f"🚨 BLOCKED: ניסיון מחיקת גיבויים צעירים מ-{MINIMUM_RETENTION_DAYS} ימים!")
+            send_admin_notification(
+                f"🚨 **אזהרת אבטחה - מחיקת גיבוי חסומה!**\n\n" +
+                f"❌ **ניסיון מחיקה:** {days_to_keep} ימים\n" +
+                f"🛡️ **מינימום מוגן:** {MINIMUM_RETENTION_DAYS} ימים\n" +
+                f"⛔ **פעולה נחסמה** - הגנת נתונים פעילה!",
+                urgent=True
+            )
+            return False
+        
         cutoff_date = datetime.now() - timedelta(days=days_to_keep)
-        cutoff_date_str = cutoff_date.strftime("%d_%m_%Y")
         
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
-        # קבלת כל הטבלאות ב-schema הגיבוי
+        # 🛡️ LAYER 2: בדיקת מספר גיבויים כללי
+        cur.execute(f"""
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = '{BACKUP_SCHEMA}'
+            AND table_name LIKE '%_backup_%'
+        """)
+        total_backups = cur.fetchone()[0]
+        
+        if total_backups < 3:  # הגנה מפני מחיקת כל הגיבויים
+            logger.error(f"🚨 BLOCKED: רק {total_backups} גיבויים - לא מוחק!")
+            send_admin_notification(
+                f"🚨 **הגנת גיבוי פעילה!**\n\n" +
+                f"📊 **גיבויים זמינים:** {total_backups}\n" +
+                f"🛡️ **מינימום נדרש:** 3 גיבויים\n" +
+                f"⛔ **מחיקה חסומה** - הגנת נתונים!",
+                urgent=True
+            )
+            return False
+        
+        # קבלת רשימת גיבויים למחיקה
         cur.execute(f"""
             SELECT table_name FROM information_schema.tables 
             WHERE table_schema = '{BACKUP_SCHEMA}'
             AND table_name LIKE '%_backup_%'
         """)
-        
         backup_tables = cur.fetchall()
-        deleted_tables = 0
+        
+        # 🛡️ LAYER 3: סימולציה ובדיקת בטיחות
+        tables_to_delete = []
+        tables_by_type = {}
         
         for (table_name,) in backup_tables:
             try:
-                # חילוץ תאריך הגיבוי
                 if "_backup_" in table_name:
                     backup_date_str = table_name.split("_backup_")[-1]
-                    
-                    # המרת תאריך לפורמט datetime
                     backup_date = datetime.strptime(backup_date_str, "%d_%m_%Y")
                     
-                    # בדיקה אם הטבלה ישנה מדי
                     if backup_date < cutoff_date:
-                        cur.execute(f"DROP TABLE {BACKUP_SCHEMA}.{table_name}")
-                        deleted_tables += 1
-                        logger.info(f"🗑️ נמחקה טבלה ישנה: {table_name}")
+                        # קיבוץ לפי סוג טבלה
+                        original_table = table_name.split("_backup_")[0]
+                        if original_table not in tables_by_type:
+                            tables_by_type[original_table] = []
+                        tables_by_type[original_table].append(table_name)
+                        tables_to_delete.append(table_name)
                         
             except Exception as e:
                 logger.warning(f"⚠️ שגיאה בבדיקת תאריך {table_name}: {e}")
+        
+        # 🛡️ LAYER 4: הגנה מפני מחיקת כל הגיבויים מסוג מסוים
+        for original_table, tables_for_deletion in tables_by_type.items():
+            # ספירת כמה גיבויים נשארים לאחר המחיקה
+            cur.execute(f"""
+                SELECT COUNT(*) FROM information_schema.tables 
+                WHERE table_schema = '{BACKUP_SCHEMA}'
+                AND table_name LIKE '{original_table}_backup_%'
+            """)
+            total_for_type = cur.fetchone()[0]
+            remaining_after_deletion = total_for_type - len(tables_for_deletion)
+            
+            if remaining_after_deletion < 2:  # חייב להשאיר לפחות 2 גיבויים
+                logger.error(f"🚨 BLOCKED: {original_table} יישאר עם {remaining_after_deletion} גיבויים בלבד!")
+                send_admin_notification(
+                    f"🚨 **הגנת גיבוי ספציפית פעילה!**\n\n" +
+                    f"📋 **טבלה:** {original_table}\n" +
+                    f"📊 **גיבויים נוכחיים:** {total_for_type}\n" +
+                    f"📉 **יישארו אחרי מחיקה:** {remaining_after_deletion}\n" +
+                    f"🛡️ **מינימום נדרש:** 2 גיבויים\n" +
+                    f"⛔ **מחיקה חסומה** - הגנת נתונים!",
+                    urgent=True
+                )
+                return False
+        
+        if not tables_to_delete:
+            logger.info("🧹 אין טבלאות גיבוי ישנות למחיקה (כל ההגנות פעילות)")
+            return True
+        
+        # 🛡️ LAYER 5: מצב סימולציה (Dry Run)
+        if dry_run:
+            logger.info(f"🧪 DRY RUN: היו נמחקות {len(tables_to_delete)} טבלאות:")
+            for table in tables_to_delete:
+                logger.info(f"   🗑️ [SIMULATION] {table}")
+            send_admin_notification(
+                f"🧪 **סימולציה - מחיקת גיבויים**\n\n" +
+                f"🗑️ **היו נמחקות:** {len(tables_to_delete)} טבלאות\n" +
+                f"📅 **ישנות מ:** {cutoff_date.strftime('%d/%m/%Y')}\n" +
+                f"💡 **זהו מצב סימולציה - שום דבר לא נמחק!**"
+            )
+            return True
+        
+        # 🛡️ LAYER 6: דרישת אישור מפורש (במצב לא כפוי)
+        if not force_cleanup:
+            logger.warning(f"⚠️ נדרש אישור מפורש למחיקת {len(tables_to_delete)} גיבויים")
+            send_admin_notification(
+                f"⚠️ **בקשת אישור מחיקת גיבויים**\n\n" +
+                f"🗑️ **להמחקה:** {len(tables_to_delete)} טבלאות\n" +
+                f"📅 **ישנות מ:** {cutoff_date.strftime('%d/%m/%Y')}\n" +
+                f"⚡ **לאישור:** הרץ עם `force_cleanup=True`\n" +
+                f"🧪 **לסימולציה:** הרץ עם `dry_run=True`\n" +
+                f"🛡️ **הגנת נתונים פעילה!**",
+                urgent=True
+            )
+            return False
+        
+        # 🛡️ LAYER 7: מחיקה מוגנת עם לוגים מפורטים
+        deleted_tables = 0
+        for table_name in tables_to_delete:
+            try:
+                # רישום מפורט לפני מחיקה
+                cur.execute(f"SELECT COUNT(*) FROM {BACKUP_SCHEMA}.{table_name}")
+                records_count = cur.fetchone()[0]
+                
+                logger.info(f"🗑️ מוחק גיבוי מוגן: {table_name} ({records_count:,} רשומות)")
+                
+                cur.execute(f"DROP TABLE {BACKUP_SCHEMA}.{table_name}")
+                deleted_tables += 1
+                
+            except Exception as e:
+                logger.error(f"❌ שגיאה במחיקת {table_name}: {e}")
         
         conn.commit()
         cur.close()
         conn.close()
         
+        # התראה מפורטת על המחיקה
         if deleted_tables > 0:
-            logger.info(f"🧹 נמחקו {deleted_tables} טבלאות גיבוי ישנות")
+            logger.info(f"🧹 נמחקו {deleted_tables} טבלאות גיבוי (מוגן)")
             
             send_admin_notification(
-                f"🧹 **ניקוי גיבויים פנימיים מסודרים**\n\n" +
+                f"🧹 **ניקוי גיבויים הושלם בהצלחה**\n\n" +
                 f"🗑️ **נמחקו:** {deleted_tables} טבלאות\n" +
                 f"📅 **ישנות מ:** {cutoff_date.strftime('%d/%m/%Y')}\n" +
-                f"💾 **שמירת:** {days_to_keep} ימים אחרונים\n" +
-                f"🗃️ **Schema:** `{BACKUP_SCHEMA}`"
+                f"💾 **שמירה:** {days_to_keep} ימים\n" +
+                f"🛡️ **הגנות שעברו:** ✅ מינימום {MINIMUM_RETENTION_DAYS} ימים\n" +
+                f"🗃️ **Schema:** `{BACKUP_SCHEMA}`\n" +
+                f"⚡ **מצב:** כפוי (force_cleanup=True)"
             )
-        else:
-            logger.info("🧹 אין טבלאות גיבוי ישנות למחיקה")
+        
+        return True
         
     except Exception as e:
-        logger.error(f"❌ שגיאה בניקוי גיבויים: {e}")
+        logger.error(f"❌ שגיאה בניקוי גיבויים מוגן: {e}")
+        send_admin_notification(
+            f"🚨 **שגיאה בניקוי גיבויים!**\n\n" +
+            f"❌ **שגיאה:** {str(e)[:200]}\n" +
+            f"🛡️ **הגנת נתונים:** פעילה\n" +
+            f"💡 **המלצה:** בדוק הלוגים",
+            urgent=True
+        )
+        return False
+
+def safe_backup_cleanup(days_to_keep=30, force=False):
+    """ניקוי גיבויים בטוח עם הגנות מרובות רבדים"""
+    try:
+        logger.info(f"🛡️ מתחיל ניקוי גיבויים מוגן (שמירה: {days_to_keep} ימים)")
+        
+        # תחילה - סימולציה לראות מה היה נמחק
+        logger.info("🧪 מריץ סימולציה...")
+        cleanup_old_organized_internal_backups(days_to_keep, force_cleanup=False, dry_run=True)
+        
+        # אם זה לא כפוי, רק נציג מה היה קורה ונבקש אישור
+        if not force:
+            logger.info("⚠️ ניקוי גיבויים דורש אישור מפורש")
+            send_admin_notification(
+                f"🛡️ **ניקוי גיבויים מוגן מוכן**\n\n" +
+                f"📅 **לשמירה:** {days_to_keep} ימים\n" +
+                f"🧪 **סימולציה הושלמה** - ראה פרטים בלוג\n" +
+                f"⚡ **לביצוע:** הרץ עם `force=True`\n" +
+                f"🛡️ **הגנות פעילות:** מינימום 7 ימים + 2 גיבויים לטבלה"
+            )
+            return False
+        
+        # ביצוע אמיתי עם הגנות
+        logger.info("⚡ מריץ ניקוי אמיתי עם הגנות...")
+        return cleanup_old_organized_internal_backups(days_to_keep, force_cleanup=True, dry_run=False)
+        
+    except Exception as e:
+        logger.error(f"❌ שגיאה בניקוי בטוח: {e}")
+        return False
+
+def get_backup_security_status():
+    """בודק מצב אבטחת הגיבויים"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # סטטיסטיקות כלליות
+        cur.execute(f"""
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = '{BACKUP_SCHEMA}'
+        """)
+        total_backups = cur.fetchone()[0]
+        
+        # בדיקה לפי סוג טבלה
+        security_status = {
+            "total_backups": total_backups,
+            "by_table_type": {},
+            "oldest_backup": None,
+            "newest_backup": None,
+            "security_level": "unknown"
+        }
+        
+        for table_name in TABLES_TO_BACKUP:
+            cur.execute(f"""
+                SELECT COUNT(*) FROM information_schema.tables 
+                WHERE table_schema = '{BACKUP_SCHEMA}'
+                AND table_name LIKE '{table_name}_backup_%'
+            """)
+            count = cur.fetchone()[0]
+            security_status["by_table_type"][table_name] = count
+        
+        # מציאת הגיבוי הישן והחדש ביותר
+        cur.execute(f"""
+            SELECT table_name FROM information_schema.tables 
+            WHERE table_schema = '{BACKUP_SCHEMA}'
+            AND table_name LIKE '%_backup_%'
+            ORDER BY table_name
+        """)
+        
+        backup_tables = [row[0] for row in cur.fetchall()]
+        if backup_tables:
+            # חילוץ תאריכים
+            dates = []
+            for table in backup_tables:
+                try:
+                    date_str = table.split("_backup_")[-1]
+                    date_obj = datetime.strptime(date_str, "%d_%m_%Y")
+                    dates.append(date_obj)
+                except:
+                    pass
+            
+            if dates:
+                security_status["oldest_backup"] = min(dates)
+                security_status["newest_backup"] = max(dates)
+                
+                # הערכת רמת אבטחה
+                days_coverage = (max(dates) - min(dates)).days
+                min_backups_per_type = min(security_status["by_table_type"].values()) if security_status["by_table_type"] else 0
+                
+                if min_backups_per_type >= 7 and days_coverage >= 7:
+                    security_status["security_level"] = "excellent"
+                elif min_backups_per_type >= 3 and days_coverage >= 3:
+                    security_status["security_level"] = "good"
+                elif min_backups_per_type >= 2:
+                    security_status["security_level"] = "minimal"
+                else:
+                    security_status["security_level"] = "critical"
+        
+        cur.close()
+        conn.close()
+        
+        return security_status
+        
+    except Exception as e:
+        logger.error(f"❌ שגיאה בבדיקת מצב אבטחה: {e}")
+        return None
+
+def send_backup_security_report():
+    """שולח דוח אבטחת גיבויים לאדמין"""
+    try:
+        status = get_backup_security_status()
+        storage = get_backup_storage_info()
+        
+        if not status or not storage:
+            send_admin_notification("❌ **שגיאה בדוח אבטחת גיבויים** - לא ניתן לקבל נתונים")
+            return
+        
+        # אייקונים לפי רמת אבטחה
+        security_icons = {
+            "excellent": "🟢",
+            "good": "🟡", 
+            "minimal": "🟠",
+            "critical": "🔴",
+            "unknown": "⚪"
+        }
+        
+        icon = security_icons.get(status["security_level"], "⚪")
+        
+        report = f"{icon} **דוח אבטחת גיבויים**\n\n"
+        report += f"🛡️ **רמת אבטחה:** {status['security_level'].upper()}\n"
+        report += f"📊 **סה\"כ גיבויים:** {status['total_backups']}\n"
+        report += f"💾 **גודל כולל:** {storage['total_backup_size']}\n\n"
+        
+        report += f"📋 **פירוט לפי טבלה:**\n"
+        for table, count in status["by_table_type"].items():
+            table_icon = "✅" if count >= 3 else "⚠️" if count >= 2 else "❌"
+            report += f"{table_icon} **{table.replace('_', ' ').title()}:** {count} גיבויים\n"
+        
+        if status["oldest_backup"] and status["newest_backup"]:
+            days_coverage = (status["newest_backup"] - status["oldest_backup"]).days
+            report += f"\n📅 **כיסוי זמן:** {days_coverage} ימים\n"
+            report += f"📆 **מ:** {status['oldest_backup'].strftime('%d/%m/%Y')}\n"
+            report += f"📆 **עד:** {status['newest_backup'].strftime('%d/%m/%Y')}\n"
+        
+        # המלצות
+        report += f"\n💡 **המלצות אבטחה:**\n"
+        if status["security_level"] == "critical":
+            report += "🚨 **דחוף:** יש פחות מ-2 גיבויים לטבלה!\n"
+        elif status["security_level"] == "minimal":
+            report += "⚠️ **זהירות:** מומלץ להגדיל מספר גיבויים\n"
+        else:
+            report += "✅ **מצוין:** רמת הגנה טובה\n"
+        
+        report += f"🗃️ **Schema:** `{BACKUP_SCHEMA}`"
+        
+        send_admin_notification(report)
+        
+    except Exception as e:
+        logger.error(f"❌ שגיאה בשליחת דוח אבטחה: {e}")
 
 def get_backup_storage_info():
     """מחזיר מידע על שטח הגיבוי במסד נתונים"""
@@ -527,9 +800,6 @@ if __name__ == "__main__":
             run_organized_internal_backup()
         elif command == "list":
             list_organized_internal_backups()
-        elif command == "cleanup":
-            days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-            cleanup_old_organized_internal_backups(days)
         elif command == "info":
             info = get_backup_storage_info()
             if info:
@@ -537,8 +807,74 @@ if __name__ == "__main__":
                 print(f"📊 טבלאות גיבוי: {info['backup_tables_count']}")
                 print(f"💾 גודל גיבוי: {info['total_backup_size']}")
                 print(f"🗄️ גודל מסד כללי: {info['total_db_size']}")
+        
+        # 🛡️ פקודות ניקוי מוגנות
+        elif command == "cleanup":
+            days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            print(f"🛡️ מריץ ניקוי מוגן (שמירה: {days} ימים)")
+            print("⚠️ זוהי פעולה מוגנת - רק סימולציה!")
+            cleanup_old_organized_internal_backups(days, force_cleanup=False, dry_run=True)
+            
+        elif command == "cleanup-force":
+            days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            print(f"⚡ מריץ ניקוי כפוי (שמירה: {days} ימים)")
+            print("🚨 זוהי פעולה אמיתית עם הגנות!")
+            cleanup_old_organized_internal_backups(days, force_cleanup=True, dry_run=False)
+            
+        elif command == "safe-cleanup":
+            days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            force = len(sys.argv) > 3 and sys.argv[3] == "force"
+            print(f"🛡️ מריץ ניקוי בטוח מלא (שמירה: {days} ימים)")
+            safe_backup_cleanup(days, force)
+            
+        # 🔍 פקודות בדיקה ודיווח
+        elif command == "security":
+            print("🔍 בודק מצב אבטחת גיבויים...")
+            status = get_backup_security_status()
+            if status:
+                print(f"🛡️ רמת אבטחה: {status['security_level']}")
+                print(f"📊 סה\"כ גיבויים: {status['total_backups']}")
+                for table, count in status["by_table_type"].items():
+                    icon = "✅" if count >= 3 else "⚠️" if count >= 2 else "❌"
+                    print(f"{icon} {table}: {count} גיבויים")
+            else:
+                print("❌ שגיאה בבדיקת אבטחה")
+                
+        elif command == "security-report":
+            print("📧 שולח דוח אבטחה לאדמין...")
+            send_backup_security_report()
+            print("✅ דוח נשלח")
+            
+        # 🧪 פקודות בדיקה
+        elif command == "dry-run":
+            days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+            print(f"🧪 מריץ סימולציה מלאה (שמירה: {days} ימים)")
+            cleanup_old_organized_internal_backups(days, force_cleanup=False, dry_run=True)
+            
         else:
-            print("שימוש: python organized_internal_backup.py [backup|list|cleanup|info]")
+            print("🛡️ מערכת גיבוי מוגנת - פקודות זמינות:")
+            print("=" * 50)
+            print("📦 גיבוי:")
+            print("  backup              - צור גיבוי חדש")
+            print("  list                - הצג רשימת גיבויים")
+            print("  info                - מידע על אחסון")
+            print()
+            print("🛡️ ניקוי מוגן:")
+            print("  cleanup [days]      - סימולציה בלבד (ברירת מחדל: 30)")
+            print("  cleanup-force [days]- ניקוי אמיתי עם הגנות")
+            print("  safe-cleanup [days] [force] - ניקוי בטוח מלא")
+            print("  dry-run [days]      - סימולציה מפורטת")
+            print()
+            print("🔍 בדיקות אבטחה:")
+            print("  security            - בדוק מצב אבטחה")
+            print("  security-report     - שלח דוח לאדמין")
+            print()
+            print("🛡️ הגנות פעילות:")
+            print("  • מינימום 7 ימים שמירה")
+            print("  • מינימום 2 גיבויים לטבלה")
+            print("  • מינימום 3 גיבויים כללי")
+            print("  • סימולציה לפני מחיקה")
+            print("  • דרישת אישור מפורש")
     else:
         # גיבוי רגיל
         run_organized_internal_backup() 
