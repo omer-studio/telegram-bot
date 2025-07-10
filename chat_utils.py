@@ -317,15 +317,22 @@ def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: in
         user_messages = []
         bot_messages = []
         
+        # 🔧 תיקון: הסרת טטאמפים מההודעות
+        import re
+        timestamp_pattern = r'^\[\d{2}/\d{2}\s+\d{2}:\d{2}\]\s*'
+        
         for row in rows:
             user_msg, bot_msg, timestamp, metadata = row
             
             if user_msg and user_msg.strip():
-                user_messages.append({
-                    "role": "user",
-                    "content": user_msg.strip(),
-                    "timestamp": timestamp
-                })
+                # הסרת טטאמפ אם קיים
+                clean_content = re.sub(timestamp_pattern, '', user_msg.strip())
+                if clean_content:
+                    user_messages.append({
+                        "role": "user",
+                        "content": clean_content,
+                        "timestamp": timestamp
+                    })
             
             if bot_msg and bot_msg.strip():
                 # 🎯 הלוגיקה הפשוטה: אם יש סיכום GPT-B - השתמש בו, אחרת בהודעה המקורית
@@ -335,11 +342,14 @@ def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: in
                     if reply_summary and reply_summary.strip():
                         bot_content = reply_summary.strip()
                 
-                bot_messages.append({
-                    "role": "assistant",
-                    "content": bot_content,
-                    "timestamp": timestamp
-                })
+                # הסרת טטאמפ אם קיים
+                clean_content = re.sub(timestamp_pattern, '', bot_content)
+                if clean_content:
+                    bot_messages.append({
+                        "role": "assistant",
+                        "content": clean_content,
+                        "timestamp": timestamp
+                    })
         
         # הגבלה למספר הנדרש
         user_messages = user_messages[-user_limit:] if len(user_messages) > user_limit else user_messages
@@ -392,67 +402,74 @@ def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: 
         # ממשיכים לקרוא עד שיש לנו מספיק הודעות משני הסוגים
         while (user_count < user_limit or bot_count < bot_limit) and current_limit <= 500:
             # קריאה מהמסד נתונים
-            rows = get_chat_history(chat_id, current_limit)
+            import psycopg2
+            from config import load_config
+            config = load_config()
+            DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+            conn = psycopg2.connect(DB_URL)
+            cur = conn.cursor()
+            
+            cur.execute("""
+                SELECT user_msg, bot_msg, timestamp, metadata
+                FROM chat_messages
+                WHERE chat_id = %s 
+                AND (user_msg IS NOT NULL OR bot_msg IS NOT NULL)
+                ORDER BY timestamp DESC
+                LIMIT %s
+            """, (chat_id, current_limit))
+            
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            
             if not rows:
                 break
-                
-            # איפוס המונים לחישוב מחדש
-            temp_messages = []
-            temp_user_count = 0
-            temp_bot_count = 0
             
-            for row in rows:
-                user_content = row[0] or ""  # user_msg
-                bot_content = row[1] or ""   # bot_msg
-                timestamp = row[2]           # timestamp
-                
-                # סינון הודעות פנימיות (כמו בפונקציה המקורית)
-                if bot_content and any(marker in bot_content for marker in [
-                    "[עדכון פרופיל]", "[הודעה אוטומטית מהבוט]", "[הודעה מערכת]", "[תשובת GPT-A]"
-                ]):
-                    continue
-                
-                if user_content and user_content.startswith("[הודעה"):
-                    continue
-                
-                # הוספת הודעות משתמש עד למגבלה
-                if user_content.strip() and temp_user_count < user_limit:
-                    formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                    content = f"{formatted_time} {user_content}" if formatted_time else user_content
-                    temp_messages.append({"role": "user", "content": content})
-                    temp_user_count += 1
-                
-                # הוספת הודעות בוט עד למגבלה
-                if bot_content.strip() and temp_bot_count < bot_limit:
-                    formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                    content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
-                    temp_messages.append({"role": "assistant", "content": content})
-                    temp_bot_count += 1
-                
-                # אם הגענו למספרים שרצינו, נעצור
-                if temp_user_count >= user_limit and temp_bot_count >= bot_limit:
-                    break
+            # מיון לפי זמן (הישן ביותר קודם)
+            rows.reverse()
             
-            # עדכון התוצאות
-            messages = temp_messages
-            user_count = temp_user_count
-            bot_count = temp_bot_count
+            # עיבוד ההודעות
+            for user_content, bot_content, timestamp, metadata in rows:
+                # 🔧 תיקון: הסרת טטאמפים מההודעות
+                # בדיקה אם ההודעה מתחילהטאמפ כמו [09/07 17:11]
+                import re
+                timestamp_pattern = r'^\[\d{2}/\d{2}\s+\d{2}:\d{2}\]\s*'
+                
+                # הודעות משתמש
+                if user_content and user_content.strip() and user_count < user_limit:
+                    # הסרת טטאמפ אם קיים
+                    clean_content = re.sub(timestamp_pattern, '', user_content.strip())
+                    if clean_content and not clean_content.startswith("[הודעה"):
+                        messages.append({"role": "user", "content": clean_content})
+                        user_count += 1
+                
+                # הודעות בוט
+                if bot_content and bot_content.strip() and bot_count < bot_limit:
+                    # הסרת טטאמפ אם קיים
+                    clean_content = re.sub(timestamp_pattern, '', bot_content.strip())
+                    if clean_content:
+                        # 🎯 הלוגיקה הפשוטה: אם יש סיכום GPT-B - השתמש בו, אחרת בהודעה המקורית
+                        if metadata and isinstance(metadata, dict):
+                            reply_summary = metadata.get('reply_summary', '')
+                            if reply_summary and reply_summary.strip():
+                                # הסרת טטאמפ גם מהסיכום
+                                clean_summary = re.sub(timestamp_pattern, '', reply_summary.strip())
+                                if clean_summary:
+                                    clean_content = clean_summary
+                        
+                        messages.append({"role": "assistant", "content": clean_content})
+                        bot_count += 1
             
-            # אם לא הגענו למספרים שרצינו, ננסה לקרוא יותר הודעות
-            if user_count < user_limit or bot_count < bot_limit:
-                current_limit += batch_size
-            else:
-                break
+            # הגדלת הגבול לסבב הבא
+            current_limit += batch_size
         
-        # הודעות כבר מגיעות מסודרות מהמסד נתונים (מהישן לחדש)
-        # לא צריך מיון נוסף כי get_chat_history כבר מחזיר אותן בסדר הנכון
-        
-        logger.info(f"chat_id={safe_str(chat_id)} | בקשה: {user_limit}+{bot_limit} | קיבל: {len(messages)} (user={user_count}, assistant={bot_count})", source="BALANCED_HISTORY")
+        # 5. לוג פשוט וברור
+        logger.info(f"chat_id={safe_str(chat_id)} | בקשה: {user_limit}+{bot_limit} | קיבל: {len(messages)} (user={user_count}, assistant={bot_count})", source="HISTORY")
         
         return messages
         
     except Exception as e:
-        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בהיסטוריה מאוזנת: {e}", source="BALANCED_HISTORY_ERROR")
+        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה: {e}", source="HISTORY_ERROR")
         return []
 
 def count_user_messages_in_history(history: list) -> int:
@@ -1254,12 +1271,29 @@ def get_system_prompts_registry():
         return get_holiday_content()
 
     def get_user_summary_content(chat_id, user_msg):
-        """מחזיר סיכום המשתמש"""
+        """מחזיר סיכום המשתמש - ללא מידע רגיש כמו גיל"""
         try:
             current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
             if current_summary:
-                logger.info(f"[SUMMARY_DEBUG] Added summary system prompt for user {safe_str(chat_id)}: '{current_summary[:50]}{'...' if len(current_summary) > 50 else ''}'", source="chat_utils")
-                return f"🎯 מידע על המשתמש: {current_summary}"
+                # הסרת מידע רגיש כמו גיל מהסיכום
+                # נסיר מילים כמו "בן X" או "גיל X" מהסיכום
+                import re
+                # הסרת מידע על גיל
+                current_summary = re.sub(r'בן\s+\d+', '', current_summary)
+                current_summary = re.sub(r'גיל\s+\d+', '', current_summary)
+                current_summary = re.sub(r'בת\s+\d+', '', current_summary)
+                current_summary = re.sub(r'בן\s*X', '', current_summary)
+                current_summary = re.sub(r'בת\s*X', '', current_summary)
+                
+                # ניקוי רווחים כפולים
+                current_summary = re.sub(r'\s+', ' ', current_summary).strip()
+                
+                if current_summary and len(current_summary) > 10:
+                    logger.info(f"[SUMMARY_DEBUG] Added filtered summary system prompt for user {safe_str(chat_id)}: '{current_summary[:50]}{'...' if len(current_summary) > 50 else ''}'", source="chat_utils")
+                    return f"🎯 מידע על המשתמש: {current_summary}"
+                else:
+                    logger.info(f"[SUMMARY_DEBUG] No meaningful summary after filtering for user {safe_str(chat_id)}", source="chat_utils")
+                    return ""
             else:
                 logger.info(f"[SUMMARY_DEBUG] No summary found for user {safe_str(chat_id)}", source="chat_utils")
                 return ""
