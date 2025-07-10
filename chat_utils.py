@@ -286,6 +286,10 @@ def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: in
     """
     try:
         # קבלת הודעות מהמסד נתונים
+        import psycopg2
+        from config import load_config
+        config = load_config()
+        DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
