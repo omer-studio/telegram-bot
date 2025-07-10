@@ -1329,14 +1329,14 @@ def build_complete_system_messages(chat_id: str, user_msg: str = "", include_mai
 
 def get_chat_history_for_gpt(chat_id: str, limit: int = 32) -> list:
     """
-    🎯 מחזיר היסטוריה עם טיימסטאפ בתוכן ההודעה - רק עבור GPT
+    🎯 מחזיר היסטוריה בלי טיימסטאפ בתוכן ההודעה - התיקון הסופי!
     
     Args:
         chat_id: מזהה הצ'אט
         limit: מספר הודעות מקסימלי (ברירת מחדל: 32)
     
     Returns:
-        list: רשימת הודעות בפורמט GPT עם טיימסטאפ בתוכן
+        list: רשימת הודעות בפורמט GPT בלי טיימסטאפ בתוכן
     """
     try:
         # 1. שליפת נתונים מהמסד נתונים
@@ -1363,23 +1363,38 @@ def get_chat_history_for_gpt(chat_id: str, limit: int = 32) -> list:
             if user_content and user_content.startswith("[הודעה"):
                 continue
             
-            # 4. הוספת הודעות עם טיימסטמפ בתוכן ההודעה - רק עבור GPT
+            # 🔧 תיקון קריטי: לא מוסיף טיימסטאפ לתוכן ההודעה!
             if user_content.strip():
-                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                content = f"{formatted_time} {user_content}" if formatted_time else user_content
-                messages.append({"role": "user", "content": content})
+                messages.append({
+                    "role": "user", 
+                    "content": user_content.strip(),
+                    "timestamp": timestamp.isoformat() if timestamp else None
+                })
                 user_count += 1
             
             if bot_content.strip():
-                formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
-                content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
-                messages.append({"role": "assistant", "content": content})
+                messages.append({
+                    "role": "assistant", 
+                    "content": bot_content.strip(),
+                    "timestamp": timestamp.isoformat() if timestamp else None
+                })
                 assistant_count += 1
         
-        # 5. לוג
-        logger.info(f"GPT History: chat_id={safe_str(chat_id)} | בקשה: {limit} | קיבל: {len(messages)} (user={user_count}, assistant={assistant_count})", source="GPT_HISTORY")
+        # 4. מיון לפי זמן (הישנות ביותר קודם)
+        messages.sort(key=lambda x: x["timestamp"] if x["timestamp"] else "")
         
-        return messages
+        # 5. החזרת הודעות בלי טיימסטאפ בתוכן - רק content ו-role
+        result = []
+        for msg in messages:
+            result.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        
+        # 6. לוג
+        logger.info(f"GPT History: chat_id={safe_str(chat_id)} | בקשה: {limit} | קיבל: {len(result)} (user={user_count}, assistant={assistant_count})", source="GPT_HISTORY")
+        
+        return result
         
     except Exception as e:
         logger.error(f"GPT History Error: chat_id={safe_str(chat_id)} | שגיאה: {e}", source="GPT_HISTORY_ERROR")

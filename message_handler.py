@@ -259,12 +259,15 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         logger.error(f"❌ [BACKGROUND] שגיאה כללית במשימות ברקע: {e}", source="message_handler")
         
         # שלב 1: עדכון היסטוריה (הועבר לכאן לצמצום פער הקוד)
-        try:
-            # עדכון ההיסטוריה המלא - כל ההודעות
-            update_chat_history(safe_str(chat_id), user_msg, bot_reply)
-            logger.info(f"[BACKGROUND] היסטוריה עודכנה | chat_id={safe_str(chat_id)}", source="message_handler")
-        except Exception as hist_err:
-            logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
+        # 🔧 תיקון קריטי: הסרת כפילות שמירה - רק save_gpt_chat_message ישמור הכל
+        # try:
+        #     # עדכון ההיסטוריה המלא - כל ההודעות
+        #     update_chat_history(safe_str(chat_id), user_msg, bot_reply)
+        #     logger.info(f"[BACKGROUND] היסטוריה עודכנה | chat_id={safe_str(chat_id)}", source="message_handler")
+        # except Exception as hist_err:
+        #     logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
+        
+        # 🔧 ההסבר: הסרתי את update_chat_history כדי למנוע כפילויות עם save_gpt_chat_message
         
         # 🔧 תיקון: טעינת היסטוריה מחדש אחרי השמירה כדי שהמונה יעלה
         try:
