@@ -983,25 +983,11 @@ def perform_detailed_migration():
     # === מיגרציית critical_error_users.json ===
     print("  🚨 מיגרציית critical_error_users.json...")
     try:
-        critical_users_path = "data/critical_error_users.json"
-        if os.path.exists(critical_users_path):
-            with open(critical_users_path, 'r', encoding='utf-8') as f:
-                critical_data = json.load(f)
-            
-            print(f"    📊 נמצאו {len(critical_data)} משתמשים קריטיים למיגרציה")
-            
-            for chat_id, user_info in critical_data.items():
-                try:
-                    save_critical_user_data(chat_id, user_info)
-                    results['critical_users']['migrated'] += 1
-                    print(f"    ✅ משתמש קריטי {chat_id} הועבר")
-                except Exception as e:
-                    results['critical_users']['errors'] += 1
-                    results['critical_users']['details'].append(f"שגיאה במשתמש קריטי {chat_id}: {e}")
-                    print(f"    ⚠️ שגיאה במשתמש קריטי {chat_id}: {e}")
-                    continue
-        else:
-            print("    ℹ️ קובץ critical_error_users.json לא קיים")
+        # 🔄 מסד נתונים במקום קבצים - מושבת
+        print("    🔄 [DISABLED] critical_error_users table disabled - all recovery data now stored in user_profiles")
+        print("    ℹ️ Recovery system migrated to database columns: needs_recovery_message, recovery_original_message, recovery_error_timestamp")
+        results['critical_users']['migrated'] = 0
+        results['critical_users']['skipped'] = 1
     except Exception as e:
         print(f"    ❌ שגיאה במיגרציית critical_users: {e}")
         results['critical_users']['errors'] += 1

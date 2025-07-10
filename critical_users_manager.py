@@ -290,8 +290,17 @@ async def send_recovery_messages_to_affected_users():
                 # נשאיר ברשימה לניסיון מאוחר יותר
                 updated_users[chat_id] = user_info
         
-        # שמירת הרשימה המעודכנת
-        _save_critical_error_users(updated_users)
+        # שמירת הרשימה המעודכנת - עדכון במסד נתונים
+        if recovery_count > 0:
+            from profile_utils import update_user_profile
+            for chat_id in updated_users.keys():
+                try:
+                    user_info = updated_users[chat_id]
+                    if user_info.get("recovered", False):
+                        # איפוס הסימון של צורך בהודעת התאוששות
+                        update_user_profile(chat_id, {"needs_recovery_message": False})
+                except Exception as e:
+                    print(f"⚠️ שגיאה בעדכון סטטוס התאוששות למשתמש {chat_id}: {e}")
         
         print(f"✅ הושלמה שליחת הודעות התאוששות - {recovery_count} משתמשים התאוששו")
         
