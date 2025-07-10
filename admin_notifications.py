@@ -398,7 +398,7 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         chat_suffix = ""
         if chat_id:
             safe_chat_id = safe_str(chat_id)
-            last_3_digits = safe_str(safe_chat_id)[-3:]
+            last_3_digits = safe_chat_id[-3:]
             chat_suffix = f" (`{last_3_digits}`)"
         
         # יצירת הודעה מעוצבת ללא מזהה משתמש

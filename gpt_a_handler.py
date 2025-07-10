@@ -332,7 +332,7 @@ async def delete_temporary_message_and_send_new(update, temp_message, new_text):
 
         # שליחת ההודעה החדשה
         chat_id = update.message.chat_id
-        await send_message(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)
+        await send_message(update, chat_id, new_text, is_bot_message=True, is_gpt_a_response=True)  # זמן החזרה לא רלוונטי כאן
         logger.info(f"📤 [NEW_MSG] נשלחה הודעה חדשה | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
         return True
 

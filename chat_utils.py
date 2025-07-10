@@ -44,6 +44,8 @@ __all__: List[str] = [
     # 🆕 מערכת ספירת הודעות מערכתית
     "get_total_user_messages_count",
     "get_recent_history_for_gpt", 
+    "get_balanced_history_for_gpt",  # 🆕 פונקציה חדשה לקבלת 20+20 הודעות
+    "get_balanced_history_with_summaries",  # 🆕 פונקציה חדשה לקבלת הודעות עם סיכומי GPT-B
     "count_user_messages_in_history",
     # context & greeting helpers
     "create_human_context_for_gpt",
@@ -271,7 +273,7 @@ def get_recent_history_for_gpt(chat_id: str, limit: int = 15) -> list:
     """
     🎯 מחזיר היסטוריה מוגבלת לשליחה ל-GPT
     
-    ⚠️ אל תשתמשו בזה לספירת הודעות כולל!
+    ⚠️ אל תשתמש בזה לספירת הודעות כולל!
     זה רק להיסטוריה ל-GPT.
     
     Args:
@@ -286,6 +288,98 @@ def get_recent_history_for_gpt(chat_id: str, limit: int = 15) -> list:
         >>> print(f"נשלחו {len(history)} הודעות ל-GPT")
     """
     return get_chat_history_simple(chat_id, limit)
+
+def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> list:
+    """
+    🎯 מחזיר היסטוריה מאוזנת בדיוק לפי המספרים שצויינו
+    
+    מביא בדיוק user_limit הודעות משתמש ו-bot_limit הודעות בוט.
+    ממשיך לקרוא מהמסד נתונים עד שמקבל את המספרים הנדרשים.
+    
+    Args:
+        chat_id: מזהה המשתמש
+        user_limit: כמה הודעות משתמש דרושות (ברירת מחדל: 20)
+        bot_limit: כמה הודעות בוט דרושות (ברירת מחדל: 20)
+        
+    Returns:
+        list: רשימת הודעות בפורמט GPT
+        
+    Example:
+        >>> history = get_balanced_history_for_gpt("123456789", 20, 20)
+        >>> print(f"נשלחו {len(history)} הודעות ל-GPT")
+    """
+    try:
+        messages = []
+        user_count = 0
+        bot_count = 0
+        batch_size = 50  # כמה הודעות לקרוא בכל פעם
+        current_limit = batch_size
+        
+        # ממשיכים לקרוא עד שיש לנו מספיק הודעות משני הסוגים
+        while (user_count < user_limit or bot_count < bot_limit) and current_limit <= 500:
+            # קריאה מהמסד נתונים
+            rows = get_chat_history(chat_id, current_limit)
+            if not rows:
+                break
+                
+            # איפוס המונים לחישוב מחדש
+            temp_messages = []
+            temp_user_count = 0
+            temp_bot_count = 0
+            
+            for row in rows:
+                user_content = row[0] or ""  # user_msg
+                bot_content = row[1] or ""   # bot_msg
+                timestamp = row[2]           # timestamp
+                
+                # סינון הודעות פנימיות (כמו בפונקציה המקורית)
+                if bot_content and any(marker in bot_content for marker in [
+                    "[עדכון פרופיל]", "[הודעה אוטומטית מהבוט]", "[הודעה מערכת]", "[תשובת GPT-A]"
+                ]):
+                    continue
+                
+                if user_content and user_content.startswith("[הודעה"):
+                    continue
+                
+                # הוספת הודעות משתמש עד למגבלה
+                if user_content.strip() and temp_user_count < user_limit:
+                    formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+                    content = f"{formatted_time} {user_content}" if formatted_time else user_content
+                    temp_messages.append({"role": "user", "content": content})
+                    temp_user_count += 1
+                
+                # הוספת הודעות בוט עד למגבלה
+                if bot_content.strip() and temp_bot_count < bot_limit:
+                    formatted_time = _format_timestamp_for_history(timestamp.isoformat() if timestamp else "")
+                    content = f"{formatted_time} {bot_content}" if formatted_time else bot_content
+                    temp_messages.append({"role": "assistant", "content": content})
+                    temp_bot_count += 1
+                
+                # אם הגענו למספרים שרצינו, נעצור
+                if temp_user_count >= user_limit and temp_bot_count >= bot_limit:
+                    break
+            
+            # עדכון התוצאות
+            messages = temp_messages
+            user_count = temp_user_count
+            bot_count = temp_bot_count
+            
+            # אם לא הגענו למספרים שרצינו, ננסה לקרוא יותר הודעות
+            if user_count < user_limit or bot_count < bot_limit:
+                current_limit += batch_size
+            else:
+                break
+        
+        # הודעות כבר מגיעות מסודרות מהמסד נתונים (מהישן לחדש)
+        # לא צריך מיון נוסף כי get_chat_history כבר מחזיר אותן בסדר הנכון
+        
+        logger.info(f"chat_id={safe_str(chat_id)} | בקשה: {user_limit}+{bot_limit} | קיבל: {len(messages)} (user={user_count}, assistant={bot_count})", source="BALANCED_HISTORY")
+        
+        return messages
+        
+    except Exception as e:
+        logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בהיסטוריה מאוזנת: {e}", source="BALANCED_HISTORY_ERROR")
+        return []
 
 def count_user_messages_in_history(history: list) -> int:
     """
@@ -856,8 +950,131 @@ def cleanup_test_users():
 
 
 # ---------------------------------------------------------------------------
-# 💬 Time-block greeting logic
+# 💬 System prompts condition logic (מרכז הלוגיקה)
 # ---------------------------------------------------------------------------
+
+def should_send_weekday_context(chat_id: str, user_msg: Optional[str] = None) -> bool:
+    """בדיקה אם יש לשלוח הקשר יום השבוע"""
+    try:
+        weekday_words = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"]
+
+        # בדיקת לילה: 21:00-05:00 - לא שולח בשעות האלה
+        effective_now = utils.get_effective_time("datetime")
+        current_hour = effective_now.hour
+        if current_hour >= 21 or current_hour < 5:
+            return False
+
+        # בדיקה אם המשתמש הזכיר יום שבוע בהודעה הנוכחית
+        if user_msg and any(word in user_msg for word in weekday_words):
+            return False
+
+        # בדיקה אם הבוט כבר הזכיר יום שבוע היום (רק בהודעות הבוט)
+        try:
+            rows = get_chat_history(chat_id, 30)
+            history = [{"user": row[0], "bot": row[1], "timestamp": row[2]} for row in rows]
+        except Exception:
+            return False
+
+        # בדיקה מתחילת היום הנוכחי (05:00)
+        start_of_day = effective_now.replace(hour=5, minute=0, second=0, microsecond=0)
+        
+        for entry in reversed(history):
+            ts = entry.get("timestamp")
+            if not ts:
+                continue
+            try:
+                entry_dt = datetime.fromisoformat(ts)
+            except ValueError:
+                continue
+            if entry_dt < start_of_day:
+                break
+            
+            # בדיקה רק בהודעות הבוט (לא המשתמש)
+            bot_content = entry.get("bot", "")
+            
+            if any(word in bot_content for word in weekday_words):
+                return False
+
+        return True
+        
+    except Exception as e:
+        logger.error(f"שגיאה ב-should_send_weekday_context: {e}", source="WEEKDAY_CHECK")
+        return False
+
+
+def should_send_holiday_message(chat_id: str, user_msg: str = "") -> bool:
+    """בדיקה אם יש לשלוח הודעת חג"""
+    try:
+        # בדיקת שעות פעילות - חגים נשלחים רק בשעות פעילות
+        if not is_active_hours():
+            return False
+        
+        # בדיקה אם יש חגים היום
+        with open("special_events.json", "r", encoding="utf-8") as f:
+            events = json.load(f)
+
+        today = utils.get_effective_time("date").strftime("%Y-%m-%d")
+        relevant_events = [event for event in events if event.get("date") == today]
+        if not relevant_events:
+            return False
+
+        # בדיקה אם כבר הזכיר מילות מפתח של החג בהודעה הנוכחית
+        if user_msg:
+            user_msg_lower = user_msg.lower()
+            for event in relevant_events:
+                for keyword in event.get("keywords", []):
+                    if keyword.lower() in user_msg_lower:
+                        return False
+
+        return True
+        
+    except Exception as e:
+        logger.error(f"שגיאה ב-should_send_holiday_message: {e}", source="HOLIDAY_CHECK")
+        return False
+
+
+def get_weekday_content() -> str:
+    """מחזיר את תוכן הנחיות יום השבוע (בלי לוגיקת תנאים)"""
+    try:
+        effective_now = utils.get_effective_time("datetime")
+        weekday = effective_now.weekday()
+        israel_weekday = (weekday + 1) % 7 + 1
+
+        weekday_instructions = {
+            1: "היום יום ראשון - אפשר להתייחס לכך שתחילת השבוע ואם יש לו תוכניות מסויימות",
+            2: "היום יום שני",
+            3: "היום יום שלישי",
+            4: "היום יום רביעי",
+            5: "היום יום חמישי - אפשר להתייחס לכך שנגמר השבוע - ומתחיל סופש אולי לבדוק אם יש לו תוכניות לסופש",
+            6: "היום יום שישי - מתחיל סופש - זה יכול להיות טריגרי עבור אנשים מסויימים - עבור אחרים הם רק צמאים לזה - אפשר לשאול מה התוכניות שלו או איפה עושה ארוחת ערב הערב",
+            7: "היום יום שבת - תבדוק איתו מה מצב הרוח שלו בשבת הזאת - זה בדרך כלל יום עם הרבה תובנות",
+        }
+        return weekday_instructions.get(israel_weekday, "")
+    except Exception as e:
+        logger.error(f"שגיאה ביצירת תוכן יום השבוע: {e}", source="WEEKDAY_CONTENT")
+        return ""
+
+
+def get_holiday_content() -> str:
+    """מחזיר את תוכן הודעת החג (בלי לוגיקת תנאים)"""
+    try:
+        with open("special_events.json", "r", encoding="utf-8") as f:
+            events = json.load(f)
+
+        today = utils.get_effective_time("date").strftime("%Y-%m-%d")
+        relevant_events = [event for event in events if event.get("date") == today]
+        if not relevant_events:
+            return ""
+
+        event = relevant_events[0]
+        return (
+            f"בוט יקר!! שים לב שהיום זה יום מיוחד - יש מועד מיוחד בישראל: {event.get('event', '')}. "
+            f"{event.get('suggestion', '')}"
+        )
+    except Exception as e:
+        logger.error(f"שגיאה ביצירת תוכן חג: {e}", source="HOLIDAY_CONTENT")
+        return ""
+
 
 def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> bool:
     """בדיקה אם יש לשלוח ברכה לפי זמן"""
@@ -945,6 +1162,9 @@ def build_complete_system_messages(chat_id: str, user_msg: str = "", include_mai
         current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
         if current_summary:
             system_messages.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
+            logger.info(f"[SUMMARY_DEBUG] Added summary system prompt for user {safe_str(chat_id)}: '{current_summary[:50]}{'...' if len(current_summary) > 50 else ''}'", source="chat_utils")
+        else:
+            logger.info(f"[SUMMARY_DEBUG] No summary found for user {safe_str(chat_id)}", source="chat_utils")
     except Exception as e:
         logger.warning(f"[build_complete_system_messages] Could not get user summary: {e}", source="chat_utils")
     
@@ -957,19 +1177,21 @@ def build_complete_system_messages(chat_id: str, user_msg: str = "", include_mai
     except Exception as e:
         logger.warning(f"[build_complete_system_messages] Could not get time greeting: {e}", source="chat_utils")
     
-    # 4. הנחיות יום השבוע
+    # 4. הנחיות יום השבוע (רק אם צריך לפי הלוגיקה)
     try:
-        weekday_context = get_weekday_context_instruction(safe_str(chat_id), user_msg)
-        if weekday_context:
-            system_messages.append({"role": "system", "content": weekday_context})
+        if should_send_weekday_context(safe_str(chat_id), user_msg):
+            weekday_context = get_weekday_content()
+            if weekday_context:
+                system_messages.append({"role": "system", "content": weekday_context})
     except Exception as e:
         logger.warning(f"[build_complete_system_messages] Could not get weekday context: {e}", source="chat_utils")
     
-    # 5. הודעות חגים מיוחדים
+    # 5. הודעות חגים מיוחדים (רק אם צריך לפי הלוגיקה)
     try:
-        holiday_message = get_holiday_system_message(safe_str(chat_id), user_msg)
-        if holiday_message:
-            system_messages.append({"role": "system", "content": holiday_message})
+        if should_send_holiday_message(safe_str(chat_id), user_msg):
+            holiday_message = get_holiday_content()
+            if holiday_message:
+                system_messages.append({"role": "system", "content": holiday_message})
     except Exception as e:
         logger.warning(f"[build_complete_system_messages] Could not get holiday message: {e}", source="chat_utils")
     

@@ -121,7 +121,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     """
     שולחת הודעה למשתמש בטלגרם, כולל לוגים ועדכון היסטוריה.
     קלט: update (אובייקט טלגרם), chat_id (int), text (str), is_bot_message (bool), is_gpt_a_response (bool)
-    פלט: אין (שולחת הודעה)
+    פלט: מחזיר את הזמן הדיוק שההודעה נשלחה בפועל לטלגרם
     # מהלך מעניין: עדכון היסטוריה ולוגים רק אם ההודעה נשלחה בהצלחה.
     """
     
@@ -136,6 +136,8 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     formatted_text = text
     
     # 🔧 תיקון קריטי: Progressive timeout מהיר יותר
+    telegram_send_time = None  # זמן השליחה בפועל לטלגרם
+    
     try:
         max_retries = 3  # פחות ניסיונות
         timeout_seconds = [TimeoutConfig.TELEGRAM_SEND_TIMEOUT, TimeoutConfig.TELEGRAM_SEND_TIMEOUT * 1.5, TimeoutConfig.TELEGRAM_SEND_TIMEOUT * 2]  # timeouts מהירים יותר!
@@ -148,6 +150,9 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
                     update.message.reply_text(formatted_text, parse_mode="HTML"),
                     timeout=current_timeout
                 )
+                
+                # 🔧 מדידת זמן דיוק של שליחה בפועל לטלגרם
+                telegram_send_time = time.time()
                 
                 logger.info(f"✅ [TELEGRAM_REPLY] הצלחה בניסיון {attempt + 1} | chat_id={safe_str(chat_id)}", source="message_handler")
                 break  # הצלחה - יוצאים מהלולאה
@@ -174,12 +179,15 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=safe_str(chat_id), user_msg=formatted_text)
         except Exception as notify_err:
             logger.error(f"❌ [NOTIFY_ERROR] התראה לאדמין נכשלה: {notify_err}", source="message_handler")
-        return
+        return None  # החזרת None במקרה של כשלון
     
     # 🚀 הודעה נשלחה בהצלחה! עדכון היסטוריה מועבר לרקע להאצת זמן תגובה
     # עדכון ההיסטוריה יתבצע ברקע ב-handle_background_tasks
     
     logger.info(f"📤 [SENT] הודעה נשלחה | chat_id={safe_str(chat_id)}", source="message_handler")
+    
+    # החזרת זמן השליחה הדיוק לטלגרם
+    return telegram_send_time
 
 
 
@@ -197,16 +205,21 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         except Exception as gpt_a_bg_err:
             logger.warning(f"[BACKGROUND] שגיאה בעיבוד GPT-A ברקע: {gpt_a_bg_err}", source="message_handler")
         
-        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע)
+        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם סיכומי GPT-B
         try:
             from admin_notifications import send_anonymous_chat_notification
+            from chat_utils import get_balanced_history_with_summaries
+            
             # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
             gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
+            
+            # קבלת היסטוריה עם סיכומי GPT-B לאדמין
+            admin_history_messages = get_balanced_history_with_summaries(safe_str(chat_id), user_limit=20, bot_limit=20)
             
             send_anonymous_chat_notification(
                 user_msg, 
                 bot_reply, 
-                history_messages, 
+                admin_history_messages,  # 🆕 שימוש בסיכומים במקום תשובות מלאות
                 messages_for_gpt,
                 gpt_timing=gpt_response_time,
                 user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
@@ -782,10 +795,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # קבלת תשובה מ-GPT
         from gpt_a_handler import get_main_response
-        from chat_utils import get_recent_history_for_gpt
+        from chat_utils import get_balanced_history_for_gpt
         
-        # בניית היסטוריה להקשר
-        history_messages = get_recent_history_for_gpt(safe_str(chat_id), limit=15)
+        # בניית היסטוריה להקשר - 20 הודעות משתמש + 20 הודעות בוט
+        history_messages = get_balanced_history_for_gpt(safe_str(chat_id), user_limit=20, bot_limit=20)
         
         # 🔧 בניית הודעות מלאות עם כל הסיסטם פרומפטים
         from chat_utils import build_complete_system_messages
@@ -815,10 +828,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # 🚀 שליחת התשובה למשתמש מיד!
-        await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
+        telegram_send_time = await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
-        # 🔧 מדידת זמן תגובה אמיתי מיד אחרי שליחה למשתמש - זה הזמן האמיתי!
-        user_response_actual_time = time.time() - user_request_start_time
+        # 🔧 מדידת זמן תגובה אמיתי מיד אחרי שליחה בפועל לטלגרם - זה הזמן האמיתי!
+        if telegram_send_time:
+            user_response_actual_time = telegram_send_time - user_request_start_time
+        else:
+            # במקרה של כשלון, נשתמש בזמן נוכחי כגיבוי
+            user_response_actual_time = time.time() - user_request_start_time
 
         # 🔧 כל השאר ברקע - המשתמש כבר קיבל תשובה!
         asyncio.create_task(handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt, user_response_actual_time))
