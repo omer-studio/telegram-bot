@@ -267,25 +267,97 @@ def get_total_user_messages_count(chat_id: str) -> int:
         logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בקבלת מספר הודעות: {e}", source="USER_COUNT_ERROR")
         return 0
 
-def get_recent_history_for_gpt(chat_id: str, limit: int = 15) -> list:
+def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> list:
     """
-    🎯 מחזיר היסטוריה מוגבלת לשליחה ל-GPT
+    🎯 מחזיר בדיוק user_limit הודעות משתמש + bot_limit הודעות בוט
+    עם סיכומי GPT-B במקום התשובות המלאות (אם יש סיכום)
     
-    ⚠️ אל תשתמש בזה לספירת הודעות כולל!
-    זה רק להיסטוריה ל-GPT.
+    הלוגיקה הפשוטה:
+    - יש סיכום GPT-B? השתמש בו
+    - אין סיכום GPT-B? השתמש בהודעה המקורית
     
     Args:
         chat_id: מזהה המשתמש
-        limit: מספר מקסימלי של הודעות
+        user_limit: כמה הודעות משתמש (ברירת מחדל: 20)
+        bot_limit: כמה הודעות בוט (ברירת מחדל: 20)
         
     Returns:
         list: רשימת הודעות בפורמט GPT
-        
-    Example:
-        >>> history = get_recent_history_for_gpt("123456789", 10)
-        >>> print(f"נשלחו {len(history)} הודעות ל-GPT")
     """
-    return get_chat_history_simple(chat_id, limit)
+    try:
+        # קבלת הודעות מהמסד נתונים
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # שאילתה לקבלת הודעות האחרונות
+        cur.execute("""
+            SELECT user_msg, bot_msg, timestamp, metadata
+            FROM chat_messages
+            WHERE chat_id = %s 
+            AND (user_msg IS NOT NULL OR bot_msg IS NOT NULL)
+            ORDER BY timestamp DESC
+            LIMIT %s
+        """, (chat_id, (user_limit + bot_limit) * 2))  # מספיק נתונים
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not rows:
+            return []
+        
+        # מיון לפי זמן (הישן ביותר קודם)
+        rows.reverse()
+        
+        # הפרדה להודעות משתמש ובוט
+        user_messages = []
+        bot_messages = []
+        
+        for row in rows:
+            user_msg, bot_msg, timestamp, metadata = row
+            
+            if user_msg and user_msg.strip():
+                user_messages.append({
+                    "role": "user",
+                    "content": user_msg.strip(),
+                    "timestamp": timestamp
+                })
+            
+            if bot_msg and bot_msg.strip():
+                # 🎯 הלוגיקה הפשוטה: אם יש סיכום GPT-B - השתמש בו, אחרת בהודעה המקורית
+                bot_content = bot_msg.strip()
+                if metadata and isinstance(metadata, dict):
+                    reply_summary = metadata.get('reply_summary', '')
+                    if reply_summary and reply_summary.strip():
+                        bot_content = reply_summary.strip()
+                
+                bot_messages.append({
+                    "role": "assistant",
+                    "content": bot_content,
+                    "timestamp": timestamp
+                })
+        
+        # הגבלה למספר הנדרש
+        user_messages = user_messages[-user_limit:] if len(user_messages) > user_limit else user_messages
+        bot_messages = bot_messages[-bot_limit:] if len(bot_messages) > bot_limit else bot_messages
+        
+        # שילוב ההודעות ומיון לפי זמן
+        all_messages = user_messages + bot_messages
+        all_messages.sort(key=lambda x: x["timestamp"])
+        
+        # הסרת timestamp מההודעות הסופיות
+        result = []
+        for msg in all_messages:
+            result.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ שגיאה בקריאת היסטוריה: {e}", source="HISTORY_READ_ERROR")
+        return []
 
 def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> list:
     """

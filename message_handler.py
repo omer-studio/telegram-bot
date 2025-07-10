@@ -917,7 +917,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 🚀 התחלת ניטור concurrent
         try:
             from concurrent_monitor import start_monitoring_user, end_monitoring_user
-            monitoring_result = await start_monitoring_user(safe_str(chat_id), str(message_id), update)
+            monitoring_result = await start_monitoring_user(safe_str(chat_id), safe_str(message_id), update)
             if not monitoring_result:
                 overload_message = "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות."
                 await send_system_message(update, chat_id, overload_message)
@@ -1013,10 +1013,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # קבלת תשובה מ-GPT
         from gpt_a_handler import get_main_response
-        from chat_utils import get_recent_history_for_gpt
+        from chat_utils import get_balanced_history_for_gpt
         
         # בניית היסטוריה להקשר - 20 הודעות משתמש + 20 הודעות בוט עם סיכומי GPT-B
-        history_messages = get_recent_history_for_gpt(safe_str(chat_id), user_limit=20, bot_limit=20)
+        history_messages = get_balanced_history_for_gpt(safe_str(chat_id), user_limit=20, bot_limit=20)
         
         # 🔧 בניית הודעות מלאות עם כל הסיסטם פרומפטים
         from chat_utils import build_complete_system_messages

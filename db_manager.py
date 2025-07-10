@@ -750,6 +750,7 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
             'gpt_request': gpt_data.get('request'),
             'gpt_response': gpt_data.get('response'),
             'metadata': {
+                'reply_summary': gpt_data.get('reply_summary', ''),  # 🆕 פשוט - הסיכום של GPT-B
                 'gpt_latency': gpt_data.get('latency'),
                 'gpt_timestamp': gpt_data.get('timestamp'),
                 'usage': gpt_data.get('usage', {})
