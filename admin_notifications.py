@@ -429,6 +429,18 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         else:
             notification_text += f"<b>📜 היסטוריה שנשלחה ל-GPT:</b> אין היסטוריה\n"
         
+        # 🔍 תיעוד מפורט של כל ההודעות שנשלחות ל-GPT
+        if messages_for_gpt:
+            total_gpt_messages = len(messages_for_gpt)
+            system_count = len([msg for msg in messages_for_gpt if msg.get("role") == "system"])
+            user_count_in_gpt = len([msg for msg in messages_for_gpt if msg.get("role") == "user"])
+            assistant_count_in_gpt = len([msg for msg in messages_for_gpt if msg.get("role") == "assistant"])
+            
+            notification_text += f"<b>🤖 סה״כ הודעות שנשלחו ל-GPT:</b> {total_gpt_messages}\n"
+            notification_text += f"  - סיסטם: {system_count}\n"
+            notification_text += f"  - משתמש: {user_count_in_gpt} (כולל הנוכחית)\n"
+            notification_text += f"  - בוט: {assistant_count_in_gpt}\n"
+        
         # סיסטם פרומפטים
         if messages_for_gpt:
             system_prompts = [msg for msg in messages_for_gpt if msg.get("role") == "system"]

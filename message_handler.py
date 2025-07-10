@@ -52,46 +52,62 @@ from chat_utils import get_weekday_context_instruction, get_holiday_system_messa
 
 
 
+def _extract_message_data(update):
+    """
+    חילוץ נתונים בסיסיים מההודעה - ללא לוגיקה מורכבת
+    """
+    if not update or not hasattr(update, 'message') or not update.message:
+        return None, None, None, None, None, None, False
+    
+    message = update.message
+    return (
+        message.chat_id,
+        message.message_id, 
+        message.text or "",
+        getattr(message, 'voice', None),
+        getattr(message, 'document', None),
+        getattr(message, 'photo', None),
+        True
+    )
+
+def _determine_message_type(voice, document, photo, text):
+    """
+    קביעת סוג הודעה - לוגיקה פשוטה וברורה
+    """
+    if voice:
+        return "voice"
+    elif document:
+        return "document"
+    elif photo:
+        return "photo"
+    elif text and text.strip():
+        return "text"
+    else:
+        return "unknown"
+
 def safe_extract_message_info(update):
     """
     🔧 פונקציה מרכזית לחילוץ בטוח של chat_id, message_id ותוכן הודעה
     מחזירה: (chat_id, message_id, message_text, message_type, success)
     """
     try:
-        if not update or not hasattr(update, 'message') or not update.message:
+        # חילוץ נתונים
+        chat_id, message_id, text, voice, document, photo, success = _extract_message_data(update)
+        
+        if not success:
             return None, None, None, "unknown", False
         
-        chat_id = update.message.chat_id
-        message_id = update.message.message_id
-        message_text = update.message.text or ""
-        message_type = "text"
+        # קביעת סוג הודעה
+        message_type = _determine_message_type(voice, document, photo, text)
         
-        # 🔧 DEBUG: הוספת לוגים לבדיקת הודעה
-        logger.info(f"[DEBUG_MESSAGE_TYPE] chat_id={safe_str(chat_id)}, message_id={message_id}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] message_text={repr(message_text)}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] hasattr voice: {hasattr(update.message, 'voice')}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] voice value: {getattr(update.message, 'voice', 'NO_ATTR')}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] hasattr document: {hasattr(update.message, 'document')}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] document value: {getattr(update.message, 'document', 'NO_ATTR')}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] hasattr photo: {hasattr(update.message, 'photo')}", source="message_handler")
-        logger.info(f"[DEBUG_MESSAGE_TYPE] photo value: {getattr(update.message, 'photo', 'NO_ATTR')}", source="message_handler")
+        # 🔧 DEBUG: לוגים לבדיקת הודעה (רק בדיבאג)
+        if should_log_debug_prints():
+            logger.info(f"[DEBUG_MESSAGE_TYPE] chat_id={safe_str(chat_id)}, message_id={message_id}", source="message_handler")
+            logger.info(f"[DEBUG_MESSAGE_TYPE] message_text={repr(text)}", source="message_handler")
+            logger.info(f"[DEBUG_MESSAGE_TYPE] voice: {voice is not None}, document: {document is not None}, photo: {photo is not None}", source="message_handler")
+            logger.info(f"[DEBUG_MESSAGE_TYPE] FINAL message_type: {message_type}", source="message_handler")
         
-        # בדיקת סוגי הודעות מיוחדות
-        if hasattr(update.message, 'voice') and update.message.voice:
-            message_type = "voice"
-            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS VOICE! voice object: {update.message.voice}", source="message_handler")
-        elif hasattr(update.message, 'document') and update.message.document:
-            message_type = "document"
-            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS DOCUMENT! document object: {update.message.document}", source="message_handler")
-        elif hasattr(update.message, 'photo') and update.message.photo:
-            message_type = "photo"
-            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS PHOTO! photo object: {update.message.photo}", source="message_handler")
-        else:
-            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS TEXT (default)", source="message_handler")
-        
-        logger.info(f"[DEBUG_MESSAGE_TYPE] FINAL message_type: {message_type}", source="message_handler")
-        
-        return chat_id, message_id, message_text, message_type, True
+        return chat_id, message_id, text, message_type, True
         
     except Exception as e:
         logger.error(f"🚨 שגיאה בחילוץ מידע הודעה: {e}", source="message_handler")
@@ -307,10 +323,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         gpt_d_result = results[0] if len(results) > 0 else None
         gpt_e_result = results[1] if len(results) > 1 else None
         
-        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם כל הנתונים המלאים של GPT-B, C, D, E
+        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - הוסר כדי למנוע כפילות
+        # זה כבר נשלח מיד כשהמשתמש שולח הודעה בפונקציה handle_message
+        # נשאר כאן רק לוג שקט לבדיקות
         try:
-            from admin_notifications import send_anonymous_chat_notification
-            
             # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
             gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
             
@@ -326,22 +342,11 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 except:
                     gpt_e_counter = None
             
-            send_anonymous_chat_notification(
-                user_msg, 
-                bot_reply, 
-                history_messages,  # משתמש באותה היסטוריה שנשלחה ל-GPT (עם סיכומים)
-                messages_for_gpt,
-                gpt_timing=gpt_response_time,
-                user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
-                chat_id=chat_id,
-                gpt_b_result=summary_result,  # 🆕 תוצאות GPT-B
-                gpt_c_result=gpt_c_result,    # 🆕 תוצאות GPT-C
-                gpt_d_result=gpt_d_result,    # 🆕 תוצאות GPT-D
-                gpt_e_result=gpt_e_result,    # 🆕 תוצאות GPT-E
-                gpt_e_counter=gpt_e_counter   # 🆕 מונה GPT-E
-            )
+            # לוג שקט לבדיקות - התכתבות כבר נשלחה לאדמין
+            logger.info(f"[BACKGROUND] התכתבות כבר נשלחה לאדמין מוקדם יותר | chat_id={safe_str(chat_id)}", source="message_handler")
+            
         except Exception as admin_chat_err:
-            logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
+            logger.warning(f"שגיאה בעיבוד נתוני ההתכתבות: {admin_chat_err}", source="message_handler")
         
         # שלב 4: רישום למסד נתונים
         try:
@@ -1066,6 +1071,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # משתמש מאושר - שולח תשובה מיד
         from db_manager import increment_user_message_count
         increment_user_message_count(safe_str(chat_id))
+        
+        # 🔧 תיקון מערכתי: הוספת התראת אדמין למשתמש מאושר מיד!
+        # זה מבטיח שכל התכתבות תגיע לאדמין, לא תלוי בהצלחת GPT
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                "⏳ עדיין מעבד תשובה...",  # הודעה זמנית עד שתתקבל תשובה מGPT
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+        except Exception as admin_err:
+            logger.warning(f"[APPROVED_USER] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
         
         # קבלת תשובה מ-GPT
         from gpt_a_handler import get_main_response
