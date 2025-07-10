@@ -387,7 +387,7 @@ def alert_system_status(message, level="info"):
     except Exception as e:
         logger.error(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
-def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None):
+def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None, gpt_b_result=None, gpt_c_result=None, gpt_d_result=None, gpt_e_result=None, gpt_e_counter=None):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
     try:
         if is_test_environment():
@@ -455,6 +455,76 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         
         # 🔧 מונה הודעות משתמש אמיתי מהמסד נתונים
         notification_text += f"\n**📊 מספר הודעות משתמש כולל:** {total_user_messages}"
+        
+        # 🆕 מידע על GPT האחרים
+        notification_text += f"\n\n**➖➖➖➖מצב GPT האחרים➖➖➖➖**\n\n"
+        
+        # GPT-B (סיכום)
+        notification_text += f"**gpt_b:**\n"
+        if gpt_b_result and isinstance(gpt_b_result, dict) and gpt_b_result.get("summary"):
+            summary = gpt_b_result["summary"]
+            if len(summary) > 100:
+                summary = summary[:100] + "..."
+            notification_text += f"{summary}\n\n"
+        else:
+            notification_text += f"לא הופעל\n\n"
+        
+        # GPT-C (חילוץ פרופיל)
+        notification_text += f"**gpt_c:**\n"
+        if gpt_c_result and isinstance(gpt_c_result, dict) and gpt_c_result.get("extracted_fields"):
+            extracted_fields = gpt_c_result["extracted_fields"]
+            if extracted_fields:
+                # הצגת השדות שחולצו
+                fields_summary = ", ".join([f"{k}: {v}" for k, v in extracted_fields.items() if v])
+                if len(fields_summary) > 100:
+                    fields_summary = fields_summary[:100] + "..."
+                notification_text += f"{fields_summary}\n\n"
+            else:
+                notification_text += f"הופעל אבל לא חולצו נתונים\n\n"
+        else:
+            notification_text += f"לא הופעל\n\n"
+        
+        # GPT-D (מיזוג פרופיל)
+        notification_text += f"**gpt_d:**\n"
+        if gpt_d_result and isinstance(gpt_d_result, dict) and gpt_d_result.get("merged_profile"):
+            merged_profile = gpt_d_result["merged_profile"]
+            if isinstance(merged_profile, dict) and merged_profile:
+                # הצגת הפרופיל הממוזג
+                profile_summary = str(merged_profile)
+                if len(profile_summary) > 100:
+                    profile_summary = profile_summary[:100] + "..."
+                notification_text += f"{profile_summary}\n\n"
+            else:
+                notification_text += f"הופעל אבל לא הושלם\n\n"
+        else:
+            notification_text += f"לא הופעל\n\n"
+        
+        # GPT-E (עדכון פרופיל מתקדם)
+        notification_text += f"**gpt_e:**\n"
+        if gpt_e_result and isinstance(gpt_e_result, dict) and gpt_e_result.get("success"):
+            changes = gpt_e_result.get("changes", {})
+            if changes and isinstance(changes, dict):
+                # הצגת השינויים
+                changes_summary = str(changes)
+                if len(changes_summary) > 100:
+                    changes_summary = changes_summary[:100] + "..."
+                notification_text += f"{changes_summary}"
+            else:
+                notification_text += f"הופעל אבל אין שינויים"
+        else:
+            notification_text += f"לא הופעל"
+        
+        # הוספת מונה GPT-E אם יש
+        if gpt_e_counter:
+            notification_text += f" - {gpt_e_counter}"
+        else:
+            # נחשב את המונה בעצמנו
+            if total_user_messages > 0:
+                from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                current_count = total_user_messages % GPT_E_RUN_EVERY_MESSAGES
+                notification_text += f" - מופעל לפי מונה הודעות כרגע המונה עומד על {current_count} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
+        
+        notification_text += f"\n"
         
         # הגבלת אורך ההודעה למניעת שגיאות טלגרם
         if len(notification_text) > 3900:

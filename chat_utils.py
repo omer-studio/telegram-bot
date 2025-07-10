@@ -267,7 +267,7 @@ def get_total_user_messages_count(chat_id: str) -> int:
         logger.error(f"chat_id={safe_str(chat_id)} | שגיאה בקבלת מספר הודעות: {e}", source="USER_COUNT_ERROR")
         return 0
 
-def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> list:
+def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> List[Dict[str, str]]:
     """
     🎯 מחזיר בדיוק user_limit הודעות משתמש + bot_limit הודעות בוט
     עם סיכומי GPT-B במקום התשובות המלאות (אם יש סיכום)
@@ -363,7 +363,7 @@ def get_recent_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: in
         logger.error(f"❌ שגיאה בקריאת היסטוריה: {e}", source="HISTORY_READ_ERROR")
         return []
 
-def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> list:
+def get_balanced_history_for_gpt(chat_id: str, user_limit: int = 20, bot_limit: int = 20) -> List[Dict[str, str]]:
     """
     🎯 מחזיר היסטוריה מאוזנת בדיוק לפי המספרים שצויינו
     

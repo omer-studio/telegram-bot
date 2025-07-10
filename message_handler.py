@@ -67,13 +67,30 @@ def safe_extract_message_info(update):
         message_text = update.message.text or ""
         message_type = "text"
         
+        # 🔧 DEBUG: הוספת לוגים לבדיקת הודעה
+        logger.info(f"[DEBUG_MESSAGE_TYPE] chat_id={safe_str(chat_id)}, message_id={message_id}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] message_text={repr(message_text)}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] hasattr voice: {hasattr(update.message, 'voice')}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] voice value: {getattr(update.message, 'voice', 'NO_ATTR')}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] hasattr document: {hasattr(update.message, 'document')}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] document value: {getattr(update.message, 'document', 'NO_ATTR')}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] hasattr photo: {hasattr(update.message, 'photo')}", source="message_handler")
+        logger.info(f"[DEBUG_MESSAGE_TYPE] photo value: {getattr(update.message, 'photo', 'NO_ATTR')}", source="message_handler")
+        
         # בדיקת סוגי הודעות מיוחדות
         if hasattr(update.message, 'voice') and update.message.voice:
             message_type = "voice"
+            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS VOICE! voice object: {update.message.voice}", source="message_handler")
         elif hasattr(update.message, 'document') and update.message.document:
             message_type = "document"
+            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS DOCUMENT! document object: {update.message.document}", source="message_handler")
         elif hasattr(update.message, 'photo') and update.message.photo:
             message_type = "photo"
+            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS PHOTO! photo object: {update.message.photo}", source="message_handler")
+        else:
+            logger.info(f"[DEBUG_MESSAGE_TYPE] DETECTED AS TEXT (default)", source="message_handler")
+        
+        logger.info(f"[DEBUG_MESSAGE_TYPE] FINAL message_type: {message_type}", source="message_handler")
         
         return chat_id, message_id, message_text, message_type, True
         
@@ -205,24 +222,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         except Exception as gpt_a_bg_err:
             logger.warning(f"[BACKGROUND] שגיאה בעיבוד GPT-A ברקע: {gpt_a_bg_err}", source="message_handler")
         
-        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם סיכומי GPT-B
-        try:
-            from admin_notifications import send_anonymous_chat_notification
-            
-            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
-            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
-            
-            send_anonymous_chat_notification(
-                user_msg, 
-                bot_reply, 
-                history_messages,  # משתמש באותה היסטוריה שנשלחה ל-GPT (עם סיכומים)
-                messages_for_gpt,
-                gpt_timing=gpt_response_time,
-                user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
-                chat_id=chat_id
-            )
-        except Exception as admin_chat_err:
-            logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
+        # הקריאה לsend_anonymous_chat_notification הועברה למקום הנכון אחרי עיבוד כל הGPT
 
         # 🔧 תיקון: שימוש בזמן התגובה האמיתי
         response_time = user_response_actual_time
@@ -254,7 +254,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             "processing_stage": "background"
         }
         
-        logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s", source="message_handler")
+        logger.info(f"✅ [BACKGROUND] כל משימות הרקע הושלמו | chat_id={safe_str(chat_id)} | זמן תגובה סופי: {response_time:.2f}s", source="message_handler")
+        
+    except Exception as e:
+        logger.error(f"❌ [BACKGROUND] שגיאה כללית במשימות ברקע: {e}", source="message_handler")
         
         # שלב 1: עדכון היסטוריה (הועבר לכאן לצמצום פער הקוד)
         try:
@@ -296,6 +299,46 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         all_tasks.append(execute_gpt_e_if_needed(safe_str(chat_id)))
         
         results = await asyncio.gather(*all_tasks, return_exceptions=True)
+        
+        # שחזור תוצאות GPT-D ו-GPT-E
+        gpt_d_result = results[0] if len(results) > 0 else None
+        gpt_e_result = results[1] if len(results) > 1 else None
+        
+        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם כל הנתונים המלאים של GPT-B, C, D, E
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            
+            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
+            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
+            
+            # חישוב מונה GPT-E
+            gpt_e_counter = None
+            if gpt_e_result and isinstance(gpt_e_result, dict) and gpt_e_result.get("success"):
+                try:
+                    from chat_utils import get_total_user_messages_count
+                    from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                    total_messages = get_total_user_messages_count(safe_str(chat_id))
+                    current_count = total_messages % GPT_E_RUN_EVERY_MESSAGES
+                    gpt_e_counter = f"מופעל לפי מונה הודעות כרגע המונה עומד על {current_count} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
+                except:
+                    gpt_e_counter = None
+            
+            send_anonymous_chat_notification(
+                user_msg, 
+                bot_reply, 
+                history_messages,  # משתמש באותה היסטוריה שנשלחה ל-GPT (עם סיכומים)
+                messages_for_gpt,
+                gpt_timing=gpt_response_time,
+                user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
+                chat_id=chat_id,
+                gpt_b_result=summary_result,  # 🆕 תוצאות GPT-B
+                gpt_c_result=gpt_c_result,    # 🆕 תוצאות GPT-C
+                gpt_d_result=gpt_d_result,    # 🆕 תוצאות GPT-D
+                gpt_e_result=gpt_e_result,    # 🆕 תוצאות GPT-E
+                gpt_e_counter=gpt_e_counter   # 🆕 מונה GPT-E
+            )
+        except Exception as admin_chat_err:
+            logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
         
         # שלב 4: רישום למסד נתונים
         try:
@@ -870,49 +913,58 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 🔧 תיקון: טיפול בהודעות לא טקסטואליות
         if message_type != "text":
-            if message_type == "voice":
-                logger.info(f"🎤 התקבלה הודעה קולית (לא נתמכת כרגע) | chat_id={safe_str(chat_id)}", source="message_handler")
-                voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
-                await send_system_message(update, chat_id, voice_message)
-                
-                # 🔧 תיקון: הוספת התראת אדמין להודעה קולית
-                try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        voice_message,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
-                    )
-                except Exception as admin_err:
-                    logger.warning(f"[VOICE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
-                
-                return
+            # 🔧 DEBUG: בדיקה נוספת לוודא שזה באמת לא טקסט
+            logger.info(f"[DEBUG_NON_TEXT] message_type={message_type}, user_msg={repr(user_msg)}", source="message_handler")
+            
+            # 🔧 תיקון זמני: אם יש טקסט בהודעה, נתייחס אליה כטקסט
+            if user_msg and user_msg.strip():
+                logger.warning(f"[DEBUG_NON_TEXT] OVERRIDE: Found text in 'non-text' message, treating as text | message_type={message_type} | text={repr(user_msg)}", source="message_handler")
+                # נמשיך עם הטיפול הרגיל בהודעות טקסט
             else:
-                # הודעות לא-טקסט אחרות
-                from messages import get_unsupported_message_response
-                appropriate_response = get_unsupported_message_response(message_type)
-                await send_system_message(update, chat_id, appropriate_response)
-                
-                # 🔧 תיקון: הוספת התראת אדמין להודעות לא נתמכות
-                try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        appropriate_response,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
-                    )
-                except Exception as admin_err:
-                    logger.warning(f"[UNSUPPORTED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
-                
-                return
+                # אין טקסט, נטפל בהודעה כהודעה לא-טקסטואלית
+                if message_type == "voice":
+                    logger.info(f"🎤 התקבלה הודעה קולית (לא נתמכת כרגע) | chat_id={safe_str(chat_id)}", source="message_handler")
+                    voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
+                    await send_system_message(update, chat_id, voice_message)
+                    
+                    # 🔧 תיקון: הוספת התראת אדמין להודעה קולית
+                    try:
+                        from admin_notifications import send_anonymous_chat_notification
+                        send_anonymous_chat_notification(
+                            user_msg,
+                            voice_message,
+                            history_messages=None,
+                            messages_for_gpt=None,
+                            gpt_timing=None,
+                            user_timing=None,
+                            chat_id=chat_id
+                        )
+                    except Exception as admin_err:
+                        logger.warning(f"[VOICE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    
+                    return
+                else:
+                    # הודעות לא-טקסט אחרות
+                    from messages import get_unsupported_message_response
+                    appropriate_response = get_unsupported_message_response(message_type)
+                    await send_system_message(update, chat_id, appropriate_response)
+                    
+                    # 🔧 תיקון: הוספת התראת אדמין להודעות לא נתמכות
+                    try:
+                        from admin_notifications import send_anonymous_chat_notification
+                        send_anonymous_chat_notification(
+                            user_msg,
+                            appropriate_response,
+                            history_messages=None,
+                            messages_for_gpt=None,
+                            gpt_timing=None,
+                            user_timing=None,
+                            chat_id=chat_id
+                        )
+                    except Exception as admin_err:
+                        logger.warning(f"[UNSUPPORTED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    
+                    return
 
         # 🚀 התחלת ניטור concurrent
         try:

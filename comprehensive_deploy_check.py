@@ -232,16 +232,37 @@ class ComprehensiveDeployChecker:
         return len(errors) == 0, errors
     
     def check_function_signatures(self) -> Tuple[bool, List[str]]:
-        """בדיקת סנכרון חתימות פונקציות"""
+        """🛡️ בדיקת סנכרון חתימות פונקציות - מונע שגיאות runtime"""
         errors = []
         
         try:
-            from tests.test_function_signature_sync import test_function_signatures
-            test_function_signatures()
-            print("✅ סנכרון חתימות פונקציות - תקין")
-            return True, []
+            from tests.test_function_signature_sync import main as signature_check
+            success = signature_check()
+            if success:
+                print("✅ כל הפונקציות מסונכרנות!")
+                return True, []
+            else:
+                errors.append("❌ בעיות בחתימות פונקציות - ראה פרטים למעלה")
+                return False, errors
         except Exception as e:
-            errors.append(f"❌ בעיה בסנכרון חתימות פונקציות: {e}")
+            errors.append(f"❌ שגיאה בבדיקת חתימות פונקציות: {e}")
+            return False, errors
+
+    def check_smoke_test(self) -> Tuple[bool, List[str]]:
+        """🔥 Smoke Test - דמוי הודעת משתמש מלאה"""
+        errors = []
+        
+        try:
+            from tests.test_message_flow_integration import test_message_flow_smoke_test
+            success = test_message_flow_smoke_test()
+            if success:
+                print("✅ Smoke test עבר בהצלחה!")
+                return True, []
+            else:
+                errors.append("❌ Smoke test נכשל - ראה פרטים למעלה")
+                return False, errors
+        except Exception as e:
+            errors.append(f"❌ שגיאה ב-smoke test: {e}")
             return False, errors
 
     def check_unit_tests(self) -> Tuple[bool, List[str]]:
@@ -1120,6 +1141,7 @@ class ComprehensiveDeployChecker:
             ("מערכת התראות", self.check_notifications_system),
             ("מערכת הגיבוי והגנה", self.check_backup_and_protection_systems),
             ("סנכרון חתימות פונקציות", self.check_function_signatures),
+            ("Smoke Test - דמוי הודעת משתמש", self.check_smoke_test),
             ("בדיקות Unit", self.check_unit_tests),
             ("צריכת זיכרון", self.check_memory_usage),
             ("תאימות ממשקי ליבה", self.check_interface_compatibility),

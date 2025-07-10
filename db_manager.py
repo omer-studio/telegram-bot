@@ -1288,12 +1288,14 @@ def check_user_approved_status_db(chat_id):
         
         code_approve, approved = row
         
+        # 🔧 תיקון: בדיקת אישור קודמת לכל השאר!
+        if approved:
+            return {"status": "approved"}
+        
+        # אם לא מאושר, בודקים אם יש קוד
         if not code_approve:
             # משתמש קיים אבל אין לו קוד (שורה זמנית) - צריך קוד
             return {"status": "pending_code"}
-        
-        if approved:
-            return {"status": "approved"}
         else:
             # משתמש קיים עם קוד אבל לא אישר תנאים - צריך אישור
             return {"status": "pending_approval"}
