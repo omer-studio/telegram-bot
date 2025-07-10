@@ -21,7 +21,7 @@ from simple_config import TimeoutConfig
 from typing import TYPE_CHECKING
 from user_friendly_errors import safe_str
 if TYPE_CHECKING:
-    from message_handler import format_text_for_telegram, send_message_with_retry  # for type checkers only
+    from message_handler import send_message_with_retry  # for type checkers only
 # מערכת ביצועים מבוטלת זמנית
 
 # ייבוא הפילטר החכם

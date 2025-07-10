@@ -7,7 +7,7 @@
 **🚨 תיקון קריטי אבטחה (29/12/2024):** 
 - ✅ **תוקנה חשיפת מידע פרטי למשתמש** - הסרת הודעות "[עדכון פרופיל]" מההיסטוריה שנשלחת ל-GPT
 - ✅ **תוקנה כפילות הודעות** - הסרת race condition ב-update_chat_history 
-- ✅ **הוספת 3 שכבות אבטחה** - בדיקות CRITICAL SECURITY ב-format_text_for_telegram, send_message, ו-send_message_with_retry
+- ✅ **הוספת 3 שכבות אבטחה** - בדיקות CRITICAL SECURITY ב-send_message ו-send_message_with_retry
 - ✅ **פילטר אבטחה ב-get_chat_history_messages** - מונע הודעות פנימיות מלהגיע ל-GPT
 - ✅ **הגנה מרובדת** - כל הודעה שמתחילה ב-"[" ומכילה מילים כמו "עדכון", "debug", "admin" חסומה
 
@@ -211,7 +211,7 @@ async def new_feature():
 **פעולות שמותרות (מהירות):**
 - `clean_response()` - ניקוי טקסט פשוט
 - `validate_input()` - ולידציה בסיסית
-- `format_for_telegram()` - פורמט הודעה
+- `send_message()` - שליחת הודעה
 
 #### 3. **דפוס העברה לרקע:**
 ```python

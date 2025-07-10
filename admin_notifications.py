@@ -401,7 +401,7 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
             last_3_digits = safe_str(safe_chat_id)[-3:]
             chat_suffix = f" (`{last_3_digits}`)"
         
-        # יצירת הודעה מפורמטת ללא מזהה משתמש
+        # יצירת הודעה מעוצבת ללא מזהה משתמש
         notification_text = f"💬 **התכתבות חדשה{chat_suffix}** 💬\n\n"
         
         # 🔧 מספר הודעות משתמש אמיתי מהמסד נתונים

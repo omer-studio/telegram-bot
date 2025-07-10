@@ -2,18 +2,18 @@
 """
 schedule_internal_backup.py
 ===========================
-מתזמן גיבוי מסודר יומי ב-01:00
-מערכת גיבוי מסודרת בקבצים ותיקיות כמו שהמשתמש ביקש:
-backup/
-├── user_profile_backup/
-│   ├── user_profile_backup_10_07_2025.json
-│   └── user_profile_backup_09_07_2025.json
-├── chat_history_backup/
-│   ├── chat_history_backup_10_07_2025.json
-│   └── chat_history_backup_09_07_2025.json
-└── gpt_calls_backup/
-    ├── gpt_calls_backup_10_07_2025.json
-    └── gpt_calls_backup_09_07_2025.json
+מתזמן גיבוי מסודר יומי ב-01:00 📅
+🔒 מערכת גיבוי מסודרת במסד נתונים בלבד - אבטחת מידע מושלמת!
+
+Schema: backup/
+├── user_profiles_backup_10_07_2025
+├── chat_messages_backup_10_07_2025  
+├── gpt_calls_log_backup_10_07_2025
+├── user_profiles_backup_09_07_2025
+├── chat_messages_backup_09_07_2025
+└── gpt_calls_log_backup_09_07_2025
+
+🗄️ כל הגיבוי במסד נתונים - מתמשך ב-Render, אבטח לחלוטין!
 """
 
 import os
@@ -31,29 +31,28 @@ scheduler = None
 scheduler_thread = None
 
 def run_scheduled_organized_backup():
-    """מריץ גיבוי מסודר מתוזמן"""
+    """מריץ גיבוי מסודר מתוזמן במסד נתונים בלבד"""
     try:
-        logger.info("🕐 מתחיל גיבוי מסודר מתוזמן...")
+        logger.info("🕐 מתחיל גיבוי מסודר מתוזמן במסד נתונים...")
         
-        # ייבוא מותנה של המערכת המסודרת בקבצים
-        from organized_backup_system import run_organized_backup, cleanup_old_organized_backups
+        # 🔒 ייבוא המערכת הפנימי במסד נתונים - אבטח לחלוטין!
+        from organized_internal_backup import run_organized_internal_backup, cleanup_old_organized_internal_backups
         
-        # ניקוי קבצים ישנים (30 ימים)
-        cleanup_old_organized_backups(30)
+        # ניקוי טבלאות ישנות במסד נתונים (30 ימים)
+        cleanup_old_organized_internal_backups(30)
         
-        # הרצת גיבוי מסודר בקבצים
-        success = run_organized_backup()
+        # הרצת גיבוי מסודר במסד נתונים
+        success = run_organized_internal_backup()
         
         if success:
-            logger.info("✅ גיבוי מסודר מתוזמן הושלם בהצלחה")
-            # 🔧 הסרת הודעה כללית - הפונקציה עצמה כבר שולחת הודעה מפורטת
-            # send_admin_notification("✅ **גיבוי מסודר יומי** הושלם בהצלחה")
+            logger.info("✅ גיבוי מסודר פנימי מתוזמן הושלם בהצלחה")
+            # הפונקציה עצמה כבר שולחת הודעה מפורטת עם תצוגה ויזואלית
         else:
-            logger.error("❌ גיבוי מסודר מתוזמן נכשל")
-            send_admin_notification("❌ **גיבוי מסודר יומי** נכשל!", urgent=True)
+            logger.error("❌ גיבוי מסודר פנימי מתוזמן נכשל")
+            send_admin_notification("❌ **גיבוי מסודר יומי במסד** נכשל!", urgent=True)
             
     except Exception as e:
-        logger.error(f"❌ שגיאה בגיבוי מסודר מתוזמן: {e}")
+        logger.error(f"❌ שגיאה בגיבוי מסודר פנימי מתוזמן: {e}")
         send_admin_notification(f"❌ **שגיאה בגיבוי מסודר יומי:**\n```{e}```", urgent=True)
 
 def start_backup_scheduler():
@@ -81,7 +80,7 @@ def start_backup_scheduler():
         # הפעלת הscheduler
         scheduler.start()
         
-        logger.info("🕐 scheduler גיבוי מסודר הופעל - גיבוי יומי ב-01:00")
+        logger.info("🕐 scheduler גיבוי מסודר פנימי הופעל - גיבוי יומי ב-01:00 (מסד נתונים בלבד)")
         
         # רישום פונקציה לסגירה נקייה
         atexit.register(stop_backup_scheduler)
@@ -129,9 +128,9 @@ def is_scheduler_running():
         return False
 
 def run_backup_now():
-    """מריץ גיבוי מסודר מיידי"""
+    """מריץ גיבוי מסודר מיידי במסד נתונים"""
     try:
-        logger.info("🚀 מריץ גיבוי מסודר מיידי...")
+        logger.info("🚀 מריץ גיבוי מסודר פנימי מיידי...")
         
         # הרצה בthread נפרד כדי לא לחסום
         backup_thread = threading.Thread(target=run_scheduled_organized_backup)
@@ -141,7 +140,7 @@ def run_backup_now():
         return True
         
     except Exception as e:
-        logger.error(f"❌ שגיאה בהרצת גיבוי מיידי: {e}")
+        logger.error(f"❌ שגיאה בהרצת גיבוי פנימי מיידי: {e}")
         return False
 
 if __name__ == "__main__":

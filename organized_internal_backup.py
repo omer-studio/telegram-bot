@@ -192,48 +192,147 @@ def compare_with_yesterday_internal(today_date, today_results):
         logger.warning(f"⚠️ שגיאה בהשוואה עם אמש: {e}")
         return {}
 
-def send_detailed_internal_backup_notification(backup_results, total_records, yesterday_comparison):
-    """שולח התראה מפורטת על הגיבוי הפנימי המסודר"""
-    try:
-        backup_time = datetime.now()
+def generate_visual_backup_tree(backup_results, yesterday_comparison):
+    """יוצר תצוגה ויזואלית של מבנה תיקיות הגיבוי"""
+    tree = f"```\n{BACKUP_SCHEMA}/\n"
+    
+    # מיפוי שמות לתיקיות ויזואליות
+    folder_mapping = {
+        "user_profiles": "user_profile_backup",
+        "chat_messages": "chat_history_backup", 
+        "gpt_calls_log": "gpt_calls_backup"
+    }
+    
+    table_count = len(backup_results)
+    for i, (table_name, info) in enumerate(backup_results.items()):
+        is_last_table = (i == table_count - 1)
+        folder_prefix = "└── " if is_last_table else "├── "
         
-        # כותרת ההודעה - קומפקטית יותר
-        notification = f"🗄️ **גיבוי מסודר יומי הושלם בהצלחה**\n\n"
-        notification += f"📅 **{backup_time.strftime('%d/%m/%Y %H:%M')}**\n"
-        notification += f"📊 **סה\"כ:** {total_records:,} רשומות ב-{len(backup_results)} טבלאות\n"
-        notification += f"🏗️ **Schema:** `{BACKUP_SCHEMA}`\n\n"
+        # שם התיקיה הויזואלית
+        visual_folder = folder_mapping.get(table_name, f"{table_name}_backup")
+        tree += f"{folder_prefix}📁 {visual_folder}/\n"
         
-        # פירוט קומפקטי לכל טבלה
-        notification += f"📋 **פירוט טבלאות:**\n"
-        for table_name, info in backup_results.items():
-            # שם קצר לטבלה
-            table_short = table_name.replace("_", " ").title()[:15]
-            notification += f"• **{table_short}:** {info['records_count']:,} רשומות ({info['table_size']})\n"
+        # קבלת גיבויים קודמים לאותה טבלה 
+        previous_backups = get_previous_backups_for_table(table_name)
+        
+        # הוספת הגיבוי הנוכחי לרשימה
+        all_backups = previous_backups + [info]
+        all_backups = sorted(all_backups, key=lambda x: x.get('backup_date', ''), reverse=True)
+        
+        # הצגת עד 3 גיבויים אחרונים
+        backups_to_show = all_backups[:3]
+        
+        for j, backup in enumerate(backups_to_show):
+            is_last_backup = (j == len(backups_to_show) - 1)
+            is_today = backup.get('backup_date') == datetime.now().strftime("%d_%m_%Y")
             
-            # השוואה עם אמש - קומפקטית
-            if table_name in yesterday_comparison:
+            if is_last_table:
+                backup_prefix = "    └── " if is_last_backup else "    ├── "
+            else:
+                backup_prefix = "│   └── " if is_last_backup else "│   ├── "
+            
+            # פורמט הקובץ הויזואלי  
+            file_name = f"{visual_folder.replace('_backup', '')}_backup_{backup.get('backup_date', 'unknown')}.json"
+            size_info = backup.get('table_size', 'unknown')
+            
+            # סימון הגיבוי של היום
+            today_marker = " 🆕" if is_today else ""
+            
+            # השוואה עם אמש
+            change_info = ""
+            if is_today and table_name in yesterday_comparison:
                 comp = yesterday_comparison[table_name]
                 if comp["has_yesterday"]:
                     records_change = comp["records_diff"]
-                    
                     if records_change > 0:
-                        notification += f"  📈 +{records_change} מאתמול\n"
+                        change_info = f" (+{records_change})"
                     elif records_change < 0:
-                        notification += f"  📉 {records_change} מאתמול\n"
-                    else:
-                        notification += f"  ➖ ללא שינוי\n"
-                else:
-                    notification += f"  🆕 גיבוי ראשון\n"
+                        change_info = f" ({records_change})"
+            
+            tree += f"{backup_prefix}{file_name}  ({size_info}){change_info}{today_marker}\n"
+        
+        # אם יש יותר גיבויים
+        if len(all_backups) > 3:
+            remaining = len(all_backups) - 3
+            if is_last_table:
+                tree += f"    └── ... ועוד {remaining} גיבויים\n"
+            else:
+                tree += f"│   └── ... ועוד {remaining} גיבויים\n"
+    
+    tree += "```"
+    return tree
+
+def get_previous_backups_for_table(table_name):
+    """מקבל רשימת גיבויים קודמים לטבלה מסוימת מהמסד"""
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        
+        # קבלת כל הטבלאות של אותו סוג מהמסד
+        cur.execute(f"""
+            SELECT table_name, 
+                   pg_size_pretty(pg_total_relation_size('{BACKUP_SCHEMA}.' || table_name)) as size
+            FROM information_schema.tables 
+            WHERE table_schema = '{BACKUP_SCHEMA}'
+            AND table_name LIKE '{table_name}_backup_%'
+            AND table_name != '{table_name}_backup_{datetime.now().strftime("%d_%m_%Y")}'
+            ORDER BY table_name DESC
+        """)
+        
+        backup_tables = cur.fetchall()
+        previous_backups = []
+        
+        for backup_table_name, size in backup_tables:
+            # חילוץ תאריך הגיבוי
+            backup_date = backup_table_name.split("_backup_")[-1]
+            
+            previous_backups.append({
+                "table_name": table_name,
+                "backup_table_name": backup_table_name,
+                "backup_date": backup_date,
+                "table_size": size
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return previous_backups
+        
+    except Exception as e:
+        logger.warning(f"⚠️ שגיאה בקבלת גיבויים קודמים ל-{table_name}: {e}")
+        return []
+
+def send_detailed_internal_backup_notification(backup_results, total_records, yesterday_comparison):
+    """שולח התראה מפורטת עם תצוגה ויזואלית של הגיבוי הפנימי המסודר"""
+    try:
+        backup_time = datetime.now()
+        
+        # כותרת ההודעה
+        notification = f"🗄️ **גיבוי מסודר יומי הושלם בהצלחה**\n\n"
+        notification += f"📅 **{backup_time.strftime('%d/%m/%Y %H:%M')}**\n"
+        notification += f"📊 **סה\"כ:** {total_records:,} רשומות ב-{len(backup_results)} טבלאות\n"
+        notification += f"🔒 **אבטחה:** גיבוי אך ורק במסד נתונים\n\n"
+        
+        # 🎨 תצוגה ויזואלית של מבנה התיקיות
+        notification += f"📂 **מבנה גיבוי ויזואלי:**\n"
+        visual_tree = generate_visual_backup_tree(backup_results, yesterday_comparison)
+        notification += f"{visual_tree}\n\n"
+        
+        # סיכום טכני קומפקטי
+        notification += f"⚙️ **פרטים טכניים:**\n"
+        for table_name, info in backup_results.items():
+            table_short = table_name.replace("_", " ").title()[:15]
+            notification += f"• **{table_short}:** {info['records_count']:,} רשומות\n"
         
         # קודי אישור
         notification += f"\n🔐 **קודי אישור:**\n"
         for table_name, info in backup_results.items():
             notification += f"• `{info['confirmation_code']}`\n"
         
-        # מיקום ומדיניות - קומפקטי
-        notification += f"\n📍 **מיקום:** PostgreSQL/{BACKUP_SCHEMA}\n"
-        notification += f"🗓️ **שמירה:** {BACKUP_RETENTION_DAYS} ימים\n"
-        notification += f"☁️ **מתמשך ב-Render** - לא נמחק!"
+        # מיקום ומדיניות
+        notification += f"\n📍 **Schema:** `{BACKUP_SCHEMA}` | "
+        notification += f"🗓️ **שמירה:** {BACKUP_RETENTION_DAYS} ימים | "
+        notification += f"☁️ **מתמשך ב-Render**"
         
         send_admin_notification(notification)
         
@@ -243,7 +342,8 @@ def send_detailed_internal_backup_notification(backup_results, total_records, ye
         try:
             backup_summary = f"✅ **גיבוי מסודר הושלם**\n"
             backup_summary += f"📊 {total_records:,} רשומות ב-{len(backup_results)} טבלאות\n"
-            backup_summary += f"📅 {backup_time.strftime('%d/%m/%Y %H:%M')}"
+            backup_summary += f"📅 {backup_time.strftime('%d/%m/%Y %H:%M')}\n"
+            backup_summary += f"🔒 אך ורק במסד נתונים"
             send_admin_notification(backup_summary)
         except Exception as e2:
             logger.error(f"❌ שגיאה גם בהודעה הקצרה: {e2}")

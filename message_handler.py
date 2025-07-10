@@ -1,8 +1,8 @@
 """
 message_handler.py
 ------------------
-קובץ זה מרכז את כל הטיפול בהודעות ועיצוב, פורמטינג, ושליחה של הודעות.
-הרציונל: ריכוז כל ניהול ההודעות, פורמטינג, שגיאות, וחוויית משתמש במקום אחד.
+קובץ זה מרכז את כל הטיפול בהודעות ושליחה של הודעות.
+הרציונל: ריכוז כל ניהול ההודעות, שגיאות, וחוויית משתמש במקום אחד.
 """
 
 import asyncio
@@ -51,22 +51,7 @@ from db_manager import register_user_with_code_db, check_user_approved_status_db
 
 from chat_utils import get_weekday_context_instruction, get_holiday_system_message
 
-# 🎨 Constants - מניעת כפילויות
-EMOJI_PATTERN = r'[\U0001F600-\U0001F64F\U0001F300-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]'
 
-# 🚀 OPTIMIZED: Pre-compiled regex patterns for fast formatting
-import re
-_HTML_CLEAN_PATTERN = re.compile(r'<[^>]+>')
-_BOLD_PATTERN = re.compile(r'\*\*(.*?)\*\*')
-_BOLD_UNDERSCORE_PATTERN = re.compile(r'__(.*?)__')
-_UNDERLINE_PATTERN = re.compile(r'\*(.*?)\*')
-_UNDERLINE_UNDERSCORE_PATTERN = re.compile(r'_(.*?)_')
-_DOT_EMOJI_PATTERN = re.compile(fr'\.(\s*)({EMOJI_PATTERN})')
-_PUNCT_EMOJI_PATTERN = re.compile(fr'([?!])(\s*)({EMOJI_PATTERN})')
-_DOT_ONLY_PATTERN = re.compile(r'\.(\s*)')
-_PUNCT_ONLY_PATTERN = re.compile(fr'([?!])(\s*)(?!.*{EMOJI_PATTERN})')
-_NEWLINE_SPACES_PATTERN = re.compile(r'\n\s+')
-_MULTIPLE_NEWLINES_PATTERN = re.compile(r'\n{3,}')
 
 def safe_extract_message_info(update):
     """
@@ -147,7 +132,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
         print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={safe_str(chat_id)}")
         return
     
-    # שליחת טקסט כמו שהוא, ללא פורמטינג מיוחד
+    # שליחת טקסט כמו שהוא, ללא עיבוד מיוחד
     formatted_text = text
     
     # 🔧 תיקון קריטי: Progressive timeout מהיר יותר
@@ -629,7 +614,7 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
 
 async def send_system_message(update, chat_id, text, reply_markup=None):
     """
-    שולחת הודעת מערכת למשתמש ללא פורמטינג מתקדם
+    שולחת הודעת מערכת למשתמש
     """
     try:
         # 🔧 תיקון קריטי: Progressive timeout אופטימלי גם להודעות מערכת

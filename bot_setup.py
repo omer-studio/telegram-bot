@@ -1597,7 +1597,7 @@ async def send_logs_to_telegram(update, logs, log_type, lines):
         formatted_logs = header + logs
         
         # חלוקה לחלקים (טלגרם מוגבל ל-4096 תווים)
-        max_length = 4000  # השארת מקום לפורמטינג
+        max_length = 4000  # השארת מקום לכותרות
         
         if len(formatted_logs) <= max_length:
             await update.message.reply_text(f"```\n{formatted_logs}\n```", parse_mode="Markdown")

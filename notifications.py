@@ -238,7 +238,7 @@ async def _send_user_friendly_error_message(update, chat_id: str, original_messa
             from message_handler import send_system_message
             await send_system_message(update, chat_id, user_friendly_message)
         else:
-            # אם אין update זמין, ננסה לשלוח ישירות דרך bot API (ללא פורמטינג - רק תשובות GPT-A צריכות פורמטינג)
+            # אם אין update זמין, ננסה לשלוח ישירות דרך bot API
             bot = telegram.Bot(token=BOT_TOKEN)
             await bot.send_message(chat_id=safe_str(chat_id), text=user_friendly_message)
         
@@ -286,7 +286,7 @@ async def send_recovery_messages_to_affected_users():
         for chat_id, user_info in users_data.items():
             if not user_info.get("recovered", False):
                 try:
-                    # הודעת התאוששות - ללא פורמטינג (רק תשובות GPT-A צריכות פורמטינג)
+                    # הודעת התאוששות
                     await bot.send_message(chat_id=safe_str(chat_id), text=recovery_message)
                     
                     # 🚨 התראה לאדמין על שליחת הודעת התאוששות
@@ -1134,7 +1134,7 @@ async def send_gentle_reminder(chat_id: str) -> bool:
         await bot.send_message(
             chat_id=safe_str(chat_id),
             text=GENTLE_REMINDER_MESSAGE,
-            parse_mode=None  # ללא פורמטינג מיוחד
+            parse_mode=None  # ללא עיבוד מיוחד
         )
         
         # סימון שהתזכורת נשלחה
@@ -1745,7 +1745,7 @@ def get_database_table_counts():
         except Exception:
             pass
         
-        # יצירת הודעה מפורמטת
+        # יצירת הודעה מעוצבת
         if not table_counts:
             return "❌ לא נמצאו טבלאות במסד הנתונים"
         
