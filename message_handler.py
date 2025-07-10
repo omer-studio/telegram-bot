@@ -94,7 +94,7 @@ async def send_approval_message(update, chat_id):
             ),
             timeout=TimeoutConfig.TELEGRAM_SEND_TIMEOUT
         )
-        update_chat_history(safe_str(chat_id), "", approval_msg)
+        # 🚀 הודעת אישור נשלחה! עדכון היסטוריה יתבצע ברקע להאצת זמן תגובה
         logger.info("הודעת אישור נשלחה", source="message_handler", chat_id=chat_id)
         
     except Exception as e:
@@ -176,8 +176,8 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             logger.error(f"❌ [NOTIFY_ERROR] התראה לאדמין נכשלה: {notify_err}", source="message_handler")
         return
     
-    if is_bot_message:
-        update_chat_history(safe_str(chat_id), "", formatted_text)
+    # 🚀 הודעה נשלחה בהצלחה! עדכון היסטוריה מועבר לרקע להאצת זמן תגובה
+    # עדכון ההיסטוריה יתבצע ברקע ב-handle_background_tasks
     
     logger.info(f"📤 [SENT] הודעה נשלחה | chat_id={safe_str(chat_id)}", source="message_handler")
 
@@ -247,9 +247,11 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s", source="message_handler")
         
-        # שלב 1: עדכון היסטוריה
+        # שלב 1: עדכון היסטוריה (הועבר לכאן לצמצום פער הקוד)
         try:
+            # עדכון ההיסטוריה המלא - כל ההודעות
             update_chat_history(safe_str(chat_id), user_msg, bot_reply)
+            logger.info(f"[BACKGROUND] היסטוריה עודכנה | chat_id={safe_str(chat_id)}", source="message_handler")
         except Exception as hist_err:
             logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
         
@@ -655,274 +657,13 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
                 else:
                     raise e
         
-        # 🔧 תיקון: שמירת הודעת מערכת נכון - הבוט שלח, לא המשתמש
-        update_chat_history(safe_str(chat_id), "", text)  # הודעת מערכת - אין הודעת משתמש
-        # 🗑️ הוחלף ב-logger פשוט
+        # 🚀 הודעת מערכת נשלחה! עדכון היסטוריה יתבצע ברקע להאצת זמן תגובה
+        # עדכון ההיסטוריה להודעות מערכת יתבצע ברקע (אם נדרש)
+        
         logger.info(f"הודעת מערכת נשלחה: {text[:100]}...", source="message_handler", chat_id=chat_id)
         
     except Exception as e:
         logger.error(f"שליחת הודעת מערכת נכשלה: {e}", source="message_handler")
-
-async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt, user_response_actual_time):
-    """
-    🔧 פונקציה חדשה: מטפלת בכל המשימות ברקע אחרי שהמשתמש קיבל תשובה
-    זה מבטיח שהמשתמש מקבל תשובה מהר, וכל השאר קורה ברקע
-    """
-    try:
-        # 🚀 שלב 0: עיבוד GPT-A ברקע (עלויות, מטריקות, לוגים)
-        try:
-            if isinstance(gpt_result, dict) and gpt_result.get("background_data"):
-                from gpt_a_handler import process_gpt_a_background_tasks
-                process_gpt_a_background_tasks(gpt_result, chat_id, message_id)
-        except Exception as gpt_a_bg_err:
-            logger.warning(f"[BACKGROUND] שגיאה בעיבוד GPT-A ברקע: {gpt_a_bg_err}", source="message_handler")
-        
-        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע)
-        try:
-            from admin_notifications import send_anonymous_chat_notification
-            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
-            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
-            
-            send_anonymous_chat_notification(
-                user_msg, 
-                bot_reply, 
-                history_messages, 
-                messages_for_gpt,
-                gpt_timing=gpt_response_time,
-                user_timing=user_response_actual_time,  # 🔧 תיקון: זמן אמיתי!
-                chat_id=chat_id
-            )
-        except Exception as admin_chat_err:
-            logger.warning(f"שגיאה בשליחת התכתבות לאדמין: {admin_chat_err}", source="message_handler")
-
-        # 🔧 תיקון: שימוש בזמן התגובה האמיתי
-        response_time = user_response_actual_time
-        
-        # 💾 שמירת זמן תגובה כולל למסד הנתונים
-        try:
-            from db_manager import save_system_metrics
-            save_system_metrics(
-                metric_type="response_time",
-                chat_id=safe_str(chat_id),
-                response_time_seconds=response_time,
-                additional_data={
-                    "message_id": message_id,
-                    "user_msg_length": len(user_msg),
-                    "bot_msg_length": len(bot_reply) if bot_reply else 0,
-                    "background_processing": True
-                }
-            )
-        except Exception as save_err:
-            logger.warning(f"Could not save response time metrics: {save_err}", source="message_handler")
-        
-        background_data = {
-            "chat_id": safe_str(chat_id),
-            "message_id": message_id,
-            "user_msg": user_msg,
-            "bot_reply": bot_reply,
-            "response_time": response_time,
-            "timestamp": datetime.utcnow().isoformat(),
-            "processing_stage": "background"
-        }
-        
-        logger.info(f"🔄 [BACKGROUND] התחלת משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s", source="message_handler")
-        
-        # שלב 1: עדכון היסטוריה
-        try:
-            update_chat_history(safe_str(chat_id), user_msg, bot_reply)
-        except Exception as hist_err:
-            logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
-        
-        # 🔧 תיקון: טעינת היסטוריה מחדש אחרי השמירה כדי שהמונה יעלה
-        try:
-            updated_history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
-            # עדכון ההיסטוריה לשליחת התראה עם המונה הנכון
-            history_messages = updated_history_messages if updated_history_messages else history_messages
-            print(f"🔄 [BACKGROUND] היסטוריה עודכנה: {len(history_messages)} הודעות")
-        except Exception as hist_reload_err:
-            logger.warning(f"[BACKGROUND] שגיאה בטעינת היסטוריה מחדש: {hist_reload_err}", source="message_handler")
-        
-        # שלב 2: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
-        summary_result = None
-        summary_usage = {}
-        if len(bot_reply) > 100:
-            try:
-                summary_result = get_summary(user_msg, bot_reply, safe_str(chat_id), message_id)
-                if summary_result and isinstance(summary_result, dict):
-                    summary_usage = summary_result.get("usage", {})
-                    print(f"📝 [BACKGROUND] נוצר סיכום: {summary_result.get('summary', '')[:50]}...")
-            except Exception as summary_err:
-                logger.warning(f"[BACKGROUND] שגיאה ביצירת סיכום: {summary_err}", source="message_handler")
-        
-        # שלב 3: הפעלה במקביל של כל התהליכים
-        all_tasks = []
-        gpt_c_result = None
-        
-        if should_run_gpt_c(user_msg):
-            gpt_c_result = await asyncio.to_thread(extract_user_info, user_msg, safe_str(chat_id))
-        
-        all_tasks.append(smart_update_profile_with_gpt_d_async(safe_str(chat_id), user_msg, bot_reply, gpt_c_result))
-        all_tasks.append(execute_gpt_e_if_needed(safe_str(chat_id)))
-        
-        results = await asyncio.gather(*all_tasks, return_exceptions=True)
-        
-        # שלב 4: רישום למסד נתונים
-        try:
-            # איסוף נתונים מלאים לרישום  
-            # ✅ השתמש בפונקציה מהמסד נתונים
-            from profile_utils import get_user_summary_fast
-            current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
-            history_messages = get_chat_history_simple(safe_str(chat_id), limit=32)
-            
-            # בניית הודעות מלאות לרישום
-            messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
-            if current_summary:
-                messages_for_log.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
-            if history_messages:
-                messages_for_log.extend(history_messages)
-            messages_for_log.append({"role": "user", "content": user_msg})
-            
-            # ✅ רישום למסד נתונים
-            save_gpt_chat_message(
-                chat_id=safe_str(chat_id),
-                user_msg=user_msg,
-                bot_msg=bot_reply,
-                gpt_data={
-                    "message_id": message_id,
-                    "reply_summary": summary_result.get("summary", "") if summary_result else "",
-                    "main_usage": gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
-                    "summary_usage": summary_usage,
-                    "extract_usage": gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
-                    "total_tokens": gpt_result.get("usage", {}).get("total_tokens", 0) if isinstance(gpt_result, dict) else 0,
-                    "cost_usd": gpt_result.get("usage", {}).get("cost_total", 0) if isinstance(gpt_result, dict) else 0,
-                    "cost_ils": gpt_result.get("usage", {}).get("cost_total_ils", 0) if isinstance(gpt_result, dict) else 0
-                }
-            )
-            
-            logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)}", source="message_handler")
-            
-        except Exception as log_exc:
-            logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_exc}", source="message_handler")
-        
-        # שלב 5: רישום למסד נתונים (לתחזוקת הדוחות היומיים)
-        try:
-            # ✅ הלוגים נשמרים אוטומטית למסד נתונים
-            # חישוב עלות כוללת
-            total_cost_ils = 0
-            if isinstance(gpt_result, dict) and gpt_result.get("usage"):
-                total_cost_ils += gpt_result["usage"].get("cost_total_ils", 0)
-            if summary_usage:
-                total_cost_ils += summary_usage.get("cost_total_ils", 0)
-            if gpt_c_result and isinstance(gpt_c_result, dict) and gpt_c_result.get("usage"):
-                total_cost_ils += gpt_c_result["usage"].get("cost_total_ils", 0)
-            
-            # ✅ הלוגים נשמרים אוטומטית למסד הנתונים
-            logger.info(f"📝 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)}", source="message_handler")
-            
-        except Exception as log_file_exc:
-            logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_file_exc}", source="message_handler")
-        
-        # 🔍 לוג שקט לבדיקות (ללא הודעות לאדמין)
-        if should_log_debug_prints():
-            ran_components = []
-            if should_run_gpt_c(user_msg) and gpt_c_result is not None:
-                ran_components.append("GPT-C")
-            if len(results) > 0 and results[0] is not None:
-                ran_components.append("GPT-D")
-            if len(results) > 1 and results[1] is not None:
-                ran_components.append("GPT-E")
-            
-            if ran_components:
-                print(f"[DEBUG] 🛠️ הרצת מעבדי פרופיל ברקע: {', '.join(ran_components)} | chat_id={safe_str(chat_id)}")
-        
-        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s | זמן כולל כולל רקע: {time.time() - user_request_start_time:.2f}s", source="message_handler")
-        
-        # שלב 5: התראות אדמין (אם יש שינויים)
-        try:
-            from unified_profile_notifications import send_profile_update_notification
-            from profile_utils import _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
-            
-            # 🔧 תיקון: שמירת הפרופיל הישן לפני כל העדכונים
-            old_profile_before_updates = get_user_profile_fast(safe_str(chat_id))
-            
-            gpt_c_changes_list = []
-            gpt_d_changes_list = []
-            gpt_e_changes_list = []
-            
-            # GPT-C changes
-            if should_run_gpt_c(user_msg) and gpt_c_result is not None and not isinstance(gpt_c_result, Exception):
-                extracted_fields = gpt_c_result.get("extracted_fields", {}) if isinstance(gpt_c_result, dict) else {}
-                new_profile = {**old_profile_before_updates, **extracted_fields}
-                changes = _detect_profile_changes(old_profile_before_updates, new_profile)
-                for change in changes:
-                    gpt_c_changes_list.append({
-                        'field': change['field'],
-                        'old_value': change['old_value'] or 'ריק',
-                        'new_value': change['new_value']
-                    })
-            
-            # GPT-D changes
-            gpt_d_res = results[0] if len(results) > 0 else None
-            if gpt_d_res is not None and not isinstance(gpt_d_res, Exception):
-                updated_profile, usage = gpt_d_res if isinstance(gpt_d_res, tuple) else (None, {})
-                if updated_profile and isinstance(updated_profile, dict):
-                    changes = _detect_profile_changes(old_profile_before_updates, updated_profile)
-                    for change in changes:
-                        gpt_d_changes_list.append({
-                            'field': change['field'],
-                            'old_value': change['old_value'] or 'ריק',
-                            'new_value': change['new_value']
-                        })
-            
-            # GPT-E changes
-            gpt_e_res = results[1] if len(results) > 1 else None
-            gpt_e_counter = None
-            if gpt_e_res is not None and not isinstance(gpt_e_res, Exception):
-                changes_dict = gpt_e_res.get("changes", {}) if isinstance(gpt_e_res, dict) else {}
-                if changes_dict:
-                    new_profile = {**old_profile_before_updates, **changes_dict}
-                    changes = _detect_profile_changes(old_profile_before_updates, new_profile)
-                    for change in changes:
-                        gpt_e_changes_list.append({
-                            'field': change['field'],
-                            'old_value': change['old_value'] or 'ריק',
-                            'new_value': change['new_value']
-                        })
-                    
-                    # הוספת קאונטר GPT-E
-                    try:
-                        from chat_utils import get_user_stats_and_history
-                        from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
-                        stats, _ = get_user_stats_and_history(safe_str(chat_id))
-                        total_messages = stats.get("total_messages", 0)
-                        gpt_e_counter = f"{total_messages}/{GPT_E_RUN_EVERY_MESSAGES}"
-                    except:
-                        gpt_e_counter = None
-            
-            # שליחת התראה רק אם יש שינויים
-            if gpt_c_changes_list or gpt_d_changes_list or gpt_e_changes_list:
-                # יצירת סיכום מהיר
-                current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
-                
-                send_profile_update_notification(
-                    chat_id=safe_str(chat_id),
-                    user_message=user_msg,
-                    gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
-                    gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
-                    gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
-                    gpt_e_counter=gpt_e_counter,
-                    summary=current_summary
-                )
-                
-        except Exception as admin_err:
-            logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
-        
-        logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s | זמן כולל כולל רקע: {time.time() - user_request_start_time:.2f}s", source="message_handler")
-        
-    except Exception as ex:
-        logger.error(f"❌ [BACKGROUND] שגיאה במשימות ברקע: {ex}", source="message_handler")
-        # לא נכשל אם המשימות ברקע נכשלות - המשתמש כבר קיבל תשובה
-
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -1076,7 +817,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 🚀 שליחת התשובה למשתמש מיד!
         await send_message(update, chat_id, bot_reply, is_bot_message=True, is_gpt_a_response=True)
 
-        # 🔧 מדידת זמן תגובה אמיתי מיד אחרי שליחה למשתמש
+        # 🔧 מדידת זמן תגובה אמיתי מיד אחרי שליחה למשתמש - זה הזמן האמיתי!
         user_response_actual_time = time.time() - user_request_start_time
 
         # 🔧 כל השאר ברקע - המשתמש כבר קיבל תשובה!

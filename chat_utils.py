@@ -909,8 +909,8 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
         
         hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
         
-        # שולח ברכה רק אם עברו יותר מ-2 שעות
-        return hours_since >= 2
+        # שולח ברכה רק אם עברו יותר מ-3 שעות
+        return hours_since >= 3
         
     except Exception as e:
         logger.error(f"שגיאה ב-should_send_time_greeting: {e}", source="GREETING_CHECK")
@@ -948,11 +948,12 @@ def build_complete_system_messages(chat_id: str, user_msg: str = "", include_mai
     except Exception as e:
         logger.warning(f"[build_complete_system_messages] Could not get user summary: {e}", source="chat_utils")
     
-    # 3. ברכות זמן
+    # 3. ברכות זמן (רק אם צריך לפי הלוגיקה)
     try:
-        time_greeting = get_time_greeting_instruction()
-        if time_greeting:
-            system_messages.append({"role": "system", "content": time_greeting})
+        if should_send_time_greeting(safe_str(chat_id), user_msg):
+            time_greeting = get_time_greeting_instruction()
+            if time_greeting:
+                system_messages.append({"role": "system", "content": time_greeting})
     except Exception as e:
         logger.warning(f"[build_complete_system_messages] Could not get time greeting: {e}", source="chat_utils")
     

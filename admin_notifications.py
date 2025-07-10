@@ -430,9 +430,9 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
                 if len(prompt_content) > 30:
                     prompt_preview = prompt_content[:30] + "..."
                     remaining_chars = len(prompt_content) - 30
-                    notification_text += f"**סיסטם פרומט {i}:** **{prompt_preview}** (+{remaining_chars})\n"
+                    notification_text += f"**סיסטם פרומט {i}:** {prompt_preview} (+{remaining_chars})\n"
                 else:
-                    notification_text += f"**סיסטם פרומט {i}:** **{prompt_content}**\n"
+                    notification_text += f"**סיסטם פרומט {i}:** {prompt_content}\n"
             if system_prompts:
                 notification_text += f"\n"
         
