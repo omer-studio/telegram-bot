@@ -116,67 +116,7 @@ async def send_approval_message(update, chat_id):
         logger.error(f"❌ שליחת הודעת אישור נכשלה: {e}", source="message_handler")
         await send_system_message(update, chat_id, approval_msg)
 
-def format_text_for_telegram(text):
-    """
-    📝 פורמטינג פשוט וברור:
-    • כל נקודה/שאלה/קריאה → מעבר שורה (נקודה נמחקת)
-    • מעבר שורה קורה לפני המילה הראשונה בשורה הבאה (אימוג'ים נשארים)
-    • שמירה על מעברי פסקאות (מעברי שורה כפולים)
-    • כל השאר נשאר אותו דבר
-    """
-    try:
-        if not text:
-            return ""
-        
-        # שלב 1: שמירת מעברי פסקאות (מעברי שורה כפולים)
-        PARAGRAPH_PLACEHOLDER = "§§§PARAGRAPH_BREAK§§§"
-        text = text.replace('\n\n', PARAGRAPH_PLACEHOLDER)
-        
-        # שלב 2: פיסוק - כללים פשוטים
-        # נקודה → מעבר שורה (מחיקת הנקודה)
-        text = text.replace('.', '\n')
-        
-        # שאלה/קריאה → מעבר שורה (שמירת הסימן)
-        text = text.replace('?', '?\n')
-        text = text.replace('!', '!\n')
-        
-        # שלב 3: החזרת מעברי פסקאות לפני Markdown
-        text = text.replace(PARAGRAPH_PLACEHOLDER, '\n\n')
-        
-        # שלב 4: Markdown → HTML (אחרי החזרת הפלייסהולדרים)
-        text = text.replace('**', '<b>').replace('**', '</b>')
-        text = text.replace('__', '<b>').replace('__', '</b>')
-        text = text.replace('*', '<u>').replace('*', '</u>')
-        text = text.replace('_', '<u>').replace('_', '</u>')
-        
-        # שלב 5: ניקוי
-        # מסיר רווחים בתחילת שורות
-        lines = text.split('\n')
-        cleaned_lines = [line.strip() for line in lines]
-        text = '\n'.join(cleaned_lines)
-        
-        # מסיר שורות ריקות מיותרות (משאיר רק כפולים)
-        while '\n\n\n' in text:
-            text = text.replace('\n\n\n', '\n\n')
-        
-        text = text.strip()
-        
-        # וידוא מעבר שורה בסוף
-        if text and not text.endswith('\n'):
-            text += '\n'
-        
-        return text
-        
-    except Exception as e:
-        # 🛡️ Error handling - המשתמש יקבל תשובה גם אם הפורמטינג נכשל
-        logger.error(f"🚨 שגיאה בפורמטינג: {e} | טקסט: {text[:50]}...", source="message_handler")
-        
-        # fallback פשוט - מחזיר את הטקסט המקורי עם \n בסוף
-        try:
-            fallback_text = str(text or "").strip()
-            return fallback_text + '\n' if fallback_text else ""
-        except:
-            return "שגיאה בפורמטינג - הודעה לא זמינה\n"
+
 
 async def _handle_holiday_check(update, chat_id, bot_reply):
     """
@@ -207,11 +147,8 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
         print(f"🚨🚨🚨 CRITICAL: חסימת הודעה פנימית למשתמש! chat_id={safe_str(chat_id)}")
         return
     
-    # 🚀 פורמטינג מהיר - עכשיו זה כבר מהיר אז אפשר לעשות לפני שליחה!
-    if is_gpt_a_response:
-        formatted_text = format_text_for_telegram(text)
-    else:
-        formatted_text = format_text_for_telegram(text)
+    # שליחת טקסט כמו שהוא, ללא פורמטינג מיוחד
+    formatted_text = text
     
     # 🔧 תיקון קריטי: Progressive timeout מהיר יותר
     try:
@@ -259,20 +196,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
     
     logger.info(f"📤 [SENT] הודעה נשלחה | chat_id={safe_str(chat_id)}", source="message_handler")
 
-async def handle_formatting_background(chat_id, original_text, sent_message):
-    """
-    🔧 פונקציה חדשה: טיפול בפורמטינג ברקע
-    """
-    try:
-        # זה יכול לקחת זמן - אבל המשתמש כבר קיבל תשובה!
-        formatted_text = format_text_for_telegram(original_text)
-        
-        # אם הפורמטינג שינה משהו משמעותי, אפשר לעדכן
-        if len(formatted_text) != len(original_text.strip() + '\n'):
-            logger.info(f"🔧 [BACKGROUND_FORMAT] פורמטינג הושלם ברקע | chat_id={safe_str(chat_id)}", source="message_handler")
-        
-    except Exception as e:
-        logger.warning(f"⚠️ [BACKGROUND_FORMAT] שגיאה בפורמטינג ברקע: {e}", source="message_handler")
+
 
 async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply, message_id, user_request_start_time, gpt_result, history_messages, messages_for_gpt, user_response_actual_time):
     """

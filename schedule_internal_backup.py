@@ -3,7 +3,17 @@
 schedule_internal_backup.py
 ===========================
 מתזמן גיבוי מסודר יומי ב-01:00
-מעבר למערכת הגיבוי המסודרת שהמשתמש ביקש
+מערכת גיבוי מסודרת בקבצים ותיקיות כמו שהמשתמש ביקש:
+backup/
+├── user_profile_backup/
+│   ├── user_profile_backup_10_07_2025.json
+│   └── user_profile_backup_09_07_2025.json
+├── chat_history_backup/
+│   ├── chat_history_backup_10_07_2025.json
+│   └── chat_history_backup_09_07_2025.json
+└── gpt_calls_backup/
+    ├── gpt_calls_backup_10_07_2025.json
+    └── gpt_calls_backup_09_07_2025.json
 """
 
 import os
@@ -25,14 +35,14 @@ def run_scheduled_organized_backup():
     try:
         logger.info("🕐 מתחיל גיבוי מסודר מתוזמן...")
         
-        # ייבוא מותנה של המערכת הפנימית המסודרת
-        from organized_internal_backup import run_organized_internal_backup, cleanup_old_organized_internal_backups
+        # ייבוא מותנה של המערכת המסודרת בקבצים
+        from organized_backup_system import run_organized_backup, cleanup_old_organized_backups
         
-        # ניקוי טבלאות ישנות (30 ימים)
-        cleanup_old_organized_internal_backups(30)
+        # ניקוי קבצים ישנים (30 ימים)
+        cleanup_old_organized_backups(30)
         
-        # הרצת גיבוי פנימי מסודר
-        success = run_organized_internal_backup()
+        # הרצת גיבוי מסודר בקבצים
+        success = run_organized_backup()
         
         if success:
             logger.info("✅ גיבוי מסודר מתוזמן הושלם בהצלחה")

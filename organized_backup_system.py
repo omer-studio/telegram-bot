@@ -237,51 +237,55 @@ def send_detailed_organized_backup_notification(backup_results, total_records, t
     try:
         backup_time = datetime.now()
         
-        # כותרת ההודעה
-        notification = f"🗂️ **גיבוי מסודר הושלם בהצלחה**\n\n"
-        notification += f"📅 **תאריך:** {backup_time.strftime('%d/%m/%Y')}\n"
-        notification += f"🕐 **שעה:** {backup_time.strftime('%H:%M:%S')}\n"
-        notification += f"📊 **סה\"כ רשומות:** {total_records:,}\n"
-        notification += f"💾 **סה\"כ גודל:** {total_size_bytes/1024/1024:.2f} MB\n"
-        notification += f"📁 **מספר קבצים:** {len(backup_results)}\n\n"
+        # כותרת ההודעה - קומפקטית
+        notification = f"🗂️ **גיבוי מסודר יומי הושלם בהצלחה**\n\n"
+        notification += f"📅 **{backup_time.strftime('%d/%m/%Y %H:%M')}**\n"
+        notification += f"📊 **סה\"כ:** {total_records:,} רשומות ב-{len(backup_results)} קבצים\n"
+        notification += f"💾 **סה\"כ גודל:** {total_size_bytes/1024/1024:.1f} MB\n\n"
         
-        # פירוט לכל טבלה
-        notification += f"📋 **פירוט מפורט:**\n"
+        # פירוט קומפקטי לכל טבלה
+        notification += f"📋 **פירוט קבצים:**\n"
         for table_name, info in backup_results.items():
-            notification += f"\n🔹 **{table_name}:**\n"
-            notification += f"   📊 רשומות: {info['records_count']:,}\n"
-            notification += f"   💾 גודל: {info['file_size_mb']:.2f} MB\n"
-            notification += f"   🔒 קוד אישור: `{info['confirmation_code']}`\n"
-            notification += f"   📁 קובץ: `{os.path.basename(info['file_path'])}`\n"
+            # שם קצר לטבלה
+            table_short = table_name.replace("_", " ").title()[:15]
+            notification += f"• **{table_short}:** {info['records_count']:,} רשומות ({info['file_size_mb']:.1f} MB)\n"
             
-            # השוואה עם אמש
+            # השוואה עם אמש - קומפקטית
             if table_name in yesterday_comparison:
                 comp = yesterday_comparison[table_name]
                 records_change = comp["records_diff"]
-                size_change = comp["size_diff_mb"]
                 
                 if records_change > 0:
-                    notification += f"   📈 שינוי: +{records_change} רשומות (+{size_change:.2f} MB)\n"
+                    notification += f"  📈 +{records_change} מאתמול\n"
                 elif records_change < 0:
-                    notification += f"   📉 שינוי: {records_change} רשומות ({size_change:.2f} MB)\n"
+                    notification += f"  📉 {records_change} מאתמול\n"
                 else:
-                    notification += f"   ➖ אין שינוי מאמש\n"
+                    notification += f"  ➖ ללא שינוי\n"
+            else:
+                notification += f"  🆕 גיבוי ראשון\n"
         
-        # מיקום הקבצים
-        notification += f"\n📂 **מיקום הקבצים:**\n"
-        notification += f"```\n{BACKUP_ROOT}/\n"
-        for table_name, config_data in TABLES_CONFIG.items():
-            notification += f"├── {config_data['folder']}/\n"
-        notification += f"```\n"
+        # קודי אישור
+        notification += f"\n🔐 **קודי אישור:**\n"
+        for table_name, info in backup_results.items():
+            notification += f"• `{info['confirmation_code']}`\n"
         
-        # שמירה ל-30 ימים
-        notification += f"\n🗓️ **מדיניות שמירה:** 30 ימים אחרונים\n"
-        notification += f"🧹 **ניקוי אוטומטי:** קבצים ישנים מ-30 ימים"
+        # מיקום ומדיניות - קומפקטי
+        notification += f"\n📂 **מיקום:** `{BACKUP_ROOT}/[table]_backup/`\n"
+        notification += f"🗓️ **שמירה:** 30 ימים\n"
+        notification += f"💾 **קבצי JSON מסודרים ועם גיבוי יומי**"
         
         send_admin_notification(notification)
         
     except Exception as e:
         logger.error(f"❌ שגיאה בשליחת התראה מפורטת: {e}")
+        # גיבוי - הודעה קצרה אם הארוכה נכשלת
+        try:
+            backup_summary = f"✅ **גיבוי מסודר הושלם**\n"
+            backup_summary += f"📊 {total_records:,} רשומות ב-{len(backup_results)} קבצים\n"
+            backup_summary += f"📅 {backup_time.strftime('%d/%m/%Y %H:%M')}"
+            send_admin_notification(backup_summary)
+        except Exception as e2:
+            logger.error(f"❌ שגיאה גם בהודעה הקצרה: {e2}")
 
 def list_organized_backups():
     """מציג רשימת גיבויים מסודרים"""
