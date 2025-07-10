@@ -15,7 +15,7 @@ class LazyLiteLLM:
     def _ensure_loaded(self):
         """טוען LiteLLM רק אם עוד לא נטען"""
         if not self._loaded:
-            print("🔄 Loading LiteLLM for the first time (saving 1GB+ memory)...")
+            print("Loading LiteLLM for the first time (saving 1GB+ memory)...")
             try:
                 import litellm as _litellm  # ייבוא האמיתי
                 self._litellm = _litellm
