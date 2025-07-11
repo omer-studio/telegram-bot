@@ -47,7 +47,7 @@ from prompts import SYSTEM_PROMPT
 import traceback
 # 🆕 פונקציות חדשות למסד נתונים - לפי המדריך!
 import db_manager
-from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new, save_gpt_chat_message
+from db_manager import register_user_with_code_db, check_user_approved_status_db, approve_user_db_new, increment_code_try_db_new
 
 from chat_utils import get_weekday_context_instruction, get_holiday_system_message
 
@@ -353,27 +353,9 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 messages_for_log.extend(updated_history_for_logging)
             messages_for_log.append({"role": "user", "content": user_msg})
             
-            # ✅ רישום למסד נתונים עם מספר סידורי (שמירה קיימת)
-            save_result = save_gpt_chat_message(
-                chat_id=safe_str(chat_id),
-                user_msg=user_msg,
-                bot_msg=bot_reply,
-                gpt_data={
-                    "message_id": message_id,
-                    "reply_summary": summary_result.get("summary", "") if summary_result else "",
-                    "main_usage": gpt_result.get("usage", {}) if isinstance(gpt_result, dict) else {},
-                    "summary_usage": summary_usage,
-                    "extract_usage": gpt_c_result.get("usage", {}) if gpt_c_result and isinstance(gpt_c_result, dict) else {},
-                    "total_tokens": gpt_result.get("usage", {}).get("total_tokens", 0) if isinstance(gpt_result, dict) else 0,
-                    "cost_usd": gpt_result.get("usage", {}).get("cost_total", 0) if isinstance(gpt_result, dict) else 0,
-                    "cost_ils": gpt_result.get("usage", {}).get("cost_total_ils", 0) if isinstance(gpt_result, dict) else 0
-                }
-            )
-            
-            # שמירת המספר הסידורי לשימוש בהתראות
-            interaction_message_number = save_result.get('interaction_message_number') if isinstance(save_result, dict) else None
-            
-            logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)} | הודעה #{interaction_message_number}", source="message_handler")
+            # 🔥 **פישוט מערכתי**: רישום מפורט יקרה ב-interactions_log בהמשך
+            # הסרנו כפילות רישום - הכל יירשם פעם אחת במקום אחד
+            logger.info(f"💾 [BACKGROUND] רישום מפורט יקרה ב-interactions_log | chat_id={safe_str(chat_id)}", source="message_handler")
             
             # 🔥 רישום למסד החדש interactions_log - הטבלה המרכזית החדשה!
             try:
@@ -574,7 +556,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 gpt_d_result=gpt_d_result,
                 gpt_e_result=gpt_e_result,
                 gpt_e_counter=gpt_e_counter,
-                message_number=interaction_message_number
+                message_number=None  # הסרנו מספר הודעה - יירשם ב-interactions_log
             )
             
             # 🔥 עדכון טבלת interactions_log עם הנוסח שנשלח לאדמין
@@ -709,16 +691,8 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
             await send_system_message(update, chat_id, error_msg)
             bot_reply = error_msg
             
-        # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-        try:
-            from db_manager import save_chat_message
-            save_chat_message(
-                chat_id=safe_str(chat_id),
-                user_msg=user_msg,
-                bot_msg=bot_reply
-            )
-        except Exception as save_err:
-            logger.warning(f"[NEW_USER] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+        # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+        # הסרנו כפילות רישום - כל אינטראקציה תרושם פעם אחת ב-interactions_log
             
         # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש חדש**
         try:
@@ -739,18 +713,8 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         logger.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}", source="message_handler")
         await send_system_message(update, chat_id, "הייתה בעיה ברישום. אנא נסה שוב מאוחר יותר.")
         
-        # 🔧 תיקון: שמירת הודעת שגיאה גם כן
-        try:
-            from db_manager import save_chat_message
-            save_chat_message(
-                chat_id=safe_str(chat_id),
-                user_msg=user_msg,
-                bot_msg="שגיאה ברישום משתמש חדש",
-                source_file='live_chat',
-                message_type='onboarding_error'
-            )
-        except Exception as save_err:
-            logger.warning(f"[NEW_USER_ERROR] שגיאה בשמירת הודעת שגיאה: {save_err}", source="message_handler")
+        # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+        # הסרנו כפילות רישום - גם שגיאות ירושמו ב-interactions_log
         
         # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש חדש בשגיאה**
         try:
@@ -809,16 +773,8 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 except Exception as admin_err:
                     logger.warning(f"[CODE_APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
                 
-                # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-                try:
-                    from db_manager import save_chat_message
-                    save_chat_message(
-                        chat_id=safe_str(chat_id),
-                        user_msg=user_msg,
-                        bot_msg=bot_reply
-                    )
-                except Exception as save_err:
-                    logger.warning(f"[CODE_APPROVED] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+                # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+                # הסרנו כפילות רישום - אישור קוד יירשם ב-interactions_log
                 
                 # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
                 
@@ -832,18 +788,8 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 await send_system_message(update, chat_id, retry_msg)
                 bot_reply = retry_msg
                 
-                # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-                try:
-                    from db_manager import save_chat_message
-                    save_chat_message(
-                        chat_id=safe_str(chat_id),
-                        user_msg=user_msg,
-                        bot_msg=bot_reply,
-                        source_file='live_chat',
-                        message_type='onboarding_code_invalid'
-                    )
-                except Exception as save_err:
-                    logger.warning(f"[CODE_INVALID] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+                # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+                # הסרנו כפילות רישום - קודים לא תקינים ירושמו ב-interactions_log
                 
                 # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
                 try:
@@ -866,16 +812,8 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         bot_reply = get_code_request_message()
         await send_system_message(update, chat_id, bot_reply)
         
-        # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-        try:
-            from db_manager import save_chat_message
-            save_chat_message(
-                chat_id=safe_str(chat_id),
-                user_msg=user_msg,
-                bot_msg=bot_reply
-            )
-        except Exception as save_err:
-            logger.warning(f"[NO_CODE] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+        # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+        # הסרנו כפילות רישום - בקשות קוד ירושמו ב-interactions_log
         
         # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
         try:
@@ -924,16 +862,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 await send_system_message(update, chat_id, bot_reply, reply_markup=ReplyKeyboardMarkup([["אהלן"]], one_time_keyboard=True, resize_keyboard=True))
                 # לא שולחים מקלדת/הודעה נוספת – המשתמש יקבל תשובה מהבינה בלבד
                 
-                # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-                try:
-                    from db_manager import save_chat_message
-                    save_chat_message(
-                        chat_id=safe_str(chat_id),
-                        user_msg=user_msg,
-                        bot_msg=bot_reply
-                    )
-                except Exception as save_err:
-                    logger.warning(f"[APPROVED] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+                # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+                # הסרנו כפילות רישום - אישור תנאים יירשם ב-interactions_log
                 
                 # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש שהתאושר זה עתה**
                 try:
@@ -958,18 +888,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 await send_system_message(update, chat_id, bot_reply)
                 logger.error(f"[Permissions] כשל באישור משתמש {safe_str(chat_id)}: {error_msg}", source="message_handler")
                 
-                # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-                try:
-                    from db_manager import save_chat_message
-                    save_chat_message(
-                        chat_id=safe_str(chat_id),
-                        user_msg=user_msg,
-                        bot_msg=bot_reply,
-                        source_file='live_chat',
-                        message_type='onboarding_approval_error'
-                    )
-                except Exception as save_err:
-                    logger.warning(f"[APPROVAL_ERROR] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+                # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+                # הסרנו כפילות רישום - שגיאות אישור ירושמו ב-interactions_log
                 
                 # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
                 try:
@@ -995,18 +915,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             await send_approval_message(update, chat_id)
             bot_reply = "דחיית תנאים - הודעת אישור נשלחה מחדש"
             
-            # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-            try:
-                from db_manager import save_chat_message
-                save_chat_message(
-                    chat_id=safe_str(chat_id),
-                    user_msg=user_msg,
-                    bot_msg=bot_reply,
-                    source_file='live_chat',
-                    message_type='onboarding_declined'
-                )
-            except Exception as save_err:
-                logger.warning(f"[DECLINED] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+            # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+            # הסרנו כפילות רישום - דחיית תנאים תירשם ב-interactions_log
             
             # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
             try:
@@ -1030,18 +940,8 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             await send_approval_message(update, chat_id)
             bot_reply = "הודעה אחרת - הודעת אישור נשלחה"
             
-            # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
-            try:
-                from db_manager import save_chat_message
-                save_chat_message(
-                    chat_id=safe_str(chat_id),
-                    user_msg=user_msg,
-                    bot_msg=bot_reply,
-                    source_file='live_chat',
-                    message_type='onboarding_pending'
-                )
-            except Exception as save_err:
-                logger.warning(f"[PENDING] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
+            # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+            # הסרנו כפילות רישום - הודעות ממתינות ירושמו ב-interactions_log
             
             # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
             try:
@@ -1206,18 +1106,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     appropriate_response = get_unsupported_message_response(message_type)
                     await send_system_message(update, chat_id, appropriate_response)
                     
-                    # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
+                    # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+                    # הסרנו כפילות רישום - הודעות לא נתמכות ירושמו ב-interactions_log
                     try:
-                        from db_manager import save_chat_message
-                        save_chat_message(
-                            chat_id=safe_str(chat_id),
-                            user_msg=user_msg,
-                            bot_msg=appropriate_response,
-                            source_file='live_chat',
-                            message_type='unsupported_message'
-                        )
-                        
-                        # שליחת התראה ישירה כי זה משתמש לא מאושר
                         from admin_notifications import send_anonymous_chat_notification
                         send_anonymous_chat_notification(
                             user_msg,
@@ -1241,18 +1132,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 overload_message = "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות."
                 await send_system_message(update, chat_id, overload_message)
                 
-                # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
+                # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד  
+                # הסרנו כפילות רישום - עומס מערכת יירשם ב-interactions_log
                 try:
-                    from db_manager import save_chat_message
-                    save_chat_message(
-                        chat_id=safe_str(chat_id),
-                        user_msg=user_msg,
-                        bot_msg=overload_message,
-                        source_file='live_chat',
-                        message_type='system_overload'
-                    )
-                    
-                    # שליחת התראה ישירה כי זה משתמש לא מאושר
                     from admin_notifications import send_anonymous_chat_notification
                     send_anonymous_chat_notification(
                         user_msg,
@@ -1272,18 +1154,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tech_error_message = "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות."
             await send_system_message(update, chat_id, tech_error_message)
             
-            # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
+            # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+            # הסרנו כפילות רישום - שגיאות טכניות ירושמו ב-interactions_log
             try:
-                from db_manager import save_chat_message
-                save_chat_message(
-                    chat_id=safe_str(chat_id),
-                    user_msg=user_msg,
-                    bot_msg=tech_error_message,
-                    source_file='live_chat',
-                    message_type='tech_error'
-                )
-                
-                # שליחת התראה ישירה כי זה משתמש לא מאושר
                 from admin_notifications import send_anonymous_chat_notification
                 send_anonymous_chat_notification(
                     user_msg,
@@ -1329,18 +1202,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_system_message(update, chat_id, permission_error_message)
             await end_monitoring_user(safe_str(chat_id), False)
             
-            # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
+            # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
+            # הסרנו כפילות רישום - שגיאות הרשאות ירושמו ב-interactions_log
             try:
-                from db_manager import save_chat_message
-                save_chat_message(
-                    chat_id=safe_str(chat_id),
-                    user_msg=user_msg,
-                    bot_msg=permission_error_message,
-                    source_file='live_chat',
-                    message_type='permission_error'
-                )
-                
-                # שליחת התראה ישירה כי זה משתמש לא מאושר
                 from admin_notifications import send_anonymous_chat_notification
                 send_anonymous_chat_notification(
                     user_msg,
