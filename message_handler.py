@@ -286,15 +286,25 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         # 🔧 ההסבר: הסרתי את update_chat_history כדי למנוע כפילויות עם save_gpt_chat_message
         
         # 🔧 תיקון: טעינת היסטוריה מחדש אחרי השמירה כדי שהמונה יעלה
+        # ❌ BAG FIX: אל לדרוס את history_messages המקורי שנשלח ל-GPT!
+        # זה גורם ל"אין היסטוריה" בהתראה לאדמין
         try:
             from chat_utils import get_chat_history_for_users
             updated_history_messages = get_chat_history_for_users(safe_str(chat_id), limit=32)
-            # עדכון ההיסטוריה לשליחת התראה עם המונה הנכון
-            history_messages = updated_history_messages if updated_history_messages else history_messages
-            print(f"🔄 [BACKGROUND] היסטוריה עודכנה: {len(history_messages)} הודעות")
+            # ✅ שמירת ההיסטוריה המקורית שנשלחה ל-GPT במשתנה נפרד
+            original_history_messages = history_messages  # ההיסטוריה שבאמת נשלחה ל-GPT
+            original_messages_for_gpt = messages_for_gpt  # ההודעות שבאמת נשלחו ל-GPT
+            
+            # רק לצורך הלוגינג נשתמש בהיסטוריה המעודכנת
+            updated_history_for_logging = updated_history_messages if updated_history_messages else []
+            print(f"🔄 [BACKGROUND] היסטוריה מקורית ל-GPT: {len(original_history_messages)} | היסטוריה מעודכנת ללוגים: {len(updated_history_for_logging)}")
         except Exception as hist_reload_err:
             logger.warning(f"[BACKGROUND] שגיאה בטעינת היסטוריה מחדש: {hist_reload_err}", source="message_handler")
-        
+            # במקרה של שגיאה, נשמור את המקוריים
+            original_history_messages = history_messages
+            original_messages_for_gpt = messages_for_gpt
+            updated_history_for_logging = history_messages  # ✅ נשתמש במקורי גם ללוגים
+
         # שלב 2: הפעלת GPT-B ליצירת סיכום (אם התשובה ארוכה מספיק)
         summary_result = None
         summary_usage = {}
@@ -323,9 +333,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         gpt_d_result = results[0] if len(results) > 0 else None
         gpt_e_result = results[1] if len(results) > 1 else None
         
-        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - הוסר כדי למנוע כפילות
-        # זה כבר נשלח מיד כשהמשתמש שולח הודעה בפונקציה handle_message
-        # נשאר כאן רק לוג שקט לבדיקות
+        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם התשובה המלאה!
+        # כעת נשלח התראה עם כל הנתונים המלאים: התשובה האמיתית + GPT-B + GPT-C + GPT-D + GPT-E
         try:
             # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
             gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
@@ -342,8 +351,24 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 except:
                     gpt_e_counter = None
             
-            # לוג שקט לבדיקות - התכתבות כבר נשלחה לאדמין
-            logger.info(f"[BACKGROUND] התכתבות כבר נשלחה לאדמין מוקדם יותר | chat_id={safe_str(chat_id)}", source="message_handler")
+            # 🔧 **תיקון קריטי: שליחת התראה מלאה לאדמין עם התשובה האמיתית!**
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_reply,  # התשובה האמיתית במקום "⏳ טרם נענה"
+                history_messages=original_history_messages,  # ✅ ההיסטוריה המקורית שנשלחה ל-GPT
+                messages_for_gpt=original_messages_for_gpt,  # ✅ ההודעות המקוריות שנשלחו ל-GPT
+                gpt_timing=gpt_response_time,
+                user_timing=user_response_actual_time,
+                chat_id=chat_id,
+                gpt_b_result=summary_result,
+                gpt_c_result=gpt_c_result,
+                gpt_d_result=gpt_d_result,
+                gpt_e_result=gpt_e_result,
+                gpt_e_counter=gpt_e_counter
+            )
+            
+            logger.info(f"📨 [BACKGROUND] התראה מלאה נשלחה לאדמין עם התשובה האמיתית | chat_id={safe_str(chat_id)}", source="message_handler")
             
         except Exception as admin_chat_err:
             logger.warning(f"שגיאה בעיבוד נתוני ההתכתבות: {admin_chat_err}", source="message_handler")
@@ -361,8 +386,9 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             messages_for_log = [{"role": "system", "content": SYSTEM_PROMPT}]
             if current_summary:
                 messages_for_log.append({"role": "system", "content": f"🎯 מידע על המשתמש: {current_summary}"})
-            if history_messages:
-                messages_for_log.extend(history_messages)
+            # ✅ השתמש בהיסטוריה המעודכנת רק ללוגים במסד נתונים
+            if updated_history_for_logging:
+                messages_for_log.extend(updated_history_for_logging)
             messages_for_log.append({"role": "user", "content": user_msg})
             
             # ✅ רישום למסד נתונים

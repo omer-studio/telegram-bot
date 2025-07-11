@@ -373,7 +373,7 @@ def alert_billing_issue(cost_usd, model_name, tier, daily_usage, monthly_usage, 
         send_admin_notification(alert_message, urgent=urgent)
         
     except Exception as e:
-        logger.error(f"�� שגיאה בשליחת התראת חיוב: {e}")
+        logger.error(f" שגיאה בשליחת התראת חיוב: {e}")
 
 def alert_system_status(message, level="info"):
     """שולח התראת סטטוס מערכת"""
@@ -392,7 +392,7 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
     try:
         if is_test_environment():
             logger.info(f"📨 [ANONYMOUS_CHAT] בסביבת בדיקה, לא שולח תראה לאדמין: {user_message}")
-            return
+            return None
 
         # יצירת כותרת עם 4 ספרות אחרונות של chat_id ומיסוך השאר
         chat_suffix = ""
@@ -551,6 +551,10 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         
         send_admin_notification_raw(notification_text)
         
+        # 🆕 החזרת תוכן ההודעה
+        return notification_text
+        
     except Exception as e:
         logger.error(f"🚨 שגיאה בשליחת התראת התכתבות אנונימית: {e}")
-        logger.error(f"Error sending anonymous chat notification: {e}") 
+        logger.error(f"Error sending anonymous chat notification: {e}")
+        return None 

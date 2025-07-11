@@ -337,9 +337,9 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
         chat_id, user_msg, bot_msg, timestamp,
         message_type, telegram_message_id, source_file, source_line_number,
         gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
-        gpt_request, gpt_response, user_data, bot_data, metadata
+        gpt_request, gpt_response, user_data, bot_data, metadata, admin_notification_content
     ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
     )
     """
     
@@ -358,6 +358,7 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
     user_data = kwargs.get('user_data')
     bot_data = kwargs.get('bot_data')
     metadata = kwargs.get('metadata')
+    admin_notification_content = kwargs.get('admin_notification_content')
     
     # המרת JSON objects לstrings
     import json
@@ -371,15 +372,19 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
         chat_id, user_msg, bot_msg, timestamp or datetime.utcnow(),
         message_type, telegram_message_id, source_file, source_line_number,
         gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
-        gpt_request_json, gpt_response_json, user_data_json, bot_data_json, metadata_json
+        gpt_request_json, gpt_response_json, user_data_json, bot_data_json, metadata_json, admin_notification_content
     ))
     
     conn.commit()
     cur.close()
     conn.close()
     
+    # 🔧 **תיקון קריטי: הסרת התראה אוטומטית כדי למנוע "⏳ טרם נענה"**
+    # ההתראה לאדמין תישלח רק מתוך handle_background_tasks עם התשובה המלאה
+    # זה מבטיח שהאדמין יראה את התשובה האמיתית ולא "⏳ טרם נענה"
+    
     # 🔧 **תיקון מערכתי: שליחת התראה לאדמין בכל הודעה שנשמרת!**
-    # זה מבטיח שכל הודעה של משתמש אמיתי תגיע לאדמין, לא משנה מאיזה מקום בקוד
+    # זה מבטיח שכל הודעה של משתמש אמיתית תגיע לאדמין, לא משנה מאיזה מקום בקוד
     try:
         # שליחת התראה רק אם יש הודעת משתמש אמיתית ומהסביבה הלייב
         if (user_msg and user_msg.strip() and 
@@ -389,7 +394,7 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
             message_type != 'system'):  # לא הודעות מערכת
             
             from admin_notifications import send_anonymous_chat_notification
-            send_anonymous_chat_notification(
+            notification_content = send_anonymous_chat_notification(
                 user_msg,
                 bot_msg or "⏳ טרם נענה",
                 history_messages=None,
@@ -398,6 +403,22 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
                 user_timing=None,
                 chat_id=chat_id
             )
+            
+            # 🆕 עדכון ההודעה שנשמרה עם תוכן התראת האדמין
+            if notification_content:
+                try:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "UPDATE chat_messages SET admin_notification_content = %s WHERE chat_id = %s AND user_msg = %s AND timestamp = %s",
+                        (notification_content, chat_id, user_msg, timestamp or datetime.utcnow())
+                    )
+                    conn.commit()
+                    cur.close()
+                    if should_log_debug_prints():
+                        print(f"✅ [ADMIN_NOTIFICATION] תוכן התראת אדמין נשמר למסד נתונים")
+                except Exception as update_err:
+                    if should_log_debug_prints():
+                        print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה בעדכון תוכן התראת אדמין: {update_err}")
             
     except Exception as admin_err:
         # לא נכשל בגלל התראה - רק לוג
@@ -1081,33 +1102,34 @@ def get_user_message_count(chat_id):
 
 def clear_user_from_database(chat_id):
     """
-    🚨 מוחק את כל הודעות הצ'אט של המשתמש מטבלת chat_messages,
-    ומוחק את הרשומה לחלוטין מטבלת user_profiles.
+    🚨 פונקציה זו מושבתת לחלוטין - אסור למחוק chat_messages!
     
-    ⚠️ זוהי פעולה דרסטית שמוחקת היסטוריה לחלוטין!
+    ⛔ chat_messages אמור רק לצבור ולא למחוק לעולם!
     
-    🔧 תיקון מערכתי: מוחק את השורה לחלוטין במקום לאפס אותה ל-NULL
-    למנוע הצטברות של "רשומות זומבי" בטבלה.
+    אם באמת צריך למחוק משתמש - צור פונקציה חדשה שמוחקת רק user_profiles
+    """
+    # 🚨 חסימה מוחלטת של מחיקת chat_messages
+    raise Exception(
+        f"🚨 BLOCKED: מחיקת chat_messages חסומה לחלוטין!\n"
+        f"chat_messages אמור רק לצבור ולא למחוק!\n"
+        f"אם באמת צריך למחוק משתמש - השתמש ב-clear_user_profile_only()"
+    )
+
+def clear_user_profile_only(chat_id):
+    """
+    🔧 מוחק רק את הפרופיל של המשתמש, לא את ההודעות!
+    ההיסטוריה נשמרת לעולם.
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
     
-    # 🚨 לוג אזהרה לפני מחיקה
-    print(f"🚨 DELETION ALERT: מוחק משתמש {chat_id} לחלוטין מהמסד נתונים!")
+    print(f"🗑️ מוחק רק פרופיל (לא הודעות) עבור משתמש {chat_id}")
     
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
-        # ספירת הודעות לפני מחיקה
-        cur.execute("SELECT COUNT(*) FROM chat_messages WHERE chat_id = %s", (chat_id,))
-        messages_count = cur.fetchone()[0]
-        
-        # מחיקת היסטוריית צ'אט
-        cur.execute("DELETE FROM chat_messages WHERE chat_id = %s", (chat_id,))
-        chat_deleted = cur.rowcount
-        
-        # 🔧 תיקון מערכתי: מחיקה מלאה של השורה במקום איפוס ל-NULL
+        # מחיקת רק הפרופיל, לא ההודעות!
         cur.execute("DELETE FROM user_profiles WHERE chat_id = %s", (chat_id,))
         profile_deleted = cur.rowcount
         
@@ -1115,24 +1137,23 @@ def clear_user_from_database(chat_id):
         cur.close()
         conn.close()
         
-        # 🚨 התראה קריטית לאדמין
+        # התראה לאדמין
         from admin_notifications import send_admin_notification
         send_admin_notification(
-            f"🚨 **מחיקת משתמש בוצעה**\n\n" +
+            f"🗑️ **מחיקת פרופיל בלבד**\n\n" +
             f"👤 **משתמש:** {chat_id}\n" +
-            f"📊 **הודעות שנמחקו:** {messages_count:,}\n" +
+            f"🔒 **ההיסטוריה נשמרה** - רק הפרופיל נמחק\n" +
             f"🗑️ **זמן:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n" +
-            f"⚠️ **זו פעולה בלתי הפיכה!**",
-            urgent=True
+            f"✅ **chat_messages מוגן!**"
         )
         
         if should_log_debug_prints():
-            print(f"🗑️ [DB] נמחקו {chat_deleted} הודעות צ'אט, פרופיל נמחק לחלוטין עבור {chat_id}")
+            print(f"🗑️ [DB] פרופיל נמחק, הודעות נשמרו עבור {chat_id}")
         
-        return chat_deleted > 0 or profile_deleted > 0
+        return profile_deleted > 0
         
     except Exception as e:
-        print(f"❌ שגיאה במחיקת משתמש מהמסד נתונים: {e}")
+        print(f"❌ שגיאה במחיקת פרופיל עבור {chat_id}: {e}")
         return False
 
 # ================================
