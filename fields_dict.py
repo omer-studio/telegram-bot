@@ -49,6 +49,7 @@ FIELDS_DICT = {
     "needs_recovery_message": {"label": "האם צריך הודעת התאוששות", "type": bool, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
     "recovery_original_message": {"label": "ההודעה המקורית שהמשתמש שלח לפני הבעיה", "type": str, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
     "recovery_error_timestamp": {"label": "מתי הבעיה הטכנית קרתה", "type": str, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
+    "last_message_time": {"label": "זמן ההודעה האחרונה של המשתמש", "type": str, "show_in_summary": "", "show_in_prompt": "", "missing_question": "", "include_in_summary": False},
 
     # --- טבלת הודעות ---
     "message_id": {"label": "מזהה הודעה", "type": str, "show_in_summary": "", "show_in_prompt": "", "include_in_summary": False},
@@ -107,7 +108,7 @@ def get_user_profile_fields():
         "closet_status", "who_knows", "who_doesnt_know", "attends_therapy", "primary_conflict", 
         "trauma_history", "goal_in_course", "language_of_strength", "date_first_seen", 
         "coping_strategies", "fears_concerns", "future_vision", "other_insights", "total_messages_count", "last_update", "summary",
-        "needs_recovery_message", "recovery_original_message", "recovery_error_timestamp"
+        "needs_recovery_message", "recovery_original_message", "recovery_error_timestamp", "last_message_time"
     ]
     return [field for field in user_fields if field in FIELDS_DICT]
 

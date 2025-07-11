@@ -245,7 +245,8 @@ async def lifespan(app: FastAPI):
     """
     # Startup logic
     from utils import health_check
-    from notifications import send_error_notification, send_recovery_messages_to_affected_users
+    from notifications import send_error_notification
+    from recovery_manager import get_users_needing_recovery, send_recovery_messages_to_all_users
     
     # וודא שהבוט מוגדר
     get_bot_app()
@@ -262,19 +263,18 @@ async def lifespan(app: FastAPI):
     # 🔍 בדיקה שקטה של מערכת משתמשים קריטיים
     try:
         print("[STARTUP] 🔍 בודק מערכת משתמשים קריטיים...")
-        from notifications import _load_critical_error_users
-        users_data = _load_critical_error_users()
-        unrecovered_count = len([uid for uid, data in users_data.items() if not data.get("recovered", False)])
-        print(f"[STARTUP] ✅ מערכת משתמשים קריטיים: {len(users_data)} משתמשים, {unrecovered_count} מחכים להתאוששות")
+        users_data = get_users_needing_recovery()
+        unrecovered_count = len(users_data)
+        print(f"[STARTUP] ✅ מערכת משתמשים קריטיים: {unrecovered_count} מחכים להתאוששות")
     except Exception as e:
         print(f"[STARTUP] ⚠️ שגיאה בבדיקת מערכת משתמשים קריטיים: {e}")
     
     # --- שליחת הודעות התאוששות אוטומטית ---
     try:
         print("[STARTUP] 🔄 בודק אם יש משתמשים שמחכים להודעות התאוששות...")
-        recovered_count = await send_recovery_messages_to_affected_users()
-        if recovered_count > 0:
-            print(f"[STARTUP] ✅ נשלחו הודעות התאוששות ל-{recovered_count} משתמשים!")
+        stats = await send_recovery_messages_to_all_users()
+        if stats["sent"] > 0:
+            print(f"[STARTUP] ✅ נשלחו הודעות התאוששות ל-{stats['sent']} משתמשים!")
         else:
             print("[STARTUP] ℹ️ אין משתמשים שמחכים להודעות התאוששות")
     except Exception as e:

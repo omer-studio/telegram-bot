@@ -9,6 +9,7 @@ import asyncio
 import re
 import json
 import time
+import psycopg2
 
 # 🚀 יבוא המערכת החדשה - פשוטה ועקבית
 from simple_config import config, TimeoutConfig
@@ -25,7 +26,6 @@ from datetime import datetime
 # 🗑️ handle_secret_command הוסרה - עברנו לפקודות טלגרם רגילות
 from config import should_log_message_debug, should_log_debug_prints
 from messages import get_welcome_messages, get_retry_message_by_attempt, approval_text, approval_keyboard, APPROVE_BUTTON_TEXT, DECLINE_BUTTON_TEXT, code_approved_message, code_not_received_message, not_approved_message, nice_keyboard, nice_keyboard_message, remove_keyboard_message, full_access_message, error_human_funny_message, get_unsupported_message_response, get_code_request_message
-from notifications import handle_critical_error
 # 🗑️ הסרת כל הייבואים מ-sheets_handler - עברנו למסד נתונים!
 # ✅ החלפה לפונקציות מסד נתונים ו-profile_utils  
 import profile_utils as _pu
@@ -41,6 +41,7 @@ except ImportError:
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active
+from recovery_manager import add_user_to_recovery_list, update_last_message_time
 from chat_utils import should_send_time_greeting, get_time_greeting_instruction
 from prompts import SYSTEM_PROMPT
 import traceback
@@ -209,6 +210,8 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
         try:
             from notifications import send_error_notification
             send_error_notification(error_message=f"[send_message] שליחת הודעה נכשלה: {e}", chat_id=safe_str(chat_id), user_msg=formatted_text)
+            # גם נוסיף את המשתמש לרשימת התאוששות
+            add_user_to_recovery_list(safe_str(chat_id), f"Failed to send message: {e}", formatted_text)
         except Exception as notify_err:
             logger.error(f"❌ [NOTIFY_ERROR] התראה לאדמין נכשלה: {notify_err}", source="message_handler")
         return None  # החזרת None במקרה של כשלון
@@ -350,7 +353,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 messages_for_log.extend(updated_history_for_logging)
             messages_for_log.append({"role": "user", "content": user_msg})
             
-            # ✅ רישום למסד נתונים עם מספר סידורי
+            # ✅ רישום למסד נתונים עם מספר סידורי (שמירה קיימת)
             save_result = save_gpt_chat_message(
                 chat_id=safe_str(chat_id),
                 user_msg=user_msg,
@@ -371,6 +374,56 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             interaction_message_number = save_result.get('interaction_message_number') if isinstance(save_result, dict) else None
             
             logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)} | הודעה #{interaction_message_number}", source="message_handler")
+            
+            # 🔥 רישום למסד החדש interactions_log - הטבלה המרכזית החדשה!
+            try:
+                from interactions_logger import log_interaction
+                
+                # חישוב זמנים
+                total_background_time = time.time() - user_request_start_time
+                timing_data = {
+                    'user_to_bot': response_time,
+                    'total': total_background_time
+                }
+                
+                # איסוף תוצאות GPT
+                gpt_results = {
+                    'a': gpt_result,
+                    'b': summary_result,
+                    'c': gpt_c_result,
+                    'd': results[0] if len(results) > 0 else None,
+                    'e': results[1] if len(results) > 1 else None
+                }
+                
+                # חישוב מונה GPT-E
+                gpt_e_counter = None
+                if gpt_results['e'] and isinstance(gpt_results['e'], dict) and gpt_results['e'].get("success"):
+                    try:
+                        from chat_utils import get_total_user_messages_count
+                        from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                        total_messages = get_total_user_messages_count(safe_str(chat_id))
+                        current_count = total_messages % GPT_E_RUN_EVERY_MESSAGES
+                        gpt_e_counter = f"{current_count}/{GPT_E_RUN_EVERY_MESSAGES}"
+                    except:
+                        gpt_e_counter = None
+                
+                # רישום האינטראקציה המלאה
+                log_success = log_interaction(
+                    chat_id=chat_id,
+                    telegram_message_id=str(message_id),
+                    user_msg=user_msg,
+                    bot_msg=bot_reply,
+                    messages_for_gpt=original_messages_for_gpt or messages_for_log,
+                    gpt_results=gpt_results,
+                    timing_data=timing_data,
+                    gpt_e_counter=gpt_e_counter
+                )
+                
+                if log_success:
+                    print(f"🔥 [INTERACTIONS_LOG] אינטראקציה נרשמה בטבלה המרכזית החדשה | chat_id={safe_str(chat_id)}")
+                
+            except Exception as interactions_log_err:
+                logger.warning(f"[INTERACTIONS_LOG] שגיאה ברישום לטבלה המרכזית: {interactions_log_err}", source="message_handler")
             
         except Exception as log_exc:
             logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_exc}", source="message_handler")
@@ -508,7 +561,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             
             # 🔧 **התראה סופית לאדמין עם כל המידע האמיתי!**
             from admin_notifications import send_anonymous_chat_notification
-            send_anonymous_chat_notification(
+            admin_notification_result = send_anonymous_chat_notification(
                 user_msg,
                 bot_reply,  # התשובה האמיתית במקום "⏳ טרם נענה"
                 history_messages=original_history_messages,  # ✅ ההיסטוריה המקורית שנשלחה ל-GPT
@@ -523,6 +576,42 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 gpt_e_counter=gpt_e_counter,
                 message_number=interaction_message_number
             )
+            
+            # 🔥 עדכון טבלת interactions_log עם הנוסח שנשלח לאדמין
+            try:
+                from interactions_logger import get_interactions_logger
+                logger_instance = get_interactions_logger()
+                
+                # קבלת הנוסח שנשלח לאדמין (admin_notification_result הוא הטקסט עצמו)
+                admin_notification_text = admin_notification_result if isinstance(admin_notification_result, str) else ''
+                
+                if admin_notification_text:
+                    # עדכון הטבלה עם הנוסח לאדמין
+                    try:
+                        import psycopg2
+                        conn = psycopg2.connect(logger_instance.db_url)
+                        cur = conn.cursor()
+                        
+                        # עדכון השורה האחרונה עבור המשתמש הזה
+                        cur.execute("""
+                            UPDATE interactions_log 
+                            SET admin_notification_text = %s 
+                            WHERE chat_id = %s 
+                            ORDER BY serial_number DESC 
+                            LIMIT 1
+                        """, (admin_notification_text, int(safe_str(chat_id))))
+                        
+                        conn.commit()
+                        cur.close()
+                        conn.close()
+                        
+                        print(f"🔥 [INTERACTIONS_LOG] עדכון הטבלה עם נוסח ההתראה לאדמין | chat_id={safe_str(chat_id)}")
+                        
+                    except ImportError:
+                        logger.warning(f"[INTERACTIONS_LOG] psycopg2 לא זמין לעדכון הטבלה", source="message_handler")
+                    
+            except Exception as update_admin_err:
+                logger.warning(f"[INTERACTIONS_LOG] שגיאה בעדכון נוסח ההתראה לאדמין: {update_admin_err}", source="message_handler")
             
             logger.info(f"📨 [FINAL] ההתראה הסופית נשלחה לאדמין אחרי שכל הדברים הסתיימו | chat_id={safe_str(chat_id)}", source="message_handler")
             
@@ -804,7 +893,9 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
             logger.warning(f"[NO_CODE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
 
     except Exception as ex:
-        await handle_critical_error(ex, chat_id, user_msg, update)
+        # הוספת המשתמש לרשימת התאוששות
+        add_user_to_recovery_list(safe_str(chat_id), f"Critical error: {str(ex)[:100]}", user_msg)
+        logger.error(f"❌ שגיאה קריטית: {ex}", source="message_handler")
 
 async def handle_pending_user_background(update, context, chat_id, user_msg):
     """
@@ -1324,8 +1415,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as ex:
         logger.error(f"❌ שגיאה בטיפול בהודעה: {ex}", source="message_handler")
-        from notifications import handle_critical_error
-        await handle_critical_error(ex, chat_id, user_msg, update)
+        # הוספת המשתמש לרשימת התאוששות
+        add_user_to_recovery_list(safe_str(chat_id), f"Critical error in message handling: {str(ex)[:100]}", user_msg)
         await end_monitoring_user(safe_str(chat_id), False)
         return
 

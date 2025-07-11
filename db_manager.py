@@ -259,7 +259,7 @@ def insert_chat_message_only(cursor, chat_id, user_msg, bot_msg, timestamp=None)
     # 📝 הדפסת כל מה שנרשם במסד הנתונים
     user_msg_display = (user_msg[:50] + "...") if user_msg and len(user_msg) > 50 else (user_msg or "")
     bot_msg_display = (bot_msg[:50] + "...") if bot_msg and len(bot_msg) > 50 else (bot_msg or "")
-    print(f"📝 [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp}")
+    print(f"💬 NEW MESSAGE [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp}")
 
 # === יצירת טבלאות (אם לא קיימות) ===
 def create_tables():

@@ -41,36 +41,17 @@ class MockUpdate:
         self.effective_chat = MockChat(chat_id)
 
 def _load_critical_error_users():
-    """טוען רשימת משתמשים שקיבלו הודעות שגיאה קריטיות מהמסד נתונים"""
+    """
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
+    השתמש ב-recovery_manager.get_users_needing_recovery() במקום
+    """
     try:
-        from profile_utils import get_all_users_with_condition
-        
-        # קבלת כל המשתמשים שצריכים הודעת התאוששות
-        users = get_all_users_with_condition("needs_recovery_message = TRUE")
-        
-        if not users:
-            print("ℹ️ אין משתמשים שצריכים הודעת התאוששות - מתחיל ברשימה ריקה")
-            return {}
-        
-        # המרה לפורמט הישן לתאימות לאחור
-        users_data = {}
-        for user in users:
-            chat_id = user.get('chat_id')
-            if chat_id:
-                users_data[safe_str(chat_id)] = {
-                    "timestamp": user.get('recovery_error_timestamp', ''),
-                    "error_message": "Database stored recovery",
-                    "recovered": False,
-                    "original_message": user.get('recovery_original_message', ''),
-                    "message_processed": False
-                }
-        
-        print(f"✅ נטענו {len(users_data)} משתמשים מהמסד נתונים שצריכים הודעת התאוששות")
-        return users_data
-        
-    except Exception as e:
-        logging.error(f"Error loading critical error users from database: {e}")
-        print(f"🚨 שגיאה בטעינת משתמשים קריטיים ממסד נתונים: {e}")
+        from recovery_manager import get_users_needing_recovery
+        users = get_users_needing_recovery()
+        # המרה לפורמט הישן לתאימות
+        return {user.get('chat_id'): user for user in users}
+    except ImportError:
+        # fallback לקוד הישן
         return {}
 
 def _save_critical_error_users(users_data):
@@ -87,8 +68,15 @@ def _save_critical_error_users(users_data):
         return False
 
 def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_user_message: str = None):
-    """מוסיף משתמש לרשימת מי שקיבל הודעת שגיאה קריטית - מסד נתונים"""
+    """
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
+    השתמש ב-recovery_manager.add_user_to_recovery_list() במקום
+    """
     try:
+        from recovery_manager import add_user_to_recovery_list
+        return add_user_to_recovery_list(chat_id, error_message, original_user_message)
+    except ImportError:
+        # fallback לקוד הישן אם המודול החדש לא זמין
         from profile_utils import update_user_profile
         
         # עדכון הפרופיל במסד נתונים
@@ -130,17 +118,25 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
             pass
 
 def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown error", original_message: str = ""):
-    """פונקציה בטוחה לרישום משתמש לרשימת התאוששות"""
+    """
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
+    השתמש ב-recovery_manager.add_user_to_recovery_list() במקום
+    """
     try:
-        if chat_id:
-            # העברת ההודעה המקורית רק אם היא לא ריקה
-            msg_to_save = original_message.strip() if original_message and original_message.strip() else None
-            _add_user_to_critical_error_list(safe_str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
-            print(f"🛡️ משתמש {safe_str(chat_id)} נוסף לרשימת התאוששות ({error_context})")
-            if msg_to_save:
-                print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
-    except Exception as e:
-        print(f"🚨 שגיאה ברישום להתאוששות: {e}")
+        from recovery_manager import add_user_to_recovery_list
+        return add_user_to_recovery_list(chat_id, error_context, original_message)
+    except ImportError:
+        # fallback לקוד הישן
+        try:
+            if chat_id:
+                # העברת ההודעה המקורית רק אם היא לא ריקה
+                msg_to_save = original_message.strip() if original_message and original_message.strip() else None
+                _add_user_to_critical_error_list(safe_str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
+                print(f"🛡️ משתמש {safe_str(chat_id)} נוסף לרשימת התאוששות ({error_context})")
+                if msg_to_save:
+                    print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
+        except Exception as e:
+            logger.error(f"Failed to add user {safe_str(chat_id)} to recovery list: {e}", source="critical_users_manager")
 
 async def _send_user_friendly_error_message(update, chat_id: str, original_message: str = None):
     """שולח הודעת שגיאה ידידותית למשתמש"""
@@ -168,157 +164,17 @@ async def _send_user_friendly_error_message(update, chat_id: str, original_messa
         safe_add_user_to_recovery_list(chat_id, f"Failed to send error message: {e}", original_message)
 
 async def send_recovery_messages_to_affected_users():
-    """שולח הודעות התאוששות למשתמשים שחוו שגיאות"""
+    """
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
+    השתמש ב-recovery_manager.send_recovery_messages_to_all_users() במקום
+    """
     try:
-        users_data = _load_critical_error_users()
-        if not users_data:
-            print("ℹ️ אין משתמשים ברשימת ההתאוששות")
-            return
-            
-        print(f"🔄 מתחיל שליחת הודעות התאוששות ל-{len(users_data)} משתמשים...")
-        
-        from telegram import Bot
-        from telegram.error import BadRequest
-        bot = Bot(token=BOT_TOKEN)
-        
-        updated_users = {}
-        recovery_count = 0
-        
-        for chat_id, user_info in users_data.items():
-            try:
-                if user_info.get("recovered", False):
-                    print(f"ℹ️ משתמש {chat_id} כבר התאושש - מדלג")
-                    updated_users[chat_id] = user_info
-                    continue
-                
-                # בדיקה אם יש הודעה מקורית לעיבוד
-                original_message = user_info.get("original_message", "").strip()
-                message_processed = user_info.get("message_processed", False)
-                
-                if original_message and not message_processed:
-                    # עיבוד ההודעה המקורית
-                    print(f"🔄 מעבד הודעה מקורית למשתמש {chat_id}: '{original_message[:50]}...'")
-                    
-                    try:
-                        # קריאה לפונקציה שמעבדת הודעות אבודות
-                        processed_response = await process_lost_message(original_message, chat_id)
-                        
-                        if processed_response:
-                            # שליחת התשובה המעובדת
-                            recovery_message = (
-                                "✅ המערכת חזרה לפעול!\n\n"
-                                "🔄 עיבדתי את הודעתך שנשלחה קודם:\n"
-                                f"💬 \"{original_message[:100]}{'...' if len(original_message) > 100 else ''}\"\n\n"
-                                f"{processed_response}\n\n"
-                                "🎯 תודה על הסבלנות!"
-                            )
-                            
-                            await bot.send_message(chat_id=chat_id, text=recovery_message)
-                            print(f"✅ נשלחה תשובה מעובדת למשתמש {chat_id}")
-                            
-                            # עדכון שההודעה עובדה
-                            user_info["message_processed"] = True
-                            user_info["recovery_response_sent"] = True
-                            user_info["recovery_timestamp"] = get_israel_time().isoformat()
-                            recovery_count += 1
-                        else:
-                            print(f"⚠️ לא הצלחתי לעבד הודעה למשתמש {chat_id}")
-                            # שליחת הודעת התאוששות רגילה
-                            recovery_message = (
-                                "✅ המערכת חזרה לפעול!\n\n"
-                                "🔄 ראיתי שניסית לשלוח הודעה קודם כשהייתה תקלה.\n"
-                                "💬 אשמח אם תשלח שוב את מה שרצית לשאול - עכשיו הכל עובד תקין!\n\n"
-                                "🎯 תודה על הסבלנות!"
-                            )
-                            
-                            await bot.send_message(chat_id=chat_id, text=recovery_message)
-                            print(f"✅ נשלחה הודעת התאוששות רגילה למשתמש {chat_id}")
-                            
-                            user_info["recovery_response_sent"] = True
-                            user_info["recovery_timestamp"] = get_israel_time().isoformat()
-                            recovery_count += 1
-                            
-                    except Exception as processing_error:
-                        print(f"⚠️ שגיאה בעיבוד הודעה למשתמש {chat_id}: {processing_error}")
-                        # שליחת הודעה רגילה במקום
-                        recovery_message = (
-                            "✅ המערכת חזרה לפעול!\n\n"
-                            "💬 אשמח אם תשלח שוב את מה שרצית לשאול - עכשיו הכל עובד תקין!\n\n"
-                            "🎯 תודה על הסבלנות!"
-                        )
-                        
-                        await bot.send_message(chat_id=chat_id, text=recovery_message)
-                        print(f"✅ נשלחה הודעת התאוששות חלופית למשתמש {chat_id}")
-                        
-                        user_info["recovery_response_sent"] = True
-                        user_info["recovery_timestamp"] = get_israel_time().isoformat()
-                        recovery_count += 1
-                else:
-                    # אין הודעה מקורית או שכבר עובדה - שליחת הודעה רגילה
-                    recovery_message = (
-                        "✅ המערכת חזרה לפעול!\n\n"
-                        "💬 אשמח אם תשלח שוב את מה שרצית לשאול - עכשיו הכל עובד תקין!\n\n"
-                        "🎯 תודה על הסבלנות!"
-                    )
-                    
-                    await bot.send_message(chat_id=chat_id, text=recovery_message)
-                    print(f"✅ נשלחה הודעת התאוששות למשתמש {chat_id}")
-                    
-                    user_info["recovery_response_sent"] = True
-                    user_info["recovery_timestamp"] = get_israel_time().isoformat()
-                    recovery_count += 1
-                
-                # עדכון שהמשתמש התאושש
-                user_info["recovered"] = True
-                updated_users[chat_id] = user_info
-                
-                # מניעת spam - המתנה בין הודעות
-                await asyncio.sleep(2)
-                
-            except BadRequest as e:
-                if "chat not found" in str(e).lower() or "user is deactivated" in str(e).lower():
-                    print(f"⚠️ משתמש {chat_id} חסום/לא קיים - מסיר מהרשימה")
-                    # לא נוסיף אותו לרשימה המעודכנת
-                    continue
-                else:
-                    print(f"⚠️ שגיאת Telegram למשתמש {chat_id}: {e}")
-                    # נשאיר ברשימה לניסיון מאוחר יותר
-                    updated_users[chat_id] = user_info
-                    
-            except Exception as e:
-                print(f"⚠️ שגיאה בשליחת הודעת התאוששות למשתמש {chat_id}: {e}")
-                # נשאיר ברשימה לניסיון מאוחר יותר
-                updated_users[chat_id] = user_info
-        
-        # שמירת הרשימה המעודכנת - עדכון במסד נתונים
-        if recovery_count > 0:
-            from profile_utils import update_user_profile
-            for chat_id in updated_users.keys():
-                try:
-                    user_info = updated_users[chat_id]
-                    if user_info.get("recovered", False):
-                        # איפוס הסימון של צורך בהודעת התאוששות
-                        update_user_profile(chat_id, {"needs_recovery_message": False})
-                except Exception as e:
-                    print(f"⚠️ שגיאה בעדכון סטטוס התאוששות למשתמש {chat_id}: {e}")
-        
-        print(f"✅ הושלמה שליחת הודעות התאוששות - {recovery_count} משתמשים התאוששו")
-        
-        # שליחת דיווח לאדמין
-        from admin_notifications import send_admin_notification
-        send_admin_notification(
-            f"✅ התאוששות הושלמה!\n"
-            f"📊 {recovery_count} משתמשים קיבלו הודעת התאוששות\n"
-            f"📋 {len(updated_users)} משתמשים נשארו ברשימה"
-        )
-        
-    except Exception as e:
-        print(f"🚨 שגיאה כללית בשליחת הודעות התאוששות: {e}")
-        try:
-            from admin_notifications import send_admin_notification
-            send_admin_notification(f"🚨 שגיאה בהתאוששות: {e}", urgent=True)
-        except:
-            pass
+        from recovery_manager import send_recovery_messages_to_all_users
+        return await send_recovery_messages_to_all_users()
+    except ImportError:
+        # fallback לקוד הישן - רק לוג שהפונקציה הישנה נקראת
+        logger.warning("Using deprecated send_recovery_messages_to_affected_users - switch to recovery_manager.py", source="critical_users_manager")
+        return 0
 
 async def process_lost_message(original_message: str, chat_id: str) -> str:
     """מעבד הודעה שאבדה בגלל שגיאה"""
@@ -485,53 +341,58 @@ def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition
 
 async def handle_critical_error(error, chat_id, user_msg, update: Update):
     """
-    מטפל בשגיאות קריטיות - שגיאות שמונעות מהבוט לענות למשתמש
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py  
+    השתמש ב-recovery_manager.add_user_to_recovery_list() במקום
     """
-    # הוספת לוג להודעה נכנסת גם בשגיאות קריטיות
-    if chat_id and user_msg and update and update.message:
-        print(f"[IN_MSG] chat_id={safe_str(chat_id)} | message_id={update.message.message_id} | text={user_msg.replace(chr(10), ' ')[:120]} (CRITICAL ERROR)")
-    
-    print(f"🚨 שגיאה קריטית: {error}")
-    # DEBUG הודעות הוסרו לטובת ביצועים
-    
-    # 🔧 הוספה: וידוא רישום המשתמש לרשימת התאוששות גם אם שליחת ההודעה נכשלת
-    if chat_id:
+    try:
+        from recovery_manager import add_user_to_recovery_list
+        add_user_to_recovery_list(chat_id, f"Critical error: {str(error)[:100]}", user_msg)
+        logger.error(f"Critical error handled via recovery_manager for user {safe_str(chat_id)}: {error}", source="critical_users_manager")
+    except ImportError:
+        # fallback לקוד הישן
+        logger.error(f"Critical error for user {safe_str(chat_id)}: {error}", source="critical_users_manager")
+        
+        # שמירת המשתמש לרשימת התאוששות
+        _add_user_to_critical_error_list(safe_str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
+        
+        # שליחת התראה לאדמין
         try:
-            # רישום למשתמש לרשימת התאוששות לפני ניסיון שליחת הודעה - עם ההודעה המקורית!
-            _add_user_to_critical_error_list(safe_str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
-            
-            # ניסיון שליחת הודעה ידידותית למשתמש - עם ההודעה המקורית
-            await _send_user_friendly_error_message(update, safe_str(chat_id), user_msg)
-        except Exception as e:
-            # גם אם שליחת ההודעה נכשלת - המשתמש כבר ברשימת ההתאוששות
-            logging.error(f"Failed to send user-friendly error message: {e}")
-            print(f"⚠️ שליחת הודעה נכשלה, אבל המשתמש {safe_str(chat_id)} נרשם לרשימת התאוששות")
-    
-    log_error_stat("critical_error")
-    
-    # התראה מפורטת לאדמין
-    admin_error_message = f"🚨 שגיאה קריטית בבוט:\n{str(error)}"
-    if chat_id:
-        admin_error_message += f"\nמשתמש: {safe_str(chat_id)}"
-    if user_msg:
-        admin_error_message += f"\nהודעה: {user_msg[:200]}"
-    admin_error_message += f"\n⚠️ המשתמש נרשם לרשימת התאוששות ויקבל התראה כשהבוט יחזור לעבוד"
-    if user_msg:
-        admin_error_message += f"\n💾 ההודעה המקורית נשמרה ותטופל כשהמערכת תחזור לעבוד"
-    
-    # ייבוא delayed כדי למנוע circular imports
-    from notifications import send_error_notification, log_error_to_file
-    
-    send_error_notification(
-        error_message=admin_error_message,
-        chat_id=chat_id,
-        user_msg=user_msg,
-        error_type="שגיאה קריטית - הבוט לא הצליח לענות למשתמש"
-    )
-    log_error_to_file({
-        "error_type": "critical_error",
-        "error": str(error),
-        "chat_id": chat_id,
-        "user_msg": user_msg,
-        "critical": True
-    }, send_telegram=False) 
+            from notifications import send_admin_notification
+            send_admin_notification(
+                f"🚨 שגיאה קריטית!\n"
+                f"👤 משתמש: {safe_str(chat_id)}\n"
+                f"💬 הודעה: {user_msg[:100] if user_msg else 'אין'}\n"
+                f"🔥 שגיאה: {str(error)[:200]}\n"
+                f"⏰ זמן: {get_israel_time().strftime('%H:%M:%S')}\n\n"
+                f"✅ המשתמש נוסף לרשימת התאוששות",
+                urgent=True
+            )
+        except Exception as admin_error:
+            logger.error(f"Failed to send admin notification: {admin_error}", source="critical_users_manager")
+
+def _load_critical_error_users():
+    """
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
+    השתמש ב-recovery_manager.get_users_needing_recovery() במקום
+    """
+    try:
+        from recovery_manager import get_users_needing_recovery
+        users = get_users_needing_recovery()
+        # המרה לפורמט הישן לתאימות
+        return {user.get('chat_id'): user for user in users}
+    except ImportError:
+        # fallback לקוד הישן
+        return {}
+
+async def send_recovery_messages_to_affected_users():
+    """
+    🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
+    השתמש ב-recovery_manager.send_recovery_messages_to_all_users() במקום
+    """
+    try:
+        from recovery_manager import send_recovery_messages_to_all_users
+        return await send_recovery_messages_to_all_users()
+    except ImportError:
+        # fallback לקוד הישן - רק לוג שהפונקציה הישנה נקראת
+        logger.warning("Using deprecated send_recovery_messages_to_affected_users - switch to recovery_manager.py", source="critical_users_manager")
+        return 0 
