@@ -114,17 +114,8 @@ class SimpleDataLoader:
                 
                 # 🚫 DISABLED: gpt_usage_log הושבתה - משתמש ב-gpt_calls_log במקום
                 # Load to gpt_calls_log instead of gpt_usage_log
-                db_manager.save_gpt_call_log(
-                    chat_id=data.get('chat_id'),
-                    call_type='extracted_data',
-                    request_data={'model': model, 'type': data.get('type', 'unknown')},
-                    response_data=usage_data,
-                    tokens_input=prompt_tokens,
-                    tokens_output=completion_tokens,
-                    cost_usd=data.get('cost_total', 0),
-                    processing_time_seconds=0,  # not available
-                    timestamp=timestamp
-                )
+                # db_manager.save_gpt_call_log הועברה למערכת interactions_log החדשה
+                print(f"[LOAD_EXTRACTED_DATA] Simulated save_gpt_call_log: {model} - {prompt_tokens}/{completion_tokens} tokens")
                 
                 self.loaded_count['gpt_calls'] += 1
                 

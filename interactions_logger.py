@@ -65,7 +65,8 @@ class InteractionsLogger:
                 'cost_agorot': None,
                 'processing_time': None,
                 'tokens_input': None,
-                'tokens_output': None
+                'tokens_output': None,
+                'tokens_cached': None
             }
         
         usage = gpt_result.get('usage', {})
@@ -86,8 +87,33 @@ class InteractionsLogger:
             'cost_agorot': cost_agorot,
             'processing_time': processing_time,
             'tokens_input': usage.get('prompt_tokens', usage.get('input_tokens')),
-            'tokens_output': usage.get('completion_tokens', usage.get('output_tokens'))
+            'tokens_output': usage.get('completion_tokens', usage.get('output_tokens')),
+            'tokens_cached': usage.get('prompt_tokens_cached', usage.get('cached_tokens', 0))
         }
+
+    def count_history_messages(self, messages_for_gpt: list) -> tuple:
+        """
+        ספירת הודעות משתמש ובוט בהיסטוריה בלבד (לא סיסטם פרומטים)
+        
+        Args:
+            messages_for_gpt: כל ההודעות שנשלחו ל-GPT
+            
+        Returns:
+            tuple: (user_count, bot_count) - מספר הודעות משתמש ובוט מההיסטוריה
+        """
+        if not messages_for_gpt:
+            return (0, 0)
+        
+        # ספירת הודעות משתמש ובוט בלבד (לא system)
+        user_count = len([msg for msg in messages_for_gpt if msg.get("role") == "user"])
+        bot_count = len([msg for msg in messages_for_gpt if msg.get("role") == "assistant"])
+        
+        # הודעת המשתמש הנוכחית היא חלק מ-messages_for_gpt אבל לא חלק מההיסטוריה
+        # אז נפחית 1 מספירת המשתמשים (ההודעה האחרונה היא הנוכחית)
+        if user_count > 0:
+            user_count -= 1
+        
+        return (user_count, bot_count)
     
     def log_complete_interaction(self, 
                                 chat_id: Union[str, int],
@@ -118,6 +144,11 @@ class InteractionsLogger:
             print("❌ [InteractionsLogger] לא נמצא URL למסד הנתונים")
             return False
         
+        # וידוא שהטבלה קיימת עם השדות החדשים
+        if not self.ensure_table_schema():
+            print("❌ [InteractionsLogger] כשל בעדכון מבנה הטבלה")
+            return False
+        
         try:
             conn = psycopg2.connect(self.db_url)
             cur = conn.cursor()
@@ -140,36 +171,41 @@ class InteractionsLogger:
             total_time = timing_data.get('total', user_to_bot_time)
             background_time = max(0, total_time - user_to_bot_time)
             
+            # ספירת הודעות היסטוריה
+            history_user_count, history_bot_count = self.count_history_messages(messages_for_gpt)
+            
             # הכנת SQL
             insert_sql = """
             INSERT INTO interactions_log (
                 telegram_message_id, chat_id, full_system_prompts, user_msg, bot_msg,
                 
-                gpt_a_model, gpt_a_cost_agorot, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output,
+                gpt_a_model, gpt_a_cost_agorot, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output, gpt_a_tokens_cached,
                 
                 gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_cost_agorot, gpt_b_processing_time, 
-                gpt_b_tokens_input, gpt_b_tokens_output,
+                gpt_b_tokens_input, gpt_b_tokens_output, gpt_b_tokens_cached,
                 
                 gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_cost_agorot, gpt_c_processing_time,
-                gpt_c_tokens_input, gpt_c_tokens_output,
+                gpt_c_tokens_input, gpt_c_tokens_output, gpt_c_tokens_cached,
                 
                 gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_cost_agorot, gpt_d_processing_time,
-                gpt_d_tokens_input, gpt_d_tokens_output,
+                gpt_d_tokens_input, gpt_d_tokens_output, gpt_d_tokens_cached,
                 
                 gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_cost_agorot, gpt_e_processing_time,
-                gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_counter,
+                gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_tokens_cached, gpt_e_counter,
                 
                 timestamp, date_only, time_only, user_to_bot_response_time, background_processing_time,
+                history_user_messages_count, history_bot_messages_count,
                 
                 total_cost_agorot, source_commit_hash, admin_notification_text
             ) VALUES (
                 %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
+                %s, %s,
                 %s, %s, %s
             ) RETURNING serial_number
             """
@@ -188,6 +224,7 @@ class InteractionsLogger:
                 gpt_data['a']['processing_time'],
                 gpt_data['a']['tokens_input'],
                 gpt_data['a']['tokens_output'],
+                gpt_data['a']['tokens_cached'],
                 
                 # GPT-B
                 gpt_data['b']['activated'],
@@ -197,6 +234,7 @@ class InteractionsLogger:
                 gpt_data['b']['processing_time'],
                 gpt_data['b']['tokens_input'],
                 gpt_data['b']['tokens_output'],
+                gpt_data['b']['tokens_cached'],
                 
                 # GPT-C
                 gpt_data['c']['activated'],
@@ -206,6 +244,7 @@ class InteractionsLogger:
                 gpt_data['c']['processing_time'],
                 gpt_data['c']['tokens_input'],
                 gpt_data['c']['tokens_output'],
+                gpt_data['c']['tokens_cached'],
                 
                 # GPT-D
                 gpt_data['d']['activated'],
@@ -215,6 +254,7 @@ class InteractionsLogger:
                 gpt_data['d']['processing_time'],
                 gpt_data['d']['tokens_input'],
                 gpt_data['d']['tokens_output'],
+                gpt_data['d']['tokens_cached'],
                 
                 # GPT-E
                 gpt_data['e']['activated'],
@@ -224,6 +264,7 @@ class InteractionsLogger:
                 gpt_data['e']['processing_time'],
                 gpt_data['e']['tokens_input'],
                 gpt_data['e']['tokens_output'],
+                gpt_data['e']['tokens_cached'],
                 gpt_e_counter,
                 
                 # זמנים
@@ -232,6 +273,10 @@ class InteractionsLogger:
                 now.time(),
                 user_to_bot_time,
                 background_time,
+                
+                # היסטוריה
+                history_user_count,
+                history_bot_count,
                 
                 # מטאדאטה
                 total_cost_agorot,
@@ -249,11 +294,136 @@ class InteractionsLogger:
             print(f"✅ [InteractionsLogger] אינטראקציה #{serial_number} נרשמה בהצלחה")
             print(f"   💰 עלות כוללת: {total_cost_agorot:.2f} אגורות")
             print(f"   ⏱️ זמן תגובה: {user_to_bot_time:.2f}s | רקע: {background_time:.2f}s")
+            print(f"   📊 היסטוריה: {history_user_count} משתמש + {history_bot_count} בוט")
             
             return True
             
         except Exception as e:
             print(f"❌ [InteractionsLogger] שגיאה ברישום אינטראקציה: {e}")
+            return False
+
+    def ensure_table_schema(self):
+        """וידוא שהטבלה קיימת עם השדות החדשים"""
+        if not self.db_url:
+            return False
+        
+        try:
+            conn = psycopg2.connect(self.db_url)
+            cur = conn.cursor()
+            
+            # בדיקה אם הטבלה קיימת
+            cur.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'interactions_log'
+                )
+            """)
+            table_exists = cur.fetchone()[0]
+            
+            if not table_exists:
+                # יצירת הטבלה מאפס
+                create_table_sql = """
+                CREATE TABLE interactions_log (
+                    serial_number SERIAL PRIMARY KEY,
+                    telegram_message_id TEXT,
+                    chat_id BIGINT NOT NULL,
+                    full_system_prompts TEXT,
+                    user_msg TEXT NOT NULL,
+                    bot_msg TEXT,
+                    
+                    gpt_a_model TEXT,
+                    gpt_a_cost_agorot INTEGER,
+                    gpt_a_processing_time DECIMAL(10,3),
+                    gpt_a_tokens_input INTEGER,
+                    gpt_a_tokens_output INTEGER,
+                    gpt_a_tokens_cached INTEGER DEFAULT 0,
+                    
+                    gpt_b_activated BOOLEAN DEFAULT FALSE,
+                    gpt_b_reply TEXT,
+                    gpt_b_model TEXT,
+                    gpt_b_cost_agorot INTEGER,
+                    gpt_b_processing_time DECIMAL(10,3),
+                    gpt_b_tokens_input INTEGER,
+                    gpt_b_tokens_output INTEGER,
+                    gpt_b_tokens_cached INTEGER DEFAULT 0,
+                    
+                    gpt_c_activated BOOLEAN DEFAULT FALSE,
+                    gpt_c_reply TEXT,
+                    gpt_c_model TEXT,
+                    gpt_c_cost_agorot INTEGER,
+                    gpt_c_processing_time DECIMAL(10,3),
+                    gpt_c_tokens_input INTEGER,
+                    gpt_c_tokens_output INTEGER,
+                    gpt_c_tokens_cached INTEGER DEFAULT 0,
+                    
+                    gpt_d_activated BOOLEAN DEFAULT FALSE,
+                    gpt_d_reply TEXT,
+                    gpt_d_model TEXT,
+                    gpt_d_cost_agorot INTEGER,
+                    gpt_d_processing_time DECIMAL(10,3),
+                    gpt_d_tokens_input INTEGER,
+                    gpt_d_tokens_output INTEGER,
+                    gpt_d_tokens_cached INTEGER DEFAULT 0,
+                    
+                    gpt_e_activated BOOLEAN DEFAULT FALSE,
+                    gpt_e_reply TEXT,
+                    gpt_e_model TEXT,
+                    gpt_e_cost_agorot INTEGER,
+                    gpt_e_processing_time DECIMAL(10,3),
+                    gpt_e_tokens_input INTEGER,
+                    gpt_e_tokens_output INTEGER,
+                    gpt_e_tokens_cached INTEGER DEFAULT 0,
+                    gpt_e_counter TEXT,
+                    
+                    timestamp TIMESTAMP DEFAULT NOW(),
+                    date_only DATE,
+                    time_only TIME,
+                    user_to_bot_response_time DECIMAL(10,3),
+                    background_processing_time DECIMAL(10,3),
+                    history_user_messages_count INTEGER DEFAULT 0,
+                    history_bot_messages_count INTEGER DEFAULT 0,
+                    
+                    total_cost_agorot INTEGER DEFAULT 0,
+                    source_commit_hash TEXT,
+                    admin_notification_text TEXT
+                )
+                """
+                cur.execute(create_table_sql)
+                print("✅ [InteractionsLogger] יצירת טבלת interactions_log הושלמה")
+            else:
+                # בדיקה אם השדות החדשים קיימים
+                cur.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name = 'interactions_log' 
+                    AND column_name IN ('gpt_a_tokens_cached', 'gpt_b_tokens_cached', 
+                                      'gpt_c_tokens_cached', 'gpt_d_tokens_cached', 'gpt_e_tokens_cached',
+                                      'history_user_messages_count', 'history_bot_messages_count')
+                """)
+                existing_columns = [row[0] for row in cur.fetchall()]
+                
+                # הוספת עמודות חסרות
+                required_columns = {
+                    'gpt_a_tokens_cached': 'INTEGER DEFAULT 0',
+                    'gpt_b_tokens_cached': 'INTEGER DEFAULT 0',
+                    'gpt_c_tokens_cached': 'INTEGER DEFAULT 0',
+                    'gpt_d_tokens_cached': 'INTEGER DEFAULT 0',
+                    'gpt_e_tokens_cached': 'INTEGER DEFAULT 0',
+                    'history_user_messages_count': 'INTEGER DEFAULT 0',
+                    'history_bot_messages_count': 'INTEGER DEFAULT 0'
+                }
+                
+                for col_name, col_type in required_columns.items():
+                    if col_name not in existing_columns:
+                        cur.execute(f"ALTER TABLE interactions_log ADD COLUMN {col_name} {col_type}")
+                        print(f"✅ [InteractionsLogger] הוספת עמודה: {col_name}")
+                
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            print(f"❌ [InteractionsLogger] שגיאה בעדכון מבנה הטבלה: {e}")
             return False
 
 # פונקציה נוחה לשימוש

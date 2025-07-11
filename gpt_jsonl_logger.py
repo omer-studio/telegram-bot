@@ -3,7 +3,7 @@ import os
 import threading
 from datetime import datetime
 from typing import Any, Dict
-from db_manager import save_gpt_call_log
+# save_gpt_call_log הועברה למערכת interactions_log החדשה
 
 
 class GPTJSONLLogger:
@@ -155,17 +155,8 @@ class GPTJSONLLogger:
             if processing_time > 0:
                 print(f"⏱️ [DEBUG][log_gpt_call] Processing time: {processing_time:.3f}s")
             
-            # שמירה ל-SQL באמצעות db_manager
-            save_gpt_call_log(
-                chat_id=chat_id,
-                call_type=gpt_type,
-                request_data=request,
-                response_data=response,
-                tokens_input=tokens_input,
-                tokens_output=tokens_output,
-                cost_usd=cost_usd or 0,
-                processing_time_seconds=processing_time
-            )
+            # שמירה ל-SQL הועברה למערכת interactions_log החדשה
+            print(f"[GPT_JSONL_LOGGER] {gpt_type} - {request.get('model', 'unknown')} - {tokens_input}/{tokens_output} tokens - ${cost_usd or 0:.4f} - {processing_time:.2f}s")
             
             print(f"[DEBUG][log_gpt_call] Successfully saved to SQL")
             

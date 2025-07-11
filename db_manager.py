@@ -300,21 +300,7 @@ def create_tables():
     
     cur.execute(create_user_profiles_sql)
     
-    # 🟢 טבלת gpt_calls_log - קריטית (מכילה את כל נתוני הקריאות והעלויות)
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS gpt_calls_log (
-        id SERIAL PRIMARY KEY,
-        chat_id TEXT,
-        call_type TEXT,
-        request_data JSONB,
-        response_data JSONB,
-        tokens_input INTEGER,
-        tokens_output INTEGER,
-        cost_usd DECIMAL(10,6),
-        processing_time_seconds DECIMAL(8,3),
-        timestamp TIMESTAMP
-    );
-    ''')
+    # 🚫 REMOVED: gpt_calls_log - הועברה למערכת interactions_log החדשה
     
     # 🚫 DISABLED: טבלאות מיותרות לא נוצרות יותר
     # gpt_usage_log - כפול ל-gpt_calls_log
@@ -325,8 +311,8 @@ def create_tables():
     # free_model_limits - מנוהל בקונפיג
     
     if should_log_debug_prints():
-        print("✅ [DB] Created only critical tables: chat_messages, user_profiles, gpt_calls_log")
-        print("🚫 [DB] Skipped unused tables: gpt_usage_log, system_logs, critical_users, billing_usage, errors_stats, free_model_limits")
+        print("✅ [DB] Created only critical tables: chat_messages, user_profiles")
+        print("🚫 [DB] Skipped unused tables: gpt_calls_log (→ interactions_log), gpt_usage_log, system_logs, critical_users, billing_usage, errors_stats, free_model_limits")
     
     conn.commit()
     cur.close()
@@ -386,49 +372,8 @@ def get_chat_history(chat_id, limit=100):
 # ✅ הוסרו פונקציות deprecated: save_user_profile, get_user_profile, get_user_profile_fast, update_user_profile_fast
 # כל הפונקציות הועברו ל-profile_utils והן פעילות שם
 
-# === שמירת לוג GPT מפורט ===
-def save_gpt_call_log(chat_id, gpt_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, admin_notification_content=None, timestamp=None):
-    """
-    שומר לוג GPT בטבלה הקריטית gpt_calls_log - כמו שהבדיקות מצפות
-    """
-    # 🎯 נרמול chat_id לטיפוס אחיד
-    chat_id = validate_chat_id(chat_id)
-    
-    if timestamp is None:
-        timestamp = datetime.now()
-    
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # המרת dict ל-JSON string
-    request_json = json.dumps(request_data) if isinstance(request_data, dict) else str(request_data)
-    response_json = json.dumps(response_data) if isinstance(response_data, dict) else str(response_data)
-    
-    # 🔧 שמירה בטבלה הקריטית gpt_calls_log (כמו שהבדיקות מצפות)
-    insert_sql = """
-    INSERT INTO gpt_calls_log (
-        chat_id, call_type, request_data, response_data, tokens_input, tokens_output, 
-        cost_usd, processing_time_seconds, timestamp
-    ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s
-    ) RETURNING id
-    """
-    
-    cur.execute(insert_sql, (
-        chat_id, gpt_type, request_json, response_json, tokens_input, tokens_output,
-        cost_usd, processing_time_seconds, timestamp
-    ))
-    
-    gpt_log_id = cur.fetchone()[0]
-    
-    conn.commit()
-    cur.close()
-    conn.close()
-    
-    if should_log_debug_prints():
-        print(f"🤖 [DB] נשמר לוג GPT-{gpt_type} #{gpt_log_id} עבור chat_id={chat_id}")
-    
-    return gpt_log_id
+# 🚫 REMOVED: save_gpt_call_log - הועברה למערכת interactions_log החדשה
+# השתמש ב-interactions_logger.log_interaction() במקום
 
 # === שמירת לוג מערכת ===
 def save_system_log(log_level, module, message, extra_data, timestamp=None):
@@ -743,8 +688,10 @@ def save_temp_critical_user_data(filename, temp_data):
 # === פונקציות עזר מורחבות ===
 def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=None):
     """
-    שומר הודעת צ'אט רגילה + לוגינג אינטראקציה מפורט
-    עכשיו עם המבנה החדש: טבלה רזה + לוגינג מפורט נפרד + מספרים סידוריים
+    🔥 **פונקציה משופרת**: שמירה רגילה + רישום מפורט ב-interactions_log
+    
+    ** הפונקציה הזו deprecated - השתמש ב-log_interaction ישירות **
+    נשארת לתאימות לאחור בלבד
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -752,45 +699,7 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
     if timestamp is None:
         timestamp = datetime.now()
     
-    # אם יש נתוני GPT, שומר אותם בטבלה הקריטית gpt_calls_log
-    gpt_log_id = None
-    admin_notification_content = None
-    
-    if gpt_data and isinstance(gpt_data, dict):
-        try:
-            # יצירת תוכן התראת אדמין אם צריך
-            if user_msg and user_msg.strip() and not user_msg.startswith('['):
-                try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    admin_notification_content = send_anonymous_chat_notification(
-                        user_msg,
-                        bot_msg or "⏳ טרם נענה",
-                        chat_id=chat_id,
-                        only_generate_content=True
-                    )
-                except Exception as admin_err:
-                    if should_log_debug_prints():
-                        print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה ביצירת תוכן: {admin_err}")
-            
-            # שמירה בטבלה הקריטית gpt_calls_log
-            gpt_log_id = save_gpt_call_log(
-                chat_id=chat_id,
-                gpt_type="A",  # ברירת מחדל GPT-A
-                request_data=gpt_data.get('request_data', {}),
-                response_data=gpt_data.get('response_data', {}),
-                tokens_input=gpt_data.get('main_usage', {}).get('input_tokens', 0),
-                tokens_output=gpt_data.get('main_usage', {}).get('output_tokens', 0),
-                cost_usd=gpt_data.get('cost_usd', 0),
-                processing_time_seconds=gpt_data.get('latency', 0),
-                timestamp=timestamp
-            )
-            
-        except Exception as gpt_err:
-            if should_log_debug_prints():
-                print(f"⚠️ [GPT_LOG] שגיאה בשמירת לוג GPT: {gpt_err}")
-            gpt_log_id = None
-    
-    # שמירה בטבלה הקריטית chat_messages
+    # שמירה בטבלה הקיימת chat_messages (לתאימות לאחור)
     message_id = save_chat_message(
         chat_id=chat_id,
         user_msg=user_msg,
@@ -798,7 +707,47 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
         timestamp=timestamp
     )
     
-    # החזרת מידע מוגבל (רק מה שצריך)
+    # 🔥 **חדש**: רישום מפורט ב-interactions_log אם יש נתוני GPT
+    if gpt_data and isinstance(gpt_data, dict):
+        try:
+            from interactions_logger import log_interaction
+            
+            # הכנת נתונים לרישום מפורט
+            gpt_results = {}
+            timing_data = {}
+            
+            # חילוץ נתוני GPT מהפורמט הישן
+            if 'main_usage' in gpt_data:
+                gpt_results['a'] = {'usage': gpt_data['main_usage'], 'bot_reply': bot_msg}
+            if 'summary_usage' in gpt_data:
+                gpt_results['b'] = {'usage': gpt_data['summary_usage']}
+            if 'extract_usage' in gpt_data:
+                gpt_results['c'] = {'usage': gpt_data['extract_usage']}
+            
+            # רישום מפורט
+            log_success = log_interaction(
+                chat_id=chat_id,
+                telegram_message_id=gpt_data.get('message_id'),
+                user_msg=user_msg,
+                bot_msg=bot_msg,
+                messages_for_gpt=[],  # לא זמין בפורמט הישן
+                gpt_results=gpt_results,
+                timing_data=timing_data,
+                gpt_e_counter=None
+            )
+            
+            if log_success and should_log_debug_prints():
+                print(f"🔥 [DEPRECATED] save_gpt_chat_message: רישום כפול chat_messages + interactions_log | chat_id={chat_id}")
+                
+        except Exception as interaction_err:
+            if should_log_debug_prints():
+                print(f"⚠️ [DEPRECATED] שגיאה ברישום מפורט: {interaction_err}")
+    
+    # התראת deprecation
+    if should_log_debug_prints():
+        print(f"⚠️ [DEPRECATED] save_gpt_chat_message is deprecated - use log_interaction directly")
+    
+    # החזרת מידע לתאימות לאחור
     return message_id
 
 def get_chat_statistics():
@@ -815,16 +764,14 @@ def get_chat_statistics():
     cur.execute("SELECT COUNT(DISTINCT chat_id) FROM chat_messages")
     stats['unique_chats'] = cur.fetchone()[0]
     
-    # סטטיסטיקות GPT - נתונים מ-gpt_calls_log במקום chat_messages
-    cur.execute("SELECT COUNT(*) FROM gpt_calls_log")
-    stats['gpt_messages'] = cur.fetchone()[0]
+    # 🚫 REMOVED: סטטיסטיקות GPT הועברו למערכת interactions_log החדשה
+    # השתמש ב-interactions_log במקום gpt_calls_log
+    stats['gpt_messages'] = 0  # יעודכן מ-interactions_log
+    stats['total_cost_usd'] = 0.0  # יעודכן מ-interactions_log
+    stats['gpt_by_type'] = {}  # יעודכן מ-interactions_log
     
-    cur.execute("SELECT SUM(cost_usd) FROM gpt_calls_log WHERE cost_usd IS NOT NULL")
-    result = cur.fetchone()[0]
-    stats['total_cost_usd'] = float(result) if result else 0.0
-    
-    cur.execute("SELECT call_type, COUNT(*) FROM gpt_calls_log WHERE call_type IS NOT NULL GROUP BY call_type")
-    stats['gpt_by_type'] = dict(cur.fetchall())
+    if should_log_debug_prints():
+        print(f"🔄 [DISABLED] GPT stats moved to interactions_log system")
     
     # סטטיסטיקות הודעות - רק מספר הודעות בוט ומשתמש
     cur.execute("SELECT COUNT(*) FROM chat_messages WHERE user_msg IS NOT NULL AND user_msg != ''")
@@ -978,13 +925,13 @@ def get_reminder_states_data():
 # === שמירת לוג שימוש ===
 def save_gpt_usage_log(chat_id, model, usage, cost_agorot, timestamp=None):
     """
-    🚫 DISABLED: טבלת gpt_usage_log הושבתה - כל נתוני השימוש נשמרים ב-gpt_calls_log
-    gpt_calls_log מכיל את כל המידע הנדרש: עלויות, טוקנים, מודלים, זמנים
+    🚫 DISABLED: טבלת gpt_usage_log הושבתה - כל נתוני השימוש נשמרים ב-interactions_log
+    interactions_log מכיל את כל המידע הנדרש: עלויות, טוקנים, מודלים, זמנים
     """
     try:
-        # כל נתוני השימוש כבר נשמרים ב-gpt_calls_log - לא צריך טבלה נפרדת
+        # כל נתוני השימוש כבר נשמרים ב-interactions_log - לא צריך טבלה נפרדת
         if should_log_debug_prints():
-            print(f"🔄 [DISABLED] gpt_usage_log table disabled - all usage data saved in gpt_calls_log")
+            print(f"🔄 [DISABLED] gpt_usage_log table disabled - all usage data saved in interactions_log")
         return  # לא שומר לטבלה המיותרת
         
         # הקוד הישן הושבת:

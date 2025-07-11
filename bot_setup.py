@@ -68,7 +68,7 @@ async def send_daily_summary(days_back=1):
 import pytz
 from message_handler import handle_message
 from notifications import gentle_reminder_background_task
-from db_manager import create_tables, save_chat_message, save_gpt_usage_log, save_gpt_call_log, save_critical_user_data, save_reminder_state, save_billing_usage_data, save_errors_stats_data, save_bot_error_log, save_bot_trace_log, save_sync_queue_data, save_rollback_data, save_free_model_limits_data, save_temp_critical_user_data
+from db_manager import create_tables, save_chat_message, save_gpt_usage_log, save_critical_user_data, save_reminder_state, save_billing_usage_data, save_errors_stats_data, save_bot_error_log, save_bot_trace_log, save_sync_queue_data, save_rollback_data, save_free_model_limits_data, save_temp_critical_user_data
 from profile_utils import save_user_profile
 from notifications import send_admin_notification
 import json
@@ -953,17 +953,8 @@ def perform_detailed_migration():
                         response = entry.get("response", {})
                         usage = response.get("usage", {})
                         
-                        save_gpt_call_log(
-                            chat_id=entry.get("chat_id"),
-                            call_type=entry.get("gpt_type", "unknown"),
-                            request_data=entry.get("request", {}),
-                            response_data=response,
-                            tokens_input=usage.get("prompt_tokens", 0),
-                            tokens_output=usage.get("completion_tokens", 0),
-                            cost_usd=entry.get("cost_usd", 0),
-                            processing_time_seconds=0,
-                            timestamp=timestamp
-                        )
+                        # save_gpt_call_log הועברה למערכת interactions_log החדשה
+                        print(f"[BOT_SETUP] Simulated save_gpt_call_log: {entry.get('gpt_type', 'unknown')} - {usage.get('prompt_tokens', 0)}/{usage.get('completion_tokens', 0)} tokens")
                         results['gpt_calls']['migrated'] += 1
                         
                         if line_num % 100 == 0:  # דיבאג כל 100 שורות

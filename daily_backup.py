@@ -18,7 +18,7 @@ BACKUP_DIR = "backups/daily_db_backups"
 CRITICAL_TABLES = [
     "user_profiles",     # הלב של המערכת - קודי אישור ומשתמשים
     "chat_messages",     # כל היסטוריית השיחות
-    "gpt_calls_log"      # כל הקריאות והעלויות
+    "interactions_log"   # כל הקריאות והעלויות (החליפה את gpt_calls_log)
 ]
 
 def ensure_backup_dir():

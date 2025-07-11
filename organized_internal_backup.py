@@ -14,7 +14,7 @@ from admin_notifications import send_admin_notification
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 
 # 🎯 הגדרות גיבוי פנימי מסודר
-TABLES_TO_BACKUP = ["user_profiles", "chat_messages", "gpt_calls_log"]
+TABLES_TO_BACKUP = ["user_profiles", "chat_messages", "interactions_log"]
 BACKUP_SCHEMA = "backup"
 BACKUP_RETENTION_DAYS = 30
 
@@ -215,7 +215,7 @@ def generate_visual_backup_tree(backup_results, yesterday_comparison):
     folder_mapping = {
         "user_profiles": "user_profile_backup",
         "chat_messages": "chat_history_backup", 
-        "gpt_calls_log": "gpt_calls_backup"
+        "interactions_log": "interactions_backup"  # החליפה את gpt_calls_log
     }
     
     table_count = len(backup_results)

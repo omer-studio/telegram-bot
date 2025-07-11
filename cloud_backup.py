@@ -191,7 +191,7 @@ def run_cloud_backup():
         logger.info("☁️ מתחיל גיבוי ענן")
         
         # קריאת הנתונים מהמסד הראשי
-        from daily_backup import CRITICAL_TABLES, backup_table_to_json
+        from daily_backup import CRITICAL_TABLES  # עכשיו כולל interactions_log במקום gpt_calls_log
         
         backup_date = datetime.now().strftime("%Y-%m-%d")
         successful_backups = 0

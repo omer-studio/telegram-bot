@@ -17,7 +17,7 @@ DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 CRITICAL_TABLES = [
     "user_profiles",     # הלב של המערכת
     "chat_messages",     # כל היסטוריית השיחות  
-    "gpt_calls_log"      # כל הקריאות והעלויות
+    "interactions_log"   # כל הקריאות והעלויות (החליפה את gpt_calls_log)
 ]
 
 def create_backup_schema(backup_date):
@@ -155,7 +155,7 @@ def run_internal_backup():
                 f"🔍 **פירוט:**\n" +
                 f"👥 user_profiles: {backup_results.get('user_profiles', 0):,}\n" +
                 f"💬 chat_messages: {backup_results.get('chat_messages', 0):,}\n" +
-                f"🤖 gpt_calls_log: {backup_results.get('gpt_calls_log', 0):,}\n\n" +
+                f"🔄 interactions_log: {backup_results.get('interactions_log', 0):,}\n\n" +
                 f"🔒 **הנתונים מוגנים באותו מסד נתונים**"
             )
             
@@ -195,8 +195,8 @@ def add_backup_metadata(schema_name, backup_results, total_rows):
                 # אומדן גודל
                 if table_name == "chat_messages":
                     size_estimate = f"~{rows_count * 0.5:.1f}KB"
-                elif table_name == "gpt_calls_log":
-                    size_estimate = f"~{rows_count * 2:.1f}KB"
+                elif table_name == "interactions_log":
+                    size_estimate = f"~{rows_count * 5:.1f}KB"  # טבלה יותר מפורטת
                 else:
                     size_estimate = f"~{rows_count * 0.1:.1f}KB"
                 
