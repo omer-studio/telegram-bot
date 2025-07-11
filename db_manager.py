@@ -377,6 +377,32 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
     conn.commit()
     cur.close()
     conn.close()
+    
+    # 🔧 **תיקון מערכתי: שליחת התראה לאדמין בכל הודעה שנשמרת!**
+    # זה מבטיח שכל הודעה של משתמש אמיתי תגיע לאדמין, לא משנה מאיזה מקום בקוד
+    try:
+        # שליחת התראה רק אם יש הודעת משתמש אמיתית ומהסביבה הלייב
+        if (user_msg and user_msg.strip() and 
+            source_file == 'live_chat' and 
+            chat_id and 
+            not user_msg.startswith('[') and  # לא הודעות פנימיות
+            message_type != 'system'):  # לא הודעות מערכת
+            
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_msg or "⏳ טרם נענה",
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+            
+    except Exception as admin_err:
+        # לא נכשל בגלל התראה - רק לוג
+        if should_log_debug_prints():
+            print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה בשליחת התראה לאדמין: {admin_err}")
 
 
 def get_chat_history(chat_id, limit=100):
@@ -1055,18 +1081,29 @@ def get_user_message_count(chat_id):
 
 def clear_user_from_database(chat_id):
     """
-    מוחק את כל הודעות הצ'אט של המשתמש מטבלת chat_messages,
+    🚨 מוחק את כל הודעות הצ'אט של המשתמש מטבלת chat_messages,
     ומוחק את הרשומה לחלוטין מטבלת user_profiles.
-    לא נוגע בכלל ב-gpt_calls_log!
+    
+    ⚠️ זוהי פעולה דרסטית שמוחקת היסטוריה לחלוטין!
     
     🔧 תיקון מערכתי: מוחק את השורה לחלוטין במקום לאפס אותה ל-NULL
     למנוע הצטברות של "רשומות זומבי" בטבלה.
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
+    
+    # 🚨 לוג אזהרה לפני מחיקה
+    from logging import getLogger
+    logger = getLogger(__name__)
+    logger.warning(f"🚨 DELETION ALERT: מוחק משתמש {chat_id} לחלוטין מהמסד נתונים!", source="CRITICAL_DELETE")
+    
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
+        
+        # ספירת הודעות לפני מחיקה
+        cur.execute("SELECT COUNT(*) FROM chat_messages WHERE chat_id = %s", (chat_id,))
+        messages_count = cur.fetchone()[0]
         
         # מחיקת היסטוריית צ'אט
         cur.execute("DELETE FROM chat_messages WHERE chat_id = %s", (chat_id,))
@@ -1080,14 +1117,24 @@ def clear_user_from_database(chat_id):
         cur.close()
         conn.close()
         
+        # 🚨 התראה קריטית לאדמין
+        from admin_notifications import send_admin_notification
+        send_admin_notification(
+            f"🚨 **מחיקת משתמש בוצעה**\n\n" +
+            f"👤 **משתמש:** {chat_id}\n" +
+            f"📊 **הודעות שנמחקו:** {messages_count:,}\n" +
+            f"🗑️ **זמן:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n" +
+            f"⚠️ **זו פעולה בלתי הפיכה!**",
+            urgent=True
+        )
+        
         if should_log_debug_prints():
             print(f"🗑️ [DB] נמחקו {chat_deleted} הודעות צ'אט, פרופיל נמחק לחלוטין עבור {chat_id}")
         
         return chat_deleted > 0 or profile_deleted > 0
         
     except Exception as e:
-        if should_log_debug_prints():
-            print(f"❌ שגיאה במחיקת משתמש מהמסד נתונים: {e}")
+        logger.error(f"❌ שגיאה במחיקת משתמש מהמסד נתונים: {e}", source="CRITICAL_DELETE_ERROR")
         return False
 
 # ================================

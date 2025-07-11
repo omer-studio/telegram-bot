@@ -165,10 +165,25 @@ def compare_with_yesterday_internal(today_date, today_results):
                 """)
                 yesterday_size = cur.fetchone()[0]
                 
+                # 🚨 הגנה מפני ירידות דרסטיות ב-chat_messages
+                records_diff = today_info["records_count"] - yesterday_records
+                if table_name == "chat_messages" and records_diff < -10:
+                    logger.error(f"🚨 ALERT: {table_name} ירד ב-{abs(records_diff)} הודעות! זה חשוד למחיקה!")
+                    send_admin_notification(
+                        f"🚨 **אזהרת מחיקה חשודה!**\n\n" +
+                        f"📋 **טבלה:** {table_name}\n" +
+                        f"📊 **אתמול:** {yesterday_records:,} הודעות\n" +
+                        f"📊 **היום:** {today_info['records_count']:,} הודעות\n" +
+                        f"📉 **ירידה:** {abs(records_diff):,} הודעות\n\n" +
+                        f"⚠️ **chat_messages אמור רק לצבור ולא למחוק!**\n" +
+                        f"🔍 **בדוק אם מישהו הריץ מחיקה או clear_user_from_database**",
+                        urgent=True
+                    )
+                
                 comparison[table_name] = {
                     "yesterday_records": yesterday_records,
                     "today_records": today_info["records_count"],
-                    "records_diff": today_info["records_count"] - yesterday_records,
+                    "records_diff": records_diff,
                     "yesterday_size": yesterday_size,
                     "today_size": today_info["table_size"],
                     "has_yesterday": True
@@ -318,11 +333,24 @@ def send_detailed_internal_backup_notification(backup_results, total_records, ye
         visual_tree = generate_visual_backup_tree(backup_results, yesterday_comparison)
         notification += f"{visual_tree}\n\n"
         
-        # סיכום טכני קומפקטי
-        notification += f"⚙️ **פרטים טכניים:**\n"
+        # 🔧 פרטים טכניים מדויקים עם מספר שורות
+        notification += f"⚙️ **פרטים טכניים מדויקים:**\n"
         for table_name, info in backup_results.items():
             table_short = table_name.replace("_", " ").title()[:15]
-            notification += f"• **{table_short}:** {info['records_count']:,} רשומות\n"
+            notification += f"• **{table_short}:** {info['records_count']:,} שורות\n"
+        
+        # השוואה עם אתמול - מספרים מדויקים
+        if yesterday_comparison:
+            notification += f"\n📈 **השוואה מדויקת עם אתמול:**\n"
+            for table_name, comp in yesterday_comparison.items():
+                if comp["has_yesterday"]:
+                    diff = comp["records_diff"]
+                    if diff > 0:
+                        notification += f"• **{table_name.replace('_', ' ').title()}:** +{diff:,} שורות\n"
+                    elif diff < 0:
+                        notification += f"• **{table_name.replace('_', ' ').title()}:** {diff:,} שורות ⚠️\n"
+                    else:
+                        notification += f"• **{table_name.replace('_', ' ').title()}:** ללא שינוי\n"
         
         # קודי אישור
         notification += f"\n🔐 **קודי אישור:**\n"
