@@ -271,9 +271,6 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         logger.info(f"✅ [BACKGROUND] כל משימות הרקע הושלמו | chat_id={safe_str(chat_id)} | זמן תגובה סופי: {response_time:.2f}s", source="message_handler")
         
-    except Exception as e:
-        logger.error(f"❌ [BACKGROUND] שגיאה כללית במשימות ברקע: {e}", source="message_handler")
-        
         # שלב 1: עדכון היסטוריה (הועבר לכאן לצמצום פער הקוד)
         # 🔧 תיקון קריטי: הסרת כפילות שמירה - רק save_gpt_chat_message ישמור הכל
         # try:
@@ -333,45 +330,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         gpt_d_result = results[0] if len(results) > 0 else None
         gpt_e_result = results[1] if len(results) > 1 else None
         
-        # 📨 שליחת התכתבות אנונימית לאדמין (ברקע) - עם התשובה המלאה!
-        # כעת נשלח התראה עם כל הנתונים המלאים: התשובה האמיתית + GPT-B + GPT-C + GPT-D + GPT-E
-        try:
-            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
-            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
-            
-            # חישוב מונה GPT-E
-            gpt_e_counter = None
-            if gpt_e_result and isinstance(gpt_e_result, dict) and gpt_e_result.get("success"):
-                try:
-                    from chat_utils import get_total_user_messages_count
-                    from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
-                    total_messages = get_total_user_messages_count(safe_str(chat_id))
-                    current_count = total_messages % GPT_E_RUN_EVERY_MESSAGES
-                    gpt_e_counter = f"מופעל לפי מונה הודעות כרגע המונה עומד על {current_count} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
-                except:
-                    gpt_e_counter = None
-            
-            # 🔧 **תיקון קריטי: שליחת התראה מלאה לאדמין עם התשובה האמיתית!**
-            from admin_notifications import send_anonymous_chat_notification
-            send_anonymous_chat_notification(
-                user_msg,
-                bot_reply,  # התשובה האמיתית במקום "⏳ טרם נענה"
-                history_messages=original_history_messages,  # ✅ ההיסטוריה המקורית שנשלחה ל-GPT
-                messages_for_gpt=original_messages_for_gpt,  # ✅ ההודעות המקוריות שנשלחו ל-GPT
-                gpt_timing=gpt_response_time,
-                user_timing=user_response_actual_time,
-                chat_id=chat_id,
-                gpt_b_result=summary_result,
-                gpt_c_result=gpt_c_result,
-                gpt_d_result=gpt_d_result,
-                gpt_e_result=gpt_e_result,
-                gpt_e_counter=gpt_e_counter
-            )
-            
-            logger.info(f"📨 [BACKGROUND] התראה מלאה נשלחה לאדמין עם התשובה האמיתית | chat_id={safe_str(chat_id)}", source="message_handler")
-            
-        except Exception as admin_chat_err:
-            logger.warning(f"שגיאה בעיבוד נתוני ההתכתבות: {admin_chat_err}", source="message_handler")
+        # 🔧 **הועבר לסוף**: ההתראה לאדמין תישלח רק אחרי שכל הדברים הסתיימו
         
         # שלב 4: רישום למסד נתונים
         try:
@@ -525,6 +484,46 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 
         except Exception as admin_err:
             logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+        
+        # 📨 **הדבר האחרון בשרשרת**: שליחת התכתבות אנונימית לאדמין עם כל הנתונים המלאים!
+        # ✅ כעת נשלח התראה אחרי שכל הדברים הקשורים לאותה הודעה הסתיימו
+        try:
+            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
+            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
+            
+            # חישוב מונה GPT-E
+            gpt_e_counter = None
+            if gpt_e_result and isinstance(gpt_e_result, dict) and gpt_e_result.get("success"):
+                try:
+                    from chat_utils import get_total_user_messages_count
+                    from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+                    total_messages = get_total_user_messages_count(safe_str(chat_id))
+                    current_count = total_messages % GPT_E_RUN_EVERY_MESSAGES
+                    gpt_e_counter = f"מופעל לפי מונה הודעות כרגע המונה עומד על {current_count} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
+                except:
+                    gpt_e_counter = None
+            
+            # 🔧 **התראה סופית לאדמין עם כל המידע האמיתי!**
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_reply,  # התשובה האמיתית במקום "⏳ טרם נענה"
+                history_messages=original_history_messages,  # ✅ ההיסטוריה המקורית שנשלחה ל-GPT
+                messages_for_gpt=original_messages_for_gpt,  # ✅ ההודעות המקוריות שנשלחו ל-GPT
+                gpt_timing=gpt_response_time,
+                user_timing=user_response_actual_time,
+                chat_id=chat_id,
+                gpt_b_result=summary_result,
+                gpt_c_result=gpt_c_result,
+                gpt_d_result=gpt_d_result,
+                gpt_e_result=gpt_e_result,
+                gpt_e_counter=gpt_e_counter
+            )
+            
+            logger.info(f"📨 [FINAL] ההתראה הסופית נשלחה לאדמין אחרי שכל הדברים הסתיימו | chat_id={safe_str(chat_id)}", source="message_handler")
+            
+        except Exception as final_admin_err:
+            logger.warning(f"[FINAL] שגיאה בשליחת ההתראה הסופית לאדמין: {final_admin_err}", source="message_handler")
         
         logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s | זמן כולל כולל רקע: {time.time() - user_request_start_time:.2f}s", source="message_handler")
         

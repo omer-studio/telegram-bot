@@ -296,7 +296,7 @@ def create_tables():
     
     # 🚫 DISABLED: טבלאות מיותרות לא נוצרות יותר
     # gpt_usage_log - כפול ל-gpt_calls_log
-    # system_logs - יש לוגים ספציפיים יותר
+    # system_logs - יש לוגים ספציפיים יותר לכל סוג שגיאה/אירוע
     # critical_users - VIP מנוהל בקונפיג
     # billing_usage - נתונים ב-gpt_calls_log
     # errors_stats - לא קריטי
@@ -312,141 +312,84 @@ def create_tables():
 
 # === שמירת הודעת צ'אט ===
 # === שמירת הודעת צ'אט מורחבת ===
-def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, **kwargs):
+def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, gpt_log_id=None):
     """
-    שומר הודעת צ'אט עם נתונים מורחבים
-    kwargs יכול להכיל:
-    - message_type: סוג ההודעה (user/bot/pair/system)
-    - telegram_message_id: מזהה ההודעה בטלגרם
-    - source_file: קובץ המקור
-    - gpt_type: סוג GPT (A/B/C/D)
-    - gpt_model: שם המודל
-    - gpt_cost_usd: עלות בדולרים
-    - gpt_tokens_input/output: מספר טוקנים
-    - gpt_request/response: בקשה ותגובה מלאה
-    - metadata: מטה-דאטה כללי
+    שומר הודעת צ'אט בטבלה הרזה - רק המידע החיוני
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
+    
+    if timestamp is None:
+        timestamp = datetime.now()
+    
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
-    # הכנת הנתונים המורחבים
+    # שמירה בטבלה הרזה החדשה
     insert_sql = """
-    INSERT INTO chat_messages (
-        chat_id, user_msg, bot_msg, timestamp,
-        message_type, telegram_message_id, source_file, source_line_number,
-        gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
-        gpt_request, gpt_response, user_data, bot_data, metadata, admin_notification_content
+    INSERT INTO simple_chat_history (
+        chat_id, user_msg, bot_msg, timestamp, gpt_log_id
     ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    )
+        %s, %s, %s, %s, %s
+    ) RETURNING id
     """
     
-    # חילוץ נתונים מ-kwargs
-    message_type = kwargs.get('message_type', 'pair' if user_msg and bot_msg else ('user' if user_msg else 'bot'))
-    telegram_message_id = kwargs.get('telegram_message_id')
-    source_file = kwargs.get('source_file', 'live_chat')
-    source_line_number = kwargs.get('source_line_number')
-    gpt_type = kwargs.get('gpt_type')
-    gpt_model = kwargs.get('gpt_model')
-    gpt_cost_usd = kwargs.get('gpt_cost_usd')
-    gpt_tokens_input = kwargs.get('gpt_tokens_input')
-    gpt_tokens_output = kwargs.get('gpt_tokens_output')
-    gpt_request = kwargs.get('gpt_request')
-    gpt_response = kwargs.get('gpt_response')
-    user_data = kwargs.get('user_data')
-    bot_data = kwargs.get('bot_data')
-    metadata = kwargs.get('metadata')
-    admin_notification_content = kwargs.get('admin_notification_content')
-    
-    # המרת JSON objects לstrings
-    import json
-    gpt_request_json = json.dumps(gpt_request) if gpt_request else None
-    gpt_response_json = json.dumps(gpt_response) if gpt_response else None
-    user_data_json = json.dumps(user_data) if user_data else None
-    bot_data_json = json.dumps(bot_data) if bot_data else None
-    metadata_json = json.dumps(metadata) if metadata else None
-    
-    cur.execute(insert_sql, (
-        chat_id, user_msg, bot_msg, timestamp or datetime.utcnow(),
-        message_type, telegram_message_id, source_file, source_line_number,
-        gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
-        gpt_request_json, gpt_response_json, user_data_json, bot_data_json, metadata_json, admin_notification_content
-    ))
+    cur.execute(insert_sql, (chat_id, user_msg, bot_msg, timestamp, gpt_log_id))
+    message_id = cur.fetchone()[0]
     
     conn.commit()
     cur.close()
     conn.close()
     
-    # 🔧 **תיקון קריטי: הסרת התראה אוטומטית כדי למנוע "⏳ טרם נענה"**
-    # ההתראה לאדמין תישלח רק מתוך handle_background_tasks עם התשובה המלאה
-    # זה מבטיח שהאדמין יראה את התשובה האמיתית ולא "⏳ טרם נענה"
-    
-    # 🔧 **תיקון מערכתי: שליחת התראה לאדמין בכל הודעה שנשמרת!**
-    # זה מבטיח שכל הודעה של משתמש אמיתית תגיע לאדמין, לא משנה מאיזה מקום בקוד
-    try:
-        # שליחת התראה רק אם יש הודעת משתמש אמיתית ומהסביבה הלייב
-        if (user_msg and user_msg.strip() and 
-            source_file == 'live_chat' and 
-            chat_id and 
-            not user_msg.startswith('[') and  # לא הודעות פנימיות
-            message_type != 'system'):  # לא הודעות מערכת
-            
-            from admin_notifications import send_anonymous_chat_notification
-            notification_content = send_anonymous_chat_notification(
-                user_msg,
-                bot_msg or "⏳ טרם נענה",
-                history_messages=None,
-                messages_for_gpt=None,
-                gpt_timing=None,
-                user_timing=None,
-                chat_id=chat_id
-            )
-            
-            # 🆕 עדכון ההודעה שנשמרה עם תוכן התראת האדמין
-            if notification_content:
-                try:
-                    cur = conn.cursor()
-                    cur.execute(
-                        "UPDATE chat_messages SET admin_notification_content = %s WHERE chat_id = %s AND user_msg = %s AND timestamp = %s",
-                        (notification_content, chat_id, user_msg, timestamp or datetime.utcnow())
-                    )
-                    conn.commit()
-                    cur.close()
-                    if should_log_debug_prints():
-                        print(f"✅ [ADMIN_NOTIFICATION] תוכן התראת אדמין נשמר למסד נתונים")
-                except Exception as update_err:
-                    if should_log_debug_prints():
-                        print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה בעדכון תוכן התראת אדמין: {update_err}")
-            
-    except Exception as admin_err:
-        # לא נכשל בגלל התראה - רק לוג
-        if should_log_debug_prints():
-            print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה בשליחת התראה לאדמין: {admin_err}")
-
+    return message_id
 
 def get_chat_history(chat_id, limit=100):
+    """
+    מחזיר היסטוריית צ'אט מהטבלה הרזה החדשה
+    """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
+    
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
+    
+    # שליפה מהטבלה הרזה החדשה
     cur.execute(
-        "SELECT user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id=%s ORDER BY timestamp DESC LIMIT %s",
+        "SELECT id, user_msg, bot_msg, timestamp, gpt_log_id FROM simple_chat_history WHERE chat_id = %s ORDER BY timestamp DESC LIMIT %s",
         (chat_id, limit)
     )
-    rows = cur.fetchall()
+    
+    messages = cur.fetchall()
     cur.close()
     conn.close()
-    return rows[::-1]  # מהישן לחדש
+    
+    # החזרת הנתונים בפורמט נוח
+    result = []
+    for msg in messages:
+        result.append({
+            'id': msg[0],
+            'user_msg': msg[1],
+            'bot_msg': msg[2],
+            'timestamp': msg[3],
+            'gpt_log_id': msg[4]
+        })
+    
+    return result
 
 # ✅ הוסרו פונקציות deprecated: save_user_profile, get_user_profile, get_user_profile_fast, update_user_profile_fast
 # כל הפונקציות הועברו ל-profile_utils והן פעילות שם
 
-# === שמירת לוג GPT ===
-def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp=None):
+# === שמירת לוג GPT מפורט ===
+def save_gpt_call_log(chat_id, gpt_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, admin_notification_content=None, timestamp=None):
+    """
+    שומר לוג GPT מפורט בטבלה המפורטת - כל המידע הטכני
+    """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
+    
+    if timestamp is None:
+        timestamp = datetime.now()
+    
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
@@ -454,13 +397,28 @@ def save_gpt_call_log(chat_id, call_type, request_data, response_data, tokens_in
     request_json = json.dumps(request_data) if isinstance(request_data, dict) else str(request_data)
     response_json = json.dumps(response_data) if isinstance(response_data, dict) else str(response_data)
     
-    cur.execute(
-        "INSERT INTO gpt_calls_log (chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-        (chat_id, call_type, request_json, response_json, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp or datetime.utcnow())
-    )
+    # שמירה בטבלה המפורטת החדשה
+    insert_sql = """
+    INSERT INTO detailed_gpt_log (
+        chat_id, gpt_type, request_data, response_data, tokens_input, tokens_output, 
+        cost_usd, processing_time_seconds, admin_notification_content, timestamp
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    ) RETURNING id
+    """
+    
+    cur.execute(insert_sql, (
+        chat_id, gpt_type, request_json, response_json, tokens_input, tokens_output,
+        cost_usd, processing_time_seconds, admin_notification_content, timestamp
+    ))
+    
+    gpt_log_id = cur.fetchone()[0]
+    
     conn.commit()
     cur.close()
     conn.close()
+    
+    return gpt_log_id
 
 # === שמירת לוג מערכת ===
 def save_system_log(log_level, module, message, extra_data, timestamp=None):
@@ -775,37 +733,62 @@ def save_temp_critical_user_data(filename, temp_data):
 # === פונקציות עזר מורחבות ===
 def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=None):
     """
-    שומר הודעת צ'אט עם נתוני GPT מלאים
-    gpt_data יכול להכיל:
-    - type: A/B/C/D
-    - model: שם המודל
-    - cost_usd: עלות
-    - tokens_input/output: טוקנים
-    - request/response: בקשה ותגובה מלאה
+    שומר הודעת צ'אט רגילה + לוגינג GPT מפורט
+    עכשיו עם המבנה החדש: טבלה רזה + לוגינג מפורט נפרד
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
-    kwargs = {'source_file': 'live_chat'}
     
-    if gpt_data:
-        gpt_kwargs = {
-            'gpt_type': gpt_data.get('type'),
-            'gpt_model': gpt_data.get('model'),
-            'gpt_cost_usd': gpt_data.get('cost_usd'),
-            'gpt_tokens_input': gpt_data.get('tokens_input'),
-            'gpt_tokens_output': gpt_data.get('tokens_output'),
-            'gpt_request': gpt_data.get('request'),
-            'gpt_response': gpt_data.get('response'),
-            'metadata': {
-                'reply_summary': gpt_data.get('reply_summary', ''),  # 🆕 פשוט - הסיכום של GPT-B
-                'gpt_latency': gpt_data.get('latency'),
-                'gpt_timestamp': gpt_data.get('timestamp'),
-                'usage': gpt_data.get('usage', {})
-            }
-        }
-        kwargs = {**kwargs, **gpt_kwargs}
+    if timestamp is None:
+        timestamp = datetime.now()
     
-    return save_chat_message(chat_id, user_msg, bot_msg, timestamp, **kwargs)
+    # אם יש נתוני GPT, שומר אותם בטבלה המפורטת ומקבל ID
+    gpt_log_id = None
+    admin_notification_content = None
+    
+    if gpt_data and isinstance(gpt_data, dict):
+        try:
+            # יצירת תוכן התראת אדמין אם צריך
+            if user_msg and user_msg.strip() and not user_msg.startswith('['):
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    admin_notification_content = send_anonymous_chat_notification(
+                        user_msg,
+                        bot_msg or "⏳ טרם נענה",
+                        chat_id=chat_id,
+                        only_generate_content=True
+                    )
+                except Exception as admin_err:
+                    if should_log_debug_prints():
+                        print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה ביצירת תוכן: {admin_err}")
+            
+            # שמירה בטבלה המפורטת
+            gpt_log_id = save_gpt_call_log(
+                chat_id=chat_id,
+                gpt_type="A",  # ברירת מחדל GPT-A
+                request_data=gpt_data.get('request_data', {}),
+                response_data=gpt_data.get('response_data', {}),
+                tokens_input=gpt_data.get('main_usage', {}).get('input_tokens', 0),
+                tokens_output=gpt_data.get('main_usage', {}).get('output_tokens', 0),
+                cost_usd=gpt_data.get('cost_usd', 0),
+                processing_time_seconds=gpt_data.get('latency', 0),
+                admin_notification_content=admin_notification_content,
+                timestamp=timestamp
+            )
+        except Exception as gpt_err:
+            if should_log_debug_prints():
+                print(f"⚠️ [GPT_LOG] שגיאה בשמירת לוג GPT: {gpt_err}")
+    
+    # שמירה בטבלה הרזה
+    message_id = save_chat_message(
+        chat_id=chat_id,
+        user_msg=user_msg,
+        bot_msg=bot_msg,
+        timestamp=timestamp,
+        gpt_log_id=gpt_log_id
+    )
+    
+    return message_id
 
 def get_chat_statistics():
     """מחזיר סטטיסטיקות מורחבות על השיחות"""

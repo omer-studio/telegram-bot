@@ -387,7 +387,7 @@ def alert_system_status(message, level="info"):
     except Exception as e:
         logger.error(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
-def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None, gpt_b_result=None, gpt_c_result=None, gpt_d_result=None, gpt_e_result=None, gpt_e_counter=None):
+def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None, gpt_b_result=None, gpt_c_result=None, gpt_d_result=None, gpt_e_result=None, gpt_e_counter=None, only_generate_content=False):
     """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
     try:
         if is_test_environment():
@@ -549,7 +549,9 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         if len(notification_text) > 3900:
             notification_text = notification_text[:3900] + "\n\n... (הודעה קוצרה)"
         
-        send_admin_notification_raw(notification_text)
+        # 🆕 שליחה רק אם לא רק ליצור תוכן
+        if not only_generate_content:
+            send_admin_notification_raw(notification_text)
         
         # 🆕 החזרת תוכן ההודעה
         return notification_text
