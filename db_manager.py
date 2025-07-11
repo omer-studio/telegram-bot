@@ -1093,9 +1093,7 @@ def clear_user_from_database(chat_id):
     chat_id = validate_chat_id(chat_id)
     
     # 🚨 לוג אזהרה לפני מחיקה
-    from logging import getLogger
-    logger = getLogger(__name__)
-    logger.warning(f"🚨 DELETION ALERT: מוחק משתמש {chat_id} לחלוטין מהמסד נתונים!", source="CRITICAL_DELETE")
+    print(f"🚨 DELETION ALERT: מוחק משתמש {chat_id} לחלוטין מהמסד נתונים!")
     
     try:
         conn = psycopg2.connect(DB_URL)
@@ -1134,7 +1132,7 @@ def clear_user_from_database(chat_id):
         return chat_deleted > 0 or profile_deleted > 0
         
     except Exception as e:
-        logger.error(f"❌ שגיאה במחיקת משתמש מהמסד נתונים: {e}", source="CRITICAL_DELETE_ERROR")
+        print(f"❌ שגיאה במחיקת משתמש מהמסד נתונים: {e}")
         return False
 
 # ================================
