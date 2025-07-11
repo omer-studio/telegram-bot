@@ -530,7 +530,7 @@ class ComprehensiveDeployChecker:
             cur.execute("""
                 SELECT COUNT(DISTINCT chat_id) 
                 FROM chat_messages 
-                WHERE created_at > NOW() - INTERVAL '7 days'
+                WHERE timestamp > NOW() - INTERVAL '7 days'
             """)
             active_users = cur.fetchone()[0]
             

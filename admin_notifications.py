@@ -387,8 +387,8 @@ def alert_system_status(message, level="info"):
     except Exception as e:
         logger.error(f"🚨 שגיאה בשליחת סטטוס מערכת: {e}") 
 
-def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None, gpt_b_result=None, gpt_c_result=None, gpt_d_result=None, gpt_e_result=None, gpt_e_counter=None, only_generate_content=False):
-    """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט"""
+def send_anonymous_chat_notification(user_message: str, bot_response: str, history_messages=None, messages_for_gpt=None, gpt_timing=None, user_timing=None, chat_id=None, gpt_b_result=None, gpt_c_result=None, gpt_d_result=None, gpt_e_result=None, gpt_e_counter=None, message_number=None, only_generate_content=False):
+    """שולח התראה אנונימית לאדמין על התכתבות משתמש-בוט עם מספר סידורי"""
     try:
         if is_test_environment():
             logger.info(f"📨 [ANONYMOUS_CHAT] בסביבת בדיקה, לא שולח תראה לאדמין: {user_message}")
@@ -408,8 +408,12 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
                 # אם המספר קצר מ-4 ספרות, הצג אותו כמו שהוא
                 chat_suffix = f" (`{safe_chat_id}`)"
         
-        # יצירת הודעה מעוצבת ללא מזהה משתמש
-        notification_text = f"💬 <b>התכתבות חדשה{chat_suffix}</b> 💬\n\n"
+        # יצירת הודעה מעוצבת ללא מזהה משתמש עם מספר סידורי
+        message_number_suffix = ""
+        if message_number:
+            message_number_suffix = f" #{message_number}"
+        
+        notification_text = f"💬 <b>התכתבות חדשה{chat_suffix}{message_number_suffix}</b> 💬\n\n"
         
         # 🔧 מספר הודעות משתמש אמיתי מהמסד נתונים
         total_user_messages = 0

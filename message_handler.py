@@ -350,8 +350,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 messages_for_log.extend(updated_history_for_logging)
             messages_for_log.append({"role": "user", "content": user_msg})
             
-            # ✅ רישום למסד נתונים
-            save_gpt_chat_message(
+            # ✅ רישום למסד נתונים עם מספר סידורי
+            save_result = save_gpt_chat_message(
                 chat_id=safe_str(chat_id),
                 user_msg=user_msg,
                 bot_msg=bot_reply,
@@ -367,7 +367,10 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 }
             )
             
-            logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)}", source="message_handler")
+            # שמירת המספר הסידורי לשימוש בהתראות
+            interaction_message_number = save_result.get('interaction_message_number') if isinstance(save_result, dict) else None
+            
+            logger.info(f"💾 [BACKGROUND] נשמר למסד נתונים | chat_id={safe_str(chat_id)} | הודעה #{interaction_message_number}", source="message_handler")
             
         except Exception as log_exc:
             logger.error(f"❌ [BACKGROUND] שגיאה ברישום למסד נתונים: {log_exc}", source="message_handler")
@@ -517,7 +520,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 gpt_c_result=gpt_c_result,
                 gpt_d_result=gpt_d_result,
                 gpt_e_result=gpt_e_result,
-                gpt_e_counter=gpt_e_counter
+                gpt_e_counter=gpt_e_counter,
+                message_number=interaction_message_number
             )
             
             logger.info(f"📨 [FINAL] ההתראה הסופית נשלחה לאדמין אחרי שכל הדברים הסתיימו | chat_id={safe_str(chat_id)}", source="message_handler")

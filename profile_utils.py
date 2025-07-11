@@ -508,7 +508,9 @@ def get_all_users_with_condition(condition: str) -> List[Dict]:
     """קבלת כל המשתמשים עם תנאי מסויים - פונקציה אחת פשוטה"""
     try:
         import psycopg2
-        from config import DB_URL
+        from config import get_config
+        config = get_config()
+        DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
         
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
