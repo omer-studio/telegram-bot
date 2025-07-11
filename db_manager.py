@@ -345,7 +345,7 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, gpt_log_id=Non
 
 def get_chat_history(chat_id, limit=100):
     """
-    מחזיר היסטוריית צ'אט מהטבלה הרזה החדשה
+    מחזיר היסטוריית צ'אט מהטבלה הרזה החדשה בפורמט התואם לקוד הקיים
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -355,26 +355,16 @@ def get_chat_history(chat_id, limit=100):
     
     # שליפה מהטבלה הרזה החדשה
     cur.execute(
-        "SELECT id, user_msg, bot_msg, timestamp, gpt_log_id FROM simple_chat_history WHERE chat_id = %s ORDER BY timestamp DESC LIMIT %s",
+        "SELECT user_msg, bot_msg, timestamp FROM simple_chat_history WHERE chat_id = %s ORDER BY timestamp DESC LIMIT %s",
         (chat_id, limit)
     )
     
-    messages = cur.fetchall()
+    rows = cur.fetchall()
     cur.close()
     conn.close()
     
-    # החזרת הנתונים בפורמט נוח
-    result = []
-    for msg in messages:
-        result.append({
-            'id': msg[0],
-            'user_msg': msg[1],
-            'bot_msg': msg[2],
-            'timestamp': msg[3],
-            'gpt_log_id': msg[4]
-        })
-    
-    return result
+    # החזרה בפורמט הישן שהקוד מצפה - מהישן לחדש
+    return rows[::-1]
 
 # ✅ הוסרו פונקציות deprecated: save_user_profile, get_user_profile, get_user_profile_fast, update_user_profile_fast
 # כל הפונקציות הועברו ל-profile_utils והן פעילות שם

@@ -622,14 +622,25 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
             save_chat_message(
                 chat_id=safe_str(chat_id),
                 user_msg=user_msg,
-                bot_msg=bot_reply,
-                source_file='live_chat',
-                message_type='onboarding_new_user'
+                bot_msg=bot_reply
             )
         except Exception as save_err:
             logger.warning(f"[NEW_USER] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
             
-        # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+        # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש חדש**
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_reply,
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+        except Exception as admin_err:
+            logger.warning(f"[NEW_USER] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
             
     except Exception as e:
         logger.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}", source="message_handler")
@@ -647,6 +658,21 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
             )
         except Exception as save_err:
             logger.warning(f"[NEW_USER_ERROR] שגיאה בשמירת הודעת שגיאה: {save_err}", source="message_handler")
+        
+        # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש חדש בשגיאה**
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                "שגיאה ברישום משתמש חדש",
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+        except Exception as admin_err:
+            logger.warning(f"[NEW_USER_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
 
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
     """
@@ -675,7 +701,20 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
                 await send_approval_message(update, chat_id)
                 
-                # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[CODE_APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
                 
                 # 🔧 **תיקון מערכתי: שמירה למסד הנתונים + התראה לאדמין אוטומטית!**
                 try:
@@ -683,9 +722,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                     save_chat_message(
                         chat_id=safe_str(chat_id),
                         user_msg=user_msg,
-                        bot_msg=bot_reply,
-                        source_file='live_chat',
-                        message_type='onboarding_code_approved'
+                        bot_msg=bot_reply
                     )
                 except Exception as save_err:
                     logger.warning(f"[CODE_APPROVED] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
@@ -715,7 +752,20 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 except Exception as save_err:
                     logger.warning(f"[CODE_INVALID] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
                 
-                # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[CODE_INVALID] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
                 
                 return
 
@@ -729,14 +779,25 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
             save_chat_message(
                 chat_id=safe_str(chat_id),
                 user_msg=user_msg,
-                bot_msg=bot_reply,
-                source_file='live_chat',
-                message_type='onboarding_no_code'
+                bot_msg=bot_reply
             )
         except Exception as save_err:
             logger.warning(f"[NO_CODE] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
         
-        # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+        # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+        try:
+            from admin_notifications import send_anonymous_chat_notification
+            send_anonymous_chat_notification(
+                user_msg,
+                bot_reply,
+                history_messages=None,
+                messages_for_gpt=None,
+                gpt_timing=None,
+                user_timing=None,
+                chat_id=chat_id
+            )
+        except Exception as admin_err:
+            logger.warning(f"[NO_CODE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
 
     except Exception as ex:
         await handle_critical_error(ex, chat_id, user_msg, update)
@@ -774,14 +835,25 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                     save_chat_message(
                         chat_id=safe_str(chat_id),
                         user_msg=user_msg,
-                        bot_msg=bot_reply,
-                        source_file='live_chat',
-                        message_type='onboarding_approved'
+                        bot_msg=bot_reply
                     )
                 except Exception as save_err:
                     logger.warning(f"[APPROVED] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
                 
-                # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש שהתאושר זה עתה**
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
                 
                 return
             else:
@@ -804,7 +876,20 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 except Exception as save_err:
                     logger.warning(f"[APPROVAL_ERROR] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
                 
-                # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+                try:
+                    from admin_notifications import send_anonymous_chat_notification
+                    send_anonymous_chat_notification(
+                        user_msg,
+                        bot_reply,
+                        history_messages=None,
+                        messages_for_gpt=None,
+                        gpt_timing=None,
+                        user_timing=None,
+                        chat_id=chat_id
+                    )
+                except Exception as admin_err:
+                    logger.warning(f"[APPROVAL_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
                 
                 return
 
@@ -828,7 +913,20 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             except Exception as save_err:
                 logger.warning(f"[DECLINED] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
             
-            # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+            # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    bot_reply,
+                    history_messages=None,
+                    messages_for_gpt=None,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[DECLINED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
             
             return
 
@@ -850,7 +948,20 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             except Exception as save_err:
                 logger.warning(f"[PENDING] שגיאה בשמירת הודעה למסד נתונים: {save_err}", source="message_handler")
             
-            # 🔧 הוסר: הקריאה הישנה להתראת אדמין - עכשיו זה קורה אוטומטית מתוך save_chat_message
+            # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+            try:
+                from admin_notifications import send_anonymous_chat_notification
+                send_anonymous_chat_notification(
+                    user_msg,
+                    bot_reply,
+                    history_messages=None,
+                    messages_for_gpt=None,
+                    gpt_timing=None,
+                    user_timing=None,
+                    chat_id=chat_id
+                )
+            except Exception as admin_err:
+                logger.warning(f"[PENDING] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
             
             return
 
@@ -1000,8 +1111,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     appropriate_response = get_unsupported_message_response(message_type)
                     await send_system_message(update, chat_id, appropriate_response)
                     
-                    # 🔧 תיקון: הוספת התראת אדמין להודעות לא נתמכות
+                    # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
                     try:
+                        from db_manager import save_chat_message
+                        save_chat_message(
+                            chat_id=safe_str(chat_id),
+                            user_msg=user_msg,
+                            bot_msg=appropriate_response,
+                            source_file='live_chat',
+                            message_type='unsupported_message'
+                        )
+                        
+                        # שליחת התראה ישירה כי זה משתמש לא מאושר
                         from admin_notifications import send_anonymous_chat_notification
                         send_anonymous_chat_notification(
                             user_msg,
@@ -1025,8 +1146,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 overload_message = "⏳ הבוט עמוס כרגע. אנא נסה שוב בעוד מספר שניות."
                 await send_system_message(update, chat_id, overload_message)
                 
-                # 🔧 תיקון: הוספת התראת אדמין למצב עומס
+                # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
                 try:
+                    from db_manager import save_chat_message
+                    save_chat_message(
+                        chat_id=safe_str(chat_id),
+                        user_msg=user_msg,
+                        bot_msg=overload_message,
+                        source_file='live_chat',
+                        message_type='system_overload'
+                    )
+                    
+                    # שליחת התראה ישירה כי זה משתמש לא מאושר
                     from admin_notifications import send_anonymous_chat_notification
                     send_anonymous_chat_notification(
                         user_msg,
@@ -1046,8 +1177,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tech_error_message = "⚠️ שגיאה טכנית. נסה שוב בעוד כמה שניות."
             await send_system_message(update, chat_id, tech_error_message)
             
-            # 🔧 תיקון: הוספת התראת אדמין לשגיאה טכנית
+            # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
             try:
+                from db_manager import save_chat_message
+                save_chat_message(
+                    chat_id=safe_str(chat_id),
+                    user_msg=user_msg,
+                    bot_msg=tech_error_message,
+                    source_file='live_chat',
+                    message_type='tech_error'
+                )
+                
+                # שליחת התראה ישירה כי זה משתמש לא מאושר
                 from admin_notifications import send_anonymous_chat_notification
                 send_anonymous_chat_notification(
                     user_msg,
@@ -1093,8 +1234,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_system_message(update, chat_id, permission_error_message)
             await end_monitoring_user(safe_str(chat_id), False)
             
-            # 🔧 תיקון: הוספת התראת אדמין לשגיאת הרשאות
+            # 🔧 **תיקון מערכתי: שמירה + התראה ישירה למשתמש לא מאושר**
             try:
+                from db_manager import save_chat_message
+                save_chat_message(
+                    chat_id=safe_str(chat_id),
+                    user_msg=user_msg,
+                    bot_msg=permission_error_message,
+                    source_file='live_chat',
+                    message_type='permission_error'
+                )
+                
+                # שליחת התראה ישירה כי זה משתמש לא מאושר
                 from admin_notifications import send_anonymous_chat_notification
                 send_anonymous_chat_notification(
                     user_msg,
