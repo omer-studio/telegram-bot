@@ -16,6 +16,9 @@ import os
 from datetime import datetime, timedelta
 from config import config
 
+# ייבוא הפונקציות המרכזיות מ-db_manager
+from db_manager import insert_chat_message_only
+
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 
 def analyze_data_loss():
@@ -151,33 +154,8 @@ def restore_from_json_file(file_path, source_name):
                     skipped_count += 1
                     continue
                 
-                # הכנסת ההודעה
-                cur.execute("""
-                    INSERT INTO chat_messages (
-                        chat_id, user_msg, bot_msg, timestamp, message_type,
-                        telegram_message_id, source_file, source_line_number,
-                        gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
-                        gpt_request, gpt_response, user_data, bot_data, metadata
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    )
-                """, (
-                    chat_id, user_msg, bot_msg, timestamp,
-                    msg.get('message_type', 'restored'),
-                    msg.get('telegram_message_id'),
-                    f'restored_from_{source_name}',
-                    msg.get('source_line_number'),
-                    msg.get('gpt_type'),
-                    msg.get('gpt_model'),
-                    msg.get('gpt_cost_usd'),
-                    msg.get('gpt_tokens_input'),
-                    msg.get('gpt_tokens_output'),
-                    msg.get('gpt_request'),
-                    msg.get('gpt_response'),
-                    msg.get('user_data'),
-                    msg.get('bot_data'),
-                    msg.get('metadata')
-                ))
+                # הכנסת ההודעה - משתמש בפונקציה המרכזית
+                insert_chat_message_only(cur, chat_id, user_msg, bot_msg, timestamp)
                 
                 restored_count += 1
                 
@@ -236,19 +214,7 @@ def restore_from_gpt_calls():
         restored_count = 0
         for msg in missing_messages:
             try:
-                cur.execute("""
-                    INSERT INTO chat_messages (
-                        chat_id, user_msg, bot_msg, timestamp, message_type,
-                        source_file, gpt_type, gpt_model, gpt_cost_usd,
-                        gpt_tokens_input, gpt_tokens_output, gpt_request, gpt_response
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    )
-                """, (
-                    msg[0], msg[1], msg[2], msg[3], 'restored_from_gpt_log',
-                    'gpt_calls_log_restore', msg[4], msg[5], msg[6],
-                    msg[7], msg[8], msg[9], msg[10]
-                ))
+                insert_chat_message_only(cur, msg[0], msg[1], msg[2], msg[3])
                 restored_count += 1
                 
                 if restored_count % 500 == 0:

@@ -1,0 +1,98 @@
+{
+  "search_time": "2025-07-11T15:10:41.876315",
+  "current_stats": {
+    "total_messages": 738,
+    "total_users": 13,
+    "user_messages": 526,
+    "active_users": 13,
+    "users_data": [
+      [
+        111709341,
+        284
+      ],
+      [
+        5676571979,
+        130
+      ],
+      [
+        1118251087,
+        37
+      ],
+      [
+        7186596694,
+        30
+      ],
+      [
+        7978662431,
+        12
+      ],
+      [
+        7566960781,
+        10
+      ],
+      [
+        1510607618,
+        8
+      ],
+      [
+        7957193610,
+        4
+      ],
+      [
+        987654321,
+        3
+      ],
+      [
+        179392777,
+        3
+      ],
+      [
+        123456789,
+        3
+      ],
+      [
+        12345,
+        2
+      ]
+    ]
+  },
+  "ssh_results": [
+    {
+      "command": "ls -la /var/log/",
+      "output": "total 496\ndrwxr-xr-x 1 root   root              4096 Jul 10 21:39 .\ndrwxr-xr-x 1 root   root              4096 Jun 10 00:00 ..\nlrwxrwxrwx 1 root   root                39 Jul 10 21:38 README -> ../../usr/share/doc/systemd/README.logs\n-rw-r--r-- 1 root   root             34101 Jul 10 21:41 alternatives.log\ndrwxr-xr-x 1 root   root              4096 Jul 10 21:41 apt\n-rw-rw---- 1 root   utmp                 0 Jun 10 00:00 btmp\n-rw-r--r-- 1 root   root            438581 Jul 10 21:41 dpkg.log\n-rw-r--r-- 1 root   root                 0 Jun 10 00:00 faillog\n-rw-r--r-- 1 root   root              3702 Jul 10 21:41 fontconfig.log\ndrwxr-sr-x 2 root   systemd-journal   4096 Jul 10 21:38 journal\n-rw-rw-r-- 1 root   utmp                 0 Jun 10 00:00 lastlog\ndrwx------ 2 root   root              4096 Jul 10 21:38 private\ndrwxr-s--- 2 valkey adm               4096 Jul 10 21:39 valkey\n-rw-rw-r-- 1 root   utmp                 0 Jun 10 00:00 wtmp"
+    }
+  ],
+  "db_results": [
+    {
+      "timestamp": "2025-07-11 06:53:22.881321",
+      "message": "Received message from user 1118251087",
+      "log_level": "INFO",
+      "user_id": "1118251087"
+    },
+    {
+      "timestamp": "2025-07-11 06:49:36.627312",
+      "message": "Received message from user 1118251087",
+      "log_level": "INFO",
+      "user_id": "1118251087"
+    },
+    {
+      "timestamp": "2025-07-11 06:46:22.079297",
+      "message": "Received message from user 1118251087",
+      "log_level": "INFO",
+      "user_id": "1118251087"
+    },
+    {
+      "timestamp": "2025-07-11 06:44:15.413461",
+      "message": "Received message from user 1118251087",
+      "log_level": "INFO",
+      "user_id": "1118251087"
+    },
+    {
+      "timestamp": "2025-07-11 06:43:02.767457",
+      "message": "Received message from user 1118251087",
+      "log_level": "INFO",
+      "user_id": "1118251087"
+    }
+  ],
+  "existing_results": []
+}

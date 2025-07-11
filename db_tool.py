@@ -120,8 +120,8 @@ def query_user_profiles(limit: int = 10) -> List[Dict[str, Any]]:
     return run_query(query)
 
 def query_recent_messages(limit: int = 10) -> List[Dict[str, Any]]:
-    """שאילתה מהירה להודעות אחרונות"""
-    query = f"SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT {limit}"
+    """שאילתה מהירה להודעות אחרונות - רק שדות קיימים"""
+    query = f"SELECT id, chat_id, user_msg, bot_msg, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT {limit}"
     return run_query(query)
 
 def query_table_info(table_name: str) -> List[Dict[str, Any]]:
@@ -141,13 +141,13 @@ def טבלה_משתמשים(limit: int = 20) -> List[Dict[str, Any]]:
     return run_query(query)
 
 def טבלה_הודעות(limit: int = 30) -> List[Dict[str, Any]]:
-    """הצגת טבלת chat_messages מלאה עם כל השדות"""
-    query = f"SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT {limit}"
+    """הצגת טבלת chat_messages מלאה עם כל השדות הקיימים"""
+    query = f"SELECT id, chat_id, user_msg, bot_msg, timestamp FROM chat_messages ORDER BY timestamp DESC LIMIT {limit}"
     return run_query(query)
 
 def טבלה_הודעות_משתמש(chat_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-    """הצגת הודעות של משתמש ספציפי מלאות"""
-    query = f"SELECT * FROM chat_messages WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT {limit}"
+    """הצגת הודעות של משתמש ספציפי מלאות - רק שדות קיימים"""
+    query = f"SELECT id, chat_id, user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT {limit}"
     return run_query(query)
 
 def טבלה_gpt_לוגים(limit: int = 25) -> List[Dict[str, Any]]:
@@ -198,17 +198,13 @@ def טבלה_מפורטת(table_name: str, limit: int = 20) -> List[Dict[str, An
 def חיפוש_משתמש_מלא(chat_id: str) -> Dict[str, Any]:
     """חיפוש מידע מלא על משתמש ספציפי - כל הטבלאות"""
     user_profile = run_query(f"SELECT * FROM user_profiles WHERE chat_id = '{chat_id}'")
-    recent_messages = run_query(f"SELECT * FROM chat_messages WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 10")
+    recent_messages = run_query(f"SELECT id, chat_id, user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 10")
     gpt_usage = run_query(f"SELECT * FROM gpt_calls_log WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 10")
-    critical_status = run_query(f"SELECT * FROM critical_users WHERE chat_id = '{chat_id}'")
-    billing = run_query(f"SELECT * FROM billing_usage WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 5")
     
     return {
         "פרופיל_מלא": user_profile,
         "הודעות_מלאות": recent_messages,
-        "gpt_מלא": gpt_usage,
-        "סטטוס_קריטי": critical_status,
-        "חיובים": billing
+        "gpt_מלא": gpt_usage
     }
 
 def סטטיסטיקות_כלליות() -> Dict[str, Any]:

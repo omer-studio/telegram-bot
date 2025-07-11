@@ -89,11 +89,9 @@ class MinimalDataLoader:
                     if cur.fetchone():
                         continue
                     
-                    # Insert message
-                    cur.execute(
-                        "INSERT INTO chat_messages (chat_id, user_msg, bot_msg, timestamp) VALUES (%s, %s, %s, %s)",
-                        (chat_id, user_msg, gpt_a_response or '', timestamp_start)
-                    )
+                    # Insert message - משתמש בפונקציה המרכזית
+                    from db_manager import insert_chat_message_only
+                    insert_chat_message_only(cur, chat_id, user_msg, gpt_a_response or '', timestamp_start)
                     
                     self.loaded_count['chat_messages'] += 1
                     

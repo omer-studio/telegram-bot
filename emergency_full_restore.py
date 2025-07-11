@@ -10,6 +10,9 @@ import json
 from datetime import datetime
 from config import config
 
+# ייבוא הפונקציות המרכזיות מ-db_manager
+from db_manager import create_chat_messages_table_only, insert_chat_message_only
+
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 
 def emergency_full_restore():
@@ -30,33 +33,9 @@ def emergency_full_restore():
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
-    # וידוא שהטבלה קיימת ויצירתה אם לא
+    # וידוא שהטבלה קיימת ויצירתה אם לא - משתמש בפונקציה המרכזית
     print("🔧 מוודא שטבלת chat_messages קיימת...")
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id SERIAL PRIMARY KEY,
-            chat_id BIGINT,
-            user_msg TEXT,
-            bot_msg TEXT,
-            timestamp TIMESTAMP,
-            message_type VARCHAR(100),
-            telegram_message_id BIGINT,
-            source_file VARCHAR(200),
-            source_line_number INTEGER,
-            gpt_type VARCHAR(50),
-            gpt_model VARCHAR(100),
-            gpt_cost_usd DECIMAL(10,6),
-            gpt_tokens_input INTEGER,
-            gpt_tokens_output INTEGER,
-            gpt_request TEXT,
-            gpt_response TEXT,
-            user_data TEXT,
-            bot_data TEXT,
-            metadata TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    create_chat_messages_table_only(cur)
     
     # שחזור כל ההודעות
     restored_count = 0
@@ -66,36 +45,14 @@ def emergency_full_restore():
     
     for i, msg in enumerate(backup_data):
         try:
-            # הכנסת ההודעה
-            cur.execute("""
-                INSERT INTO chat_messages (
-                    chat_id, user_msg, bot_msg, timestamp, message_type,
-                    telegram_message_id, source_file, source_line_number,
-                    gpt_type, gpt_model, gpt_cost_usd, gpt_tokens_input, gpt_tokens_output,
-                    gpt_request, gpt_response, user_data, bot_data, metadata
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                )
-            """, (
+            # הכנסת ההודעה - משתמש בפונקציה המרכזית
+            insert_chat_message_only(
+                cur,
                 msg.get('chat_id'),
                 msg.get('user_msg'),
                 msg.get('bot_msg'),
-                msg.get('timestamp'),
-                msg.get('message_type', 'restored_full'),
-                msg.get('telegram_message_id'),
-                msg.get('source_file', 'full_backup_restore'),
-                msg.get('source_line_number'),
-                msg.get('gpt_type'),
-                msg.get('gpt_model'),
-                msg.get('gpt_cost_usd'),
-                msg.get('gpt_tokens_input'),
-                msg.get('gpt_tokens_output'),
-                msg.get('gpt_request'),
-                msg.get('gpt_response'),
-                msg.get('user_data'),
-                msg.get('bot_data'),
-                msg.get('metadata')
-            ))
+                msg.get('timestamp')
+            )
             
             restored_count += 1
             

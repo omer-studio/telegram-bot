@@ -15,6 +15,9 @@ from user_friendly_errors import safe_str, safe_operation
 from user_friendly_errors import safe_int, handle_database_error
 from simple_config import TimeoutConfig
 
+# ייבוא הפונקציות המרכזיות מ-db_manager
+from db_manager import create_chat_messages_table_only, insert_chat_message_only
+
 # טעינת קונפיגורציה
 try:
     from config import config
@@ -66,62 +69,17 @@ class SimpleDataManager:
     
     def save_chat_message(self, chat_id: str, user_msg: str, bot_msg: str, 
                          timestamp: Optional[datetime] = None, **kwargs) -> bool:
-        """שמירת הודעת צ'אט - פונקציה אחת פשוטה עם Context Manager בטוח"""
+        """שמירת הודעת צ'אט - משתמש בפונקציה המרכזית מ-db_manager"""
         try:
             with safe_db_connection() as conn:
                 cur = conn.cursor()
                 
-                # יצירת טבלה אם לא קיימת
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS chat_messages (
-                        id SERIAL PRIMARY KEY,
-                        chat_id TEXT NOT NULL,
-                        user_msg TEXT,
-                        bot_msg TEXT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        message_type VARCHAR(50),
-                        source_file VARCHAR(100),
-                        gpt_type VARCHAR(10),
-                        gpt_model VARCHAR(100),
-                        gpt_cost_usd DECIMAL(10,6),
-                        gpt_tokens_input INTEGER,
-                        gpt_tokens_output INTEGER,
-                        gpt_request JSONB,
-                        gpt_response JSONB,
-                        metadata JSONB,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                # יצירת טבלה אם לא קיימת - משתמש בפונקציה המרכזית
+                create_chat_messages_table_only(cur)
                 
-                # הכנת הנתונים
-                insert_data = {
-                    'chat_id': chat_id,
-                    'user_msg': user_msg,
-                    'bot_msg': bot_msg,
-                    'timestamp': timestamp or datetime.utcnow(),
-                    'message_type': kwargs.get('message_type'),
-                    'source_file': kwargs.get('source_file'),
-                    'gpt_type': kwargs.get('gpt_type'),
-                    'gpt_model': kwargs.get('gpt_model'),
-                    'gpt_cost_usd': kwargs.get('gpt_cost_usd'),
-                    'gpt_tokens_input': kwargs.get('gpt_tokens_input'),
-                    'gpt_tokens_output': kwargs.get('gpt_tokens_output'),
-                    'gpt_request': json.dumps(kwargs.get('gpt_request')) if kwargs.get('gpt_request') else None,
-                    'gpt_response': json.dumps(kwargs.get('gpt_response')) if kwargs.get('gpt_response') else None,
-                    'metadata': json.dumps(kwargs.get('metadata', {}))
-                }
+                # הכנסת ההודעה - משתמש בפונקציה המרכזית
+                insert_chat_message_only(cur, chat_id, user_msg, bot_msg, timestamp)
                 
-                # הכנת SQL דינמי
-                fields = [k for k, v in insert_data.items() if v is not None]
-                placeholders = ', '.join(['%s'] * len(fields))
-                values = [insert_data[k] for k in fields]
-                
-                insert_sql = f"""
-                INSERT INTO chat_messages ({', '.join(fields)})
-                VALUES ({placeholders})
-                """
-                
-                cur.execute(insert_sql, values)
                 conn.commit()
                 cur.close()
                 
@@ -138,7 +96,7 @@ class SimpleDataManager:
                 cur = conn.cursor()
                 
                 cur.execute("""
-                    SELECT user_msg, bot_msg, timestamp, message_type, gpt_type, gpt_model, gpt_cost_usd
+                    SELECT user_msg, bot_msg, timestamp
                     FROM chat_messages 
                     WHERE chat_id = %s 
                     ORDER BY timestamp DESC 
@@ -153,11 +111,7 @@ class SimpleDataManager:
                     history.append({
                         'user_msg': row[0],
                         'bot_msg': row[1],
-                        'timestamp': row[2],
-                        'message_type': row[3],
-                        'gpt_type': row[4],
-                        'gpt_model': row[5],
-                        'gpt_cost_usd': float(row[6]) if row[6] else 0.0
+                        'timestamp': row[2]
                     })
                 
                 return history

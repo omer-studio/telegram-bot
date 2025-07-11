@@ -231,13 +231,8 @@ def save_system_metrics(metric_type, chat_id=None, **metrics):
             print(f"❌ שגיאה בהוספת מטריקה {metric_type}: {e}")
         return False
 
-# === יצירת טבלאות (אם לא קיימות) ===
-def create_tables():
-    conn = psycopg2.connect(DB_URL)
-    cur = conn.cursor()
-    
-    # 🟢 טבלאות קריטיות - נשארות
-    cur.execute('''
+# === מבנה טבלת chat_messages - מקור האמת היחיד ===
+CHAT_MESSAGES_SCHEMA = '''
     CREATE TABLE IF NOT EXISTS chat_messages (
         id SERIAL PRIMARY KEY,
         chat_id TEXT,
@@ -245,7 +240,34 @@ def create_tables():
         bot_msg TEXT,
         timestamp TIMESTAMP
     );
-    ''')
+'''
+
+def create_chat_messages_table_only(cursor):
+    """יוצר את טבלת chat_messages - פונקציה מרכזית"""
+    cursor.execute(CHAT_MESSAGES_SCHEMA)
+
+def insert_chat_message_only(cursor, chat_id, user_msg, bot_msg, timestamp=None):
+    """מכניס הודעה לטבלת chat_messages - פונקציה מרכזית"""
+    if timestamp is None:
+        timestamp = datetime.now()
+    
+    cursor.execute("""
+        INSERT INTO chat_messages (chat_id, user_msg, bot_msg, timestamp) 
+        VALUES (%s, %s, %s, %s)
+    """, (chat_id, user_msg, bot_msg, timestamp))
+    
+    # 📝 הדפסת כל מה שנרשם במסד הנתונים
+    user_msg_display = (user_msg[:50] + "...") if user_msg and len(user_msg) > 50 else (user_msg or "")
+    bot_msg_display = (bot_msg[:50] + "...") if bot_msg and len(bot_msg) > 50 else (bot_msg or "")
+    print(f"📝 [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp}")
+
+# === יצירת טבלאות (אם לא קיימות) ===
+def create_tables():
+    conn = psycopg2.connect(DB_URL)
+    cur = conn.cursor()
+    
+    # 🟢 טבלאות קריטיות - נשארות
+    create_chat_messages_table_only(cur)
     
     # יצירת טבלת user_profiles עם עמודות נפרדות
     from fields_dict import get_user_profile_fields, FIELDS_DICT
@@ -314,27 +336,19 @@ def create_tables():
 # === שמירת הודעת צ'אט מורחבת ===
 def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, source_file=None, message_type=None):
     """
-    שומר הודעת צ'אט בטבלה הקריטית chat_messages - כמו שהבדיקות מצפות
+    שומר הודעת צ'אט בטבלה הקריטית chat_messages - משתמש בפונקציה המרכזית
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
     
-    if timestamp is None:
-        timestamp = datetime.now()
-    
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
-    # 🔧 שמירה בטבלה הקריטית chat_messages (כמו שהבדיקות מצפות)
-    insert_sql = """
-    INSERT INTO chat_messages (
-        chat_id, user_msg, bot_msg, timestamp
-    ) VALUES (
-        %s, %s, %s, %s
-    ) RETURNING id
-    """
+    # 🔧 שמירה בפונקציה המרכזית
+    insert_chat_message_only(cur, chat_id, user_msg, bot_msg, timestamp)
     
-    cur.execute(insert_sql, (chat_id, user_msg, bot_msg, timestamp))
+    # קבלת ID של ההודעה שנשמרה
+    cur.execute("SELECT lastval()")
     message_id = cur.fetchone()[0]
     
     conn.commit()
@@ -348,7 +362,7 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, source_file=No
 
 def get_chat_history(chat_id, limit=100):
     """
-    מחזיר היסטוריית צ'אט מהטבלה הרזה החדשה בפורמט התואם לקוד הקיים + מספרים סידוריים
+    מחזיר היסטוריית צ'אט מהטבלה הקריטית chat_messages - כמו שהקוד מצפה
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -356,9 +370,9 @@ def get_chat_history(chat_id, limit=100):
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
-    # שליפה מהטבלה הרזה החדשה כולל המספר הסידורי
+    # 🔧 שליפה מהטבלה הקריטית chat_messages (כמו שהקוד מצפה)
     cur.execute(
-        "SELECT user_msg, bot_msg, timestamp, message_number, interaction_id FROM simple_chat_history WHERE chat_id = %s ORDER BY timestamp DESC LIMIT %s",
+        "SELECT user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id = %s ORDER BY timestamp DESC LIMIT %s",
         (chat_id, limit)
     )
     
@@ -366,18 +380,8 @@ def get_chat_history(chat_id, limit=100):
     cur.close()
     conn.close()
     
-    # החזרה בפורמט מורחב עם מספרים סידוריים - מהישן לחדש
-    enhanced_rows = []
-    for row in reversed(rows):  # מהישן לחדש
-        enhanced_rows.append({
-            'user_msg': row[0],
-            'bot_msg': row[1], 
-            'timestamp': row[2],
-            'message_number': row[3],
-            'interaction_id': row[4]
-        })
-    
-    return enhanced_rows
+    # החזרה בפורמט הישן שהקוד מצפה - מהישן לחדש
+    return rows[::-1]
 
 # ✅ הוסרו פונקציות deprecated: save_user_profile, get_user_profile, get_user_profile_fast, update_user_profile_fast
 # כל הפונקציות הועברו ל-profile_utils והן פעילות שם
@@ -385,7 +389,7 @@ def get_chat_history(chat_id, limit=100):
 # === שמירת לוג GPT מפורט ===
 def save_gpt_call_log(chat_id, gpt_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, admin_notification_content=None, timestamp=None):
     """
-    שומר אינטראקציה מפורטת בטבלה המפורטת - כל המידע הטכני
+    שומר לוג GPT בטבלה הקריטית gpt_calls_log - כמו שהבדיקות מצפות
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -400,33 +404,31 @@ def save_gpt_call_log(chat_id, gpt_type, request_data, response_data, tokens_inp
     request_json = json.dumps(request_data) if isinstance(request_data, dict) else str(request_data)
     response_json = json.dumps(response_data) if isinstance(response_data, dict) else str(response_data)
     
-    # שמירה בטבלה המפורטת החדשה עם מספר סידורי
+    # 🔧 שמירה בטבלה הקריטית gpt_calls_log (כמו שהבדיקות מצפות)
     insert_sql = """
-    INSERT INTO user_interactions (
-        chat_id, gpt_type, request_data, response_data, tokens_input, tokens_output, 
-        cost_usd, processing_time_seconds, admin_notification_content, timestamp
+    INSERT INTO gpt_calls_log (
+        chat_id, call_type, request_data, response_data, tokens_input, tokens_output, 
+        cost_usd, processing_time_seconds, timestamp
     ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    ) RETURNING id, message_number
+        %s, %s, %s, %s, %s, %s, %s, %s, %s
+    ) RETURNING id
     """
     
     cur.execute(insert_sql, (
         chat_id, gpt_type, request_json, response_json, tokens_input, tokens_output,
-        cost_usd, processing_time_seconds, admin_notification_content, timestamp
+        cost_usd, processing_time_seconds, timestamp
     ))
     
-    result = cur.fetchone()
-    interaction_id = result[0]
-    message_number = result[1]
+    gpt_log_id = cur.fetchone()[0]
     
     conn.commit()
     cur.close()
     conn.close()
     
     if should_log_debug_prints():
-        print(f"🤖 [DB] נשמרה אינטראקציה #{message_number} GPT-{gpt_type} עבור chat_id={chat_id}")
+        print(f"🤖 [DB] נשמר לוג GPT-{gpt_type} #{gpt_log_id} עבור chat_id={chat_id}")
     
-    return interaction_id, message_number
+    return gpt_log_id
 
 # === שמירת לוג מערכת ===
 def save_system_log(log_level, module, message, extra_data, timestamp=None):
@@ -750,9 +752,8 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
     if timestamp is None:
         timestamp = datetime.now()
     
-    # אם יש נתוני GPT, שומר אותם בטבלה המפורטת ומקבל ID + מספר הודעה
-    interaction_id = None
-    interaction_message_number = None
+    # אם יש נתוני GPT, שומר אותם בטבלה הקריטית gpt_calls_log
+    gpt_log_id = None
     admin_notification_content = None
     
     if gpt_data and isinstance(gpt_data, dict):
@@ -771,8 +772,8 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
                     if should_log_debug_prints():
                         print(f"⚠️ [ADMIN_NOTIFICATION] שגיאה ביצירת תוכן: {admin_err}")
             
-            # שמירה בטבלה המפורטת
-            interaction_id, interaction_message_number = save_gpt_call_log(
+            # שמירה בטבלה הקריטית gpt_calls_log
+            gpt_log_id = save_gpt_call_log(
                 chat_id=chat_id,
                 gpt_type="A",  # ברירת מחדל GPT-A
                 request_data=gpt_data.get('request_data', {}),
@@ -781,34 +782,24 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
                 tokens_output=gpt_data.get('main_usage', {}).get('output_tokens', 0),
                 cost_usd=gpt_data.get('cost_usd', 0),
                 processing_time_seconds=gpt_data.get('latency', 0),
-                admin_notification_content=admin_notification_content,
                 timestamp=timestamp
             )
             
-            # עדכון תוכן הודעת האדמין עם המספר הסידורי
-            if admin_notification_content and interaction_message_number:
-                admin_notification_content = f"🔢 הודעה #{interaction_message_number}\n{admin_notification_content}"
-            
         except Exception as gpt_err:
             if should_log_debug_prints():
-                print(f"⚠️ [GPT_LOG] שגיאה בשמירת לוג אינטראקציה: {gpt_err}")
+                print(f"⚠️ [GPT_LOG] שגיאה בשמירת לוג GPT: {gpt_err}")
+            gpt_log_id = None
     
-    # שמירה בטבלה הרזה
-    message_id, chat_message_number = save_chat_message(
+    # שמירה בטבלה הקריטית chat_messages
+    message_id = save_chat_message(
         chat_id=chat_id,
         user_msg=user_msg,
         bot_msg=bot_msg,
-        timestamp=timestamp,
-        interaction_id=interaction_id
+        timestamp=timestamp
     )
     
-    # החזרת כל המידע הרלוונטי
-    return {
-        'message_id': message_id,
-        'chat_message_number': chat_message_number,
-        'interaction_id': interaction_id,
-        'interaction_message_number': interaction_message_number
-    }
+    # החזרת מידע מוגבל (רק מה שצריך)
+    return message_id
 
 def get_chat_statistics():
     """מחזיר סטטיסטיקות מורחבות על השיחות"""
@@ -824,26 +815,29 @@ def get_chat_statistics():
     cur.execute("SELECT COUNT(DISTINCT chat_id) FROM chat_messages")
     stats['unique_chats'] = cur.fetchone()[0]
     
-    # סטטיסטיקות GPT
-    cur.execute("SELECT COUNT(*) FROM chat_messages WHERE gpt_type IS NOT NULL")
+    # סטטיסטיקות GPT - נתונים מ-gpt_calls_log במקום chat_messages
+    cur.execute("SELECT COUNT(*) FROM gpt_calls_log")
     stats['gpt_messages'] = cur.fetchone()[0]
     
-    cur.execute("SELECT SUM(gpt_cost_usd) FROM chat_messages WHERE gpt_cost_usd IS NOT NULL")
+    cur.execute("SELECT SUM(cost_usd) FROM gpt_calls_log WHERE cost_usd IS NOT NULL")
     result = cur.fetchone()[0]
     stats['total_cost_usd'] = float(result) if result else 0.0
     
-    cur.execute("SELECT gpt_type, COUNT(*) FROM chat_messages WHERE gpt_type IS NOT NULL GROUP BY gpt_type")
+    cur.execute("SELECT call_type, COUNT(*) FROM gpt_calls_log WHERE call_type IS NOT NULL GROUP BY call_type")
     stats['gpt_by_type'] = dict(cur.fetchall())
     
-    # סטטיסטיקות לפי סוג הודעה
-    cur.execute("SELECT message_type, COUNT(*) FROM chat_messages WHERE message_type IS NOT NULL GROUP BY message_type")
-    stats['by_message_type'] = dict(cur.fetchall())
+    # סטטיסטיקות הודעות - רק מספר הודעות בוט ומשתמש
+    cur.execute("SELECT COUNT(*) FROM chat_messages WHERE user_msg IS NOT NULL AND user_msg != ''")
+    stats['user_messages'] = cur.fetchone()[0]
+    
+    cur.execute("SELECT COUNT(*) FROM chat_messages WHERE bot_msg IS NOT NULL AND bot_msg != ''")
+    stats['bot_messages'] = cur.fetchone()[0]
     
     # צ'אטים פעילים (בשבוע האחרון)
     cur.execute("""
         SELECT COUNT(DISTINCT chat_id) 
         FROM chat_messages 
-        WHERE created_at > NOW() - INTERVAL '7 days'
+        WHERE timestamp > NOW() - INTERVAL '7 days'
     """)
     stats['active_chats_week'] = cur.fetchone()[0]
     
@@ -853,16 +847,14 @@ def get_chat_statistics():
     return stats
 
 def get_chat_history_enhanced(chat_id, limit=50):
-    """מחזיר היסטוריית צ'אט עם נתונים מורחבים"""
+    """מחזיר היסטוריית צ'אט - רק שדות רזים (כמו get_chat_history)"""
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     
     cur.execute("""
-        SELECT 
-            id, user_msg, bot_msg, timestamp, message_type,
-            gpt_type, gpt_model, gpt_cost_usd, source_file, metadata
+        SELECT id, user_msg, bot_msg, timestamp
         FROM chat_messages 
         WHERE chat_id = %s 
         ORDER BY timestamp DESC 
@@ -879,13 +871,7 @@ def get_chat_history_enhanced(chat_id, limit=50):
             'id': row[0],
             'user_msg': row[1],
             'bot_msg': row[2],
-            'timestamp': row[3],
-            'message_type': row[4],
-            'gpt_type': row[5],
-            'gpt_model': row[6],
-            'gpt_cost_usd': row[7],
-            'source_file': row[8],
-            'metadata': row[9]
+            'timestamp': row[3]
         })
     
     return history
