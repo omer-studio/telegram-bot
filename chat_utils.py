@@ -122,30 +122,58 @@ def validate_message_counting_usage():
 
 def update_chat_history(chat_id: str, user_msg: str, bot_msg: str, **kwargs) -> bool:
     """
-    🎯 פונקציה אחת פשוטה לעדכון היסטוריה - במקום פונקציות רבות
+    🔥 **פונקציה משופרת**: עדכון היסטוריה + רישום מפורט
     
     עושה הכל:
-    - שומרת הודעה במסד נתונים
+    - שומרת הודעה במסד נתונים (טבלה chat_messages)
+    - מרשמת גם ב-interactions_log אם זו אינטראקציה מלאה
     - מטפלת בשגיאות
     - לוגים פשוטים
     
     Args:
         chat_id: מזהה הצ'אט
-        user_msg: הודעת המשתמש
+        user_msg: הודעת המשתמש  
         bot_msg: הודעת הבוט
-        **kwargs: פרמטרים נוספים (gpt_type, gpt_model, וכו')
+        **kwargs: פרמטרים נוספים (gpt_type, gpt_model, messages_for_gpt, גרת וכו')
     
     Returns:
         True אם הצליח, False אם נכשל
     """
     try:
-        # שמירה במסד נתונים
+        # שמירה במסד נתונים (הטבלה הקיימת)
         success = save_chat_message(
             chat_id=chat_id,
             user_msg=user_msg,
             bot_msg=bot_msg,
             **kwargs
         )
+        
+        # 🔥 **הוספה חדשה**: אם זו אינטראקציה מלאה, מרשמת גם ב-interactions_log
+        try:
+            # בדיקה אם יש מידע מלא לרישום מפורט
+            has_gpt_data = kwargs.get('gpt_results') or kwargs.get('messages_for_gpt')
+            
+            if has_gpt_data and user_msg and bot_msg:
+                from interactions_logger import log_interaction
+                
+                # רישום מפורט במערכת החדשה
+                log_success = log_interaction(
+                    chat_id=chat_id,
+                    telegram_message_id=kwargs.get('telegram_message_id'),
+                    user_msg=user_msg,
+                    bot_msg=bot_msg,
+                    messages_for_gpt=kwargs.get('messages_for_gpt', []),
+                    gpt_results=kwargs.get('gpt_results', {}),
+                    timing_data=kwargs.get('timing_data', {}),
+                    gpt_e_counter=kwargs.get('gpt_e_counter')
+                )
+                
+                if log_success:
+                    logger.info(f"🔥 [DUAL_LOG] chat_id={safe_str(chat_id)} | רישום כפול: chat_messages + interactions_log", source="HISTORY_SAVE")
+                    
+        except Exception as interaction_err:
+            # אם נכשל הרישום המפורט, נמשיך בלי לכשל בכל התהליך
+            logger.warning(f"[DUAL_LOG] שגיאה ברישום מפורט: {interaction_err}", source="HISTORY_SAVE")
         
         if success:
             logger.info(f"chat_id={safe_str(chat_id)} | נשמר בהצלחה", source="HISTORY_SAVE")
