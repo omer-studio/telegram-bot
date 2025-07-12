@@ -303,6 +303,19 @@ TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
 OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
 print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", _mask_sensitive(OPENAI_ADMIN_KEY, 5))
+
+# 🎯 הגדרת מסד נתונים - קריטי לפעולה תקינה
+DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL") or os.getenv("DATABASE_URL")
+if not DB_URL:
+    # יצירת DB_URL dummy לסביבת CI/CD
+    if IS_CI_ENVIRONMENT:
+        DB_URL = "postgresql://dummy:dummy@localhost:5432/dummy"
+        print("⚠️ [CONFIG] סביבת CI - משתמש ב-dummy DB_URL")
+    else:
+        raise ValueError("❌ [CONFIG] DB_URL חסר! הגדר DATABASE_URL או DATABASE_EXTERNAL_URL בקונפיגורציה")
+else:
+    print(f"✅ [CONFIG] מסד נתונים מוגדר: {_mask_sensitive(DB_URL, 20)}")
+
 # 🗑️ Google Sheets הוסר - עברנו למסד נתונים
 GOOGLE_SHEET_ID = "dummy_sheet_id"
 

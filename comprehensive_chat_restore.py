@@ -5,7 +5,7 @@
 שחזור מקיף מכל המקורות הזמינים!
 
 🎯 מטרה: לשחזר את כל ההודעות שנמחקו מכל הגיבויים
-🔍 מקורות: גיבויים יומיים, קבצי JSON, gpt_calls_log ועוד
+🔍 מקורות: גיבויים יומיים, קבצי JSON, interactions_log ועוד
 
 הפעלה: python comprehensive_chat_restore.py
 """
@@ -181,35 +181,34 @@ def restore_from_json_file(file_path, source_name):
         print(f"❌ שגיאה בשחזור מ-{source_name}: {e}")
         return 0
 
-def restore_from_gpt_calls():
-    """שחזור הודעות מטבלת gpt_calls_log"""
-    print(f"\n🔄 משחזר הודעות מ-gpt_calls_log...")
+def restore_from_interactions():
+    """🔥 שחזור הודעות מטבלת interactions_log החדשה"""
+    print(f"\n🔄 משחזר הודעות מ-interactions_log...")
     
     try:
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
-        # בדיקת הודעות ב-gpt_calls_log שחסרות ב-chat_messages
+        # בדיקת הודעות ב-interactions_log שחסרות ב-chat_messages
         cur.execute("""
             SELECT DISTINCT 
-                g.chat_id, g.user_msg, g.bot_msg, g.timestamp,
-                g.gpt_type, g.gpt_model, g.gpt_cost_usd, 
-                g.gpt_tokens_input, g.gpt_tokens_output,
-                g.gpt_request, g.gpt_response
-            FROM gpt_calls_log g
-            WHERE g.user_msg IS NOT NULL 
-            AND g.user_msg != ''
+                i.chat_id, i.user_msg, i.bot_msg, i.timestamp,
+                i.gpt_a_model, i.total_cost_agorot,
+                i.gpt_a_tokens_input, i.gpt_a_tokens_output
+            FROM interactions_log i
+            WHERE i.user_msg IS NOT NULL 
+            AND i.user_msg != ''
             AND NOT EXISTS (
                 SELECT 1 FROM chat_messages c
-                WHERE c.chat_id = g.chat_id 
-                AND c.user_msg = g.user_msg 
-                AND c.timestamp = g.timestamp
+                WHERE c.chat_id = i.chat_id 
+                AND c.user_msg = i.user_msg 
+                AND c.timestamp = i.timestamp
             )
-            ORDER BY g.timestamp
+            ORDER BY i.timestamp
         """)
         
         missing_messages = cur.fetchall()
-        print(f"📋 נמצאו {len(missing_messages):,} הודעות ב-gpt_calls_log שחסרות ב-chat_messages")
+        print(f"📋 נמצאו {len(missing_messages):,} הודעות ב-interactions_log שחסרות ב-chat_messages")
         
         restored_count = 0
         for msg in missing_messages:
@@ -218,7 +217,7 @@ def restore_from_gpt_calls():
                 restored_count += 1
                 
                 if restored_count % 500 == 0:
-                    print(f"   📊 שוחזרו {restored_count:,} הודעות מ-gpt_calls_log...")
+                    print(f"   📊 שוחזרו {restored_count:,} הודעות מ-interactions_log...")
                     conn.commit()
                     
             except Exception as e:
@@ -228,11 +227,11 @@ def restore_from_gpt_calls():
         cur.close()
         conn.close()
         
-        print(f"✅ gpt_calls_log: שוחזרו {restored_count:,} הודעות")
+        print(f"✅ interactions_log: שוחזרו {restored_count:,} הודעות")
         return restored_count
         
     except Exception as e:
-        print(f"❌ שגיאה בשחזור מ-gpt_calls_log: {e}")
+        print(f"❌ שגיאה בשחזור מ-interactions_log: {e}")
         return 0
 
 def comprehensive_restore():
@@ -260,9 +259,9 @@ def comprehensive_restore():
         restored = restore_from_json_file(file_path, source_name)
         total_restored += restored
     
-    # שחזור מ-gpt_calls_log
-    gpt_restored = restore_from_gpt_calls()
-    total_restored += gpt_restored
+    # 🔥 שחזור מ-interactions_log החדשה
+    interactions_restored = restore_from_interactions()
+    total_restored += interactions_restored
     
     print(f"\n🎉 סיכום שחזור מקיף:")
     print(f"   📊 סה\"כ הודעות ששוחזרו: {total_restored:,}")

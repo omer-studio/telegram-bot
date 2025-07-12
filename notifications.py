@@ -36,6 +36,7 @@ from config import (
 from simple_config import TimeoutConfig
 from utils import get_israel_time
 from chat_utils import log_error_stat
+from recovery_manager import add_user_to_recovery_list, get_users_needing_recovery, send_recovery_messages_to_all_users
 import time
 
 # ייבוא פונקציות התראות אדמין שהועברו לadmin_notifications.py
@@ -70,53 +71,14 @@ def _add_user_to_critical_error_list(chat_id: str, error_message: str, original_
     🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
     השתמש ב-recovery_manager.add_user_to_recovery_list() במקום
     """
-    try:
-        from recovery_manager import add_user_to_recovery_list
-        return add_user_to_recovery_list(chat_id, error_message, original_user_message)
-    except ImportError:
-        # fallback לקוד הישן אם המודול החדש לא זמין
-        from profile_utils import update_user_profile
-        
-        # עדכון הפרופיל במסד נתונים
-        update_data = {
-            "needs_recovery_message": True,
-            "recovery_error_timestamp": get_israel_time().isoformat()
-        }
-        
-        # 🔧 הוספה: שמירת ההודעה המקורית של המשתמש אם קיימת
-        if original_user_message and len(original_user_message.strip()) > 0:
-            update_data["recovery_original_message"] = original_user_message.strip()
-            print(f"💾 נשמרה הודעה מקורית למשתמש {safe_str(chat_id)}: '{original_user_message[:50]}...'")
-        
-        # עדכון במסד נתונים
-        success = update_user_profile(safe_str(chat_id), update_data)
-        
-        if success:
-            logger.info(f"Added user {safe_str(chat_id)} to critical error list in database", source="notifications")
-            print(f"✅ משתמש {safe_str(chat_id)} נוסף לרשימת המשתמשים הקריטיים במסד נתונים")
-        else:
-            raise Exception("Failed to update user profile in database")
+    return add_user_to_recovery_list(chat_id, error_message, original_user_message)
 
 def safe_add_user_to_recovery_list(chat_id: str, error_context: str = "Unknown error", original_message: str = ""):
     """
     🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
     השתמש ב-recovery_manager.add_user_to_recovery_list() במקום
     """
-    try:
-        from recovery_manager import add_user_to_recovery_list
-        return add_user_to_recovery_list(chat_id, error_context, original_message)
-    except ImportError:
-        # fallback לקוד הישן
-        try:
-            if chat_id:
-                # העברת ההודעה המקורית רק אם היא לא ריקה
-                msg_to_save = original_message.strip() if original_message and original_message.strip() else None
-                _add_user_to_critical_error_list(safe_str(chat_id), f"Safe recovery: {error_context}", msg_to_save)
-                print(f"🛡️ משתמש {safe_str(chat_id)} נוסף לרשימת התאוששות ({error_context})")
-                if msg_to_save:
-                    print(f"💾 נשמרה הודעה מקורית: '{msg_to_save[:50]}...'")
-        except Exception as e:
-            logger.error(f"Failed to add user {safe_str(chat_id)} to recovery list: {e}", source="notifications")
+    return add_user_to_recovery_list(chat_id, error_context, original_message)
 
 async def _send_user_friendly_error_message(update, chat_id: str, original_message: str = None):
     """שולח הודעת שגיאה ידידותית למשתמש - רק פעם אחת!"""
@@ -163,14 +125,8 @@ async def send_recovery_messages_to_affected_users():
     🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
     השתמש ב-recovery_manager.send_recovery_messages_to_all_users() במקום
     """
-    try:
-        from recovery_manager import send_recovery_messages_to_all_users
-        return await send_recovery_messages_to_all_users()
-    except ImportError:
-        # fallback לקוד הישן - רק לוג שהפונקציה הישנה נקראת
-        logger.warning("Using deprecated send_recovery_messages_to_affected_users - switch to recovery_manager.py", source="notifications")
-        # כאן יהיה הקוד הישן אם נדרש
-        return 0
+    logger.warning("Using deprecated send_recovery_messages_to_affected_users - switch to recovery_manager.py", source="notifications")
+    return await send_recovery_messages_to_all_users()
 
 async def process_lost_message(original_message: str, chat_id: str) -> str:
     """
@@ -182,13 +138,9 @@ async def process_lost_message(original_message: str, chat_id: str) -> str:
 def clear_old_critical_error_users(days_old: int = 7):
     """מנקה משתמשים ישנים מרשימת השגיאות הקריטיות"""
     try:
-        try:
-            from recovery_manager import get_users_needing_recovery
-            users_list = get_users_needing_recovery()
-            # המרה לפורמט הישן לתאימות
-            users_data = {user.get('chat_id'): user for user in users_list}
-        except ImportError:
-            users_data = {}
+        users_list = get_users_needing_recovery()
+        # המרה לפורמט הישן לתאימות
+        users_data = {user.get('chat_id'): user for user in users_list}
         current_time = get_israel_time()
         cleaned_users = {}
         
@@ -470,30 +422,8 @@ async def handle_critical_error(error, chat_id, user_msg, update: Update):
     🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py  
     השתמש ב-recovery_manager.add_user_to_recovery_list() במקום
     """
-    try:
-        from recovery_manager import add_user_to_recovery_list
-        add_user_to_recovery_list(chat_id, f"Critical error: {str(error)[:100]}", user_msg)
-        logger.error(f"Critical error handled via recovery_manager for user {safe_str(chat_id)}: {error}", source="notifications")
-    except ImportError:
-        # fallback לקוד הישן
-        logger.error(f"Critical error for user {safe_str(chat_id)}: {error}", source="notifications")
-        
-        # שמירת המשתמש לרשימת התאוששות
-        _add_user_to_critical_error_list(safe_str(chat_id), f"Critical error: {str(error)[:100]}", user_msg)
-        
-        # שליחת התראה לאדמין
-        try:
-            send_admin_notification(
-                f"🚨 שגיאה קריטית!\n"
-                f"👤 משתמש: {safe_str(chat_id)}\n"
-                f"💬 הודעה: {user_msg[:100] if user_msg else 'אין'}\n"
-                f"🔥 שגיאה: {str(error)[:200]}\n"
-                f"⏰ זמן: {get_israel_time().strftime('%H:%M:%S')}\n\n"
-                f"✅ המשתמש נוסף לרשימת התאוששות",
-                urgent=True
-            )
-        except Exception as admin_error:
-            logger.error(f"Failed to send admin notification: {admin_error}", source="notifications")
+    add_user_to_recovery_list(chat_id, f"Critical error: {str(error)[:100]}", user_msg)
+    logger.error(f"Critical error handled via recovery_manager for user {safe_str(chat_id)}: {error}", source="notifications")
 
 def handle_non_critical_error(error, chat_id, user_msg, error_type):
     """
@@ -1142,13 +1072,9 @@ def diagnose_critical_users_system():
     """
     🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
     """
-    try:
-        from recovery_manager import get_users_needing_recovery
-        users = get_users_needing_recovery()
-        print(f"📊 דוח מערכת התאוששות: {len(users)} משתמשים דורשים התאוששות")
-        return {"total_users": len(users), "status": "OK"}
-    except ImportError:
-        return {"total_users": 0, "status": "Module not available"}
+    users = get_users_needing_recovery()
+    print(f"📊 דוח מערכת התאוששות: {len(users)} משתמשים דורשים התאוששות")
+    return {"total_users": len(users), "status": "OK"}
 
 def manual_add_critical_user(chat_id: str, error_context: str = "Manual addition"):
     """הוספה ידנית של משתמש לרשימת משתמשים קריטיים - לשימוש חירום"""
@@ -1329,14 +1255,9 @@ def _load_critical_error_users():
     🗑️ DEPRECATED: פונקציה זו הוחלפה במודול recovery_manager.py
     השתמש ב-recovery_manager.get_users_needing_recovery() במקום
     """
-    try:
-        from recovery_manager import get_users_needing_recovery
-        users = get_users_needing_recovery()
-        # המרה לפורמט הישן לתאימות
-        return {user.get('chat_id'): user for user in users}
-    except ImportError:
-        # fallback לקוד הישן
-        return {}
+    users = get_users_needing_recovery()
+    # המרה לפורמט הישן לתאימות
+    return {user.get('chat_id'): user for user in users}
 
 def merge_temporary_critical_files():
     """

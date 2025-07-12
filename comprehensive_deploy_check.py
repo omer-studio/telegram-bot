@@ -507,12 +507,12 @@ class ComprehensiveDeployChecker:
             
             print(f"✅ טבלת chat_messages מכילה {message_count} הודעות")
             
-            # בדיקת טבלת gpt_calls_log
-            print("🔍 בודק טבלת gpt_calls_log...")
-            cur.execute("SELECT COUNT(*) FROM gpt_calls_log")
-            gpt_calls_count = cur.fetchone()[0]
+            # 🔥 בדיקת טבלת interactions_log החדשה
+            print("🔍 בודק טבלת interactions_log...")
+            cur.execute("SELECT COUNT(*) FROM interactions_log")
+            interactions_count = cur.fetchone()[0]
             
-            print(f"✅ טבלת gpt_calls_log מכילה {gpt_calls_count} קריאות GPT")
+            print(f"✅ טבלת interactions_log מכילה {interactions_count} אינטראקציות מלאות")
             
             # בדיקת טבלת user_profiles
             print("🔍 בודק טבלת user_profiles...")
@@ -1075,8 +1075,8 @@ class ComprehensiveDeployChecker:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
                     
-                    # בדיקת טבלאות קריטיות
-                    critical_tables = ["user_profiles", "chat_messages", "gpt_calls_log"]
+                    # 🔥 בדיקת טבלאות קריטיות (עודכן ל-interactions_log)
+                    critical_tables = ["user_profiles", "chat_messages", "interactions_log"]
                     for table in critical_tables:
                         cur.execute(f"SELECT COUNT(*) FROM {table}")
                         count = cur.fetchone()[0]

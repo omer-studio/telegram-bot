@@ -151,8 +151,8 @@ def טבלה_הודעות_משתמש(chat_id: str, limit: int = 20) -> List[Dict
     return run_query(query)
 
 def טבלה_gpt_לוגים(limit: int = 25) -> List[Dict[str, Any]]:
-    """הצגת טבלת gpt_calls_log מלאה עם כל השדות"""
-    query = f"SELECT * FROM gpt_calls_log ORDER BY timestamp DESC LIMIT {limit}"
+    """🔥 הצגת טבלת interactions_log החדשה עם נתונים מתקדמים"""
+    query = f"SELECT * FROM interactions_log ORDER BY timestamp DESC LIMIT {limit}"
     return run_query(query)
 
 def טבלה_gpt_קריאות(limit: int = 25) -> List[Dict[str, Any]]:
@@ -196,29 +196,31 @@ def טבלה_מפורטת(table_name: str, limit: int = 20) -> List[Dict[str, An
     return run_query(query)
 
 def חיפוש_משתמש_מלא(chat_id: str) -> Dict[str, Any]:
-    """חיפוש מידע מלא על משתמש ספציפי - כל הטבלאות"""
+    """🔥 חיפוש מידע מלא על משתמש ספציפי - כל הטבלאות (עודכן ל-interactions_log)"""
     user_profile = run_query(f"SELECT * FROM user_profiles WHERE chat_id = '{chat_id}'")
     recent_messages = run_query(f"SELECT id, chat_id, user_msg, bot_msg, timestamp FROM chat_messages WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 10")
-    gpt_usage = run_query(f"SELECT * FROM gpt_calls_log WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 10")
+    gpt_interactions = run_query(f"SELECT * FROM interactions_log WHERE chat_id = '{chat_id}' ORDER BY timestamp DESC LIMIT 10")
     
     return {
         "פרופיל_מלא": user_profile,
         "הודעות_מלאות": recent_messages,
-        "gpt_מלא": gpt_usage
+        "אינטראקציות_מלאות": gpt_interactions
     }
 
 def סטטיסטיקות_כלליות() -> Dict[str, Any]:
-    """סטטיסטיקות כלליות של המערכת"""
+    """🔥 סטטיסטיקות כלליות של המערכת (עודכן ל-interactions_log)"""
     total_users = run_query("SELECT COUNT(*) as total FROM user_profiles")[0]['total']
     approved_users = run_query("SELECT COUNT(*) as approved FROM user_profiles WHERE approved = true")[0]['approved']
     messages_today = run_query("SELECT COUNT(*) as today FROM chat_messages WHERE DATE(timestamp) = CURRENT_DATE")[0]['today']
-    cost_week = run_query("SELECT COALESCE(SUM(cost_usd), 0) as week_cost FROM gpt_calls_log WHERE timestamp >= NOW() - INTERVAL '7 days'")[0]['week_cost']
+    # חישוב עלות מ-interactions_log (אגורות מומרות לדולרים)
+    cost_week_agorot = run_query("SELECT COALESCE(SUM(total_cost_agorot), 0) as week_cost FROM interactions_log WHERE timestamp >= NOW() - INTERVAL '7 days'")[0]['week_cost']
+    cost_week_usd = float(cost_week_agorot) / 100 / 3.7 if cost_week_agorot else 0  # 1 אגורה = 0.01 שקל, 1 שקל ≈ 0.27 דולר
     
     return {
         "סה_כ_משתמשים": total_users,
         "משתמשים_מאושרים": approved_users,
         "הודעות_היום": messages_today,
-        "עלות_שבוע_דולר": float(cost_week) if cost_week else 0
+        "עלות_שבוע_דולר": round(cost_week_usd, 4)
     }
 
 # פונקציה למתודולוגיות debug

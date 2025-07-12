@@ -8,7 +8,7 @@ utils.py - פונקציות עזר כלליות
 import os
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, List
 from simple_logger import logger
 from user_friendly_errors import safe_str, safe_operation
@@ -109,6 +109,40 @@ def get_israel_time():
     """החזרת הזמן בישראל (Asia/Jerusalem) – תאימות לאחור"""
     israel_tz = pytz.timezone("Asia/Jerusalem")
     return datetime.now(israel_tz)
+
+def get_effective_time(format_type="datetime"):
+    """
+    🕐 לוגיקת זמן חשובה - יום מתחיל ב-5 בבוקר
+    
+    העיקרון: יום מתחיל ב-5 בבוקר, לא בחצות. 
+    כל מה שקורה לפני 5 בבוקר שייך ללילה הקודם.
+    
+    Args:
+        format_type: "datetime", "date", "night_check"
+    
+    Returns:
+        datetime/date: זמן מתוקן לפי לוגיקה זו
+    """
+    israel_tz = pytz.timezone("Asia/Jerusalem")
+    now = datetime.now(israel_tz)
+    
+    # אם השעה לפני 5:00 בבוקר, זה נחשב עדיין לאתמול
+    if now.hour < 5:
+        effective_time = now - timedelta(days=1)
+        # אבל השעה נשארת כמו שהיא (לא 5:00)
+        effective_time = effective_time.replace(hour=now.hour, minute=now.minute, second=now.second, microsecond=now.microsecond)
+    else:
+        effective_time = now
+    
+    if format_type == "datetime":
+        return effective_time
+    elif format_type == "date":
+        return effective_time.date()
+    elif format_type == "night_check":
+        # בדיקה אם זה שעת לילה (23:00-05:00)
+        return now.hour >= 23 or now.hour < 5
+    
+    return effective_time
 
 def is_valid_chat_id(chat_id: Any) -> bool:
     """
