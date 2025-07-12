@@ -404,9 +404,13 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                     # 🔥 שליחת התראה לאדמין מנתוני אמת
                     try:
                         from admin_notifications import send_admin_notification_from_db
-                        send_admin_notification_from_db(interaction_id)
-                        print(f"✅ [ADMIN_NOTIFICATION] התראה נשלחה מנתוני אמת | interaction_id={interaction_id}")
+                        result = send_admin_notification_from_db(interaction_id)
+                        if result:
+                            print(f"✅ [ADMIN_NOTIFICATION] התראה נשלחה מנתוני אמת | interaction_id={interaction_id}")
+                        else:
+                            print(f"❌ [ADMIN_NOTIFICATION] שליחת התראה נכשלה | interaction_id={interaction_id}")
                     except Exception as admin_notif_err:
+                        print(f"❌ [ADMIN_NOTIFICATION] שגיאה בשליחת התראה: {admin_notif_err}")
                         logger.warning(f"[ADMIN_NOTIFICATION] שגיאה בשליחת התראה: {admin_notif_err}", source="message_handler")
                 
             except Exception as interactions_log_err:

@@ -187,7 +187,7 @@ def send_admin_notification_raw(message):
         _send_telegram_message_admin_sync(ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID, message)
         
     except Exception as e:
-        logger.error(f"�� שגיאה בשליחת התראה גולמית: {e}")
+        logger.error(f"🚨 שגיאה בשליחת התראה גולמית: {e}")
 
 def send_admin_secret_command_notification(message: str):
     """שולח התראה מיוחדת לאדמין על הפעלת פקודה סודית"""
@@ -414,6 +414,24 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         if not db_url:
             logger.error("[DB_NOTIFICATION] לא נמצא URL למסד הנתונים")
             return False
+            
+        # בדיקה אם זה dummy database
+        if "dummy" in db_url.lower():
+            logger.info(f"📨 [DB_NOTIFICATION] מזוהה dummy database - שולח התראה פשוטה | interaction_id={interaction_id}")
+            
+            # שליחת התראה פשוטה במקום מהמסד
+            dummy_notification = f"💬 <b>התכתבות חדשה (מצב פיתוח)</b> 💬\n\n"
+            dummy_notification += f"📊 <b>מזהה אינטראקציה:</b> {interaction_id}\n"
+            dummy_notification += f"⚠️ <b>מצב:</b> מסד נתונים לא זמין - התראה פשוטה\n"
+            dummy_notification += f"🔧 <b>פתרון:</b> הגדר DATABASE_URL אמיתי לקבלת התראות מלאות\n\n"
+            dummy_notification += f"📋 <b>מה חסר:</b>\n"
+            dummy_notification += f"• נתוני אמת מהמסד\n"
+            dummy_notification += f"• עלויות מדויקות\n"
+            dummy_notification += f"• זמני תגובה\n"
+            dummy_notification += f"• תוכן הודעות\n"
+            
+            send_admin_notification_raw(dummy_notification)
+            return True
         
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
