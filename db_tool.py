@@ -489,12 +489,12 @@ def export_all_main_tables():
     
     return exported_files
 
-def export_all_main_tables_excel():
-    """מייצא את כל הטבלאות הראשיות ל-Excel מעוצב ומקצועי"""
+def export_all_main_tables_to_excel():
+    """מייצא את כל הטבלאות הראשיות ל-Excel מעוצב"""
     main_tables = ['user_profiles', 'chat_messages', 'interactions_log']
     exported_files = []
     
-    logger.info("📤 מתחיל יצוא כל הטבלאות הראשיות ל-Excel מעוצב...")
+    logger.info("📊 מתחיל יצוא כל הטבלאות הראשיות ל-Excel...")
     
     for table in main_tables:
         filepath = export_table_to_excel(table)
@@ -504,9 +504,11 @@ def export_all_main_tables_excel():
     if exported_files:
         logger.info(f"✅ יוצאו {len(exported_files)} טבלאות Excel בהצלחה:")
         for file in exported_files:
-            logger.info(f"   📄 {file}")
+            logger.info(f"   📊 {file}")
     
     return exported_files
+
+
 
 if __name__ == "__main__":
     import sys
@@ -544,7 +546,7 @@ if __name__ == "__main__":
                     print("❌ שגיאה ביצוא הטבלה")
             else:
                 print("📊 מייצא את כל הטבלאות הראשיות ל-Excel מעוצב...")
-                files = export_all_main_tables_excel()
+                files = export_all_main_tables_to_excel()
                 if files:
                     print("🎨 כל הקבצים נשמרו כ-Excel מעוצב ומקצועי!")
                     

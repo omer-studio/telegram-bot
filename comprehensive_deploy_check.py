@@ -1128,10 +1128,43 @@ class ComprehensiveDeployChecker:
             print("\n✅ מערכת הגיבוי והגנה פועלת בהצלחה!")
             return True, []
     
+    def generate_local_excel_export(self) -> bool:
+        """📊 יצוא Excel מקומי לפני deploy - רק במחשב האישי"""
+        print("📊 מייצא נתוני Excel מעודכנים למחשב המקומי...")
+        print("-" * 50)
+        
+        try:
+            from db_tool import export_all_main_tables_to_excel
+            
+            exported_files = export_all_main_tables_to_excel()
+            if exported_files:
+                print(f"✅ יוצאו {len(exported_files)} קבצי Excel בהצלחה:")
+                for file_path in exported_files:
+                    filename = file_path.split('/')[-1] if '/' in file_path else file_path.split('\\')[-1]
+                    print(f"   📄 {filename}")
+                
+                print("🎯 הקבצים נשמרו במחשב האישי שלך עם עיצוב מקצועי!")
+                print("📂 מיקום: excel_exports/")
+                return True
+            else:
+                print("⚠️ יצוא Excel לא הניב קבצים")
+                return False
+                
+        except Exception as e:
+            print(f"❌ שגיאה ביצוא Excel מקומי: {e}")
+            print("ℹ️ יצוא Excel נכשל - אבל הבדיקות ימשיכו")
+            return False
+
     def run_all_checks(self) -> bool:
         """מריץ את כל הבדיקות"""
         print("🚀 מתחיל בדיקות מקיפות לפני deploy...")
         print("=" * 60)
+        
+        # 📊 יצוא Excel מקומי תחילה
+        print("\n🎯 שלב 1: יצוא נתונים מעודכנים למחשב האישי")
+        self.generate_local_excel_export()
+        
+        print("\n🔍 שלב 2: בדיקות מערכתיות")
         
         # רשימת כל הבדיקות בסדר חשיבות
         checks = [
