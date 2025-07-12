@@ -156,7 +156,12 @@ class InteractionsLogger:
             conn = psycopg2.connect(self.db_url)
             cur = conn.cursor()
             
+            # 🔧 הגדרת timezone למסד הנתונים לזמן ישראל
+            cur.execute("SET timezone TO 'Asia/Jerusalem'")
+            
             # הכנת נתונים בסיסיים
+            # 🔧 תיקון קריטי: שמירה בזמן ישראל תמיד!
+            from utils import get_israel_time
             now = get_israel_time()
             commit_hash = self.get_current_commit_hash()
             full_system_prompts = self.format_system_prompts(messages_for_gpt)
@@ -205,7 +210,7 @@ class InteractionsLogger:
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s,
@@ -333,6 +338,8 @@ class InteractionsLogger:
             conn = psycopg2.connect(self.db_url)
             cur = conn.cursor()
             
+            # 🔧 תיקון קריטי: שמירה בזמן ישראל תמיד!
+            from utils import get_israel_time
             now = get_israel_time()
             commit_hash = self.get_current_commit_hash()
             
@@ -363,7 +370,7 @@ class InteractionsLogger:
             cur.close()
             conn.close()
             
-            print(f"✅ [InteractionsLogger] אינטראקציה פשוטה #{serial_number} נרשמה")
+            print(f"✅ [InteractionsLogger] אינטראקציה פשוטה #{serial_number} נרשמה (זמן ישראל: {now})")
             return serial_number
             
         except Exception as e:

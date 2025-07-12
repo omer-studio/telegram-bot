@@ -1,9 +1,24 @@
+#!/usr/bin/env python3
+"""
+db_manager.py - מנהל מסד נתונים מרכזי
+"""
+
+import os
 import psycopg2
-from config import config
-from datetime import datetime
+from psycopg2.extras import RealDictCursor
 import json
-import threading
 import queue
+import threading
+from datetime import datetime
+from typing import Dict, List, Optional, Any, Union
+from decimal import Decimal
+from contextlib import contextmanager
+
+from config import config
+from simple_logger import logger
+from user_friendly_errors import safe_str, safe_operation, safe_chat_id, handle_database_error
+from fields_dict import FIELDS_DICT, get_user_profile_fields
+from utils import get_israel_time
 
 # 🎯 ייבוא מרכזי של פונקציות בטוחות
 from user_friendly_errors import safe_str, safe_operation
@@ -105,7 +120,9 @@ def create_chat_messages_table_only(cursor):
 def insert_chat_message_only(cursor, chat_id, user_msg, bot_msg, timestamp=None):
     """מכניס הודעה לטבלת chat_messages - פונקציה מרכזית"""
     if timestamp is None:
-        timestamp = datetime.now()
+        # 🔧 תיקון קריטי: שמירה בזמן ישראל תמיד!
+        from utils import get_israel_time
+        timestamp = get_israel_time()
     
     cursor.execute("""
         INSERT INTO chat_messages (chat_id, user_msg, bot_msg, timestamp) 
@@ -115,7 +132,7 @@ def insert_chat_message_only(cursor, chat_id, user_msg, bot_msg, timestamp=None)
     # 📝 הדפסת כל מה שנרשם במסד הנתונים
     user_msg_display = (user_msg[:50] + "...") if user_msg and len(user_msg) > 50 else (user_msg or "")
     bot_msg_display = (bot_msg[:50] + "...") if bot_msg and len(bot_msg) > 50 else (bot_msg or "")
-    print(f"💬 NEW MESSAGE [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp}")
+    print(f"💬 NEW MESSAGE [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp} (זמן ישראל)")
 
 # === יצירת טבלאות (אם לא קיימות) ===
 def create_tables():
@@ -185,6 +202,9 @@ def save_chat_message(chat_id, user_msg, bot_msg, timestamp=None, source_file=No
     
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
+    
+    # 🔧 הגדרת timezone למסד הנתונים לזמן ישראל
+    cur.execute("SET timezone TO 'Asia/Jerusalem'")
     
     # 🔧 שמירה בפונקציה המרכזית
     insert_chat_message_only(cur, chat_id, user_msg, bot_msg, timestamp)
@@ -553,7 +573,7 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
     chat_id = validate_chat_id(chat_id)
     
     if timestamp is None:
-        timestamp = datetime.now()
+        timestamp = get_israel_time()
     
     # שמירה בטבלה הקיימת chat_messages (לתאימות לאחור)
     message_id = save_chat_message(
@@ -794,7 +814,7 @@ def increment_user_message_count(chat_id):
             # משתמש קיים - מעדכן את המונה למספר האמיתי
             cur.execute(
                 "UPDATE user_profiles SET total_messages_count = %s, updated_at = %s WHERE chat_id = %s",
-                (actual_count, datetime.utcnow(), chat_id)
+                (actual_count, get_israel_time(), chat_id)
             )
             if should_log_debug_prints():
                 old_count = result[0] if result[0] is not None else 0
@@ -810,7 +830,7 @@ def increment_user_message_count(chat_id):
                     insert_data[field] = None
             
             # הוספת timestamp
-            insert_data['updated_at'] = datetime.utcnow()
+            insert_data['updated_at'] = get_israel_time()
             
             # יצירת SQL דינמי
             fields = list(insert_data.keys())
@@ -902,7 +922,7 @@ def clear_user_profile_only(chat_id):
             f"🗑️ **מחיקת פרופיל בלבד**\n\n" +
             f"👤 **משתמש:** {chat_id}\n" +
             f"🔒 **ההיסטוריה נשמרה** - רק הפרופיל נמחק\n" +
-            f"🗑️ **זמן:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n" +
+            f"🗑️ **זמן:** {get_israel_time().strftime('%d/%m/%Y %H:%M')}\n" +
             f"✅ **chat_messages מוגן!**"
         )
         
@@ -960,7 +980,7 @@ def register_user_with_code_db(chat_id, code_input=None):
             cur.execute("""
                 INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
                 VALUES (%s, 0, FALSE, %s)
-            """, (chat_id, datetime.utcnow()))
+            """, (chat_id, get_israel_time()))
             
             conn.commit()
             cur.close()
@@ -995,7 +1015,7 @@ def register_user_with_code_db(chat_id, code_input=None):
                     UPDATE user_profiles 
                     SET code_try = code_try + 1, updated_at = %s 
                     WHERE chat_id = %s
-                """, (datetime.utcnow(), chat_id))
+                """, (get_israel_time(), chat_id))
                 
                 # קבלת מספר הניסיון החדש
                 cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (chat_id,))
@@ -1020,7 +1040,7 @@ def register_user_with_code_db(chat_id, code_input=None):
                     UPDATE user_profiles 
                     SET code_try = code_try + 1, updated_at = %s 
                     WHERE chat_id = %s
-                """, (datetime.utcnow(), chat_id))
+                """, (get_israel_time(), chat_id))
                 
                 # קבלת מספר הניסיון החדש
                 cur.execute("SELECT code_try FROM user_profiles WHERE chat_id = %s", (chat_id,))
@@ -1051,7 +1071,7 @@ def register_user_with_code_db(chat_id, code_input=None):
                 UPDATE user_profiles 
                 SET chat_id = %s, code_try = %s, approved = FALSE, updated_at = %s
                 WHERE code_approve = %s AND chat_id IS NULL
-            """, (chat_id, user_code_try, datetime.utcnow(), code_input))
+            """, (chat_id, user_code_try, get_israel_time(), code_input))
             
             # בדיקה שהעדכון הצליח
             if cur.rowcount == 0:
@@ -1145,14 +1165,14 @@ def increment_code_try_db_new(chat_id):
             UPDATE user_profiles 
             SET code_try = code_try + 1, updated_at = %s 
             WHERE chat_id = %s
-        """, (datetime.utcnow(), chat_id))
+        """, (get_israel_time(), chat_id))
         
         if cur.rowcount == 0:
             # אין שורה כזאת - יוצר שורה זמנית עם code_try=1
             cur.execute("""
                 INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
                 VALUES (%s, 1, FALSE, %s)
-            """, (chat_id, datetime.utcnow()))
+            """, (chat_id, get_israel_time()))
             new_attempt = 1
         else:
             # קבלת הערך החדש
@@ -1187,7 +1207,7 @@ def approve_user_db_new(chat_id):
         # 🔧 תיקון: שימוש ב-TRUE במקום 1 
         cursor.execute(
             "UPDATE user_profiles SET approved = TRUE, updated_at = %s WHERE chat_id = %s",
-            (datetime.utcnow(), chat_id)
+            (get_israel_time(), chat_id)
         )
         
         success = cursor.rowcount > 0

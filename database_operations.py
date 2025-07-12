@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from config import config
 from user_friendly_errors import safe_str, safe_operation, safe_chat_id, handle_database_error
 from simple_config import TimeoutConfig
-from utils import safe_str
+from utils import safe_str, get_israel_time
 from fields_dict import FIELDS_DICT, get_user_profile_fields
 
 # הגדרות מרכזיות
@@ -87,6 +87,9 @@ def save_chat_message(chat_id: str, user_msg: str, bot_msg: str,
         with safe_db_connection() as conn:
             cur = conn.cursor()
             
+            # 🔧 הגדרת timezone למסד הנתונים לזמן ישראל
+            cur.execute("SET timezone TO 'Asia/Jerusalem'")
+            
             # יצירת טבלה אם לא קיימת
             create_chat_messages_table_only(cur)
             
@@ -111,6 +114,9 @@ def save_chat_message(chat_id: str, user_msg: str, bot_msg: str,
 
 def create_chat_messages_table_only(cursor):
     """יצירת טבלת chat_messages - פונקציה מרכזית"""
+    # 🔧 הגדרת timezone למסד הנתונים לזמן ישראל
+    cursor.execute("SET timezone TO 'Asia/Jerusalem'")
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS chat_messages (
             id SERIAL PRIMARY KEY,
@@ -125,7 +131,9 @@ def create_chat_messages_table_only(cursor):
 def insert_chat_message_only(cursor, chat_id, user_msg, bot_msg, timestamp=None):
     """הכנסת הודעה לטבלת chat_messages - פונקציה מרכזית"""
     if timestamp is None:
-        timestamp = datetime.now()
+        # 🔧 תיקון קריטי: שמירה בזמן ישראל תמיד!
+        from utils import get_israel_time
+        timestamp = get_israel_time()
     
     cursor.execute("""
         INSERT INTO chat_messages (chat_id, user_msg, bot_msg, timestamp) 
@@ -135,7 +143,7 @@ def insert_chat_message_only(cursor, chat_id, user_msg, bot_msg, timestamp=None)
     # הדפסת מה שנרשם
     user_msg_display = (user_msg[:50] + "...") if user_msg and len(user_msg) > 50 else (user_msg or "")
     bot_msg_display = (bot_msg[:50] + "...") if bot_msg and len(bot_msg) > 50 else (bot_msg or "")
-    print(f"💬 NEW MESSAGE [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp}")
+    print(f"💬 NEW MESSAGE [DB_INSERT] chat_messages: chat_id={chat_id} | user_msg={user_msg_display} | bot_msg={bot_msg_display} | timestamp={timestamp} (זמן ישראל)")
 
 # =================================
 # 👤 פונקציות שמירת פרופילים
@@ -220,13 +228,13 @@ def update_user_profile_field(chat_id: str, field_name: str, new_value: Any, old
                     UPDATE user_profiles 
                     SET {field_name} = %s, updated_at = %s 
                     WHERE chat_id = %s
-                """, (new_value, datetime.utcnow(), chat_id))
+                """, (new_value, get_israel_time(), chat_id))
             else:
                 # יצירת פרופיל חדש
                 cur.execute(f"""
                     INSERT INTO user_profiles (chat_id, {field_name}, updated_at) 
                     VALUES (%s, %s, %s)
-                """, (chat_id, new_value, datetime.utcnow()))
+                """, (chat_id, new_value, get_israel_time()))
             
             conn.commit()
             cur.close()
@@ -670,7 +678,7 @@ def register_user_with_code(chat_id: str, code_input: Optional[str] = None) -> D
                 cur.execute("""
                     INSERT INTO user_profiles (chat_id, code_try, approved, updated_at) 
                     VALUES (%s, 0, FALSE, %s)
-                """, (chat_id, datetime.utcnow()))
+                """, (chat_id, get_israel_time()))
                 
                 conn.commit()
                 cur.close()
@@ -728,7 +736,7 @@ def register_user_with_code(chat_id: str, code_input: Optional[str] = None) -> D
                     UPDATE user_profiles 
                     SET chat_id = %s, updated_at = %s 
                     WHERE code_approve = %s
-                """, (chat_id, datetime.utcnow(), code_input))
+                """, (chat_id, get_israel_time(), code_input))
                 
                 conn.commit()
                 cur.close()
@@ -759,7 +767,7 @@ def approve_user(chat_id: str) -> Dict[str, Any]:
                 UPDATE user_profiles 
                 SET approved = TRUE, updated_at = %s 
                 WHERE chat_id = %s
-            """, (datetime.utcnow(), chat_id))
+            """, (get_israel_time(), chat_id))
             
             success = cur.rowcount > 0
             
@@ -807,7 +815,7 @@ def increment_user_message_count(chat_id: str) -> bool:
                     UPDATE user_profiles 
                     SET total_messages_count = %s, updated_at = %s 
                     WHERE chat_id = %s
-                """, (actual_count, datetime.utcnow(), chat_id))
+                """, (actual_count, get_israel_time(), chat_id))
                 
                 if should_log_debug_prints():
                     old_count = result[0] if result[0] is not None else 0
@@ -819,7 +827,7 @@ def increment_user_message_count(chat_id: str) -> bool:
                     if field != 'total_messages_count':
                         insert_data[field] = None
                 
-                insert_data['updated_at'] = datetime.utcnow()
+                insert_data['updated_at'] = get_israel_time()
                 
                 fields = list(insert_data.keys())
                 placeholders = ', '.join(['%s'] * len(fields))

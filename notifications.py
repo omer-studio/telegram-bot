@@ -818,7 +818,7 @@ def cleanup_inactive_users():
 def auto_cleanup_old_users():
     """ניקוי אוטומטי של משתמשים ישנים"""
     try:
-        now = utils.get_israel_time()
+        now = get_israel_time()
         
         # וידוא timezone awareness
         if now.tzinfo is None:
@@ -953,7 +953,7 @@ async def validate_user_before_reminder(chat_id: str) -> bool:
 async def check_and_send_gentle_reminders():
     """בדיקה ושליחת תזכורות עדינות"""
     try:
-        now = utils.get_israel_time()
+        now = get_israel_time()
         
         # וידוא timezone awareness
         if now.tzinfo is None:

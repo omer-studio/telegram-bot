@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-profile_utils.py - ניהול פרופילים של משתמשים
-כל הפונקציות כאן - פשוטות, ברורות, ונגישות
+profile_utils.py - כלי עזר לניהול פרופילי משתמשים
 """
 
 import json
-import time
+import psycopg2
 from datetime import datetime
-from typing import Any, Dict, Optional, List
+from typing import Dict, Any, Optional, List, Union
+from decimal import Decimal
+
+# ייבואים מרכזיים
+from config import config
 from simple_logger import logger
-from user_friendly_errors import safe_str, safe_operation
+from user_friendly_errors import safe_str, safe_chat_id
+from utils import get_israel_time
+from fields_dict import FIELDS_DICT, get_user_profile_fields
 
 # Cache פשוט לפרופילים
 _profile_cache = {}
@@ -53,8 +58,8 @@ def get_user_profile(chat_id: Any) -> Dict:
             # יצירת פרופיל חדש
             new_profile = {
                 'chat_id': safe_id,
-                'created_at': datetime.now().isoformat(),
-                'last_updated': datetime.now().isoformat(),
+                        'created_at': get_israel_time().isoformat(),
+        'last_updated': get_israel_time().isoformat(),
                 'message_count': 0,
                 'total_cost': 0.0,
                 'preferences': {},
@@ -83,7 +88,7 @@ def update_user_profile(chat_id: Any, updates: Dict) -> bool:
         
         # עדכון הפרופיל
         current_profile.update(updates)
-        current_profile['last_updated'] = datetime.now().isoformat()
+        current_profile['last_updated'] = get_israel_time().isoformat()
         
         # שמירה במסד נתונים
         from simple_data_manager import data_manager
@@ -173,7 +178,7 @@ def log_profile_change(chat_id: Any, field: str, old_val: Any, new_val: Any) -> 
             'field': field,
             'old_value': str(old_val) if old_val is not None else None,
             'new_value': str(new_val),
-            'timestamp': datetime.now().isoformat()
+            'timestamp': get_israel_time().isoformat()
         }
         
         data_manager.save_profile_change(change_data)
@@ -367,7 +372,7 @@ def update_emotional_identity(chat_id: Any, emotional_data: Dict) -> bool:
         # עדכון הפרופיל עם נתונים רגשיים
         updates = {
             'emotional_identity': emotional_data,
-            'last_emotional_update': datetime.now().isoformat()
+            'last_emotional_update': get_israel_time().isoformat()
         }
         
         success = update_user_profile(safe_id, updates)

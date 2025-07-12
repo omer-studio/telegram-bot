@@ -19,6 +19,9 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 import io
 
+# ייבוא מרכזיים
+from utils import get_israel_time
+
 # Import with fallback for missing modules
 try:
     import psycopg2
@@ -98,7 +101,7 @@ class DatabaseStdoutCapture:
                         message.strip(), 
                         level=level, 
                         source=f"terminal_{self.stream_type}",
-                        metadata={"stream_type": self.stream_type, "captured_at": datetime.now().isoformat()}
+                        metadata={"stream_type": self.stream_type, "captured_at": get_israel_time().isoformat()}
                     )
                 finally:
                     self.is_logging = False
@@ -119,7 +122,7 @@ class DatabaseStdoutCapture:
 class DeploymentLogger:
     def __init__(self, capture_all_output=True):
         self.log_queue = queue.Queue()
-        self.session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.session_id = f"session_{get_israel_time().strftime('%Y%m%d_%H%M%S')}"
         self.commit_hash = self._get_commit_hash()
         self.commit_message = self._get_commit_message()
         self.branch_name = self._get_branch_name()
@@ -386,7 +389,7 @@ class DeploymentLogger:
                 stack_trace = ''.join(traceback.format_tb(sys.last_traceback))
         
         log_entry = {
-            'timestamp': datetime.now(),
+            'timestamp': get_israel_time(),
             'session_id': self.session_id,
             'commit_hash': self.commit_hash,
             'commit_message': self.commit_message,

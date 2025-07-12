@@ -20,7 +20,8 @@ def save_log_to_file(content: str, filename: str = None) -> str:
     """שמירת לוג לקובץ - פונקציה אחת פשוטה"""
     try:
         if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # 🔧 תיקון קריטי: שימוש בזמן ישראל במקום זמן מקומי
+            timestamp = get_israel_time().strftime("%Y%m%d_%H%M%S")
             filename = f"log_{timestamp}.txt"
         
         with open(filename, 'w', encoding='utf-8') as f:
@@ -103,7 +104,8 @@ def safe_json_loads(json_str: str) -> Dict:
 
 def get_timestamp() -> str:
     """קבלת timestamp נוכחי - פונקציה אחת פשוטה"""
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # 🔧 תיקון קריטי: שימוש בזמן ישראל במקום זמן מקומי
+    return get_israel_time().strftime("%Y-%m-%d %H:%M:%S")
 
 def get_israel_time():
     """החזרת הזמן בישראל (Asia/Jerusalem) – תאימות לאחור"""

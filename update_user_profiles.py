@@ -1,33 +1,23 @@
 #!/usr/bin/env python3
 """
-update_user_profiles.py
-======================
-עדכון פרופילי משתמשים במסד הנתונים על בסיס הניתוח
-
-🚀 איך להריץ:
-1. הרץ קודם את comprehensive_user_analyzer.py
-2. בדוק את התוצאות בקובץ JSON
-3. הרץ את הסקריפט הזה עם אישור לכל עדכון
+update_user_profiles.py - עדכון פרופילי משתמשים
 """
 
-import json
 import psycopg2
 from datetime import datetime
+from typing import Dict, Any, Optional, List, Union
+import json
+import time
+from contextlib import contextmanager
+
+# ייבואים מרכזיים
 from config import config
-from utils import safe_str, get_logger
+from simple_logger import logger
+from user_friendly_errors import safe_str, safe_chat_id, handle_database_error
+from utils import get_israel_time
+from fields_dict import FIELDS_DICT, get_user_profile_fields
 
-logger = get_logger(__name__)
-
-# יבוא של FIELDS_DICT
-try:
-    from fields_dict import FIELDS_DICT, get_user_profile_fields
-    # 🗑️ עברנו למסד נתונים - אין צורך ב-Google Sheets!
-    # from sheets_handler import update_user_profile, get_user_summary
-    from profile_utils import update_user_profile_fast, get_user_summary_fast, get_user_profile
-except ImportError:
-    print("⚠️ לא ניתן לייבא חלק מהמודולים - חלק מהפונקציות לא יעבדו")
-
-# הגדרת חיבור למסד הנתונים
+# הגדרות מרכזיות
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
 
 class UserProfileUpdater:
@@ -81,13 +71,13 @@ class UserProfileUpdater:
                     UPDATE user_profiles 
                     SET {field_name} = %s, updated_at = %s 
                     WHERE chat_id = %s
-                """, (new_value, datetime.utcnow(), safe_str(chat_id)))
+                """, (new_value, get_israel_time(), safe_str(chat_id)))
             else:
                 # יצירת פרופיל חדש
                 cur.execute(f"""
                     INSERT INTO user_profiles (chat_id, {field_name}, updated_at) 
                     VALUES (%s, %s, %s)
-                """, (safe_str(chat_id), new_value, datetime.utcnow()))
+                """, (safe_str(chat_id), new_value, get_israel_time()))
             
             conn.commit()
             cur.close()
@@ -99,7 +89,7 @@ class UserProfileUpdater:
                 'field': field_name,
                 'old_value': old_value,
                 'new_value': new_value,
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': get_israel_time().isoformat(),
                 'action': 'update' if profile_exists else 'create'
             })
             
@@ -340,7 +330,7 @@ class UserProfileUpdater:
         
         log_data = {
             'update_session': {
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': get_israel_time().isoformat(),
                 'total_updates': len(self.updates_log),
                 'updated_users': len(set(log['chat_id'] for log in self.updates_log))
             },

@@ -4,6 +4,14 @@ service_account.json
 client_secret.json
 .env
 
+# 🚨 תיקיית סיקריטים - חסימה מוחלטת
+etc/secrets/
+/etc/secrets/
+etc/secrets/*
+/etc/secrets/*
+*/secrets/
+**/secrets/**
+
 # 🧠 נתונים רגישים מהבוט
 chat_history.json
 bot_errors.jsonl

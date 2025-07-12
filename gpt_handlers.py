@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-gpt_handlers.py - מקום אחד לכל הטיפול ב-GPT
-🎯 איחוד מערכתי: כל הפונקציות שמטפלות ב-GPT במקום אחד
-🔧 פשוט ונקי: כל GPT עם הלוגיקה שלו במקום נפרד
-📊 קל לתחזוקה: אם יש בעיה, אתה יודע איפה לחפש
+gpt_handlers.py - מרכז הבקרה לכל GPT handlers
 """
 
 import psycopg2
@@ -34,6 +31,7 @@ from prompts import (
     SYSTEM_PROMPT, BOT_REPLY_SUMMARY_PROMPT, 
     build_profile_extraction_enhanced_prompt, build_profile_merge_prompt
 )
+from utils import get_israel_time
 
 # הגדרות מרכזיות
 USD_TO_ILS = 3.7  # שער הדולר-שקל
@@ -822,7 +820,7 @@ class GPTEHandler:
     async def run_gpt_e(self, chat_id: str) -> Dict[str, Any]:
         """מריץ GPT-E עבור משתמש"""
         safe_chat_id = safe_str(chat_id)
-        start_time = datetime.now()
+        start_time = get_israel_time()
         
         try:
             # שלב 1: אספת היסטוריית שיחות
@@ -899,7 +897,7 @@ class GPTEHandler:
                 except Exception as update_e:
                     logger.error(f"[gpt_e] Failed to update profile: {update_e}")
             
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (get_israel_time() - start_time).total_seconds()
             
             return {
                 "success": True,
@@ -955,7 +953,6 @@ class BillingProtection:
     
     def _get_current_keys(self) -> tuple:
         """מחזיר מפתחות תאריך נוכחיים"""
-        from utils import get_israel_time
         now = get_israel_time()
         daily_key = now.strftime("%Y-%m-%d")
         monthly_key = now.strftime("%Y-%m")

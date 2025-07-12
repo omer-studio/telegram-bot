@@ -265,7 +265,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
             "user_msg": user_msg,
             "bot_reply": bot_reply,
             "response_time": response_time,
-            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": get_israel_time().isoformat(),
             "processing_stage": "background"
         }
         

@@ -1,13 +1,13 @@
+#!/usr/bin/env python3
 """
-gpt_e_handler.py
-----------------
-מנוע gpt_e: עדכון פרופיל משתמש מקיף על סמך היסטוריית שיחות
+gpt_e_handler.py - GPT-E מטפל בתזכורות ומצבים מתקדמים
 """
 
 import json
 import time
-from datetime import datetime
-from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List, Union
+from decimal import Decimal
 
 import lazy_litellm as litellm
 
@@ -179,9 +179,10 @@ async def run_gpt_e(chat_id: str) -> Dict[str, Any]:
         else:
             logger.info(f"[gpt_e] No changes to apply for chat_id={safe_chat_id}", source="gpt_e_handler")
         
-        # חישוב זמן ביצוע
-        execution_time = (datetime.now() - start_time).total_seconds()
+        # 🕐 תיקון קריטי: הכל בזמן ישראל!
+        execution_time = (get_israel_time() - start_time).total_seconds()
         
+        # 📊 החזרת תוצאה מלאה
         result = {
             "success": True,
             "changes": changes,
@@ -234,7 +235,7 @@ def log_gpt_e_run(chat_id: str, result: Dict[str, Any]) -> None:
             'model': result.get('model', ''),
             'usage': result.get('usage', {}),
             'changes': result.get('changes', {}),
-            'timestamp': result.get('timestamp', datetime.now().isoformat())
+            'timestamp': result.get('timestamp', get_israel_time().isoformat())
         }
         
         # כאן אפשר להוסיף שמירה למסד הנתונים
