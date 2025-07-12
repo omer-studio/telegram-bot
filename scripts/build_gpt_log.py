@@ -43,19 +43,31 @@ def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
         connection = psycopg2.connect(database_url)
         cursor = connection.cursor(cursor_factory=RealDictCursor)
         
-        # שאילתה לקריאת הנתונים האחרונים מטבלה gpt_calls_log
+        # 🔥 שאילתה חדשה לקריאת הנתונים מטבלת interactions_log המתקדמת
         query = """
         SELECT 
-            timestamp as created_at,
-            call_type as gpt_type,
-            request_data,
-            response_data,
-            tokens_input,
-            tokens_output,
-            cost_usd,
+            timestamp,
+            user_msg,
+            bot_msg,
             chat_id,
-            processing_time_seconds
-        FROM gpt_calls_log
+            
+            gpt_a_model, gpt_a_cost_agorot, gpt_a_processing_time, 
+            gpt_a_tokens_input, gpt_a_tokens_output, gpt_a_tokens_cached,
+            
+            gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_cost_agorot, gpt_b_processing_time,
+            gpt_b_tokens_input, gpt_b_tokens_output, gpt_b_tokens_cached,
+            
+            gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_cost_agorot, gpt_c_processing_time,
+            gpt_c_tokens_input, gpt_c_tokens_output, gpt_c_tokens_cached,
+            
+            gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_cost_agorot, gpt_d_processing_time,
+            gpt_d_tokens_input, gpt_d_tokens_output, gpt_d_tokens_cached,
+            
+            gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_cost_agorot, gpt_e_processing_time,
+            gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_tokens_cached,
+            
+            total_cost_agorot
+        FROM interactions_log
         ORDER BY timestamp DESC
         LIMIT %s
         """
@@ -63,48 +75,65 @@ def get_gpt_calls_from_sql(limit: int = MAX_LINES) -> List[Dict[str, Any]]:
         cursor.execute(query, (limit,))
         rows = cursor.fetchall()
         
-        # המרת התוצאות למבנה הנדרש
+        # 🔥 המרת התוצאות החדשות למבנה הנדרש - פירוק לGPT calls נפרדים
         results = []
+        
         for row in rows:
-            # פירוק נתוני request/response JSON
-            request_data = row.get('request_data', {})
-            response_data = row.get('response_data', {})
+            # עבור כל GPT שהיה פעיל, יוצרים רשומה נפרדת
+            gpts_data = [
+                ('A', 'gpt_a', True),  # GPT-A תמיד פעיל
+                ('B', 'gpt_b', row.get('gpt_b_activated', False)),
+                ('C', 'gpt_c', row.get('gpt_c_activated', False)),
+                ('D', 'gpt_d', row.get('gpt_d_activated', False)),
+                ('E', 'gpt_e', row.get('gpt_e_activated', False))
+            ]
             
-            # חילוץ מודל מ-request_data
-            model = request_data.get('model', 'unknown-model') if isinstance(request_data, dict) else 'unknown-model'
-            
-            # חילוץ הודעות מ-request_data
-            messages = request_data.get('messages', []) if isinstance(request_data, dict) else []
-            
-            # חילוץ תוכן התשובה
-            response_content = ""
-            if isinstance(response_data, dict):
-                choices = response_data.get('choices', [])
-                if choices and len(choices) > 0:
-                    message = choices[0].get('message', {})
-                    response_content = message.get('content', '')
-            
-            # בניית המבנה הנדרש
-            entry = {
-                "ts": row['created_at'].isoformat() + "Z",
-                "gpt_type": row['gpt_type'],
-                "cost_usd": float(row['cost_usd']) if row['cost_usd'] else 0.0,
-                "request": {
-                    "model": model,
-                    "messages": messages
-                },
-                "response": {
-                    "id": response_data.get('id', 'unknown') if isinstance(response_data, dict) else 'unknown',
-                    "choices": [{"message": {"content": response_content}}],
-                    "usage": {
-                        "prompt_tokens": int(row['tokens_input']) if row['tokens_input'] else 0,
-                        "completion_tokens": int(row['tokens_output']) if row['tokens_output'] else 0,
-                        "total_tokens": int(row['tokens_input'] or 0) + int(row['tokens_output'] or 0)
-                    }
-                },
-                "formatted_message": response_content
-            }
-            results.append(entry)
+            for gpt_letter, gpt_prefix, is_activated in gpts_data:
+                if not is_activated:
+                    continue
+                
+                # חילוץ נתונים עבור GPT זה
+                model = row.get(f'{gpt_prefix}_model') or 'unknown-model'
+                tokens_input = row.get(f'{gpt_prefix}_tokens_input') or 0
+                tokens_output = row.get(f'{gpt_prefix}_tokens_output') or 0
+                tokens_cached = row.get(f'{gpt_prefix}_tokens_cached') or 0
+                cost_agorot = row.get(f'{gpt_prefix}_cost_agorot') or 0
+                
+                # המרה לדולרים (1 אגורה = 0.01 שקל, 1 שקל = ~0.27 דולר)
+                cost_usd = float(cost_agorot) / 100 / USD_TO_ILS if cost_agorot else 0.0
+                
+                # תוכן התשובה
+                if gpt_letter == 'A':
+                    response_content = row.get('bot_msg', '')
+                else:
+                    response_content = row.get(f'{gpt_prefix}_reply', '')
+                
+                # הודעות - נבנה פשוט מהנתונים הבסיסיים
+                messages = [
+                    {"role": "user", "content": row.get('user_msg', '')}
+                ]
+                
+                # בניית המבנה הנדרש
+                entry = {
+                    "ts": row['timestamp'].isoformat() + "Z",
+                    "gpt_type": gpt_letter,
+                    "cost_usd": cost_usd,
+                    "request": {
+                        "model": model,
+                        "messages": messages
+                    },
+                    "response": {
+                        "id": f"interactions_{row.get('timestamp', '')}_{gpt_letter}",
+                        "choices": [{"message": {"content": response_content}}],
+                        "usage": {
+                            "prompt_tokens": int(tokens_input),
+                            "completion_tokens": int(tokens_output),
+                            "total_tokens": int(tokens_input) + int(tokens_output)
+                        }
+                    },
+                    "formatted_message": response_content
+                }
+                results.append(entry)
         
         cursor.close()
         connection.close()
@@ -299,8 +328,8 @@ def build_html() -> None:
     # Ensure output directory exists
     os.makedirs(os.path.dirname(HTML_OUT_PATH) or ".", exist_ok=True)
 
-    # קריאת נתונים מ-SQL במקום מקבצים 🚀
-    print("📊 קריאת נתוני GPT מ-SQL...")
+    # 🔥 קריאת נתונים מ-interactions_log החדשה במקום מ-gpt_calls_log הישנה
+    print("📊 קריאת נתוני GPT מ-interactions_log...")
     sql_records = get_gpt_calls_from_sql(MAX_LINES)
     
     if not sql_records:

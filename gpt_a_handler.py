@@ -120,10 +120,7 @@ def create_missing_fields_system_message(chat_id: str) -> tuple:
     try:
         safe_chat_id = safe_str(chat_id)
         from profile_utils import get_user_profile
-        try:
-            from fields_dict import FIELDS_DICT
-        except ImportError:
-            FIELDS_DICT = {"dummy": "dummy"}
+        from fields_dict import FIELDS_DICT
         if not should_ask_profile_question(safe_chat_id):
             logger.info(f"📊 [PROFILE_QUESTION] לא הגיע הזמן לשאול שאלת פרופיל | chat_id={safe_str(chat_id)}", source="gpt_a_handler")
             return "", ""

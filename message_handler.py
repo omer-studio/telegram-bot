@@ -34,10 +34,7 @@ from gpt_b_handler import get_summary
 from gpt_c_handler import extract_user_info, should_run_gpt_c
 from gpt_d_handler import smart_update_profile_with_gpt_d_async
 from gpt_utils import normalize_usage_dict
-try:
-    from fields_dict import FIELDS_DICT
-except ImportError:
-    FIELDS_DICT = {"dummy": "dummy"}
+from fields_dict import FIELDS_DICT
 from gpt_e_handler import execute_gpt_e_if_needed
 from concurrent_monitor import start_monitoring_user, update_user_processing_stage, end_monitoring_user
 from notifications import mark_user_active

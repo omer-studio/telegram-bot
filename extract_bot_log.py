@@ -8,6 +8,7 @@ import subprocess
 import re
 import json
 from datetime import datetime
+from simple_config import TimeoutConfig
 
 def extract_bot_log():
     """חילוץ תוכן מלוג הבוט"""
@@ -55,14 +56,14 @@ def extract_bot_log():
         print(f"\n📋 פקודה {i}: {cmd}")
         
         try:
-            full_cmd = f'ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+            full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
             
             result = subprocess.run(
                 full_cmd,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=TimeoutConfig.SUBPROCESS_TIMEOUT,
                 encoding='utf-8',
                 errors='ignore'
             )
@@ -174,14 +175,14 @@ def check_other_logs():
         print(f"\n📋 בדיקה {i}: {cmd}")
         
         try:
-            full_cmd = f'ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+            full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
             
             result = subprocess.run(
                 full_cmd,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=20,
+                timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT,
                 encoding='utf-8',
                 errors='ignore'
             )

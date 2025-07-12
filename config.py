@@ -64,10 +64,7 @@ if not IS_CI_ENVIRONMENT:
         # import gspread
         # from oauth2client.service_account import ServiceAccountCredentials
         from lazy_litellm import completion
-        try:
-            from fields_dict import FIELDS_DICT
-        except ImportError:
-            FIELDS_DICT = {"dummy": "dummy"}
+        from fields_dict import FIELDS_DICT
         # ייבוא ישיר של הפרומט הראשי - רק בסביבת ייצור
         try:
             from prompts import SYSTEM_PROMPT
@@ -84,10 +81,7 @@ if not IS_CI_ENVIRONMENT:
         # gspread = DummyModule()
         # ServiceAccountCredentials = DummyModule()
         completion = DummyModule()
-        try:
-            from fields_dict import FIELDS_DICT
-        except ImportError:
-            FIELDS_DICT = {"dummy": "dummy"}
+        from fields_dict import FIELDS_DICT
         try:
             from prompts import SYSTEM_PROMPT
         except ImportError:
@@ -109,10 +103,7 @@ else:
     _lazy.embedding = lambda *args, **kwargs: None  # type: ignore[attr-defined]
     _sys.modules.setdefault("lazy_litellm", _lazy)
     # הגדרות dummy לסביבת CI
-    try:
-        from fields_dict import FIELDS_DICT
-    except ImportError:
-        FIELDS_DICT = {"dummy": "dummy"}
+    from fields_dict import FIELDS_DICT
     try:
         from prompts import SYSTEM_PROMPT
     except ImportError:

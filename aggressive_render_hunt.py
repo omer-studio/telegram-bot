@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-🔥 Aggressive Render Hunt - חיפוש אגרסיבי ללוגי רנדר
-מתמקד בחילוץ הודעות בצורה ישירה ומהירה
+🚨 Aggressive Render Hunt - ציד אגרסיבי אחרי הודעות ברנדר
 """
 
 import subprocess
-import requests
 import psycopg2
+import requests
 import json
 import re
+import time
 from datetime import datetime, timedelta
 from config import config
+from simple_config import TimeoutConfig
 
 def direct_ssh_hunt():
     """חיפוש ישיר ומהיר ב-SSH"""
@@ -57,14 +58,14 @@ def direct_ssh_hunt():
         print(f"\n🔍 פקודה {i}: {cmd[:50]}...")
         
         try:
-            full_cmd = f'ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
-            
-            result = subprocess.run(
-                full_cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=20,
+                    full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+        
+        result = subprocess.run(
+            full_cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT,
                 encoding='utf-8',
                 errors='ignore'
             )
@@ -150,7 +151,7 @@ def hunt_render_api_logs():
                 'limit': 1000
             }
             
-            response = requests.get(logs_url, headers=headers, params=params, timeout=30)
+            response = requests.get(logs_url, headers=headers, params=params, timeout=TimeoutConfig.RENDER_LOGS_TIMEOUT)
             
             if response.status_code == 200:
                 logs_data = response.json()

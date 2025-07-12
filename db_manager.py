@@ -688,10 +688,10 @@ def save_temp_critical_user_data(filename, temp_data):
 # === פונקציות עזר מורחבות ===
 def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=None):
     """
-    🔥 **פונקציה משופרת**: שמירה רגילה + רישום מפורט ב-interactions_log
+    🔥 **הוסר רישום כפול**: רק שמירה בטבלה הבסיסית chat_messages
     
-    ** הפונקציה הזו deprecated - השתמש ב-log_interaction ישירות **
-    נשארת לתאימות לאחור בלבד
+    ⚠️ DEPRECATED: השתמש ב-interactions_logger.log_interaction() ישירות במקום
+    רישום מפורט מתבצע רק ב-message_handler.py במקום מרכזי אחד
     """
     # 🎯 נרמול chat_id לטיפוס אחיד
     chat_id = validate_chat_id(chat_id)
@@ -707,45 +707,12 @@ def save_gpt_chat_message(chat_id, user_msg, bot_msg, gpt_data=None, timestamp=N
         timestamp=timestamp
     )
     
-    # 🔥 **חדש**: רישום מפורט ב-interactions_log אם יש נתוני GPT
-    if gpt_data and isinstance(gpt_data, dict):
-        try:
-            from interactions_logger import log_interaction
-            
-            # הכנת נתונים לרישום מפורט
-            gpt_results = {}
-            timing_data = {}
-            
-            # חילוץ נתוני GPT מהפורמט הישן
-            if 'main_usage' in gpt_data:
-                gpt_results['a'] = {'usage': gpt_data['main_usage'], 'bot_reply': bot_msg}
-            if 'summary_usage' in gpt_data:
-                gpt_results['b'] = {'usage': gpt_data['summary_usage']}
-            if 'extract_usage' in gpt_data:
-                gpt_results['c'] = {'usage': gpt_data['extract_usage']}
-            
-            # רישום מפורט
-            log_success = log_interaction(
-                chat_id=chat_id,
-                telegram_message_id=gpt_data.get('message_id'),
-                user_msg=user_msg,
-                bot_msg=bot_msg,
-                messages_for_gpt=[],  # לא זמין בפורמט הישן
-                gpt_results=gpt_results,
-                timing_data=timing_data,
-                gpt_e_counter=None
-            )
-            
-            if log_success and should_log_debug_prints():
-                print(f"🔥 [DEPRECATED] save_gpt_chat_message: רישום כפול chat_messages + interactions_log | chat_id={chat_id}")
-                
-        except Exception as interaction_err:
-            if should_log_debug_prints():
-                print(f"⚠️ [DEPRECATED] שגיאה ברישום מפורט: {interaction_err}")
+    # 🔥 **הוסר רישום כפול**: interactions_log מתבצע רק ב-message_handler.py
+    # רישום מפורט יקרה במקום מרכזי אחד במקום כפילות
     
     # התראת deprecation
     if should_log_debug_prints():
-        print(f"⚠️ [DEPRECATED] save_gpt_chat_message is deprecated - use log_interaction directly")
+        print(f"⚠️ [DEPRECATED] save_gpt_chat_message is deprecated - use interactions_logger.log_interaction directly")
     
     # החזרת מידע לתאימות לאחור
     return message_id

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🔍 Smart Render Search - חיפוש חכם בלוגי רנדר
+🎯 Smart Render Search - חיפוש חכם ברנדר
 """
 
 import subprocess
@@ -45,14 +45,14 @@ def search_ssh_logs():
         print(f"\n📋 פקודה {i}: {cmd}")
         
         try:
-            full_cmd = f'ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
-            
+            full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+        
             result = subprocess.run(
                 full_cmd,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=15,
+                timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT,
                 encoding='utf-8',
                 errors='ignore'  # תיקון בעיית encoding
             )

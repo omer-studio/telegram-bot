@@ -148,30 +148,17 @@ class MinimalDataLoader:
                     else:
                         timestamp = datetime.utcnow()
                     
-                    # 🚫 DISABLED: gpt_usage_log הושבתה - משתמש ב-gpt_calls_log במקום
-                    # Check if call already exists in gpt_calls_log instead
-                    cur.execute(
-                        "SELECT id FROM gpt_calls_log WHERE call_type = %s AND timestamp = %s AND tokens_input + tokens_output = %s",
-                        ('extracted_data', timestamp, total_tokens)
-                    )
-                    if cur.fetchone():
-                        continue
+                    # 🚫 DISABLED: gpt_calls_log הושבתה - כל הנתונים עברו ל-interactions_log
+                    # המערכת החדשה interactions_log מכילה נתונים מתקדמים יותר:
+                    # - cached tokens עבור כל GPT
+                    # - ספירת הודעות היסטוריה  
+                    # - 55 שדות מפורטים במקום 11
                     
-                    # Insert GPT call to gpt_calls_log instead of gpt_usage_log
-                    cur.execute(
-                        "INSERT INTO gpt_calls_log (chat_id, call_type, request_data, response_data, tokens_input, tokens_output, cost_usd, processing_time_seconds, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                        (
-                            data.get('chat_id'),
-                            'extracted_data',
-                            json.dumps({'model': model, 'type': data.get('type', 'unknown')}),
-                            json.dumps(usage_data),
-                            usage_data.get('prompt_tokens', 0),
-                            usage_data.get('completion_tokens', 0),
-                            data.get('cost_total', 0),
-                            0,  # processing_time not available
-                            timestamp
-                        )
-                    )
+                    if logger:
+                        logger.info(f"🔄 [DISABLED] GPT call skipped - gpt_calls_log disabled, use interactions_log")
+                        logger.info(f"   Model: {model}, Tokens: {total_tokens}, Chat: {data.get('chat_id', 'unknown')}")
+                    
+                    # אין יותר כתיבה ל-gpt_calls_log - הכל עבר ל-interactions_log
                     
                     self.loaded_count['gpt_calls'] += 1
                     

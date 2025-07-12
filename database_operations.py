@@ -341,65 +341,24 @@ def save_gpt_call_log(chat_id: str, gpt_type: str, request_data: Dict, response_
                       tokens_input: int, tokens_output: int, cost_usd: float, 
                       processing_time_seconds: float, timestamp: Optional[datetime] = None) -> Optional[int]:
     """
-    שמירת לוג GPT מפורט - הפונקציה המרכזית
+    🚫 DEPRECATED: פונקציה הושבתה - כל הנתונים נשמרים ב-interactions_log
+    
+    ⚠️ המערכת עברה ל-interactions_log שמכילה נתונים מתקדמים יותר:
+    - cached tokens עבור כל GPT
+    - ספירת הודעות היסטוריה
+    - 55 שדות מפורטים במקום 11
+    
+    השתמש ב-interactions_logger.log_interaction() במקום.
     
     Returns:
-        int: gpt_log_id אם הצליח, None אם נכשל
+        int: None (פונקציה מושבתת)
     """
-    try:
-        chat_id = validate_chat_id(chat_id)
-        
-        if timestamp is None:
-            timestamp = datetime.now()
-        
-        with safe_db_connection() as conn:
-            cur = conn.cursor()
-            
-            # יצירת טבלה אם לא קיימת
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS gpt_calls_log (
-                    id SERIAL PRIMARY KEY,
-                    chat_id TEXT,
-                    call_type TEXT,
-                    request_data JSONB,
-                    response_data JSONB,
-                    tokens_input INTEGER,
-                    tokens_output INTEGER,
-                    cost_usd DECIMAL(10,6),
-                    processing_time_seconds DECIMAL(8,3),
-                    timestamp TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # המרת נתונים ל-JSON
-            request_json = json.dumps(request_data) if isinstance(request_data, dict) else str(request_data)
-            response_json = json.dumps(response_data) if isinstance(response_data, dict) else str(response_data)
-            
-            # הכנסת הנתונים
-            cur.execute("""
-                INSERT INTO gpt_calls_log (
-                    chat_id, call_type, request_data, response_data, tokens_input, tokens_output, 
-                    cost_usd, processing_time_seconds, timestamp
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s
-                ) RETURNING id
-            """, (chat_id, gpt_type, request_json, response_json, tokens_input, tokens_output,
-                  cost_usd, processing_time_seconds, timestamp))
-            
-            gpt_log_id = cur.fetchone()[0]
-            
-            conn.commit()
-            cur.close()
-            
-            if should_log_debug_prints():
-                print(f"🤖 [DB] לוג GPT-{gpt_type} #{gpt_log_id} נשמר עבור chat_id={chat_id}")
-            
-            return gpt_log_id
-            
-    except Exception as e:
-        handle_database_error("save", chat_id, f"gpt_log_{gpt_type}")
-        return None
+    if should_log_debug_prints():
+        print(f"🔄 [DEPRECATED] save_gpt_call_log disabled - data now saved in interactions_log")
+        print(f"   GPT-{gpt_type} call for chat_id={chat_id} skipped (use interactions_logger instead)")
+    
+    # החזרת ID דמה לתאימות לאחור
+    return None
 
 # =================================
 # 📊 פונקציות שמירת מטריקות
@@ -545,171 +504,65 @@ def _metrics_worker():
 # 🔄 פונקציות אינטראקציות
 # =================================
 
+# 🔥 **הועבר למערכת מרכזית**: interactions_logger.py
+# השתמש ב-interactions_logger.log_interaction() במקום
 def save_complete_interaction(chat_id: Union[str, int], telegram_message_id: Optional[str],
                               user_msg: str, bot_msg: str, messages_for_gpt: list,
                               gpt_results: Dict[str, Any], timing_data: Dict[str, float],
                               admin_notification: Optional[str] = None, 
                               gpt_e_counter: Optional[str] = None) -> bool:
     """
-    שמירת אינטראקציה מלאה - הפונקציה המרכזית
+    🔥 **הועבר למערכת מרכזית**: interactions_logger.py
+    פונקציה זו מועברת לפונקציה המרכזית עם כל השדות החדשים
     
-    Args:
-        chat_id: מזהה משתמש
-        telegram_message_id: מזהה הודעה בטלגרם
-        user_msg: הודעת המשתמש
-        bot_msg: תשובת הבוט
-        messages_for_gpt: הודעות שנשלחו ל-GPT
-        gpt_results: תוצאות GPT
-        timing_data: נתוני זמנים
-        admin_notification: התראה לאדמין
-        gpt_e_counter: מונה GPT-E
-        
-    Returns:
-        bool: True אם הצליח, False אם נכשל
+    ⚠️ DEPRECATED: השתמש ב-interactions_logger.log_interaction() במקום
     """
     try:
-        chat_id = validate_chat_id(chat_id)
+        from interactions_logger import log_interaction
         
-        with safe_db_connection() as conn:
-            cur = conn.cursor()
-            
-            # יצירת טבלה אם לא קיימת
-            create_interactions_log_table(cur)
-            
-            # הכנת נתונים
-            now = datetime.utcnow()
-            commit_hash = get_current_commit_hash()
-            full_system_prompts = format_system_prompts(messages_for_gpt)
-            
-            # חילוץ נתוני GPT
-            gpt_data = {}
-            for gpt_type in ['a', 'b', 'c', 'd', 'e']:
-                gpt_data[gpt_type] = extract_gpt_data(gpt_type, gpt_results.get(gpt_type))
-            
-            # חישוב עלות כוללת
-            total_cost_agorot = calculate_total_cost(gpt_results)
-            
-            # זמני עיבוד
-            user_to_bot_time = timing_data.get('user_to_bot', 0)
-            total_time = timing_data.get('total', user_to_bot_time)
-            background_time = max(0, total_time - user_to_bot_time)
-            
-            # הכנסת הנתונים
-            insert_sql = """
-            INSERT INTO interactions_log (
-                telegram_message_id, chat_id, full_system_prompts, user_msg, bot_msg,
-                gpt_a_model, gpt_a_cost_agorot, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output,
-                gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_cost_agorot, gpt_b_processing_time, 
-                gpt_b_tokens_input, gpt_b_tokens_output,
-                gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_cost_agorot, gpt_c_processing_time,
-                gpt_c_tokens_input, gpt_c_tokens_output,
-                gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_cost_agorot, gpt_d_processing_time,
-                gpt_d_tokens_input, gpt_d_tokens_output,
-                gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_cost_agorot, gpt_e_processing_time,
-                gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_counter,
-                timestamp, date_only, time_only, user_to_bot_response_time, background_processing_time,
-                total_cost_agorot, source_commit_hash, admin_notification_text
-            ) VALUES (
-                %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s, %s
-            ) RETURNING serial_number
-            """
-            
-            values = (
-                telegram_message_id, int(chat_id), full_system_prompts, user_msg, bot_msg,
-                gpt_data['a']['model'], gpt_data['a']['cost_agorot'], gpt_data['a']['processing_time'],
-                gpt_data['a']['tokens_input'], gpt_data['a']['tokens_output'],
-                gpt_data['b']['activated'], gpt_data['b']['reply'], gpt_data['b']['model'],
-                gpt_data['b']['cost_agorot'], gpt_data['b']['processing_time'],
-                gpt_data['b']['tokens_input'], gpt_data['b']['tokens_output'],
-                gpt_data['c']['activated'], gpt_data['c']['reply'], gpt_data['c']['model'],
-                gpt_data['c']['cost_agorot'], gpt_data['c']['processing_time'],
-                gpt_data['c']['tokens_input'], gpt_data['c']['tokens_output'],
-                gpt_data['d']['activated'], gpt_data['d']['reply'], gpt_data['d']['model'],
-                gpt_data['d']['cost_agorot'], gpt_data['d']['processing_time'],
-                gpt_data['d']['tokens_input'], gpt_data['d']['tokens_output'],
-                gpt_data['e']['activated'], gpt_data['e']['reply'], gpt_data['e']['model'],
-                gpt_data['e']['cost_agorot'], gpt_data['e']['processing_time'],
-                gpt_data['e']['tokens_input'], gpt_data['e']['tokens_output'], gpt_e_counter,
-                now, now.date(), now.time(), user_to_bot_time, background_time,
-                total_cost_agorot, commit_hash, admin_notification
-            )
-            
-            cur.execute(insert_sql, values)
-            serial_number = cur.fetchone()[0]
-            
-            conn.commit()
-            cur.close()
-            
-            print(f"✅ [DB] אינטראקציה #{serial_number} נשמרה עבור chat_id={chat_id}")
-            
-            return True
-            
+        return log_interaction(
+            chat_id=chat_id,
+            telegram_message_id=telegram_message_id,
+            user_msg=user_msg,
+            bot_msg=bot_msg,
+            messages_for_gpt=messages_for_gpt,
+            gpt_results=gpt_results,
+            timing_data=timing_data,
+            admin_notification=admin_notification,
+            gpt_e_counter=gpt_e_counter
+        )
+        
     except Exception as e:
         handle_database_error("save", chat_id, "interaction")
         return False
 
+# 🔥 **הועבר למערכת מרכזית**: interactions_logger.py
+# השתמש ב-interactions_logger.ensure_table_schema() במקום
 def create_interactions_log_table(cursor):
-    """יצירת טבלת interactions_log"""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS interactions_log (
-            serial_number SERIAL PRIMARY KEY,
-            telegram_message_id TEXT,
-            chat_id BIGINT,
-            full_system_prompts TEXT,
-            user_msg TEXT,
-            bot_msg TEXT,
-            gpt_a_model TEXT,
-            gpt_a_cost_agorot DECIMAL(10,2),
-            gpt_a_processing_time DECIMAL(10,3),
-            gpt_a_tokens_input INTEGER,
-            gpt_a_tokens_output INTEGER,
-            gpt_b_activated BOOLEAN,
-            gpt_b_reply TEXT,
-            gpt_b_model TEXT,
-            gpt_b_cost_agorot DECIMAL(10,2),
-            gpt_b_processing_time DECIMAL(10,3),
-            gpt_b_tokens_input INTEGER,
-            gpt_b_tokens_output INTEGER,
-            gpt_c_activated BOOLEAN,
-            gpt_c_reply TEXT,
-            gpt_c_model TEXT,
-            gpt_c_cost_agorot DECIMAL(10,2),
-            gpt_c_processing_time DECIMAL(10,3),
-            gpt_c_tokens_input INTEGER,
-            gpt_c_tokens_output INTEGER,
-            gpt_d_activated BOOLEAN,
-            gpt_d_reply TEXT,
-            gpt_d_model TEXT,
-            gpt_d_cost_agorot DECIMAL(10,2),
-            gpt_d_processing_time DECIMAL(10,3),
-            gpt_d_tokens_input INTEGER,
-            gpt_d_tokens_output INTEGER,
-            gpt_e_activated BOOLEAN,
-            gpt_e_reply TEXT,
-            gpt_e_model TEXT,
-            gpt_e_cost_agorot DECIMAL(10,2),
-            gpt_e_processing_time DECIMAL(10,3),
-            gpt_e_tokens_input INTEGER,
-            gpt_e_tokens_output INTEGER,
-            gpt_e_counter TEXT,
-            timestamp TIMESTAMP,
-            date_only DATE,
-            time_only TIME,
-            user_to_bot_response_time DECIMAL(10,3),
-            background_processing_time DECIMAL(10,3),
-            total_cost_agorot DECIMAL(10,2),
-            source_commit_hash TEXT,
-            admin_notification_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    """
+    🔥 **הועבר למערכת מרכזית**: interactions_logger.py
+    ⚠️ DEPRECATED: השתמש ב-interactions_logger.ensure_table_schema() במקום
+    """
+    try:
+        from interactions_logger import get_interactions_logger
+        logger = get_interactions_logger()
+        logger.ensure_table_schema()
+        print("✅ [DB] יצירת טבלת interactions_log הושלמה (מועבר למערכת מרכזית)")
+    except Exception as e:
+        print(f"❌ [DB] שגיאה ביצירת טבלת interactions_log: {e}")
+        # fallback - יצירה בסיסית
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS interactions_log (
+                serial_number SERIAL PRIMARY KEY,
+                telegram_message_id TEXT,
+                chat_id BIGINT,
+                full_system_prompts TEXT,
+                user_msg TEXT,
+                bot_msg TEXT,
+                timestamp TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        print("✅ [DB] יצירת טבלת interactions_log בסיסית הושלמה")
 
 # =================================
 # 🚨 פונקציות שמירת שגיאות
@@ -1163,19 +1016,31 @@ def get_current_commit_hash() -> str:
     except Exception:
         return "unknown"
 
+# 🔥 **הועבר למערכת מרכזית**: interactions_logger.py
+# השתמש ב-interactions_logger.*() במקום
+
 def format_system_prompts(messages_for_gpt: list) -> str:
-    """פורמט כל הסיסטם פרומטס"""
-    system_prompts = []
-    
-    for msg in messages_for_gpt:
-        if msg.get('role') == 'system':
-            system_prompts.append(msg.get('content', ''))
-    
-    return '\n\n--- SYSTEM PROMPT SEPARATOR ---\n\n'.join(system_prompts)
+    """⚠️ DEPRECATED: השתמש ב-interactions_logger.format_system_prompts() במקום"""
+    try:
+        from interactions_logger import get_interactions_logger
+        logger = get_interactions_logger()
+        return logger.format_system_prompts(messages_for_gpt)
+    except:
+        # fallback
+        system_prompts = []
+        for msg in messages_for_gpt:
+            if msg.get('role') == 'system':
+                system_prompts.append(msg.get('content', ''))
+        return '\n\n--- SYSTEM PROMPT SEPARATOR ---\n\n'.join(system_prompts)
 
 def extract_gpt_data(gpt_type: str, gpt_result: Dict[str, Any]) -> Dict[str, Any]:
-    """חילוץ נתונים מתוצאת GPT"""
-    if not gpt_result:
+    """⚠️ DEPRECATED: השתמש ב-interactions_logger.extract_gpt_data() במקום"""
+    try:
+        from interactions_logger import get_interactions_logger
+        logger = get_interactions_logger()
+        return logger.extract_gpt_data(gpt_type, gpt_result)
+    except:
+        # fallback
         return {
             'activated': False,
             'reply': None,
@@ -1183,41 +1048,26 @@ def extract_gpt_data(gpt_type: str, gpt_result: Dict[str, Any]) -> Dict[str, Any
             'cost_agorot': None,
             'processing_time': None,
             'tokens_input': None,
-            'tokens_output': None
+            'tokens_output': None,
+            'tokens_cached': 0
         }
-    
-    usage = gpt_result.get('usage', {})
-    cost_ils = usage.get('cost_total_ils', 0)
-    cost_agorot = Decimal(str(cost_ils * 100)) if cost_ils else None
-    
-    processing_time = None
-    for time_key in ['gpt_pure_latency', 'processing_time', 'latency']:
-        if time_key in gpt_result:
-            processing_time = gpt_result[time_key]
-            break
-    
-    return {
-        'activated': True,
-        'reply': gpt_result.get('response', gpt_result.get('summary', str(gpt_result))),
-        'model': gpt_result.get('model', 'unknown'),
-        'cost_agorot': cost_agorot,
-        'processing_time': processing_time,
-        'tokens_input': usage.get('prompt_tokens', usage.get('input_tokens')),
-        'tokens_output': usage.get('completion_tokens', usage.get('output_tokens'))
-    }
 
 def calculate_total_cost(gpt_results: Dict[str, Any]) -> Decimal:
-    """חישוב עלות כוללת בשקלים"""
-    total_agorot = Decimal('0')
-    
-    for gpt_type in ['a', 'b', 'c', 'd', 'e']:
-        if gpt_type in gpt_results and gpt_results[gpt_type]:
-            usage = gpt_results[gpt_type].get('usage', {})
-            cost_ils = usage.get('cost_total_ils', 0)
-            if cost_ils:
-                total_agorot += Decimal(str(cost_ils * 100))
-    
-    return total_agorot
+    """⚠️ DEPRECATED: השתמש ב-interactions_logger.calculate_total_cost() במקום"""
+    try:
+        from interactions_logger import get_interactions_logger
+        logger = get_interactions_logger()
+        return logger.calculate_total_cost(gpt_results)
+    except:
+        # fallback
+        total_agorot = Decimal('0')
+        for gpt_type in ['a', 'b', 'c', 'd', 'e']:
+            if gpt_type in gpt_results and gpt_results[gpt_type]:
+                usage = gpt_results[gpt_type].get('usage', {})
+                cost_ils = usage.get('cost_total_ils', 0)
+                if cost_ils:
+                    total_agorot += Decimal(str(cost_ils * 100))
+        return total_agorot
 
 def execute_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False) -> Any:
     """ביצוע שאילתת SQL גנרית"""

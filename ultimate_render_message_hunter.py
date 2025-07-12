@@ -108,7 +108,7 @@ def get_ssh_content(cmd):
             shell=True,
             capture_output=True,
             text=True,
-            timeout=15
+            timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT
         )
         
         if result.returncode == 0:
