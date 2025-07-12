@@ -816,71 +816,88 @@ def cleanup_inactive_users():
         logger.error(f"[CLEANUP] Error cleaning up inactive users: {e}")
 
 def auto_cleanup_old_users():
-    """
-    ניקוי אוטומטי של משתמשים ישנים (יותר מ-90 יום ללא פעילות)
-    ומשתמשים שלא הגיבו לתזכורות במשך זמן רב.
-    """
+    """ניקוי אוטומטי של משתמשים ישנים"""
     try:
-        from config import CHAT_HISTORY_PATH
-        global _reminder_state
+        now = utils.get_israel_time()
         
-        if not os.path.exists(CHAT_HISTORY_PATH):
-            logger.debug("[AUTO_CLEANUP] Chat history file not found")
-            return
+        # וידוא timezone awareness
+        if now.tzinfo is None:
+            import pytz
+            israel_tz = pytz.timezone('Asia/Jerusalem')
+            now = israel_tz.localize(now)
         
-        # טעינת נתונים
-        with open(CHAT_HISTORY_PATH, 'r', encoding='utf-8') as f:
-            history_data = json.load(f)
+        # סף של 60 יום לניקוי
+        cutoff_date = now - timedelta(days=60)
         
-        _load_reminder_state()
-        now = get_israel_time()
         cleanup_candidates = []
         
-        for chat_id, user_data in history_data.items():
-            if not user_data.get("history"):
-                continue
-                
-            # בדיקת זמן האינטראקציה האחרונה
-            last_entry = user_data["history"][-1]
-            last_contact_str = last_entry.get("timestamp")
-            
-            if last_contact_str:
-                try:
-                    last_contact_time = datetime.fromisoformat(last_contact_str)
-                    # וידוא שיש timezone לשני התאריכים
-                    if last_contact_time.tzinfo is None:
-                        import pytz
-                        israel_tz = pytz.timezone('Asia/Jerusalem')
-                        last_contact_time = israel_tz.localize(last_contact_time)
-                    days_since = (now - last_contact_time).days
-                    
-                    # משתמשים שלא פעילים יותר מ-90 יום
-                    if days_since > 90:
-                        cleanup_candidates.append((chat_id, f"inactive_{days_since}_days"))
-                        continue
-                    
-                    # משתמשים שקיבלו תזכורת אבל לא הגיבו יותר מ-30 יום
-                    user_state = _reminder_state.get(safe_str(chat_id), {})
-                    if user_state.get("reminder_sent"):
-                        reminder_time_str = user_state.get("sent_at")
-                        if reminder_time_str:
+        # עבור על כל המשתמשים
+        for chat_id, user_state in _reminder_state.items():
+            try:
+                last_contact_str = user_state.get("last_contact")
+                if last_contact_str:
+                    try:
+                        # 🔧 תיקון: שימוש בפונקציה בטוחה
+                        last_contact_time = None
+                        if isinstance(last_contact_str, str):
                             try:
-                                reminder_time = datetime.fromisoformat(reminder_time_str)
-                                # וידוא שיש timezone לשני התאריכים
+                                last_contact_time = datetime.fromisoformat(last_contact_str.replace("Z", "+00:00"))
+                            except ValueError:
+                                try:
+                                    last_contact_time = datetime.strptime(last_contact_str, "%Y-%m-%d %H:%M:%S")
+                                except ValueError:
+                                    pass
+                        elif isinstance(last_contact_str, datetime):
+                            last_contact_time = last_contact_str
+                        
+                        if last_contact_time:
+                            # וידוא timezone awareness
+                            if last_contact_time.tzinfo is None:
+                                import pytz
+                                israel_tz = pytz.timezone('Asia/Jerusalem')
+                                last_contact_time = israel_tz.localize(last_contact_time)
+                            
+                            if last_contact_time < cutoff_date:
+                                cleanup_candidates.append((chat_id, "old_user"))
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f"[AUTO_CLEANUP] Error parsing last_contact for {chat_id}: {e}")
+                        cleanup_candidates.append((chat_id, "invalid_contact_time"))
+                
+                # בדיקת תזכורות שנשלחו מזמן
+                if user_state.get("reminder_sent"):
+                    reminder_time_str = user_state.get("sent_at")
+                    if reminder_time_str:
+                        try:
+                            # 🔧 תיקון: שימוש בפונקציה בטוחה
+                            reminder_time = None
+                            if isinstance(reminder_time_str, str):
+                                try:
+                                    reminder_time = datetime.fromisoformat(reminder_time_str.replace("Z", "+00:00"))
+                                except ValueError:
+                                    try:
+                                        reminder_time = datetime.strptime(reminder_time_str, "%Y-%m-%d %H:%M:%S")
+                                    except ValueError:
+                                        pass
+                            elif isinstance(reminder_time_str, datetime):
+                                reminder_time = reminder_time_str
+                            
+                            if reminder_time:
+                                # וידוא timezone awareness
                                 if reminder_time.tzinfo is None:
                                     import pytz
                                     israel_tz = pytz.timezone('Asia/Jerusalem')
                                     reminder_time = israel_tz.localize(reminder_time)
+                                
                                 days_since_reminder = (now - reminder_time).days
                                 if days_since_reminder > 30:
                                     cleanup_candidates.append((chat_id, f"no_response_to_reminder_{days_since_reminder}_days"))
-                            except (ValueError, TypeError) as e:
-                                logger.debug(f"[AUTO_CLEANUP] Error parsing reminder time for {chat_id}: {e}")
-                                pass
-                                
-                except ValueError:
-                    # זמן לא תקין - מועמד לניקוי
-                    cleanup_candidates.append((chat_id, "invalid_timestamp"))
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"[AUTO_CLEANUP] Error parsing reminder time for {chat_id}: {e}")
+                            pass
+                            
+            except ValueError:
+                # זמן לא תקין - מועמד לניקוי
+                cleanup_candidates.append((chat_id, "invalid_timestamp"))
         
         # סימון המשתמשים כלא פעילים
         marked_count = 0
@@ -893,17 +910,17 @@ def auto_cleanup_old_users():
             marked_count += 1
             logger.info(f"[AUTO_CLEANUP] Marked user {chat_id} as inactive: {reason}")
         
+        # שמירת מצב
+        _save_reminder_state()
+        
         if marked_count > 0:
-            _save_reminder_state()
-            logger.info(f"[AUTO_CLEANUP] ✅ Marked {marked_count} users as inactive")
-            
-            # הפעלת ניקוי מלא
-            cleanup_inactive_users()
-        else:
-            logger.debug("[AUTO_CLEANUP] No users need cleanup")
-            
+            logger.info(f"[AUTO_CLEANUP] Marked {marked_count} users as inactive")
+        
+        return marked_count
+        
     except Exception as e:
-        logger.error(f"[AUTO_CLEANUP] Error in auto cleanup: {e}")
+        logger.error(f"[AUTO_CLEANUP] Error during cleanup: {e}")
+        return 0
 
 async def validate_user_before_reminder(chat_id: str) -> bool:
     """
@@ -934,100 +951,99 @@ async def validate_user_before_reminder(chat_id: str) -> bool:
         return True
 
 async def check_and_send_gentle_reminders():
-    """בודק משתמשים ושולח תזכורות לפי הצורך."""
-    global _reminder_state
+    """בדיקה ושליחת תזכורות עדינות"""
     try:
-        from config import CHAT_HISTORY_PATH
+        now = utils.get_israel_time()
         
-        # 📂 בדיקת קיום קובץ ההיסטוריה
-        if not os.path.exists(CHAT_HISTORY_PATH):
-            logger.debug(f"[REMINDER] Chat history file not found: {CHAT_HISTORY_PATH}", source="notifications")
-            return
+        # וידוא timezone awareness
+        if now.tzinfo is None:
+            import pytz
+            israel_tz = pytz.timezone('Asia/Jerusalem')
+            now = israel_tz.localize(now)
         
-        # 📖 קריאת היסטוריית כל המשתמשים
-        with open(CHAT_HISTORY_PATH, 'r', encoding='utf-8') as f:
-            history_data = json.load(f)
+        # בדיקת שעות מותרות
+        if not _is_allowed_time():
+            logger.debug("[REMINDER] Outside allowed hours", source="notifications")
+            return 0
         
-        reminders_sent = 0
-        now = get_israel_time()
-        total_users = len(history_data)
+        # ניקוי אוטומטי
+        await auto_cleanup_old_users()
         
-        logger.debug(f"[REMINDER] Checking {total_users} users for gentle reminders", source="notifications")
+        # רענון מצב התזכורות
+        await _refresh_reminder_state()
         
-        # 🔄 לולאה על כל המשתמשים
-        for chat_id, user_data in history_data.items():
-            # ⏭️ דילוג על משתמשים ללא היסטוריה
-            if not user_data.get("history"):
-                continue
-            
-            chat_id_str = safe_str(chat_id)
-            user_reminder_state = _reminder_state.get(chat_id_str, {})
-            
-            # ⏭️ דילוג על משתמשים שסומנו כלא פעילים
-            if user_reminder_state.get("user_inactive"):
-                logger.debug(f"[REMINDER] Skipping inactive user {safe_str(chat_id)}", source="notifications")
-                continue
-            
-            # בדיקה אם יש תזכורת נדחית שצריך לשלוח ב-7 בבוקר
-            if user_reminder_state.get("scheduled_for_morning") and 7 <= now.hour <= 22:
-                logger.info(f"[REMINDER] 🌅 Sending delayed reminder to {safe_str(chat_id)} (scheduled for morning)", source="notifications")
-                success = await send_gentle_reminder(safe_str(chat_id))
-                if success:
-                    reminders_sent += 1
-                continue
-            
-            # ⏭️ דילוג על משתמשים שכבר קיבלו תזכורת
-            if user_reminder_state.get("reminder_sent"):
-                continue
-            
-            # 🕐 חישוב זמן מהאינטראקציה האחרונה
-            last_entry = user_data["history"][-1]
-            last_contact_str = last_entry.get("timestamp")
-            
-            if not last_contact_str:
-                continue
-            
+        # מציאת מועמדים לתזכורת
+        reminder_candidates = []
+        
+        for chat_id, user_state in _reminder_state.items():
             try:
-                last_contact_time = datetime.fromisoformat(last_contact_str)
-                # וידוא שיש timezone לשני התאריכים
-                if last_contact_time.tzinfo is None:
-                    # אם אין timezone, נניח שזה בזמן ישראל
-                    import pytz
-                    israel_tz = pytz.timezone('Asia/Jerusalem')
-                    last_contact_time = israel_tz.localize(last_contact_time)
-                time_since_last = now - last_contact_time
-                hours_since = time_since_last.total_seconds() / 3600
+                # דילוג על משתמשים לא פעילים
+                if user_state.get("user_inactive", False):
+                    continue
                 
-                # ✅ בדיקה: האם עברו מספיק שעות
-                if time_since_last >= timedelta(hours=REMINDER_INTERVAL_HOURS):
-                    logger.debug(f"[REMINDER] User {safe_str(chat_id)} needs reminder ({hours_since:.1f}h since last contact)", source="notifications")
+                # דילוג על משתמשים שכבר נשלחה להם תזכורת והם לא ענו
+                if user_state.get("reminder_sent_waiting_response", False):
+                    continue
+                
+                # בדיקת זמן מגע אחרון
+                last_contact_str = user_state.get("last_contact")
+                if not last_contact_str:
+                    continue
+                
+                try:
+                    # 🔧 תיקון: שימוש בפונקציה בטוחה
+                    last_contact_time = None
+                    if isinstance(last_contact_str, str):
+                        try:
+                            last_contact_time = datetime.fromisoformat(last_contact_str.replace("Z", "+00:00"))
+                        except ValueError:
+                            try:
+                                last_contact_time = datetime.strptime(last_contact_str, "%Y-%m-%d %H:%M:%S")
+                            except ValueError:
+                                pass
+                    elif isinstance(last_contact_str, datetime):
+                        last_contact_time = last_contact_str
                     
-                    # ✨ בדיקת תקפות המשתמש לפני שליחת תזכורת
-                    is_valid = await validate_user_before_reminder(safe_str(chat_id))
-                    if not is_valid:
-                        logger.debug(f"[REMINDER] User {safe_str(chat_id)} validation failed - skipping", source="notifications")
-                        continue
-                    
-                    success = await send_gentle_reminder(safe_str(chat_id))
-                    if success:
-                        reminders_sent += 1
-                else:
-                    logger.debug(f"[REMINDER] User {safe_str(chat_id)} too recent ({hours_since:.1f}h < {REMINDER_INTERVAL_HOURS}h)", source="notifications")
+                    if last_contact_time:
+                        # וידוא timezone awareness לשני התאריכים
+                        if last_contact_time.tzinfo is None:
+                            import pytz
+                            israel_tz = pytz.timezone('Asia/Jerusalem')
+                            last_contact_time = israel_tz.localize(last_contact_time)
                         
-            except ValueError as e:
-                logger.warning(f"[REMINDER] Invalid timestamp for user {safe_str(chat_id)}: {last_contact_str}", source="notifications")
+                        time_since_last = now - last_contact_time
+                        hours_since = time_since_last.total_seconds() / 3600
+                        
+                        # ✅ בדיקה: האם עברו מספיק שעות
+                        if time_since_last >= timedelta(hours=REMINDER_INTERVAL_HOURS):
+                            logger.debug(f"[REMINDER] User {safe_str(chat_id)} needs reminder ({hours_since:.1f}h since last contact)", source="notifications")
+                            
+                            # ✨ בדיקת תקפות המשתמש לפני שליחת תזכורת
+                            is_valid = await validate_user_before_reminder(safe_str(chat_id))
+                            if not is_valid:
+                                logger.debug(f"[REMINDER] User {safe_str(chat_id)} validation failed - skipping", source="notifications")
+                                continue
+                            
+                            success = await send_gentle_reminder(safe_str(chat_id))
+                            if success:
+                                reminders_sent += 1
+                        else:
+                            logger.debug(f"[REMINDER] User {safe_str(chat_id)} too recent ({hours_since:.1f}h < {REMINDER_INTERVAL_HOURS}h)", source="notifications")
+                            
+                except ValueError as e:
+                    logger.warning(f"[REMINDER] Invalid timestamp for user {safe_str(chat_id)}: {last_contact_str}", source="notifications")
+                    continue
+                    
+            except Exception as user_error:
+                logger.warning(f"[REMINDER] Error checking user {safe_str(chat_id)}: {user_error}", source="notifications")
                 continue
         
-        # 📊 דיווח סיכום
-        if reminders_sent > 0:
-            logger.info(f"[REMINDER] ✅ Sent {reminders_sent} gentle reminders out of {total_users} users", source="notifications")
-        else:
-            logger.debug(f"[REMINDER] No reminders needed for {total_users} users", source="notifications")
-            
+        logger.info(f"[REMINDER] Sent {reminders_sent} gentle reminders", source="notifications")
+        return reminders_sent
+        
     except Exception as e:
-        error_msg = f"[REMINDER] Critical error in check_and_send_gentle_reminders: {e}"
-        logger.error(error_msg, source="notifications")
-        send_error_notification(error_msg)
+        logger.error(f"[REMINDER] Error in check_and_send_gentle_reminders: {e}", source="notifications")
+        return 0
 
 async def gentle_reminder_background_task():
     """משימת רקע לבדיקת תזכורות כל שעה + ניקוי אוטומטי שבועי."""

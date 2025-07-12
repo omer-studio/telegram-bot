@@ -993,6 +993,66 @@ def cleanup_test_users():
 # 💬 System prompts condition logic (מרכז הלוגיקה)
 # ---------------------------------------------------------------------------
 
+def _safe_parse_timestamp(timestamp_value):
+    """
+    🔧 פונקציה מערכתית לטיפול בטיח בזמנים
+    מטפלת בכל הסוגים: string, datetime, None
+    """
+    try:
+        if timestamp_value is None:
+            return None
+        
+        # אם זה כבר datetime object
+        if isinstance(timestamp_value, datetime):
+            return timestamp_value
+        
+        # אם זה string
+        if isinstance(timestamp_value, str):
+            try:
+                # ניסיון עם fromisoformat
+                return datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
+            except ValueError:
+                try:
+                    # ניסיון עם strptime
+                    return datetime.strptime(timestamp_value, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    # אם כל השיטות נכשלו
+                    logger.warning(f"Could not parse timestamp: {timestamp_value}", source="TIMESTAMP_PARSE")
+                    return None
+        
+        # אם זה לא string ולא datetime
+        logger.warning(f"Unknown timestamp type: {type(timestamp_value)} - {timestamp_value}", source="TIMESTAMP_PARSE")
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error parsing timestamp: {e}", source="TIMESTAMP_PARSE")
+        return None
+
+def _ensure_timezone_aware(dt):
+    """
+    🔧 פונקציה מערכתית לוידוא timezone awareness
+    מטפלת בבעיות timezone-aware/naive
+    """
+    try:
+        if dt is None:
+            return None
+        
+        if not isinstance(dt, datetime):
+            return dt
+        
+        # אם כבר יש timezone
+        if dt.tzinfo is not None:
+            return dt
+        
+        # אם אין timezone, מוסיפים זמן ישראל
+        import pytz
+        israel_tz = pytz.timezone('Asia/Jerusalem')
+        return israel_tz.localize(dt)
+        
+    except Exception as e:
+        logger.warning(f"Error ensuring timezone: {e}", source="TIMEZONE_ENSURE")
+        return dt
+
 def should_send_weekday_context(chat_id: str, user_msg: Optional[str] = None) -> bool:
     """בדיקה אם יש לשלוח הקשר יום השבוע"""
     try:
@@ -1022,10 +1082,16 @@ def should_send_weekday_context(chat_id: str, user_msg: Optional[str] = None) ->
             ts = entry.get("timestamp")
             if not ts:
                 continue
-            try:
-                entry_dt = datetime.fromisoformat(ts)
-            except ValueError:
+            
+            # 🔧 תיקון: שימוש בפונקציה הבטוחה
+            entry_dt = _safe_parse_timestamp(ts)
+            if entry_dt is None:
                 continue
+                
+            # 🔧 תיקון: וידוא timezone awareness
+            entry_dt = _ensure_timezone_aware(entry_dt)
+            start_of_day = _ensure_timezone_aware(start_of_day)
+            
             if entry_dt < start_of_day:
                 break
             
@@ -1040,7 +1106,6 @@ def should_send_weekday_context(chat_id: str, user_msg: Optional[str] = None) ->
     except Exception as e:
         logger.error(f"שגיאה ב-should_send_weekday_context: {e}", source="WEEKDAY_CHECK")
         return False
-
 
 def should_send_holiday_message(chat_id: str, user_msg: str = "") -> bool:
     """בדיקה אם יש לשלוח הודעת חג"""
@@ -1153,18 +1218,16 @@ def should_send_time_greeting(chat_id: str, user_msg: Optional[str] = None) -> b
             # אין טיימסטמפ תקין - לא שולח ברכה (מוסר תנאי 2)
             return False
 
-        # וידוא שlast_timestamp הוא datetime object
-        if not isinstance(last_timestamp, datetime):
-            try:
-                if isinstance(last_timestamp, str):
-                    last_timestamp = datetime.fromisoformat(last_timestamp)
-                else:
-                    # אם זה לא string וגם לא datetime, לא שולח ברכה
-                    return False
-            except Exception:
-                return False
+        # 🔧 תיקון: שימוש בפונקציה הבטוחה
+        parsed_timestamp = _safe_parse_timestamp(last_timestamp)
+        if parsed_timestamp is None:
+            return False
         
-        hours_since = (effective_now - last_timestamp).total_seconds() / 3600.0
+        # 🔧 תיקון: וידוא timezone awareness
+        parsed_timestamp = _ensure_timezone_aware(parsed_timestamp)
+        effective_now = _ensure_timezone_aware(effective_now)
+        
+        hours_since = (effective_now - parsed_timestamp).total_seconds() / 3600.0
         
         # שולח ברכה רק אם עברו יותר מ-3 שעות
         return hours_since >= 3

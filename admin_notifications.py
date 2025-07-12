@@ -659,57 +659,62 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"\n➖➖➖➖<b>הודעת משתמש</b>➖➖➖➖\n\n"
         notification_text += f"{user_msg}\n\n"
         
-        notification_text += f"➖➖➖➖<b>תשובת הבוט</b>➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖<b>תשובת הבוט</b>➖➖➖➖➖\n\n"
         notification_text += f"{bot_msg}\n\n"
         
-        notification_text += f"➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+        notification_text += f".➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
         
         # GPT-B
-        notification_text += f"<b>gpt_b:</b>\n"
+        notification_text += f"<b>מודל gpt_b:</b>\n"
         if gpt_b_activated and gpt_b_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_b_model or 'לא זמין'}\n"
             summary_text = gpt_b_reply[:100] + "..." if len(gpt_b_reply) > 100 else gpt_b_reply
             notification_text += f"{summary_text}\n\n"
         else:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_b_model or 'לא זמין'}\n"
             notification_text += f"לא הופעל (אם הופעל אז לכתוב רק את התשובה)\n\n"
         
         # GPT-C
-        notification_text += f"<b>gpt_c:</b>\n"
+        notification_text += f"<b>מודל gpt_c:</b>\n"
         if gpt_c_activated and gpt_c_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_c_model or 'לא זמין'}\n"
             reply_text = gpt_c_reply[:100] + "..." if len(gpt_c_reply) > 100 else gpt_c_reply
             notification_text += f"{reply_text}\n\n"
         else:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_c_model or 'לא זמין'}\n"
             notification_text += f"לא הופעל\n\n"
         
         # GPT-D
-        notification_text += f"<b>gpt_d:</b>\n"
+        notification_text += f"<b>מודל gpt_d:</b>\n"
         if gpt_d_activated and gpt_d_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_d_model or 'לא זמין'}\n"
             reply_text = gpt_d_reply[:100] + "..." if len(gpt_d_reply) > 100 else gpt_d_reply
             notification_text += f"{reply_text}\n\n"
         else:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_d_model or 'לא זמין'}\n"
             notification_text += f"לא הופעל\n\n"
         
-        # GPT-E
-        notification_text += f"<b>gpt_e:</b>\n"
-        notification_text += f"🔧 <b>מודל:</b> {gpt_e_model or 'לא זמין'}\n"
+        # GPT-E - תיקון המונה
+        notification_text += f"<b>מודל gpt_e:</b>\n"
         if gpt_e_activated and gpt_e_reply:
+            notification_text += f"🔧 <b>מודל:</b> {gpt_e_model or 'לא זמין'}\n"
             reply_text = gpt_e_reply[:100] + "..." if len(gpt_e_reply) > 100 else gpt_e_reply
             notification_text += f"{reply_text}"
         else:
-            notification_text += f"לא הופעל - מופעל לפי מונה הודעות כרגע המונה עומד על {gpt_e_counter or 'לא זמין'} מתוך 10"
+            # חישוב מונה נכון
+            current_msg_count = history_user_count if history_user_count > 0 else 1
+            counter_display = current_msg_count % 10
+            if counter_display == 0:
+                counter_display = 10
+            notification_text += f"לא הופעל - מופעל לפי מונה הודעות כרגע המונה עומד על {counter_display} מתוך 10"
         
         notification_text += f"\n\n"
+        
+        # הפרדה לפני נתוני אמת מהמסד
+        notification_text += f".➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
         
         # נתוני אמת מהמסד - למטה
         notification_text += f"📊 <b>נתוני אמת מהמסד:</b>\n"
         notification_text += f"💰 <b>עלות כוללת לכל האינטרקציה:</b> {total_cost_agorot:.1f} אגורות\n"
         notification_text += f"⏱️ <b>זמן שלקח לבינה:</b> {gpt_a_time or 0:.2f}s | <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s    | <b>פער קוד:</b> {background_time:.2f}s\n"
-        notification_text += f"📊 <b>מספר הודעות משתמש כולל:</b> {history_user_count}\n"
+        notification_text += f"📊 <b>מספר הודעות משתמש כולל:</b> {history_user_count or 1}\n"
         notification_text += f"🕐 <b>שעת שליחת ההודעה :</b> {timestamp.strftime('%H:%M:%S')}\n\n"
         
         # גישה מהירה לטבלה

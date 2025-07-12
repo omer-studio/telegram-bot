@@ -302,10 +302,31 @@ def update_user_profile_fast(chat_id: Any, updates: Dict) -> bool:
     try:
         safe_id = safe_str(chat_id)
         
+        # 🔧 תיקון: וידוא שהעדכונים תקינים
+        if not updates or not isinstance(updates, dict):
+            logger.warning(f"Invalid updates for {safe_id}: {updates}", source="profile_utils")
+            return False
+        
+        # 🔧 תיקון: סינון שדות לא חוקיים
+        valid_updates = {}
+        for key, value in updates.items():
+            if key and isinstance(key, str):
+                # המרת ערכים מורכבים לJSON
+                if isinstance(value, (dict, list)):
+                    valid_updates[key] = json.dumps(value) if value else None
+                else:
+                    valid_updates[key] = value
+            else:
+                logger.warning(f"Invalid field name: {key}", source="profile_utils")
+        
+        if not valid_updates:
+            logger.warning(f"No valid updates for {safe_id}", source="profile_utils")
+            return True  # אין מה לעדכן - זה בסדר
+        
         # עדכון ישיר במסד נתונים
         from simple_data_manager import data_manager
         
-        success = data_manager.update_user_profile_fast(safe_id, updates)
+        success = data_manager.update_user_profile_fast(safe_id, valid_updates)
         
         if success:
             # ניקוי cache
@@ -315,7 +336,7 @@ def update_user_profile_fast(chat_id: Any, updates: Dict) -> bool:
             logger.info(f"✅ פרופיל עודכן במהירות למשתמש {safe_id}", source="profile_utils")
             return True
         else:
-            logger.error(f"Error updating profile for {safe_id}: {updates}", source="profile_utils")
+            logger.error(f"Database update failed for {safe_id}: {valid_updates}", source="profile_utils")
             return False
             
     except Exception as e:
@@ -512,34 +533,87 @@ def get_all_users_with_condition(condition: str) -> List[Dict]:
         config = get_config()
         DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
         
+        # 🔧 תיקון: וידוא שהחיבור תקין
+        if not DB_URL:
+            logger.error("No database URL found", source="profile_utils")
+            return []
+        
         conn = psycopg2.connect(DB_URL)
         cur = conn.cursor()
         
-        # שאילתה עם תנאי
-        query = f"SELECT * FROM user_profiles WHERE {condition}"
-        cur.execute(query)
+        # 🔧 תיקון: בדיקת קיום הטבלה תחילה
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'user_profiles'
+            )
+        """)
+        table_exists = cur.fetchone()[0]
         
-        # קבלת כל השורות
-        rows = cur.fetchall()
+        if not table_exists:
+            logger.warning("Table user_profiles does not exist", source="profile_utils")
+            cur.close()
+            conn.close()
+            return []
         
-        # קבלת שמות עמודות
-        columns = [desc[0] for desc in cur.description] if cur.description else []
-        
-        # המרה לרשימת dictionaries
-        users = []
-        for row in rows:
-            if columns:
-                user_dict = dict(zip(columns, row))
-                users.append(user_dict)
-            else:
-                # גיבוי אם אין שמות עמודות
-                users.append({})
-        
-        cur.close()
-        conn.close()
-        
-        logger.info(f"✅ נמצאו {len(users)} משתמשים עם תנאי: {condition}", source="profile_utils")
-        return users
+        # 🔧 תיקון: בדיקת קיום העמודות בתנאי
+        try:
+            # שאילתה עם תנאי - עם הגנה מפני SQL injection
+            if "needs_recovery_message" in condition:
+                # בדיקת קיום העמודה
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'user_profiles' 
+                        AND column_name = 'needs_recovery_message'
+                    )
+                """)
+                column_exists = cur.fetchone()[0]
+                
+                if not column_exists:
+                    logger.warning("Column needs_recovery_message does not exist - running migration", source="profile_utils")
+                    cur.close()
+                    conn.close()
+                    
+                    # ריצת מיגרציה
+                    from database_operations import force_database_migration
+                    if force_database_migration():
+                        # ניסיון חוזר לאחר המיגרציה
+                        return get_all_users_with_condition(condition)
+                    else:
+                        return []
+            
+            # שאילתה רגילה
+            query = f"SELECT * FROM user_profiles WHERE {condition}"
+            cur.execute(query)
+            
+            # קבלת כל השורות
+            rows = cur.fetchall()
+            
+            # קבלת שמות עמודות
+            columns = [desc[0] for desc in cur.description] if cur.description else []
+            
+            # המרה לרשימת dictionaries
+            users = []
+            for row in rows:
+                if columns:
+                    user_dict = dict(zip(columns, row))
+                    users.append(user_dict)
+                else:
+                    # גיבוי אם אין שמות עמודות
+                    users.append({})
+            
+            cur.close()
+            conn.close()
+            
+            logger.info(f"✅ נמצאו {len(users)} משתמשים עם תנאי: {condition}", source="profile_utils")
+            return users
+            
+        except psycopg2.Error as db_error:
+            logger.error(f"Database error with condition '{condition}': {db_error}", source="profile_utils")
+            cur.close()
+            conn.close()
+            return []
         
     except Exception as exc:
         logger.error(f"שגיאה בקבלת משתמשים עם תנאי '{condition}': {exc}", source="profile_utils")

@@ -320,6 +320,69 @@ def create_user_profiles_table(cursor):
     cursor.execute(create_sql)
 
 # =================================
+# 🔧 פונקציה לריצת מיגרציה כפויה
+# =================================
+
+def force_database_migration():
+    """
+    מריץ מיגרציה כפויה לתיקון הבעיות במסד הנתונים
+    פונקציה זו מטפלת בכל הבעיות שזוהו:
+    1. עמודות חסרות בטבלת user_profiles
+    2. וידוא שכל השדות החדשים קיימים
+    3. תיקון מבנה הטבלה
+    """
+    try:
+        print("🔧 מתחיל מיגרציה כפויה של מסד הנתונים...")
+        
+        with safe_db_connection() as conn:
+            cur = conn.cursor()
+            
+            # שלב 1: וידוא שהטבלה קיימת עם כל השדות
+            print("📋 בודק מבנה טבלת user_profiles...")
+            create_user_profiles_table(cur)
+            
+            # שלב 2: בדיקת עמודות נוספות שחסרות
+            print("🔍 בודק עמודות נוספות...")
+            additional_columns = {
+                'code_try': 'INTEGER DEFAULT 0',
+                'approved': 'BOOLEAN DEFAULT FALSE', 
+                'code_approve': 'TEXT',
+                'total_messages_count': 'INTEGER DEFAULT 0'
+            }
+            
+            for column_name, column_type in additional_columns.items():
+                cur.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'user_profiles' 
+                        AND column_name = %s
+                    )
+                """, (column_name,))
+                column_exists = cur.fetchone()[0]
+                
+                if not column_exists:
+                    try:
+                        cur.execute(f"ALTER TABLE user_profiles ADD COLUMN {column_name} {column_type}")
+                        print(f"✅ [MIGRATION] הוספנו עמודה: {column_name}")
+                    except Exception as e:
+                        print(f"⚠️ [MIGRATION] שגיאה בהוספת עמודה {column_name}: {e}")
+            
+            # שלב 3: וידוא שהטבלאות האחרות קיימות
+            print("📊 בודק טבלאות נוספות...")
+            create_chat_messages_table_only(cur)
+            create_interactions_log_table(cur)
+            
+            conn.commit()
+            cur.close()
+            
+            print("✅ מיגרציה כפויה הושלמה בהצלחה!")
+            return True
+            
+    except Exception as e:
+        print(f"❌ שגיאה במיגרציה כפויה: {e}")
+        return False
+
+# =================================
 # 🤖 פונקציות שמירת GPT
 # =================================
 
