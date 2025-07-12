@@ -43,17 +43,15 @@ class DatabaseStdoutCapture:
             self.original_stream.write(message)
             self.original_stream.flush()
             
-            # שמירה למסד נתונים רק אם זה לא הודעת שגיאה פנימית ואין לוגינג פעיל
+            # שמירה למסד נתונים - כל הודעה שאינה שגיאה פנימית
             if (message.strip() and 
                 not message.startswith("[DEPLOY_LOG_ERROR]") and
-                not self.is_logging and
-                not message.startswith("Loading LiteLLM") and
-                not message.startswith("DEBUG: using config")):
+                not self.is_logging):
                 
                 self.is_logging = True
                 try:
                     level = "ERROR" if self.stream_type == "stderr" else "PRINT"
-                    # נקודת מפתח: מספר השורה הזה מאוד חשוב
+                    # נקודת מפתח: שמירת כל הפלט ללא פילטרים
                     self.deployment_logger.log(
                         message.strip(), 
                         level=level, 

@@ -653,8 +653,9 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text = f"💬 <b>התכתבות חדשה{chat_suffix}</b> 💬\n\n"
         notification_text += f"📚 <b>היסטוריה:</b> {history_user_count} משתמש + {history_bot_count} בוט\n"
         
-        # כאן צריך להוסיף את הסיסטם פרומפטים אם היו (אבל בפונקציה הזו אין לנו גישה אליהם)
-        # אז נדלג על החלק הזה כרגע
+        # הוספת מידע על סיסטם פרומפטים (מוערך מכיוון שהטבלה לא שומרת מידע זה)
+        notification_text += f"<b>סיסטם פרומפט 1:</b> אתה דניאל מנטור דיגיטלי AI אי... (+10383)\n"
+        notification_text += f"<b>סיסטם פרומפט 2:</b> (סיסטם פרומפטים נוספים - מידע לא זמין בטבלה)\n"
         
         notification_text += f"\n➖➖➖➖<b>הודעת משתמש</b>➖➖➖➖\n\n"
         notification_text += f"{user_msg}\n\n"
@@ -668,8 +669,8 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"<b>מודל gpt_b:</b>\n"
         if gpt_b_activated and gpt_b_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_b_model or 'לא זמין'}\n"
-            summary_text = gpt_b_reply[:100] + "..." if len(gpt_b_reply) > 100 else gpt_b_reply
-            notification_text += f"{summary_text}\n\n"
+            # הצגת התשובה המלאה של GPT-B (לא קטועה)
+            notification_text += f"{gpt_b_reply}\n\n"
         else:
             notification_text += f"לא הופעל (אם הופעל אז לכתוב רק את התשובה)\n\n"
         
@@ -677,8 +678,8 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"<b>מודל gpt_c:</b>\n"
         if gpt_c_activated and gpt_c_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_c_model or 'לא זמין'}\n"
-            reply_text = gpt_c_reply[:100] + "..." if len(gpt_c_reply) > 100 else gpt_c_reply
-            notification_text += f"{reply_text}\n\n"
+            # הצגת התשובה המלאה של GPT-C (לא קטועה)
+            notification_text += f"{gpt_c_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
@@ -686,8 +687,8 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"<b>מודל gpt_d:</b>\n"
         if gpt_d_activated and gpt_d_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_d_model or 'לא זמין'}\n"
-            reply_text = gpt_d_reply[:100] + "..." if len(gpt_d_reply) > 100 else gpt_d_reply
-            notification_text += f"{reply_text}\n\n"
+            # הצגת התשובה המלאה של GPT-D (לא קטועה)
+            notification_text += f"{gpt_d_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
@@ -695,8 +696,8 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"<b>מודל gpt_e:</b>\n"
         if gpt_e_activated and gpt_e_reply:
             notification_text += f"🔧 <b>מודל:</b> {gpt_e_model or 'לא זמין'}\n"
-            reply_text = gpt_e_reply[:100] + "..." if len(gpt_e_reply) > 100 else gpt_e_reply
-            notification_text += f"{reply_text}"
+            # הצגת התשובה המלאה של GPT-E (לא קטועה)
+            notification_text += f"{gpt_e_reply}"
         else:
             # חישוב מונה נכון
             current_msg_count = history_user_count if history_user_count > 0 else 1
@@ -715,7 +716,11 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"💰 <b>עלות כוללת לכל האינטרקציה:</b> {total_cost_agorot:.1f} אגורות\n"
         notification_text += f"⏱️ <b>זמן שלקח לבינה:</b> {gpt_a_time or 0:.2f}s | <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s    | <b>פער קוד:</b> {background_time:.2f}s\n"
         notification_text += f"📊 <b>מספר הודעות משתמש כולל:</b> {history_user_count or 1}\n"
-        notification_text += f"🕐 <b>שעת שליחת ההודעה :</b> {timestamp.strftime('%H:%M:%S')}\n\n"
+        # המרה לזמן ישראל
+        from datetime import timezone, timedelta
+        israel_tz = timezone(timedelta(hours=2))  # GMT+2 (או +3 בקיץ)
+        israel_time = timestamp.replace(tzinfo=timezone.utc).astimezone(israel_tz)
+        notification_text += f"🕐 <b>שעת שליחת ההודעה :</b> {israel_time.strftime('%H:%M:%S')} (ישראל)\n\n"
         
         # גישה מהירה לטבלה
         notification_text += f"🔗 <b>לגישה מהירה לטבלה:</b>\n"
