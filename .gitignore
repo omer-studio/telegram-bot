@@ -72,6 +72,13 @@ render_logs*.txt
 /debug_files/
 /test_outputs/
 
+# 🔒 קבצי יצוא נתונים - חשוב! אסור שיעלו לגיט!
+/csv_exports/
+/excel_exports/
+*.csv
+*.xlsx
+*_export_*
+
 # 🖥️ קבצי IDE ומערכת
 .cursor/
 venv/
