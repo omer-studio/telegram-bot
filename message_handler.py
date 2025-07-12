@@ -673,20 +673,17 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
         # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
         # הסרנו כפילות רישום - גם שגיאות ירושמו ב-interactions_log
         
-        # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש חדש בשגיאה**
+        # 🔧 **תיקון מערכתי: רישום שגיאה במסד נתונים**
         try:
-            from admin_notifications import send_anonymous_chat_notification
-            send_anonymous_chat_notification(
-                user_msg,
-                "שגיאה ברישום משתמש חדש",
-                history_messages=None,
-                messages_for_gpt=None,
-                gpt_timing=None,
-                user_timing=None,
-                chat_id=chat_id
+            from interactions_logger import log_simple
+            log_simple(
+                chat_id=chat_id,
+                user_msg=user_msg,
+                bot_msg="שגיאה ברישום משתמש חדש",
+                telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
             )
         except Exception as admin_err:
-            logger.warning(f"[NEW_USER_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            logger.warning(f"[NEW_USER_ERROR] שגיאה ברישום: {admin_err}", source="message_handler")
 
 async def handle_unregistered_user_background(update, context, chat_id, user_msg):
     """
@@ -758,20 +755,17 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
                 # הסרנו כפילות רישום - קודים לא תקינים ירושמו ב-interactions_log
                 
-                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+                # 🔧 **תיקון מערכתי: רישום במסד נתונים**
                 try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        bot_reply,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
+                    from interactions_logger import log_simple
+                    log_simple(
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        bot_msg=bot_reply,
+                        telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                     )
                 except Exception as admin_err:
-                    logger.warning(f"[CODE_INVALID] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    logger.warning(f"[CODE_INVALID] שגיאה ברישום: {admin_err}", source="message_handler")
                 
                 return
 
@@ -782,20 +776,17 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
         # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
         # הסרנו כפילות רישום - בקשות קוד ירושמו ב-interactions_log
         
-        # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+        # 🔧 **תיקון מערכתי: רישום במסד נתונים**
         try:
-            from admin_notifications import send_anonymous_chat_notification
-            send_anonymous_chat_notification(
-                user_msg,
-                bot_reply,
-                history_messages=None,
-                messages_for_gpt=None,
-                gpt_timing=None,
-                user_timing=None,
-                chat_id=chat_id
+            from interactions_logger import log_simple
+            log_simple(
+                chat_id=chat_id,
+                user_msg=user_msg,
+                bot_msg=bot_reply,
+                telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
             )
         except Exception as admin_err:
-            logger.warning(f"[NO_CODE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            logger.warning(f"[NO_CODE] שגיאה ברישום: {admin_err}", source="message_handler")
 
     except Exception as ex:
         # הוספת המשתמש לרשימת התאוששות
@@ -832,20 +823,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
                 # הסרנו כפילות רישום - אישור תנאים יירשם ב-interactions_log
                 
-                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש שהתאושר זה עתה**
+                # 🔧 **תיקון מערכתי: רישום במסד נתונים**
                 try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        bot_reply,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
+                    from interactions_logger import log_simple
+                    log_simple(
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        bot_msg=bot_reply,
+                        telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                     )
                 except Exception as admin_err:
-                    logger.warning(f"[APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    logger.warning(f"[APPROVED] שגיאה ברישום: {admin_err}", source="message_handler")
                 
                 return
             else:
@@ -858,20 +846,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
                 # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
                 # הסרנו כפילות רישום - שגיאות אישור ירושמו ב-interactions_log
                 
-                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+                # 🔧 **תיקון מערכתי: רישום במסד נתונים**
                 try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        bot_reply,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
+                    from interactions_logger import log_simple
+                    log_simple(
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        bot_msg=bot_reply,
+                        telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                     )
                 except Exception as admin_err:
-                    logger.warning(f"[APPROVAL_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    logger.warning(f"[APPROVAL_ERROR] שגיאה ברישום: {admin_err}", source="message_handler")
                 
                 return
 
@@ -885,20 +870,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
             # הסרנו כפילות רישום - דחיית תנאים תירשם ב-interactions_log
             
-            # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+            # 🔧 **תיקון מערכתי: רישום במסד נתונים**
             try:
-                from admin_notifications import send_anonymous_chat_notification
-                send_anonymous_chat_notification(
-                    user_msg,
-                    bot_reply,
-                    history_messages=None,
-                    messages_for_gpt=None,
-                    gpt_timing=None,
-                    user_timing=None,
-                    chat_id=chat_id
+                from interactions_logger import log_simple
+                log_simple(
+                    chat_id=chat_id,
+                    user_msg=user_msg,
+                    bot_msg=bot_reply,
+                    telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                 )
             except Exception as admin_err:
-                logger.warning(f"[DECLINED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                logger.warning(f"[DECLINED] שגיאה ברישום: {admin_err}", source="message_handler")
             
             return
 
@@ -910,20 +892,17 @@ async def handle_pending_user_background(update, context, chat_id, user_msg):
             # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
             # הסרנו כפילות רישום - הודעות ממתינות ירושמו ב-interactions_log
             
-            # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+            # 🔧 **תיקון מערכתי: רישום במסד נתונים**
             try:
-                from admin_notifications import send_anonymous_chat_notification
-                send_anonymous_chat_notification(
-                    user_msg,
-                    bot_reply,
-                    history_messages=None,
-                    messages_for_gpt=None,
-                    gpt_timing=None,
-                    user_timing=None,
-                    chat_id=chat_id
+                from interactions_logger import log_simple
+                log_simple(
+                    chat_id=chat_id,
+                    user_msg=user_msg,
+                    bot_msg=bot_reply,
+                    telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                 )
             except Exception as admin_err:
-                logger.warning(f"[PENDING] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                logger.warning(f"[PENDING] שגיאה ברישום: {admin_err}", source="message_handler")
             
             return
 
@@ -1051,20 +1030,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     voice_message = "🎤 מצטער, תמיכה בהודעות קוליות זמנית לא זמינה.\nאנא שלח את השאלה שלך בטקסט ואשמח לעזור! 😊"
                     await send_system_message(update, chat_id, voice_message)
                     
-                    # 🔧 תיקון: הוספת התראת אדמין להודעה קולית
+                    # 🔧 תיקון: רישום הודעה קולית במסד נתונים
                     try:
-                        from admin_notifications import send_anonymous_chat_notification
-                        send_anonymous_chat_notification(
-                            user_msg,
-                            voice_message,
-                            history_messages=None,
-                            messages_for_gpt=None,
-                            gpt_timing=None,
-                            user_timing=None,
-                            chat_id=chat_id
+                        from interactions_logger import log_simple
+                        log_simple(
+                            chat_id=chat_id,
+                            user_msg="🎤 הודעה קולית",
+                            bot_msg=voice_message,
+                            telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                         )
                     except Exception as admin_err:
-                        logger.warning(f"[VOICE] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                        logger.warning(f"[VOICE] שגיאה ברישום: {admin_err}", source="message_handler")
                     
                     return
                 else:
@@ -1076,18 +1052,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
                     # הסרנו כפילות רישום - הודעות לא נתמכות ירושמו ב-interactions_log
                     try:
-                        from admin_notifications import send_anonymous_chat_notification
-                        send_anonymous_chat_notification(
-                            user_msg,
-                            appropriate_response,
-                            history_messages=None,
-                            messages_for_gpt=None,
-                            gpt_timing=None,
-                            user_timing=None,
-                            chat_id=chat_id
+                        from interactions_logger import log_simple
+                        log_simple(
+                            chat_id=chat_id,
+                            user_msg=f"📎 {message_type}",
+                            bot_msg=appropriate_response,
+                            telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                         )
                     except Exception as admin_err:
-                        logger.warning(f"[UNSUPPORTED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                        logger.warning(f"[UNSUPPORTED] שגיאה ברישום: {admin_err}", source="message_handler")
                     
                     return
 
@@ -1102,18 +1075,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד  
                 # הסרנו כפילות רישום - עומס מערכת יירשם ב-interactions_log
                 try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        overload_message,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
+                    from interactions_logger import log_simple
+                    log_simple(
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        bot_msg=overload_message,
+                        telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                     )
                 except Exception as admin_err:
-                    logger.warning(f"[OVERLOAD] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    logger.warning(f"[OVERLOAD] שגיאה ברישום: {admin_err}", source="message_handler")
                 
                 return
         except Exception as e:
@@ -1124,18 +1094,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
             # הסרנו כפילות רישום - שגיאות טכניות ירושמו ב-interactions_log
             try:
-                from admin_notifications import send_anonymous_chat_notification
-                send_anonymous_chat_notification(
-                    user_msg,
-                    tech_error_message,
-                    history_messages=None,
-                    messages_for_gpt=None,
-                    gpt_timing=None,
-                    user_timing=None,
-                    chat_id=chat_id
+                from interactions_logger import log_simple
+                log_simple(
+                    chat_id=chat_id,
+                    user_msg=user_msg,
+                    bot_msg=tech_error_message,
+                    telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                 )
             except Exception as admin_err:
-                logger.warning(f"[TECH_ERROR] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                logger.warning(f"[TECH_ERROR] שגיאה ברישום: {admin_err}", source="message_handler")
             
             return
 
