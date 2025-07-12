@@ -227,33 +227,32 @@ def test_send_admin_notification(monkeypatch):
 
 
 def test_profile_overview_admin_notification(monkeypatch):
-    """Ensure unified profile notification system constructs correct content."""
+    """Ensure profile notification system constructs correct content."""
     
-    # ✅ תיקון: במקום לכבות משתני סביבה, נשתמש במוק
-    import unified_profile_notifications as upn
+    # ✅ תיקון: החלפה למערכת התראות פשוטה
+    import admin_notifications
 
     captured = {}
 
-    def fake_raw(msg):
+    def fake_send_admin_notification(msg):
         captured['msg'] = msg
         return True  # Mock successful send
 
-    # ✅ תיקון: מוק הפונקציה ב-unified_profile_notifications ישירות
-    monkeypatch.setattr("unified_profile_notifications.send_admin_notification_raw", fake_raw, raising=False)
+    # ✅ תיקון: מוק הפונקציה ב-admin_notifications
+    monkeypatch.setattr("admin_notifications.send_admin_notification", fake_send_admin_notification, raising=False)
     
-    # ✅ תיקון: מוק המניע שליחה אמיתית ב-unified_profile_notifications.py
-    monkeypatch.setattr("unified_profile_notifications.os.environ.get", lambda key, default=None: None if key in ["CI", "TESTING", "PYTEST_CURRENT_TEST"] else default, raising=False)
+    # ✅ תיקון: מוק המניע שליחה אמיתית ב-admin_notifications.py
+    monkeypatch.setattr("admin_notifications.is_test_environment", lambda: False, raising=False)
 
     chat_id = "999999"
-    gpt_c_changes = [{"field": "age", "old_value": "ריק", "new_value": "30"}]
+    changes = {"age": "30"}
 
-    result = upn.send_profile_update_notification(
+    # ✅ תיקון: החלפה לפונקציה הפשוטה
+    from profile_utils import send_admin_profile_notification
+    
+    result = send_admin_profile_notification(
         chat_id=chat_id,
-        user_message="אני בן 30",
-        gpt_c_changes=gpt_c_changes,
-        gpt_d_changes=[],
-        gpt_e_changes=[],
-        summary="גיל: 30"
+        changes=changes
     )
 
     assert result is True, "Profile notification should return True"
@@ -261,7 +260,7 @@ def test_profile_overview_admin_notification(monkeypatch):
     text = captured['msg']
     assert chat_id in text, "chat_id missing in overview notification"
     assert "age" in text or "גיל" in text, "Updated field name missing"
-    assert "<b>GPT-C:</b>" in text, "GPT-C section missing (should be HTML formatted)"
+    assert "עדכון פרופיל" in text, "Profile update text missing"
 
 
 def test_admin_notification_content_on_profile_update(monkeypatch):

@@ -203,46 +203,28 @@ def send_admin_profile_notification(chat_id: Any, changes: Dict) -> bool:
         
         logger.info(f"[ADMIN_NOTIFICATION] 📬 שולח הודעה למשתמש {safe_id} עם {total_changes} שינויים (C:{gpt_c_changes}, D:{gpt_d_changes}, E:{gpt_e_changes})", source="profile_utils")
         
-        # ✅ שימוש בפונקציה החדשה המאוחדת - שאילתה מוקדמת
+        # ✅ שליחת התראה פשוטה לאדמין
         try:
-            from unified_profile_notifications import send_profile_update_notification
+            from admin_notifications import send_admin_notification
             
-            # המרה לפורמט החדש עם זיהוי מדויק של שינויים
-            gpt_c_changes_list = []
-            gpt_d_changes_list = []
-            gpt_e_changes_list = []
-            
-            # פיצול השינויים לפי סוג GPT על בסיס שם השדה
+            # יצירת הודעה פשוטה על השינויים
+            change_details = []
             for field, value in changes.items():
-                change_obj = {
-                    'field': field,
-                    'old_value': 'קיים', 
-                    'new_value': str(value)
-                }
-                
-                # זיהוי סוג השינוי על בסיס שם השדה
-                field_lower = str(field).lower()
-                if any(keyword in field_lower for keyword in ['age', 'name', 'location', 'occupation', 'religion']):
-                    gpt_c_changes_list.append(change_obj)
-                elif any(keyword in field_lower for keyword in ['summary', 'description', 'bio']):
-                    gpt_d_changes_list.append(change_obj)
-                elif any(keyword in field_lower for keyword in ['emotion', 'feeling', 'mood']):
-                    gpt_e_changes_list.append(change_obj)
-                else:
-                    # ברירת מחדל - GPT-C
-                    gpt_c_changes_list.append(change_obj)
+                change_details.append(f"• {field}: {value}")
             
-            success = send_profile_update_notification(
-                chat_id=safe_id,
-                user_message=f"עדכון פרופיל עם {total_changes} שינויים",
-                gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
-                gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
-                gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
-                summary="עדכון פרופיל כללי"
-            )
+            notification_message = f"📝 **עדכון פרופיל משתמש**\n\n"
+            notification_message += f"👤 **משתמש:** {safe_id}\n"
+            notification_message += f"📊 **מספר שינויים:** {total_changes}\n"
+            notification_message += f"🔗 **פירוט השינויים:**\n" + "\n".join(change_details[:5])  # מגביל ל-5 שינויים
+            
+            if len(change_details) > 5:
+                notification_message += f"\n... ועוד {len(change_details) - 5} שינויים"
+            
+            send_admin_notification(notification_message)
+            success = True
+            
         except Exception as import_error:
-            # גיבוי: הפונקציה זמינה אבל לא פעילה עדיין
-            logger.debug(f"[ADMIN_NOTIFICATION] unified_profile_notifications not fully active: {import_error}", source="profile_utils")
+            logger.debug(f"[ADMIN_NOTIFICATION] שגיאה בשליחת התראה לאדמין: {import_error}", source="profile_utils")
             success = True  # לא נכשיל בגלל זה
         
         if success:

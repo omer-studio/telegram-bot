@@ -516,18 +516,30 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
                 
                 try:
-                    from unified_profile_notifications import send_profile_update_notification
-                    send_profile_update_notification(
-                        chat_id=safe_str(chat_id),
-                        user_message=user_msg,
-                        gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
-                        gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
-                        gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
-                        gpt_e_counter=gpt_e_counter,
-                        summary=current_summary
-                    )
+                    from admin_notifications import send_admin_notification
+                    
+                    # יצירת הודעה פשוטה על פעילות GPT
+                    notification_message = f"🤖 **פעילות GPT ברקע**\n\n"
+                    notification_message += f"👤 **משתמש:** {safe_str(chat_id)}\n"
+                    notification_message += f"💬 **הודעה:** {user_msg[:100]}{'...' if len(user_msg) > 100 else ''}\n"
+                    
+                    if gpt_c_changes_list:
+                        notification_message += f"📊 **GPT-C שינויים:** {len(gpt_c_changes_list)}\n"
+                    if gpt_d_changes_list:
+                        notification_message += f"📝 **GPT-D שינויים:** {len(gpt_d_changes_list)}\n"
+                    if gpt_e_changes_list:
+                        notification_message += f"🎭 **GPT-E שינויים:** {len(gpt_e_changes_list)}\n"
+                    
+                    if gpt_e_counter:
+                        notification_message += f"🔢 **GPT-E מונה:** {gpt_e_counter}\n"
+                    
+                    if current_summary:
+                        notification_message += f"📄 **סיכום:** {current_summary[:100]}{'...' if len(current_summary) > 100 else ''}\n"
+                    
+                    send_admin_notification(notification_message)
+                    
                 except Exception as import_error:
-                    logger.debug(f"[ADMIN_NOTIFICATION] unified_profile_notifications not fully active: {import_error}", source="message_handler")
+                    logger.debug(f"[ADMIN_NOTIFICATION] שגיאה בשליחת התראה לאדמין: {import_error}", source="message_handler")
                 
         except Exception as admin_err:
             logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")

@@ -1,8 +1,6 @@
+#!/usr/bin/env python3
 """
-admin_notifications.py
-======================
-מודול לניהול התראות אדמין ומערכת
-הועבר מ-notifications.py כדי לשמור על קוד lean ומסודר
+admin_notifications.py - התראות לאדמין
 """
 
 import json
@@ -43,7 +41,7 @@ def write_deploy_commit_to_log(commit):
         deploy_data = {
             "commit": commit,
             "timestamp": get_israel_time().isoformat(),
-            "deploy_time": datetime.now().isoformat()
+            "deploy_time": get_israel_time().isoformat()
         }
         
         with open(deploy_log_file, 'w', encoding='utf-8') as f:
