@@ -272,15 +272,15 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         logger.info(f"✅ [BACKGROUND] כל משימות הרקע הושלמו | chat_id={safe_str(chat_id)} | זמן תגובה סופי: {response_time:.2f}s", source="message_handler")
         
         # שלב 1: עדכון היסטוריה (הועבר לכאן לצמצום פער הקוד)
-        # 🔧 תיקון קריטי: הסרת כפילות שמירה - רק save_gpt_chat_message ישמור הכל
-        # try:
-        #     # עדכון ההיסטוריה המלא - כל ההודעות
-        #     update_chat_history(safe_str(chat_id), user_msg, bot_reply)
-        #     logger.info(f"[BACKGROUND] היסטוריה עודכנה | chat_id={safe_str(chat_id)}", source="message_handler")
-        # except Exception as hist_err:
-        #     logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
+        # 🔧 תיקון קריטי: החזרת שמירה לטבלת chat_messages!
+        try:
+            # עדכון ההיסטוריה המלא - כל ההודעות
+            update_chat_history(safe_str(chat_id), user_msg, bot_reply)
+            logger.info(f"[BACKGROUND] היסטוריה עודכנה | chat_id={safe_str(chat_id)}", source="message_handler")
+        except Exception as hist_err:
+            logger.warning(f"[BACKGROUND] שגיאה בעדכון היסטוריה: {hist_err}", source="message_handler")
         
-        # 🔧 ההסבר: הסרתי את update_chat_history כדי למנוע כפילויות עם save_gpt_chat_message
+        # 🔧 ההסבר: חזרנו לשמירה ב-chat_messages בנוסף ל-interactions_log
         
         # 🔧 תיקון: טעינת היסטוריה מחדש אחרי השמירה כדי שהמונה יעלה
         # ❌ BAG FIX: אל לדרוס את history_messages המקורי שנשלח ל-GPT!
@@ -625,8 +625,13 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
             await send_system_message(update, chat_id, error_msg)
             bot_reply = error_msg
             
-        # 🔥 **תיקון מערכתי: רישום ושליחת התראה מנתוני אמת**
+        # 🔥 **תיקון מערכתי: רישום מלא לשתי הטבלאות**
         try:
+            # שמירה לטבלת chat_messages
+            from chat_utils import update_chat_history
+            update_chat_history(safe_str(chat_id), user_msg, bot_reply)
+            
+            # רישום לטבלת interactions_log  
             from interactions_logger import log_simple
             from admin_notifications import send_admin_notification_from_db
             
@@ -694,8 +699,13 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
                 await send_approval_message(update, chat_id)
                 
-                # 🔥 **תיקון מערכתי: רישום ושליחת התראה מנתוני אמת**
+                # 🔥 **תיקון מערכתי: רישום מלא לשתי הטבלאות**
                 try:
+                    # שמירה לטבלת chat_messages
+                    from chat_utils import update_chat_history
+                    update_chat_history(safe_str(chat_id), user_msg, bot_reply)
+                    
+                    # רישום לטבלת interactions_log
                     from interactions_logger import log_simple
                     from admin_notifications import send_admin_notification_from_db
                     
