@@ -389,6 +389,9 @@ def export_table_to_excel(table_name, output_dir="excel_exports"):
             # קבלת הגיליון לעיצוב
             worksheet = writer.sheets[table_name]
             
+            # 🇮🇱 הגדרת הגיליון מימין לשמאל (RTL) לתמיכה בעברית
+            worksheet.sheet_view.rightToLeft = True
+            
             # 🎨 עיצוב כותרות - כחול כהה מקצועי
             header_font = Font(bold=True, color="FFFFFF", size=12, name="Calibri")
             header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")

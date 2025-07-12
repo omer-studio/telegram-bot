@@ -34,6 +34,7 @@ class DatabaseStdoutCapture:
         self.deployment_logger = deployment_logger
         self.stream_type = stream_type
         self.original_stream = sys.stdout if stream_type == "stdout" else sys.stderr
+        self.is_logging = False  # מניעת לופים אינסופיים
         
     def write(self, message):
         """כתיבה - גם למסך וגם למסד נתונים"""
@@ -42,18 +43,30 @@ class DatabaseStdoutCapture:
             self.original_stream.write(message)
             self.original_stream.flush()
             
-            # שמירה למסד נתונים רק אם זה לא הודעת שגיאה פנימית
-            if message.strip() and not message.startswith("[DEPLOY_LOG_ERROR]"):
-                level = "ERROR" if self.stream_type == "stderr" else "PRINT"
-                self.deployment_logger.log(
-                    message.strip(), 
-                    level=level, 
-                    source="terminal_output",
-                    metadata={"stream_type": self.stream_type}
-                )
+            # שמירה למסד נתונים רק אם זה לא הודעת שגיאה פנימית ואין לוגינג פעיל
+            if (message.strip() and 
+                not message.startswith("[DEPLOY_LOG_ERROR]") and
+                not self.is_logging and
+                not message.startswith("Loading LiteLLM") and
+                not message.startswith("DEBUG: using config")):
+                
+                self.is_logging = True
+                try:
+                    level = "ERROR" if self.stream_type == "stderr" else "PRINT"
+                    # נקודת מפתח: מספר השורה הזה מאוד חשוב
+                    self.deployment_logger.log(
+                        message.strip(), 
+                        level=level, 
+                        source=f"terminal_{self.stream_type}",
+                        metadata={"stream_type": self.stream_type, "captured_at": datetime.now().isoformat()}
+                    )
+                finally:
+                    self.is_logging = False
+                    
         except Exception as e:
             # אם יש שגיאה בלוגינג - לא נעצור את הבוט!
-            self.original_stream.write(f"[DEPLOY_LOG_ERROR] Capture failed: {e}\n")
+            if not self.is_logging:  # מניעת לופים אינסופיים
+                self.original_stream.write(f"[DEPLOY_LOG_ERROR] Capture failed: {e}\n")
     
     def flush(self):
         """flush למסך"""
@@ -84,9 +97,12 @@ class DeploymentLogger:
         # רישום התחלת הסשן
         self.log("🚀 Deployment Logger initialized", "INFO", "deployment_logger")
         
-        # הפעלת תפיסת הפלט הכללית
+        # הפעלת תפיסת הפלט הכללית - מיד ברנדר
         if self.capture_enabled and self.environment == "render":
             self._setup_output_capture()
+            self.log("🚀 [DEPLOY] Terminal output capture is now ACTIVE in Render!", "INFO", "deployment_logger")
+        elif self.capture_enabled and self.environment != "render":
+            self.log("ℹ️ [DEPLOY] Terminal output capture disabled - only active in Render environment", "INFO", "deployment_logger")
     
     def _setup_output_capture(self):
         """הקמת תפיסת כל הפלט לטרמינל"""
@@ -99,7 +115,9 @@ class DeploymentLogger:
             sys.stdout = DatabaseStdoutCapture(self, "stdout")
             sys.stderr = DatabaseStdoutCapture(self, "stderr")
             
-            self.log("📝 Output capture enabled - all prints will be saved to deployment_logs", "INFO", "deployment_logger")
+            # הודעה למסך הרגיל (לא דרך הlogger כדי לא ליצור לוגינג מיותר)
+            self.original_stdout.write("📝 [DEPLOY] Output capture enabled - all prints will be saved to deployment_logs\n")
+            self.original_stdout.flush()
             
         except Exception as e:
             self.log(f"❌ Failed to setup output capture: {e}", "ERROR", "deployment_logger")
@@ -409,8 +427,13 @@ class DeploymentLogger:
         # המתנה לסיום עיבוד כל הלוגים
         self.log_queue.join()
 
-# יצירת instance גלובלי - תפיסת פלט מופעלת רק ברנדר
+# יצירת instance גלובלי - תפיסת פלט מופעלת מיד ברנדר
 deployment_logger = DeploymentLogger(capture_all_output=True)
+
+# 🚀 הפעלה מיידית של תפיסת פלט ברנדר
+if deployment_logger.environment == "render":
+    deployment_logger.original_stdout.write("🚀 [DEPLOY] Deployment Logger fully initialized in Render!\n")
+    deployment_logger.original_stdout.flush()
 
 # פונקציות נוחות
 def log_info(message: str, **kwargs):
