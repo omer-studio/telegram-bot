@@ -351,7 +351,6 @@ class ComprehensiveDeployChecker:
                 'python-telegram-bot',  # נדרש לבוט
                 'openai',  # נדרש ל-GPT
                 'litellm',  # נדרש ל-LiteLLM
-                'gspread',  # נדרש לגיליונות Google
                 'fastapi',  # נדרש לשרת
                 'uvicorn',  # נדרש לשרת
                 'python-dotenv',  # נדרש להגדרות
@@ -366,6 +365,7 @@ class ComprehensiveDeployChecker:
                 'asyncio',  # נדרש לאסינכרוניות
                 'anthropic',  # נדרש ל-Anthropic
                 'google-generativeai',  # נדרש ל-Gemini
+                'schedule',  # נדרש לתזמון Render logs
             ]
             
             missing_packages = []
@@ -394,6 +394,47 @@ class ComprehensiveDeployChecker:
                 return False, errors
             
             print("✅ פורמט requirements.txt תקין")
+            
+            # 🆕 בדיקה קריטית - תווי NULL שיכולים לשבור את Render
+            print("🔍 בודק תווי NULL ו-encoding...")
+            with open('requirements.txt', 'rb') as f:
+                binary_content = f.read()
+            
+            # בדיקת תווי NULL
+            if b'\x00' in binary_content:
+                null_count = binary_content.count(b'\x00')
+                errors.append(f"❌ נמצאו {null_count} תווי NULL בקובץ requirements.txt - זה ישבור את Render!")
+                return False, errors
+            
+            # בדיקת encoding תקין
+            try:
+                binary_content.decode('utf-8')
+                print("✅ encoding UTF-8 תקין")
+            except UnicodeDecodeError as e:
+                errors.append(f"❌ בעיית encoding בקובץ requirements.txt: {e}")
+                return False, errors
+            
+            # בדיקת פרסום שורות כמו שRender עושה
+            try:
+                lines = binary_content.decode('utf-8').split('\n')
+                for i, line in enumerate(lines, 1):
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        # דמה את הפרסום של pip
+                        if '==' in line:
+                            parts = line.split('==')
+                            if len(parts) != 2:
+                                errors.append(f"❌ שורה {i}: פורמט שגוי - '{line}'")
+                                continue
+                            package, version = parts
+                            if not package.strip() or not version.strip():
+                                errors.append(f"❌ שורה {i}: חבילה או גרסה ריקה - '{line}'")
+                print("✅ פורמט pip תקין")
+            except Exception as e:
+                errors.append(f"❌ שגיאה בפרסום requirements.txt: {e}")
+                return False, errors
+            
+            print("✅ requirements.txt תקין לחלוטין לRender")
             return True, []
             
         except FileNotFoundError:
