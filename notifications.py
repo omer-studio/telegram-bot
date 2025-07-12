@@ -970,10 +970,11 @@ async def check_and_send_gentle_reminders():
         await auto_cleanup_old_users()
         
         # רענון מצב התזכורות
-        await _refresh_reminder_state()
+        _load_reminder_state()  # 🔧 תיקון: שימוש בפונקציה קיימת
         
         # מציאת מועמדים לתזכורת
         reminder_candidates = []
+        reminders_sent = 0  # 🔧 תיקון: הגדרת המשתנה
         
         for chat_id, user_state in _reminder_state.items():
             try:

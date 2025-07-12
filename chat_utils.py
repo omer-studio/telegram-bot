@@ -1008,6 +1008,10 @@ def _safe_parse_timestamp(timestamp_value):
         
         # אם זה string
         if isinstance(timestamp_value, str):
+            # וידוא שהstring לא ריק
+            if not timestamp_value.strip():
+                return None
+                
             try:
                 # ניסיון עם fromisoformat
                 return datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
@@ -1016,10 +1020,22 @@ def _safe_parse_timestamp(timestamp_value):
                     # ניסיון עם strptime
                     return datetime.strptime(timestamp_value, "%Y-%m-%d %H:%M:%S")
                 except ValueError:
-                    # אם כל השיטות נכשלו
-                    logger.warning(f"Could not parse timestamp: {timestamp_value}", source="TIMESTAMP_PARSE")
-                    return None
+                    try:
+                        # ניסיון נוסף עם פורמט שונה
+                        return datetime.strptime(timestamp_value, "%Y-%m-%d %H:%M:%S.%f")
+                    except ValueError:
+                        # אם כל השיטות נכשלו
+                        logger.warning(f"Could not parse timestamp: {timestamp_value}", source="TIMESTAMP_PARSE")
+                        return None
         
+        # אם זה לא string ולא datetime - נסה להמיר לstring
+        try:
+            str_timestamp = str(timestamp_value)
+            if str_timestamp and str_timestamp.strip():
+                return _safe_parse_timestamp(str_timestamp)
+        except:
+            pass
+            
         # אם זה לא string ולא datetime
         logger.warning(f"Unknown timestamp type: {type(timestamp_value)} - {timestamp_value}", source="TIMESTAMP_PARSE")
         return None

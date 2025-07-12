@@ -7,7 +7,6 @@ import traceback
 import sys
 from typing import Any, Optional, Dict
 from datetime import datetime
-from utils import get_israel_time
 
 class UserFriendlyError(Exception):
     """שגיאה ידידותית למשתמש - במקום traceback מפחיד"""
@@ -19,7 +18,13 @@ class UserFriendlyError(Exception):
         self.error_code = error_code
         self.what_to_do = what_to_do
         self.technical_details = technical_details
-        self.timestamp = get_israel_time()
+        
+        # Import זמני כדי למנוע circular import
+        try:
+            from utils import get_israel_time
+            self.timestamp = get_israel_time()
+        except ImportError:
+            self.timestamp = datetime.now()
         
         # הודעה ברורה למשתמש
         full_message = f"❌ {message}"
@@ -45,7 +50,15 @@ def safe_operation(operation_name: str, fallback_message: str = ""):
                 
                 print(f"🚨 {error_msg}")
                 print(f"📝 {user_msg}")
-                print(f"⏰ זמן: {get_israel_time().strftime('%H:%M:%S')}")
+                
+                # Import זמני כדי למנוע circular import
+                try:
+                    from utils import get_israel_time
+                    timestamp = get_israel_time()
+                except ImportError:
+                    timestamp = datetime.now()
+                    
+                print(f"⏰ זמן: {timestamp.strftime('%H:%M:%S')}")
                 
                 # לוג טכני למפתח (אם נדרש)
                 if hasattr(sys, '_debug') and sys._debug:
@@ -74,7 +87,15 @@ def handle_database_error(operation: str, chat_id: Any = None, user_msg: str = "
         user_friendly_msg += f" (הודעה: {user_msg[:50]}...)"
     
     print(f"💾 {user_friendly_msg}")
-    print(f"⏰ זמן: {get_israel_time().strftime('%H:%M:%S')}")
+    
+    # Import זמני כדי למנוע circular import
+    try:
+        from utils import get_israel_time
+        timestamp = get_israel_time()
+    except ImportError:
+        timestamp = datetime.now()
+        
+    print(f"⏰ זמן: {timestamp.strftime('%H:%M:%S')}")
     print("🔄 המערכת תנסה שוב בעוד כמה שניות...")
     
     return False
@@ -88,7 +109,15 @@ def handle_type_error(value: Any, expected_type: str, context: str = ""):
         user_friendly_msg += f" בהקשר: {context}"
     
     print(f"🔧 {user_friendly_msg}")
-    print(f"⏰ זמן: {get_israel_time().strftime('%H:%M:%S')}")
+    
+    # Import זמני כדי למנוע circular import
+    try:
+        from utils import get_israel_time
+        timestamp = get_israel_time()
+    except ImportError:
+        timestamp = datetime.now()
+        
+    print(f"⏰ זמן: {timestamp.strftime('%H:%M:%S')}")
     print("🔄 המערכת תנסה לתקן אוטומטית...")
     
     return None
@@ -108,7 +137,14 @@ def log_user_friendly_error(error: Exception, context: str = "", user_id: str = 
     if user_id:
         print(f"👤 משתמש: {user_id}")
     
-    print(f"⏰ זמן: {get_israel_time().strftime('%H:%M:%S')}")
+    # Import זמני כדי למנוע circular import
+    try:
+        from utils import get_israel_time
+        timestamp = get_israel_time()
+    except ImportError:
+        timestamp = datetime.now()
+        
+    print(f"⏰ זמן: {timestamp.strftime('%H:%M:%S')}")
     
     # הוראות פשוטות למשתמש
     print("💡 מה לעשות:")

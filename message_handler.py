@@ -450,7 +450,7 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         
         # שלב 5: התראות אדמין (אם יש שינויים)
         try:
-            from unified_profile_notifications import send_profile_update_notification
+            # from unified_profile_notifications import send_profile_update_notification  # הושבת זמנית
             from profile_utils import _detect_profile_changes, get_user_profile_fast, get_user_summary_fast
             
             # 🔧 תיקון: שמירת הפרופיל הישן לפני כל העדכונים
@@ -515,15 +515,19 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                 # יצירת סיכום מהיר
                 current_summary = get_user_summary_fast(safe_str(chat_id)) or ""
                 
-                send_profile_update_notification(
-                    chat_id=safe_str(chat_id),
-                    user_message=user_msg,
-                    gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
-                    gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
-                    gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
-                    gpt_e_counter=gpt_e_counter,
-                    summary=current_summary
-                )
+                try:
+                    from unified_profile_notifications import send_profile_update_notification
+                    send_profile_update_notification(
+                        chat_id=safe_str(chat_id),
+                        user_message=user_msg,
+                        gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
+                        gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
+                        gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
+                        gpt_e_counter=gpt_e_counter,
+                        summary=current_summary
+                    )
+                except Exception as import_error:
+                    logger.debug(f"[ADMIN_NOTIFICATION] unified_profile_notifications not fully active: {import_error}", source="message_handler")
                 
         except Exception as admin_err:
             logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")

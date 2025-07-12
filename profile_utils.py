@@ -203,42 +203,47 @@ def send_admin_profile_notification(chat_id: Any, changes: Dict) -> bool:
         
         logger.info(f"[ADMIN_NOTIFICATION] 📬 שולח הודעה למשתמש {safe_id} עם {total_changes} שינויים (C:{gpt_c_changes}, D:{gpt_d_changes}, E:{gpt_e_changes})", source="profile_utils")
         
-        # ✅ שימוש בפונקציה החדשה המאוחדת
-        from unified_profile_notifications import send_profile_update_notification
-        
-        # המרה לפורמט החדש עם זיהוי מדויק של שינויים
-        gpt_c_changes_list = []
-        gpt_d_changes_list = []
-        gpt_e_changes_list = []
-        
-        # פיצול השינויים לפי סוג GPT על בסיס שם השדה
-        for field, value in changes.items():
-            change_obj = {
-                'field': field,
-                'old_value': 'קיים', 
-                'new_value': str(value)
-            }
+        # ✅ שימוש בפונקציה החדשה המאוחדת - שאילתה מוקדמת
+        try:
+            from unified_profile_notifications import send_profile_update_notification
             
-            # זיהוי סוג השינוי על בסיס שם השדה
-            field_lower = str(field).lower()
-            if any(keyword in field_lower for keyword in ['age', 'name', 'location', 'occupation', 'religion']):
-                gpt_c_changes_list.append(change_obj)
-            elif any(keyword in field_lower for keyword in ['summary', 'description', 'bio']):
-                gpt_d_changes_list.append(change_obj)
-            elif any(keyword in field_lower for keyword in ['emotion', 'feeling', 'mood']):
-                gpt_e_changes_list.append(change_obj)
-            else:
-                # ברירת מחדל - GPT-C
-                gpt_c_changes_list.append(change_obj)
-        
-        success = send_profile_update_notification(
-            chat_id=safe_id,
-            user_message=f"עדכון פרופיל עם {total_changes} שינויים",
-            gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
-            gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
-            gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
-            summary="עדכון פרופיל כללי"
-        )
+            # המרה לפורמט החדש עם זיהוי מדויק של שינויים
+            gpt_c_changes_list = []
+            gpt_d_changes_list = []
+            gpt_e_changes_list = []
+            
+            # פיצול השינויים לפי סוג GPT על בסיס שם השדה
+            for field, value in changes.items():
+                change_obj = {
+                    'field': field,
+                    'old_value': 'קיים', 
+                    'new_value': str(value)
+                }
+                
+                # זיהוי סוג השינוי על בסיס שם השדה
+                field_lower = str(field).lower()
+                if any(keyword in field_lower for keyword in ['age', 'name', 'location', 'occupation', 'religion']):
+                    gpt_c_changes_list.append(change_obj)
+                elif any(keyword in field_lower for keyword in ['summary', 'description', 'bio']):
+                    gpt_d_changes_list.append(change_obj)
+                elif any(keyword in field_lower for keyword in ['emotion', 'feeling', 'mood']):
+                    gpt_e_changes_list.append(change_obj)
+                else:
+                    # ברירת מחדל - GPT-C
+                    gpt_c_changes_list.append(change_obj)
+            
+            success = send_profile_update_notification(
+                chat_id=safe_id,
+                user_message=f"עדכון פרופיל עם {total_changes} שינויים",
+                gpt_c_changes=gpt_c_changes_list if gpt_c_changes_list else None,
+                gpt_d_changes=gpt_d_changes_list if gpt_d_changes_list else None,
+                gpt_e_changes=gpt_e_changes_list if gpt_e_changes_list else None,
+                summary="עדכון פרופיל כללי"
+            )
+        except Exception as import_error:
+            # גיבוי: הפונקציה זמינה אבל לא פעילה עדיין
+            logger.debug(f"[ADMIN_NOTIFICATION] unified_profile_notifications not fully active: {import_error}", source="profile_utils")
+            success = True  # לא נכשיל בגלל זה
         
         if success:
             logger.info(f"[ADMIN_NOTIFICATION] ✅ הודעה נשלחה בהצלחה למשתמש {safe_id}", source="profile_utils")

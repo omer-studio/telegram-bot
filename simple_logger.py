@@ -9,7 +9,6 @@ import json
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional
-from user_friendly_errors import safe_str
 
 class SimpleLogger:
     """מערכת לוגים אחידה - כל הלוגים במערכת עוברים דרך כאן"""
@@ -36,8 +35,12 @@ class SimpleLogger:
             details = []
             for key, value in kwargs.items():
                 if key == 'chat_id':
-                    # טיפול בטוח ב-chat_id
-                    safe_id = safe_str(value)
+                    # Import זמני כדי למנוע circular import
+                    try:
+                        from user_friendly_errors import safe_str
+                        safe_id = safe_str(value)
+                    except ImportError:
+                        safe_id = str(value) if value is not None else ""
                     details.append(f"user={safe_id}")
                 else:
                     details.append(f"{key}={value}")
@@ -69,7 +72,13 @@ class SimpleLogger:
     
     def log_user_action(self, action: str, chat_id: Any, details: Dict = None):
         """לוג פעולת משתמש - ברור ונגיש למשתמש הלא-טכני"""
-        safe_id = safe_str(chat_id)
+        # Import זמני כדי למנוע circular import
+        try:
+            from user_friendly_errors import safe_str
+            safe_id = safe_str(chat_id)
+        except ImportError:
+            safe_id = str(chat_id) if chat_id is not None else ""
+            
         message = f"משתמש {safe_id}: {action}"
         
         if details:
@@ -100,7 +109,12 @@ class SimpleLogger:
             message += f" (הקשר: {context})"
         
         if user_id:
-            safe_id = safe_str(user_id)
+            # Import זמני כדי למנוע circular import
+            try:
+                from user_friendly_errors import safe_str
+                safe_id = safe_str(user_id)
+            except ImportError:
+                safe_id = str(user_id) if user_id is not None else ""
             message += f" (משתמש: {safe_id})"
         
         self.error(message, source="error_handler")
