@@ -14,6 +14,7 @@ import sys
 import subprocess
 import time
 import traceback
+import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
 import io
@@ -26,6 +27,47 @@ except ImportError:
     print("⚠️ psycopg2 not available - database logging disabled")
     PSYCOPG2_AVAILABLE = False
     psycopg2 = None
+
+class DatabaseLoggingHandler(logging.Handler):
+    """Handler לתפיסת כל הלוגים מ-Python logging module"""
+    
+    def __init__(self, deployment_logger):
+        super().__init__()
+        self.deployment_logger = deployment_logger
+        self.is_logging = False  # מניעת לופים אינסופיים
+        
+    def emit(self, record):
+        """פונקציה הנקראת לכל לוג שעובר דרך Python logging"""
+        try:
+            if not self.is_logging:  # מניעת לופים אינסופיים
+                self.is_logging = True
+                try:
+                    # המרת רמת לוג ל-string
+                    level_name = record.levelname
+                    
+                    # עיצוב הודעה
+                    formatted_msg = self.format(record)
+                    
+                    # שמירה לטבלה
+                    self.deployment_logger.log(
+                        formatted_msg,
+                        level=level_name,
+                        source=f"python_logging_{record.name}",
+                        metadata={
+                            "logger_name": record.name,
+                            "module": record.module,
+                            "function": record.funcName,
+                            "line": record.lineno,
+                            "thread": record.thread,
+                            "process": record.process,
+                            "captured_via": "logging_handler"
+                        }
+                    )
+                finally:
+                    self.is_logging = False
+        except Exception as e:
+            # אם יש שגיאה - לא נעצור את הלוגינג!
+            pass
 
 class DatabaseStdoutCapture:
     """תופס כל פלט stdout/stderr ושומר לטבלת deployment_logs"""
@@ -98,7 +140,9 @@ class DeploymentLogger:
         # הפעלת תפיסת הפלט הכללית - מיד ברנדר
         if self.capture_enabled and self.environment == "render":
             self._setup_output_capture()
+            self._setup_logging_handler()
             self.log("🚀 [DEPLOY] Terminal output capture is now ACTIVE in Render!", "INFO", "deployment_logger")
+            self.log("🚀 [DEPLOY] Python logging handler is now ACTIVE - capturing ALL logs!", "INFO", "deployment_logger")
         elif self.capture_enabled and self.environment != "render":
             self.log("ℹ️ [DEPLOY] Terminal output capture disabled - only active in Render environment", "INFO", "deployment_logger")
     
@@ -120,13 +164,40 @@ class DeploymentLogger:
         except Exception as e:
             self.log(f"❌ Failed to setup output capture: {e}", "ERROR", "deployment_logger")
     
+    def _setup_logging_handler(self):
+        """הקמת handler לתפיסת כל הלוגים מ-Python logging module"""
+        try:
+            # יצירת handler מותאם אישית
+            self.logging_handler = DatabaseLoggingHandler(self)
+            
+            # הוספת formatter
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            self.logging_handler.setFormatter(formatter)
+            
+            # הוספת handler לרוט logger (כל הלוגים עוברים דרכו)
+            root_logger = logging.getLogger()
+            root_logger.addHandler(self.logging_handler)
+            
+            # הודעה למסך
+            self.original_stdout.write("🎯 [DEPLOY] Python logging handler installed - capturing ALL logging module output!\n")
+            self.original_stdout.flush()
+            
+        except Exception as e:
+            self.log(f"❌ Failed to setup logging handler: {e}", "ERROR", "deployment_logger")
+    
     def disable_output_capture(self):
         """השבתת תפיסת הפלט"""
         try:
+            # השבת הסטרימים המקוריים
             if hasattr(self, 'original_stdout'):
                 sys.stdout = self.original_stdout
             if hasattr(self, 'original_stderr'):
                 sys.stderr = self.original_stderr
+            
+            # הסרת logging handler
+            if hasattr(self, 'logging_handler'):
+                root_logger = logging.getLogger()
+                root_logger.removeHandler(self.logging_handler)
                 
             self.log("📝 Output capture disabled", "INFO", "deployment_logger")
             

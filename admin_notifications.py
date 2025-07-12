@@ -659,54 +659,50 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             system_prompts_list = full_system_prompts.split('\n\n--- SYSTEM PROMPT SEPARATOR ---\n\n')
             for i, prompt in enumerate(system_prompts_list, 1):
                 if prompt.strip():
-                    if len(prompt) > 25:
-                        prompt_preview = prompt[:25] + "..."
-                        remaining_chars = len(prompt) - 25
-                        notification_text += f"{prompt_preview} (+{remaining_chars})\n"
+                    if len(prompt) > 30:
+                        prompt_preview = prompt[:30] + "..."
+                        remaining_chars = len(prompt) - 30
+                        notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt_preview} (+{remaining_chars})\n"
                     else:
-                        notification_text += f"{prompt}\n"
+                        notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt}\n"
         else:
-            notification_text += f"לא נמצאו סיסטם פרומפטים בטבלה\n"
+            notification_text += f"<b>סיסטם פרומפט:</b> לא נמצאו סיסטם פרומפטים בטבלה\n"
         
-        notification_text += f"\n➖➖➖➖➖➖➖     <b>הודעת משתמש</b>     ➖➖➖➖➖➖➖\n\n"
+        notification_text += f"\n➖➖➖➖➖     <b>הודעת משתמש</b>     ➖➖➖➖➖\n\n"
         notification_text += f"{user_msg}\n\n"
         
-        notification_text += f"➖➖➖➖➖➖➖        <b>תשובת הבוט</b>       ➖➖➖➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖➖       <b>תשובת הבוט</b>       ➖➖➖➖➖\n\n"
         notification_text += f"{bot_msg}\n\n"
         
-        notification_text += f"➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖➖➖    <b>עוד נתונים</b>   ➖➖➖➖➖➖\n\n"
         
         # GPT-B
-        notification_text += f"<b><u>מודל gpt_b:</u></b>\n"
+        notification_text += f"<b><u>מודל gpt_b:</u></b>     (מודל {gpt_b_model or 'לא זמין'})\n"
         if gpt_b_activated and gpt_b_reply:
-            notification_text += f"({gpt_b_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-B (לא קטועה)
             notification_text += f"{gpt_b_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
         # GPT-C
-        notification_text += f"<b><u>מודל gpt_c:</u></b>\n"
+        notification_text += f"<b><u>מודל gpt_c:</u></b>     (מודל {gpt_c_model or 'לא זמין'})\n"
         if gpt_c_activated and gpt_c_reply:
-            notification_text += f"({gpt_c_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-C (לא קטועה)
             notification_text += f"{gpt_c_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
         # GPT-D
-        notification_text += f"<b><u>מודל gpt_d:</u></b>\n"
+        notification_text += f"<b><u>מודל gpt_d:</u></b>     (מודל {gpt_d_model or 'לא זמין'})\n"
         if gpt_d_activated and gpt_d_reply:
-            notification_text += f"({gpt_d_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-D (לא קטועה)
             notification_text += f"{gpt_d_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
         # GPT-E - תיקון המונה
-        notification_text += f"<b><u>מודל gpt_e:</u></b>\n"
+        notification_text += f"<b><u>מודל gpt_e:</u></b>     (מודל {gpt_e_model or 'לא זמין'})\n"
         if gpt_e_activated and gpt_e_reply:
-            notification_text += f"({gpt_e_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-E (לא קטועה)
             notification_text += f"{gpt_e_reply}"
         else:
@@ -718,7 +714,7 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         
         notification_text += f"\n\n"
         
-        # הוספת סיכום פרופיל רגשי אם קיים
+        # הוספת סיכום פרופיל רגשי תמיד
         # שליפת פרופיל המשתמש
         try:
             profile_conn = psycopg2.connect(db_url)
@@ -726,17 +722,21 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             profile_cur.execute("SELECT summary FROM user_profiles WHERE chat_id = %s", (safe_str(chat_id),))
             user_profile = profile_cur.fetchone()
             
+            notification_text += f"➖➖➖➖ <b>סיכום פרופיל רגשי</b> ➖➖➖➖➖➖\n"
             if user_profile and user_profile[0] and user_profile[0].strip():
-                notification_text += f"➖➖➖➖ <b>סיכום פרופיל רגשי</b> ➖➖➖➖➖➖\n"
                 notification_text += f"{user_profile[0]}\n\n"
+            else:
+                notification_text += f"חסר (אין פרופיל למשתמש)\n\n"
             
             profile_cur.close()
             profile_conn.close()
         except Exception as profile_err:
             logger.warning(f"[DB_NOTIFICATION] שגיאה בשליפת פרופיל: {profile_err}")
+            notification_text += f"➖➖➖➖ <b>סיכום פרופיל רגשי</b> ➖➖➖➖➖➖\n"
+            notification_text += f"שגיאה בשליפת פרופיל\n\n"
         
         # הפרדה לפני נתוני אמת מהמסד
-        notification_text += f"➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖➖➖    <b>עוד נתונים</b>   ➖➖➖➖➖➖\n\n"
         
         # נתוני אמת מהמסד - למטה
         notification_text += f"📊 <b>נתוני אמת מהמסד:</b>\n"
@@ -744,14 +744,14 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         
         # תיקון חישוב הזמנים - 3 שורות נפרדות
         notification_text += f"⏱️ <b>זמן שלקח לבינה:</b> {gpt_a_time or 0:.2f}s\n"
-        notification_text += f"     <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s\n"
+        notification_text += f"      <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s\n"
         
         # חישוב פער קוד נכון
         if gpt_a_time and user_to_bot_time:
             code_gap = user_to_bot_time - gpt_a_time
-            notification_text += f"     <b>פער קוד:</b> {code_gap:.2f}s\n"
+            notification_text += f"      <b>פער קוד:</b> {code_gap:.2f}s\n"
         else:
-            notification_text += f"     <b>פער קוד:</b> {background_time:.2f}s\n"
+            notification_text += f"      <b>פער קוד:</b> {background_time:.2f}s\n"
         
         notification_text += f"📊 <b>מספר הודעות משתמש כולל:</b> {history_user_count or 1}\n"
         
@@ -768,7 +768,7 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             timestamp_utc = timestamp
         
         israel_time = timestamp_utc.astimezone(israel_tz)
-        notification_text += f"🕐 <b>שעת שליחת ההודעה :</b> {israel_time.strftime('%H:%M:%S')} (ישראל)\n\n"
+        notification_text += f"🕐 <b>ההודעה נשלחה ב:</b> {israel_time.strftime('%d/%m/%y %H:%M')} ישראל\n\n"
         
         # גישה מהירה לטבלה
         notification_text += f"🔗 <b>לגישה מהירה לטבלה:</b>\n"
