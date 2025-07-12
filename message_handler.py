@@ -640,7 +640,7 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
                 chat_id=chat_id,
                 user_msg=user_msg,
                 bot_msg=bot_reply,
-                telegram_message_id=str(getattr(update.message, 'message_id', 'unknown'))
+                telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
             )
             
             # שליחת התראה מנתוני אמת
@@ -714,7 +714,7 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                         chat_id=chat_id,
                         user_msg=user_msg,
                         bot_msg=bot_reply,
-                        telegram_message_id=str(getattr(update.message, 'message_id', 'unknown'))
+                        telegram_message_id=safe_str(getattr(update.message, 'message_id', 'unknown'))
                     )
                     
                     # שליחת התראה מנתוני אמת
