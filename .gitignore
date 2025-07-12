@@ -79,6 +79,18 @@ render_logs*.txt
 *.xlsx
 *_export_*
 
+# 🚨 קבצי JSON רגישים - מונע דליפת נתונים
+*_extraction_*.json
+*_search_results_*.json
+*_log_*.json
+*chat_history*.json
+*user_check*.json
+*messages_data*.json
+*bot_log*.json
+*render_*.json
+extracted_*.json
+user_*_*.json
+
 # 🖥️ קבצי IDE ומערכת
 .cursor/
 venv/
