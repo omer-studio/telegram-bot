@@ -400,6 +400,9 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
     Returns:
         bool: האם ההתראה נשלחה בהצלחה
     """
+    # 🔧 מחזיק פירוט השגיאות למקרה של כשל
+    error_details = []
+    
     try:
         if is_test_environment():
             logger.info(f"📨 [DB_NOTIFICATION] בסביבת בדיקה, לא שולח התראה לאדמין | interaction_id={interaction_id}")
@@ -412,32 +415,87 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
         
         if not db_url:
-            logger.error("[DB_NOTIFICATION] לא נמצא URL למסד הנתונים")
+            error_msg = "[DB_NOTIFICATION] לא נמצא URL למסד הנתונים"
+            logger.error(error_msg)
+            error_details.append("❌ DATABASE_URL לא מוגדר בקונפיגורציה")
+            
+            # שליחת התראה על הבעיה
+            try:
+                send_admin_notification(f"🚨 **בעיה בשליחת התראה מהמסד**\n\n❌ **בעיה:** DATABASE_URL לא מוגדר\n🔗 **אינטראקציה:** {interaction_id}", urgent=True)
+            except:
+                pass
+            
             return False
         
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
+        try:
+            conn = psycopg2.connect(db_url)
+            error_details.append("✅ חיבור למסד הנתונים הצליח")
+            cur = conn.cursor()
+        except Exception as conn_err:
+            error_msg = f"[DB_NOTIFICATION] שגיאה בחיבור למסד הנתונים: {conn_err}"
+            logger.error(error_msg)
+            error_details.append(f"❌ כשל בחיבור למסד הנתונים: {str(conn_err)}")
+            
+            # שליחת התראה על הבעיה
+            try:
+                send_admin_notification(f"🚨 **בעיה בשליחת התראה מהמסד**\n\n❌ **בעיה:** כשל בחיבור למסד הנתונים\n🔗 **אינטראקציה:** {interaction_id}\n📋 **שגיאה:** {str(conn_err)}", urgent=True)
+            except:
+                pass
+            
+            return False
         
-        # שליפת נתוני האינטראקציה המלאים כולל הסיסטם פרומפטים
-        cur.execute("""
-            SELECT 
-                serial_number, chat_id, user_msg, bot_msg, full_system_prompts,
-                gpt_a_model, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output, gpt_a_tokens_cached,
-                gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_processing_time, gpt_b_tokens_input, gpt_b_tokens_output, gpt_b_tokens_cached,
-                gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_processing_time, gpt_c_tokens_input, gpt_c_tokens_output, gpt_c_tokens_cached,
-                gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_processing_time, gpt_d_tokens_input, gpt_d_tokens_output, gpt_d_tokens_cached,
-                gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_processing_time, gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_tokens_cached, gpt_e_counter,
-                user_to_bot_response_time, background_processing_time, total_cost_agorot,
-                history_user_messages_count, history_bot_messages_count, timestamp
-            FROM interactions_log 
-            WHERE serial_number = %s
-        """, (interaction_id,))
-        
-        row = cur.fetchone()
-        if not row:
-            logger.error(f"[DB_NOTIFICATION] לא נמצאה אינטראקציה {interaction_id}")
-            cur.close()
-            conn.close()
+        try:
+            
+            # שליפת נתוני האינטראקציה המלאים כולל הסיסטם פרומפטים
+            cur.execute("""
+                SELECT 
+                    serial_number, chat_id, user_msg, bot_msg, full_system_prompts,
+                    gpt_a_model, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output, gpt_a_tokens_cached,
+                    gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_processing_time, gpt_b_tokens_input, gpt_b_tokens_output, gpt_b_tokens_cached,
+                    gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_processing_time, gpt_c_tokens_input, gpt_c_tokens_output, gpt_c_tokens_cached,
+                    gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_processing_time, gpt_d_tokens_input, gpt_d_tokens_output, gpt_d_tokens_cached,
+                    gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_processing_time, gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_tokens_cached, gpt_e_counter,
+                    user_to_bot_response_time, background_processing_time, total_cost_agorot,
+                    history_user_messages_count, history_bot_messages_count, timestamp
+                FROM interactions_log 
+                WHERE serial_number = %s
+            """, (interaction_id,))
+            
+            row = cur.fetchone()
+            if not row:
+                error_msg = f"[DB_NOTIFICATION] לא נמצאה אינטראקציה {interaction_id}"
+                logger.error(error_msg)
+                error_details.append(f"❌ לא נמצאה אינטראקציה {interaction_id} בטבלה")
+                
+                # שליחת התראה על הבעיה
+                try:
+                    send_admin_notification(f"🚨 **בעיה בשליחת התראה מהמסד**\n\n❌ **בעיה:** לא נמצאה אינטראקציה\n🔗 **אינטראקציה:** {interaction_id}\n📋 **הסבר:** ייתכן שהאינטראקציה לא נרשמה או שיש בעיה בטבלה", urgent=True)
+                except:
+                    pass
+                
+                cur.close()
+                conn.close()
+                return False
+            
+            error_details.append("✅ נתוני האינטראקציה נמצאו בהצלחה")
+            
+        except Exception as query_err:
+            error_msg = f"[DB_NOTIFICATION] שגיאה בשליפת נתונים: {query_err}"
+            logger.error(error_msg)
+            error_details.append(f"❌ כשל בשליפת נתונים: {str(query_err)}")
+            
+            # שליחת התראה על הבעיה
+            try:
+                send_admin_notification(f"🚨 **בעיה בשליחת התראה מהמסד**\n\n❌ **בעיה:** כשל בשליפת נתונים\n🔗 **אינטראקציה:** {interaction_id}\n📋 **שגיאה:** {str(query_err)}", urgent=True)
+            except:
+                pass
+            
+            try:
+                cur.close()
+                conn.close()
+            except:
+                pass
+            
             return False
         
         # פירוק הנתונים כולל הסיסטם פרומפטים
@@ -598,8 +656,22 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"```"
 
         # שליחת ההתראה לאדמין
-        send_admin_notification_raw(notification_text)
-        success = True  # נניח שהשליחה הצליחה אם לא הייתה exception
+        try:
+            send_admin_notification_raw(notification_text)
+            success = True
+            error_details.append("✅ הודעת האדמין נשלחה בהצלחה")
+        except Exception as send_err:
+            error_msg = f"[DB_NOTIFICATION] שגיאה בשליחת ההתראה: {send_err}"
+            logger.error(error_msg)
+            error_details.append(f"❌ כשל בשליחת ההתראה: {str(send_err)}")
+            
+            # ניסיון שליחת התראה על הכשל בשליחה
+            try:
+                send_admin_notification(f"🚨 **בעיה בשליחת התראה מהמסד**\n\n❌ **בעיה:** כשל בשליחת ההתראה עצמה\n🔗 **אינטראקציה:** {interaction_id}\n📋 **שגיאה:** {str(send_err)}", urgent=True)
+            except:
+                pass
+            
+            success = False
         
         if success:
             # עדכון הטבלה עם הנוסח שנשלח
@@ -624,4 +696,73 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         
     except Exception as e:
         logger.error(f"❌ [DB_NOTIFICATION] שגיאה בשליחת התראה מהטבלה: {e}")
+        
+        # 🔧 שליחת התראה מפורטת לאדמין על הכשל
+        try:
+            import traceback
+            
+            # בניית הודעת שגיאה מפורטת
+            error_notification = f"🚨 **כשל בשליחת התראה מהמסד** 🚨\n\n"
+            error_notification += f"🔗 **אינטראקציה:** {interaction_id}\n"
+            error_notification += f"❌ **שגיאה:** {str(e)}\n\n"
+            
+            # הוספת פירוט השגיאות שנצברו
+            if error_details:
+                error_notification += f"📋 **פירוט הבעיות:**\n"
+                for detail in error_details:
+                    error_notification += f"• {detail}\n"
+                error_notification += f"\n"
+            
+            # הוספת traceback מקוצר
+            tb_lines = traceback.format_exc().split('\n')
+            relevant_lines = [line for line in tb_lines if 'admin_notifications.py' in line or 'Exception:' in line or 'Error:' in line]
+            if relevant_lines:
+                error_notification += f"🔍 **מידע טכני:**\n"
+                error_notification += f"```\n{chr(10).join(relevant_lines[-3:])}\n```\n\n"
+            
+            # בדיקת רכיבי המערכת
+            error_notification += f"🔧 **בדיקת רכיבים:**\n"
+            
+            # בדיקה 1: הגדרות קונפיגורציה
+            try:
+                from config import ADMIN_BOT_TELEGRAM_TOKEN, ADMIN_NOTIFICATION_CHAT_ID
+                token_ok = ADMIN_BOT_TELEGRAM_TOKEN and ADMIN_BOT_TELEGRAM_TOKEN != "YOUR_ADMIN_BOT_TOKEN_HERE"
+                chat_id_ok = ADMIN_NOTIFICATION_CHAT_ID and ADMIN_NOTIFICATION_CHAT_ID.strip()
+                error_notification += f"• טוקן אדמין: {'✅' if token_ok else '❌'}\n"
+                error_notification += f"• chat_id: {'✅' if chat_id_ok else '❌'}\n"
+            except Exception as config_err:
+                error_notification += f"• קונפיגורציה: ❌ ({str(config_err)})\n"
+            
+            # בדיקה 2: ספרית requests
+            try:
+                import requests
+                error_notification += f"• requests: ✅\n"
+            except ImportError:
+                error_notification += f"• requests: ❌ (חסר)\n"
+            
+            # בדיקה 3: מסד נתונים
+            try:
+                import psycopg2
+                error_notification += f"• psycopg2: ✅\n"
+            except ImportError:
+                error_notification += f"• psycopg2: ❌ (חסר)\n"
+            
+            # בדיקה 4: database URL
+            try:
+                from config import get_config
+                config = get_config()
+                db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+                error_notification += f"• DATABASE_URL: {'✅' if db_url else '❌'}\n"
+            except Exception as db_err:
+                error_notification += f"• DATABASE_URL: ❌ ({str(db_err)})\n"
+            
+            error_notification += f"\n⚠️ **נדרש תיקון מיידי של מערכת ההתראות!**"
+            
+            # ניסיון שליחת ההתראה - רק אם יש לנו את הדברים הבסיסיים
+            send_admin_notification(error_notification, urgent=True)
+            
+        except Exception as notification_err:
+            # אם גם שליחת הודעת השגיאה נכשלת, רק נרשום בלוג
+            logger.error(f"🚨 [DB_NOTIFICATION] גם שליחת הודעת השגיאה נכשלה: {notification_err}")
+            
         return False 
