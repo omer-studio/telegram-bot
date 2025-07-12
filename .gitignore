@@ -90,6 +90,36 @@ render_logs*.txt
 *render_*.json
 extracted_*.json
 user_*_*.json
+*_analyzer*.json
+*_analysis*.json
+*_data_*.json
+*_users_*.json
+*_comprehensive_*.json
+
+# 🔐 קבצי Python רגישים - מונע קבצי ניתוח משתמשים
+*_analyzer.py
+*_analysis.py  
+*_users_analyzer.py
+*_user_analyzer.py
+*_comprehensive_*.py
+*_extractor.py
+*_data_extractor.py
+create_csv.py
+*_summary_updater.py
+*_notifications.py
+*_profile_*.py
+
+# 🚨 קבצי TXT רגישים - מונע דליפת נתונים
+*chat_history*.txt
+*user_*.txt
+*messages_*.txt
+*_summary.txt
+*_analysis.txt
+
+# 🔒 קבצי נתונים מיוחדים - חסימה מלאה
+recover-chats.json
+*_backup_*.json
+*_restore_*.json
 
 # 🖥️ קבצי IDE ומערכת
 .cursor/
