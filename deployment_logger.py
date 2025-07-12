@@ -432,6 +432,46 @@ deployment_logger = DeploymentLogger(capture_all_output=True)
 if deployment_logger.environment == "render":
     deployment_logger.original_stdout.write("🚀 [DEPLOY] Deployment Logger fully initialized in Render!\n")
     deployment_logger.original_stdout.flush()
+    
+    # 🔥 הפעלת מירור לוגי Render בזמן אמת
+    try:
+        import threading
+        import sys
+        import os
+        
+        def start_render_mirror():
+            """הפעלת מירור לוגי Render ברקע"""
+            try:
+                # ייבוא המירור
+                sys.path.insert(0, os.path.dirname(__file__))
+                from render_logs_mirror import RenderLogsMirror
+                
+                # יצירת מירור
+                mirror = RenderLogsMirror()
+                
+                # הפעלה ברקע עם interval של 2 דקות (לא לעומס Render)
+                mirror.sync_interval = 120
+                
+                deployment_logger.original_stdout.write("🔥 [DEPLOY] Starting Render API logs mirror...\n")
+                deployment_logger.original_stdout.flush()
+                
+                # הפעלת המירור ברקע
+                mirror.start_continuous_sync()
+                
+            except Exception as e:
+                deployment_logger.original_stdout.write(f"⚠️ [DEPLOY] Render mirror failed to start: {e}\n")
+                deployment_logger.original_stdout.flush()
+        
+        # הפעלת המירור בthread נפרד
+        mirror_thread = threading.Thread(target=start_render_mirror, daemon=True)
+        mirror_thread.start()
+        
+        deployment_logger.original_stdout.write("🔥 [DEPLOY] Render logs mirror thread started!\n")
+        deployment_logger.original_stdout.flush()
+        
+    except Exception as e:
+        deployment_logger.original_stdout.write(f"⚠️ [DEPLOY] Failed to start render mirror: {e}\n")
+        deployment_logger.original_stdout.flush()
 
 # פונקציות נוחות
 def log_info(message: str, **kwargs):
