@@ -597,10 +597,10 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
         
-        # שליפת נתוני האינטראקציה המלאים
+        # שליפת נתוני האינטראקציה המלאים כולל הסיסטם פרומפטים
         cur.execute("""
             SELECT 
-                serial_number, chat_id, user_msg, bot_msg,
+                serial_number, chat_id, user_msg, bot_msg, full_system_prompts,
                 gpt_a_model, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output, gpt_a_tokens_cached,
                 gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_processing_time, gpt_b_tokens_input, gpt_b_tokens_output, gpt_b_tokens_cached,
                 gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_processing_time, gpt_c_tokens_input, gpt_c_tokens_output, gpt_c_tokens_cached,
@@ -619,8 +619,8 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             conn.close()
             return False
         
-        # פירוק הנתונים
-        (serial_num, chat_id, user_msg, bot_msg,
+        # פירוק הנתונים כולל הסיסטם פרומפטים
+        (serial_num, chat_id, user_msg, bot_msg, full_system_prompts,
          gpt_a_model, gpt_a_time, gpt_a_input, gpt_a_output, gpt_a_cached,
          gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_time, gpt_b_input, gpt_b_output, gpt_b_cached,
          gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_time, gpt_c_input, gpt_c_output, gpt_c_cached,
@@ -653,9 +653,20 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text = f"💬 <b>התכתבות חדשה{chat_suffix}</b> 💬\n\n"
         notification_text += f"📚 <b>היסטוריה:</b> {history_user_count} משתמש + {history_bot_count} בוט\n"
         
-        # הוספת מידע על סיסטם פרומפטים (מוערך מכיוון שהטבלה לא שומרת מידע זה)
-        notification_text += f"<b>סיסטם פרומפט 1:</b> אתה דניאל מנטור דיגיטלי AI אי... (+10383)\n"
-        notification_text += f"<b>סיסטם פרומפט 2:</b> (סיסטם פרומפטים נוספים - מידע לא זמין בטבלה)\n"
+        # הוספת מידע על סיסטם פרומפטים האמיתיים מהטבלה
+        if full_system_prompts:
+            # פיצול הסיסטם פרומפטים לפי המפריד
+            system_prompts_list = full_system_prompts.split('\n\n--- SYSTEM PROMPT SEPARATOR ---\n\n')
+            for i, prompt in enumerate(system_prompts_list, 1):
+                if prompt.strip():
+                    if len(prompt) > 50:
+                        prompt_preview = prompt[:50] + "..."
+                        remaining_chars = len(prompt) - 50
+                        notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt_preview} (+{remaining_chars})\n"
+                    else:
+                        notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt}\n"
+        else:
+            notification_text += f"<b>סיסטם פרומפט:</b> לא נמצאו סיסטם פרומפטים בטבלה\n"
         
         notification_text += f"\n➖➖➖➖<b>הודעת משתמש</b>➖➖➖➖\n\n"
         notification_text += f"{user_msg}\n\n"
@@ -699,12 +710,11 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             # הצגת התשובה המלאה של GPT-E (לא קטועה)
             notification_text += f"{gpt_e_reply}"
         else:
-            # חישוב מונה נכון
+            # חישוב מונה נכון - כל 10 הודעות מופעל GPT-E
             current_msg_count = history_user_count if history_user_count > 0 else 1
-            counter_display = current_msg_count % 10
-            if counter_display == 0:
-                counter_display = 10
-            notification_text += f"לא הופעל - מופעל לפי מונה הודעות כרגע המונה עומד על {counter_display} מתוך 10"
+            from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
+            counter_display = current_msg_count % GPT_E_RUN_EVERY_MESSAGES
+            notification_text += f"לא הופעל - מופעל לפי מונה הודעות כרגע המונה עומד על {counter_display} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
         
         notification_text += f"\n\n"
         
@@ -716,10 +726,19 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"💰 <b>עלות כוללת לכל האינטרקציה:</b> {total_cost_agorot:.1f} אגורות\n"
         notification_text += f"⏱️ <b>זמן שלקח לבינה:</b> {gpt_a_time or 0:.2f}s | <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s    | <b>פער קוד:</b> {background_time:.2f}s\n"
         notification_text += f"📊 <b>מספר הודעות משתמש כולל:</b> {history_user_count or 1}\n"
-        # המרה לזמן ישראל
-        from datetime import timezone, timedelta
-        israel_tz = timezone(timedelta(hours=2))  # GMT+2 (או +3 בקיץ)
-        israel_time = timestamp.replace(tzinfo=timezone.utc).astimezone(israel_tz)
+        # המרה לזמן ישראל עם pytz
+        import pytz
+        israel_tz = pytz.timezone('Asia/Jerusalem')
+        
+        # המרה נכונה מUTC לזמן ישראל
+        if timestamp.tzinfo is None:
+            # אם אין timezone, נניח שזה UTC
+            utc_tz = pytz.timezone('UTC')
+            timestamp_utc = utc_tz.localize(timestamp)
+        else:
+            timestamp_utc = timestamp
+        
+        israel_time = timestamp_utc.astimezone(israel_tz)
         notification_text += f"🕐 <b>שעת שליחת ההודעה :</b> {israel_time.strftime('%H:%M:%S')} (ישראל)\n\n"
         
         # גישה מהירה לטבלה
@@ -729,19 +748,19 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"```"
 
         # שליחת ההתראה לאדמין
-        success = send_admin_notification_raw(notification_text)
+        send_admin_notification_raw(notification_text)
+        success = True  # נניח שהשליחה הצליחה אם לא הייתה exception
         
         if success:
-            # עדכון הטבלה עם הנוסח שנשלח - כולל הפורמט של 7 ספרות
+            # עדכון הטבלה עם הנוסח שנשלח
             try:
                 conn = psycopg2.connect(db_url)
                 cur = conn.cursor()
                 cur.execute("""
                     UPDATE interactions_log 
-                    SET admin_notification_text = %s,
-                        formatted_serial_number = %s
+                    SET admin_notification_text = %s
                     WHERE serial_number = %s
-                """, (notification_text, formatted_id, serial_num))
+                """, (notification_text, serial_num))
                 conn.commit()
                 cur.close()
                 conn.close()

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-🔥 Render Logs Mirror - שיקוף מלא בזמן אמת ללוגי Render
+🔥 Render Logs Mirror - שיקוף ללוגי Render בפריסה ויומית
 ====================================================================
 
-מערכת מתקדמת שמושכת כל לוג מ-Render API ושומרת אותו במסד הנתונים
-מטרה: שיקוף אחד לאחד ללוגים האמיתיים של Render ללא חסרון
+מערכת חכמה שמושכת כל לוג מ-Render API בתזמון אופטימלי:
+- כל פריסה חדשה (בהתחלת הבוט)
+- פעם ביום (מירור יומי מלא)
 
 🎯 תכונות:
-- שליפה אוטומטית כל דקה
 - שמירת כל לוג למסד הנתונים
 - מניעת כפילויות
-- חסינות לשגיאות
+- חסינות לשגיאות  
 - מעקב אחר לוגים חדשים בלבד
-- ביצועים מותאמים
+- אופטימיזציה לחיסכון ב-API calls
 
 """
 
@@ -23,6 +23,7 @@ import json
 import requests
 import threading
 import psycopg2
+import schedule
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import signal
@@ -38,17 +39,14 @@ except ImportError:
     CONFIG_AVAILABLE = False
 
 class RenderLogsMirror:
-    """מערכת שיקוף לוגי Render בזמן אמת"""
+    """מערכת שיקוף לוגי Render בפריסה ויומית"""
     
     def __init__(self):
-        self.running = False
-        self.last_sync_time = None
         self.total_logs_synced = 0
         self.api_calls_count = 0
         self.error_count = 0
         self.config = self._load_config()
-        self.sync_interval = 60  # שניות - כל דקה
-        self.batch_size = 1000  # מקסימום לוגים לבקשה
+        self.batch_size = 2000  # יותר לוגים בפריסה/יומית
         
         # וידוא שהטבלה קיימת
         self._ensure_table_exists()
@@ -56,7 +54,8 @@ class RenderLogsMirror:
         # קבלת הזמן האחרון שנשמר במסד
         self.last_saved_time = self._get_last_saved_time()
         
-        logger.info("🔥 Render Logs Mirror initialized")
+        if CONFIG_AVAILABLE:
+            logger.info("🔥 Render Logs Mirror initialized (deployment + daily)")
         print(f"🔥 [MIRROR] מערכת שיקוף לוגי Render הופעלה")
         print(f"📅 [MIRROR] זמן אחרון שנשמר: {self.last_saved_time}")
     
@@ -125,7 +124,7 @@ class RenderLogsMirror:
                 print(f"📅 [MIRROR] נמצא זמן אחרון: {result}")
                 return result
             else:
-                # אם אין נתונים, התחל מ-24 שעות אחורה
+                # אם אין נתונים, התחל מ-24 שעות אחורה  
                 start_time = datetime.now() - timedelta(hours=24)
                 print(f"📅 [MIRROR] התחלה מ-24 שעות אחורה: {start_time}")
                 return start_time
@@ -173,7 +172,7 @@ class RenderLogsMirror:
             self.error_count += 1
             return []
     
-    def _save_logs_to_db(self, logs: List[Dict]) -> int:
+    def _save_logs_to_db(self, logs: List[Dict], sync_type: str = "manual") -> int:
         """שמירת לוגים למסד הנתונים"""
         if not logs:
             return 0
@@ -225,18 +224,18 @@ class RenderLogsMirror:
                             )
                         """, (
                             timestamp_dt,
-                            'render_mirror',
+                            f'render_mirror_{sync_type}',
                             'unknown',
-                            'Mirror from Render API',
+                            f'Mirror from Render API ({sync_type})',
                             'main',
-                            'render_api_sync',
+                            f'render_api_sync_{sync_type}',
                             'render',
                             level,
                             'render_api_mirror',
-                            'fetch_logs',
+                            f'sync_{sync_type}',
                             0,
                             message,
-                            json.dumps({'original_log': log_entry})
+                            json.dumps({'original_log': log_entry, 'sync_type': sync_type})
                         ))
                         
                         saved_count += 1
@@ -249,7 +248,7 @@ class RenderLogsMirror:
             conn.close()
             
             if saved_count > 0:
-                print(f"💾 [MIRROR] נשמרו {saved_count} לוגים חדשים למסד הנתונים")
+                print(f"💾 [MIRROR] נשמרו {saved_count} לוגים חדשים ({sync_type})")
                 
             return saved_count
             
@@ -258,18 +257,20 @@ class RenderLogsMirror:
             self.error_count += 1
             return 0
     
-    def _sync_once(self):
-        """ביצוע סנכרון אחד"""
+    def sync_deployment_logs(self) -> int:
+        """סנכרון לוגים בפריסה - מאז הפעם האחרונה"""
+        print("🚀 [MIRROR] מבצע סנכרון פריסה...")
+        
         try:
-            # זמן התחלה לחיפוש
-            start_time = self.last_saved_time or (datetime.now() - timedelta(hours=1))
+            # זמן התחלה - מאז הפעם האחרונה
+            start_time = self.last_saved_time or (datetime.now() - timedelta(hours=4))
             
             # משיכת לוגים חדשים
             logs = self._fetch_render_logs(start_time)
             
             if logs:
                 # שמירת לוגים למסד
-                saved_count = self._save_logs_to_db(logs)
+                saved_count = self._save_logs_to_db(logs, "deployment")
                 
                 if saved_count > 0:
                     self.total_logs_synced += saved_count
@@ -281,111 +282,160 @@ class RenderLogsMirror:
                             latest_log['timestamp'].replace('Z', '+00:00')
                         )
                 
-                self.last_sync_time = datetime.now()
-                
+                print(f"✅ [MIRROR] סנכרון פריסה הושלם: {saved_count} לוגים חדשים")
+                return saved_count
             else:
-                print("📋 [MIRROR] אין לוגים חדשים")
+                print("📭 [MIRROR] אין לוגים חדשים בפריסה")
+                return 0
                 
         except Exception as e:
-            print(f"❌ [MIRROR] שגיאה בסנכרון: {e}")
+            print(f"❌ [MIRROR] שגיאה בסנכרון פריסה: {e}")
             self.error_count += 1
+            return 0
     
-    def start_continuous_sync(self):
-        """התחלת סנכרון רציף"""
-        print(f"🚀 [MIRROR] מתחיל סנכרון רציף כל {self.sync_interval} שניות")
-        self.running = True
+    def sync_daily_logs(self) -> int:
+        """סנכרון יומי מלא - 24 שעות אחרונות"""
+        print("📅 [MIRROR] מבצע סנכרון יומי...")
         
-        while self.running:
-            try:
-                print(f"\n🔄 [MIRROR] מבצע סנכרון - {datetime.now().strftime('%H:%M:%S')}")
+        try:
+            # זמן התחלה - 24 שעות אחורה
+            start_time = datetime.now() - timedelta(hours=24)
+            
+            # משיכת לוגים
+            logs = self._fetch_render_logs(start_time)
+            
+            if logs:
+                # שמירת לוגים למסד (רק חדשים)
+                saved_count = self._save_logs_to_db(logs, "daily")
                 
-                self._sync_once()
+                if saved_count > 0:
+                    self.total_logs_synced += saved_count
                 
-                # הצגת סטטיסטיקות
-                print(f"📊 [MIRROR] סטטיסטיקות:")
-                print(f"   📋 סה\"כ לוגים שנשמרו: {self.total_logs_synced}")
-                print(f"   🌐 קריאות API: {self.api_calls_count}")
-                print(f"   ❌ שגיאות: {self.error_count}")
-                print(f"   ⏰ סנכרון אחרון: {self.last_sync_time}")
+                print(f"✅ [MIRROR] סנכרון יומי הושלם: {saved_count} לוגים חדשים")
+                return saved_count
+            else:
+                print("📭 [MIRROR] אין לוגים חדשים בסנכרון יומי")
+                return 0
                 
-                # המתנה לסנכרון הבא
-                print(f"⏳ [MIRROR] ממתין {self.sync_interval} שניות...")
-                
-                for i in range(self.sync_interval):
-                    if not self.running:
-                        break
-                    time.sleep(1)
-                    
-            except KeyboardInterrupt:
-                print("\n🛑 [MIRROR] התקבל Ctrl+C - עוצר...")
-                self.stop()
-                break
-            except Exception as e:
-                print(f"❌ [MIRROR] שגיאה בלולאה ראשית: {e}")
-                self.error_count += 1
-                time.sleep(10)  # המתנה קצרה לפני ניסיון נוסף
+        except Exception as e:
+            print(f"❌ [MIRROR] שגיאה בסנכרון יומי: {e}")
+            self.error_count += 1
+            return 0
     
-    def sync_once_and_exit(self):
-        """ביצוע סנכרון אחד ויציאה"""
-        print("🔄 [MIRROR] מבצע סנכרון חד-פעמי...")
-        self._sync_once()
-        print("✅ [MIRROR] סנכרון חד-פעמי הושלם")
+    def setup_daily_scheduler(self):
+        """הגדרת תזמון יומי לסנכרון"""
+        try:
+            # תזמון לשעה 02:00 בלילה כל יום
+            schedule.every().day.at("02:00").do(self.sync_daily_logs)
+            
+            print("⏰ [MIRROR] תזמון יומי הוגדר ל-02:00")
+            
+            # רץ ברקע
+            def run_scheduler():
+                while True:
+                    schedule.run_pending()
+                    time.sleep(3600)  # בדיקה כל שעה
+            
+            scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+            scheduler_thread.start()
+            
+            print("✅ [MIRROR] תזמון יומי פעיל")
+            
+        except Exception as e:
+            print(f"❌ [MIRROR] שגיאה בהגדרת תזמון: {e}")
     
-    def stop(self):
-        """עצירת הסנכרון"""
-        print("🛑 [MIRROR] עוצר סנכרון...")
-        self.running = False
-        
-        # הצגת סיכום סופי
-        print(f"\n📊 [MIRROR] סיכום סופי:")
-        print(f"   📋 סה\"כ לוגים שנשמרו: {self.total_logs_synced}")
-        print(f"   🌐 קריאות API: {self.api_calls_count}")
-        print(f"   ❌ שגיאות: {self.error_count}")
-        print(f"   ⏰ זמן ריצה: {datetime.now()}")
+    def get_stats(self) -> Dict:
+        """קבלת סטטיסטיקות המירור"""
+        return {
+            'total_logs_synced': self.total_logs_synced,
+            'api_calls_count': self.api_calls_count,
+            'error_count': self.error_count,
+            'last_saved_time': self.last_saved_time
+        }
 
-def signal_handler(signum, frame):
-    """טיפול בסיגנלי מערכת"""
-    print(f"\n🛑 התקבל סיגנל {signum} - יוצא...")
-    mirror.stop()
-    sys.exit(0)
+# Instance גלובלי למירור
+mirror_instance = None
 
-# משתנה גלובלי למירור
-mirror = None
+def get_render_mirror():
+    """קבלת instance של המירור (singleton)"""
+    global mirror_instance
+    if mirror_instance is None:
+        mirror_instance = RenderLogsMirror()
+    return mirror_instance
+
+def sync_on_deployment():
+    """סנכרון בפריסה - נקרא מ-deployment_logger"""
+    try:
+        mirror = get_render_mirror()
+        saved_count = mirror.sync_deployment_logs()
+        print(f"🚀 [MIRROR] פריסה: {saved_count} לוגים נוספו")
+        return saved_count
+    except Exception as e:
+        print(f"❌ [MIRROR] שגיאה בסנכרון פריסה: {e}")
+        return 0
+
+def setup_daily_sync():
+    """הגדרת סנכרון יומי - נקרא מ-deployment_logger"""
+    try:
+        mirror = get_render_mirror()
+        mirror.setup_daily_scheduler()
+        print("⏰ [MIRROR] תזמון יומי הוגדר")
+    except Exception as e:
+        print(f"❌ [MIRROR] שגיאה בהגדרת תזמון יומי: {e}")
 
 def main():
-    """פונקציה ראשית"""
-    global mirror
-    
-    print("🔥 === Render Logs Mirror - שיקוף לוגי Render ===")
+    """פונקציה ראשית לבדיקות ידניות"""
+    print("🔥 === Render Logs Mirror - פריסה ויומית ===")
     print(f"🕐 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
     print("=" * 60)
     
-    # הגדרת טיפול בסיגנלים
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    # יצירת המירור
-    mirror = RenderLogsMirror()
+    mirror = get_render_mirror()
     
     # בדיקת ארגומנטים
     if len(sys.argv) > 1:
-        if sys.argv[1] == "once":
-            mirror.sync_once_and_exit()
+        command = sys.argv[1].lower()
+        
+        if command == "deployment":
+            print("🚀 [MIRROR] מבצע סנכרון פריסה ידני...")
+            saved_count = mirror.sync_deployment_logs()
+            print(f"✅ [MIRROR] הושלם: {saved_count} לוגים")
             return
-        elif sys.argv[1] == "test":
-            print("🧪 [MIRROR] מבצע בדיקת חיבור...")
-            mirror._sync_once()
-            print("✅ [MIRROR] בדיקה הושלמה")
+            
+        elif command == "daily":
+            print("📅 [MIRROR] מבצע סנכרון יומי ידני...")
+            saved_count = mirror.sync_daily_logs()
+            print(f"✅ [MIRROR] הושלם: {saved_count} לוגים")
+            return
+            
+        elif command == "setup":
+            print("⏰ [MIRROR] מגדיר תזמון יומי...")
+            mirror.setup_daily_scheduler()
+            print("✅ [MIRROR] תזמון הוגדר - ממתין...")
+            try:
+                while True:
+                    time.sleep(60)
+            except KeyboardInterrupt:
+                print("\n🛑 [MIRROR] תזמון הופסק")
+            return
+            
+        elif command == "stats":
+            print("📊 [MIRROR] סטטיסטיקות:")
+            stats = mirror.get_stats()
+            for key, value in stats.items():
+                print(f"   {key}: {value}")
             return
     
-    # הפעלת סנכרון רציף
-    try:
-        mirror.start_continuous_sync()
-    except Exception as e:
-        print(f"❌ [MIRROR] שגיאה ראשית: {e}")
-    finally:
-        if mirror:
-            mirror.stop()
+    # ברירת מחדל - סנכרון פריסה
+    print("🚀 [MIRROR] מבצע סנכרון פריסה (ברירת מחדל)...")
+    saved_count = mirror.sync_deployment_logs()
+    print(f"✅ [MIRROR] הושלם: {saved_count} לוגים")
+    
+    # הוראות שימוש
+    print(f"\n💡 שימושים:")
+    print(f"   python {sys.argv[0]} deployment    - סנכרון פריסה")
+    print(f"   python {sys.argv[0]} daily         - סנכרון יומי") 
+    print(f"   python {sys.argv[0]} setup         - הגדרת תזמון יומי")
+    print(f"   python {sys.argv[0]} stats         - סטטיסטיקות")
 
 if __name__ == "__main__":
     main() 

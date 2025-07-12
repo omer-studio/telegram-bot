@@ -310,9 +310,8 @@ def export_table_to_utf8_csv(table_name, output_dir="csv_exports"):
             logger.error("❌ לא נמצאו עמודות בטבלה")
             return None
         
-        # יצירת שם קובץ עם תאריך
-        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M")
-        filename = f"{table_name}_{timestamp}.csv"
+        # יצירת שם קובץ פשוט - ידרוס את הקיים
+        filename = f"{table_name}.csv"
         filepath = os.path.join(output_dir, filename)
         
         # כתיבת הקובץ עם UTF-8 BOM
@@ -377,9 +376,8 @@ def export_table_to_excel(table_name, output_dir="excel_exports"):
             logger.warning(f"⚠️ הטבלה {table_name} ריקה")
             return None
         
-        # יצירת שם קובץ עם תאריך
-        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M")
-        filename = f"{table_name}_{timestamp}.xlsx"
+        # יצירת שם קובץ פשוט - ידרוס את הקיים
+        filename = f"{table_name}.xlsx"
         filepath = os.path.join(output_dir, filename)
         
         # יצירת Excel עם עיצוב מקצועי

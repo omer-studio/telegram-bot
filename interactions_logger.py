@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, Optional, Union
-from utils import safe_str
+from utils import safe_str, get_israel_time
 
 class InteractionsLogger:
     """מחלקה לרישום מלא של כל אינטראקציה"""
@@ -157,7 +157,7 @@ class InteractionsLogger:
             cur = conn.cursor()
             
             # הכנת נתונים בסיסיים
-            now = datetime.utcnow()
+            now = get_israel_time()
             commit_hash = self.get_current_commit_hash()
             full_system_prompts = self.format_system_prompts(messages_for_gpt)
             
@@ -333,7 +333,7 @@ class InteractionsLogger:
             conn = psycopg2.connect(self.db_url)
             cur = conn.cursor()
             
-            now = datetime.utcnow()
+            now = get_israel_time()
             commit_hash = self.get_current_commit_hash()
             
             # רישום פשוט - רק השדות הבסיסיים
