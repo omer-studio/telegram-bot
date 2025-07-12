@@ -12,15 +12,10 @@ python-dotenv>=1.0.0
 asyncio>=3.4.3
 openai>=1.30.0
 anthropic>=0.25.1
-litellm==1.73.0  # 🔒 נעול לגרסה יציבה ובטוחה (מרץ 2024)
+litellm==1.73.0
 google-generativeai>=0.8.0
 fastapi>=0.110.0
 uvicorn>=0.22.0
-# 🗑️ עברנו למסד נתונים - הסרת dependency של Google Sheets
-# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
-# gspread==5.12.0  # היה נדרש רק עבור Google Sheets
-# 🗑️ Google Sheets הוסר - עברנו למסד נתונים
-# oauth2client==4.1.3  # היה נדרש רק עבור Google Sheets
 requests>=2.31.0
 Flask
 psutil>=5.9.0
@@ -28,10 +23,6 @@ APScheduler
 pytz>=2024.1
 pytest
 pyluach>=2.2.0
-psycopg2-binary>=2.9.0  # 🔧 נדרש לחיבור PostgreSQL
-# 🔧 תיקון זמני: מבוטל עד פתרון בעיית ffmpeg בסביבת הענן
-# faster-whisper>=1.1.0  
-# openai-whisper
-# ffmpeg-python>=0.2.0
+psycopg2-binary>=2.9.0
 python-dateutil>=2.8.0
-schedule==1.2.2
+schedule==1.2.2 
