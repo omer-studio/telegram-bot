@@ -18,19 +18,22 @@ recovery_manager.py
 import asyncio
 from datetime import datetime
 from typing import List, Dict, Optional
-from telegram import Bot
-from telegram.error import BadRequest
+
+# ייבוא ברזי ויציב - ללא תלות ב-telegram package
+import requests
 
 from utils import get_israel_time, safe_str
 from simple_logger import logger
-from config import BOT_TOKEN
+from config import BOT_TOKEN  
+from simple_config import TimeoutConfig
 
 
 class RecoveryManager:
     """מנהל התאוששות מרכזי - כל הפונקציונליות במקום אחד"""
     
     def __init__(self):
-        self.bot = Bot(token=BOT_TOKEN)
+        self.bot_token = BOT_TOKEN
+        self.telegram_api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     
     def add_user_to_recovery_list(self, chat_id: str, error_message: str, original_message: str = None) -> bool:
         """
@@ -155,18 +158,27 @@ class RecoveryManager:
                     "🎯 תודה על הסבלנות!"
                 )
             
-            # שליחת ההודעה
-            await self.bot.send_message(chat_id=safe_str(chat_id), text=recovery_message)
-            logger.info(f"✅ נשלחה הודעת התאוששות למשתמש {safe_str(chat_id)}")
-            return True
+            # שליחת ההודעה דרך HTTP API
+            payload = {
+                "chat_id": safe_str(chat_id),
+                "text": recovery_message
+            }
             
-        except BadRequest as e:
-            if "chat not found" in str(e).lower() or "user is deactivated" in str(e).lower():
-                logger.warning(f"⚠️ משתמש {safe_str(chat_id)} חסום/לא קיים")
-                return False
+            response = requests.post(self.telegram_api_url, json=payload, timeout=TimeoutConfig.HTTP_REQUEST_TIMEOUT)
+            
+            if response.status_code == 200:
+                logger.info(f"✅ נשלחה הודעת התאוששות למשתמש {safe_str(chat_id)}")
+                return True
             else:
-                logger.error(f"❌ שגיאת Telegram למשתמש {safe_str(chat_id)}: {e}")
-                return False
+                error_data = response.json() if response.content else {}
+                error_desc = error_data.get("description", "Unknown error")
+                
+                if "chat not found" in error_desc.lower() or "user is deactivated" in error_desc.lower():
+                    logger.warning(f"⚠️ משתמש {safe_str(chat_id)} חסום/לא קיים")
+                    return False
+                else:
+                    logger.error(f"❌ שגיאת Telegram למשתמש {safe_str(chat_id)}: {error_desc}")
+                    return False
                 
         except Exception as e:
             logger.error(f"❌ שגיאה בשליחת הודעת התאוששות למשתמש {safe_str(chat_id)}: {e}")

@@ -21,12 +21,12 @@ from contextlib import contextmanager
 from config import config
 from user_friendly_errors import safe_str, safe_operation, safe_chat_id, handle_database_error
 from simple_config import TimeoutConfig
-from utils import safe_str, get_logger
+from utils import safe_str
 from fields_dict import FIELDS_DICT, get_user_profile_fields
 
 # הגדרות מרכזיות
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
-logger = get_logger(__name__)
+from simple_logger import logger
 
 # תור למטריקות ברקע
 _metrics_queue = queue.Queue()
@@ -241,22 +241,69 @@ def update_user_profile_field(chat_id: str, field_name: str, new_value: Any, old
         return False
 
 def create_user_profiles_table(cursor):
-    """יצירת טבלת user_profiles עם כל השדות"""
+    """יצירת טבלת user_profiles עם כל השדות מfields_dict"""
+    from fields_dict import get_user_profile_fields
+    
+    # בדיקת קיום הטבלה
+    cursor.execute("""
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'user_profiles'
+        )
+    """)
+    table_exists = cursor.fetchone()[0]
+    
+    if table_exists:
+        # ✅ אם הטבלה קיימת, נוודא שיש לה את השדות החדשים
+        missing_columns = []
+        required_columns = {
+            'needs_recovery_message': 'BOOLEAN DEFAULT FALSE',
+            'recovery_original_message': 'TEXT',
+            'recovery_error_timestamp': 'TIMESTAMP',
+            'last_message_time': 'TIMESTAMP'
+        }
+        
+        for column_name, column_type in required_columns.items():
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns 
+                    WHERE table_name = 'user_profiles' 
+                    AND column_name = %s
+                )
+            """, (column_name,))
+            column_exists = cursor.fetchone()[0]
+            
+            if not column_exists:
+                missing_columns.append((column_name, column_type))
+        
+        # הוספת עמודות חסרות
+        for column_name, column_type in missing_columns:
+            try:
+                cursor.execute(f"ALTER TABLE user_profiles ADD COLUMN {column_name} {column_type}")
+                print(f"✅ [DB_MIGRATION] הוספנו עמודה חדשה: {column_name}")
+            except Exception as e:
+                print(f"⚠️ [DB_MIGRATION] שגיאה בהוספת עמודה {column_name}: {e}")
+        
+        return
+    
+    # ✅ אם הטבלה לא קיימת - ניצור אותה מאפס
+    fields = get_user_profile_fields()
+    
+    # מיפוי טיפוסי Python לטיפוסי PostgreSQL
+    type_mapping = {
+        int: "INTEGER",
+        float: "DECIMAL(10,2)",
+        str: "TEXT",
+        bool: "BOOLEAN DEFAULT FALSE",
+        datetime: "TIMESTAMP"
+    }
+    
+    # בניית רשימת עמודות
     columns = []
-    for field in get_user_profile_fields():
-        field_info = FIELDS_DICT[field]
-        field_type = field_info['type']
-        
-        # המרת טיפוסי Python לטיפוסי PostgreSQL
-        if field_type == int:
-            pg_type = 'INTEGER'
-        elif field_type == float:
-            pg_type = 'REAL'
-        elif field_type == bool:
-            pg_type = 'BOOLEAN'
-        else:
-            pg_type = 'TEXT'
-        
+    for field in fields:
+        from fields_dict import FIELDS_DICT
+        field_type = FIELDS_DICT.get(field, {}).get('type', str)
+        pg_type = type_mapping.get(field_type, "TEXT")
         columns.append(f"{field} {pg_type}")
     
     create_sql = f'''

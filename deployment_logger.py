@@ -426,4 +426,22 @@ def log_performance(message: str, duration_ms: int, **kwargs):
     deployment_logger.performance(message, duration_ms, **kwargs)
 
 def log_user_action(message: str, user_id: str, **kwargs):
-    deployment_logger.user_action(message, user_id, **kwargs) 
+    deployment_logger.user_action(message, user_id, **kwargs)
+
+# 🧪 פונקציית בדיקה מיוחדת לפיתוח
+def test_capture_functionality():
+    """בדיקת תפיסת פלט לפיתוח - נדלק רק ביד"""
+    print("🧪 [TEST] מבדק תפיסת פלט - זה אמור להיות בטבלה!")
+    print("📝 [TEST] זה print רגיל")
+    print("❌ [TEST] זה stderr", file=sys.stderr)
+    deployment_logger.log("🧪 [TEST] זה לוג ישיר", "TEST", "test_module")
+    print("✅ [TEST] בדיקה הושלמה!")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        print("🧪 מריץ בדיקת תפיסת פלט...")
+        test_capture_functionality()
+        import time
+        time.sleep(2)  # תן לworker thread לסיים
+        print("🧪 בדיקה הושלמה! בדוק בטבלת deployment_logs") 

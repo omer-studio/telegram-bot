@@ -17,6 +17,18 @@ from datetime import datetime
 import csv
 from io import StringIO
 
+# ייבוא Excel libraries
+try:
+    import pandas as pd
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+    EXCEL_AVAILABLE = True
+except ImportError:
+    EXCEL_AVAILABLE = False
+    print("⚠️ Excel libraries not available - only CSV export supported")
+
 try:
     import psycopg2
     import psycopg2.extras
@@ -326,6 +338,138 @@ def export_table_to_utf8_csv(table_name, output_dir="csv_exports"):
         logger.error(f"❌ שגיאה ביצוא הטבלה {table_name}: {e}")
         return None
 
+def export_table_to_excel(table_name, output_dir="excel_exports"):
+    """
+    מייצא טבלה לקובץ Excel מעוצב ומקצועי 📊✨
+    כולל עיצוב אוטומטי, פילטרים, וכותרות יפות
+    """
+    if not EXCEL_AVAILABLE:
+        logger.error("❌ Excel libraries לא זמינות - השתמש ב-CSV במקום")
+        return export_table_to_utf8_csv(table_name, output_dir.replace("excel_", "csv_"))
+        
+    try:
+        # יצירת תיקיה אם לא קיימת
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # קבלת URL למסד הנתונים
+        db_url = get_database_url()
+        if not db_url:
+            logger.error("❌ לא נמצא URL למסד הנתונים")
+            return None
+            
+        conn = psycopg2.connect(db_url, sslmode="require")
+        
+        # שליפת הנתונים כ-DataFrame
+        df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+        conn.close()
+        
+        if df.empty:
+            logger.warning(f"⚠️ הטבלה {table_name} ריקה")
+            return None
+        
+        # יצירת שם קובץ עם תאריך
+        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M")
+        filename = f"{table_name}_{timestamp}.xlsx"
+        filepath = os.path.join(output_dir, filename)
+        
+        # יצירת Excel עם עיצוב מקצועי
+        with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name=table_name, index=False)
+            
+            # קבלת הגיליון לעיצוב
+            worksheet = writer.sheets[table_name]
+            
+            # 🎨 עיצוב כותרות - כחול כהה מקצועי
+            header_font = Font(bold=True, color="FFFFFF", size=12, name="Calibri")
+            header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+            header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            
+            # 🎨 עיצוב גבולות
+            border = Border(
+                left=Side(border_style="thin"),
+                right=Side(border_style="thin"),
+                top=Side(border_style="thin"),
+                bottom=Side(border_style="thin")
+            )
+            
+            # החלת עיצוב על כותרות
+            for col_num, column in enumerate(df.columns, 1):
+                cell = worksheet.cell(row=1, column=col_num)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = border
+            
+            # 🎨 עיצוב נתונים
+            data_font = Font(name="Calibri", size=11)
+            
+            for row in range(2, len(df) + 2):
+                for col in range(1, len(df.columns) + 1):
+                    cell = worksheet.cell(row=row, column=col)
+                    cell.border = border
+                    cell.font = data_font
+                    cell.alignment = Alignment(vertical="center", wrap_text=False)
+                    
+                    # צבע זברה לשורות - כחול בהיר
+                    if row % 2 == 0:
+                        cell.fill = PatternFill(start_color="F7F9FC", end_color="F7F9FC", fill_type="solid")
+                    
+                    # עיצוב מיוחד לתאריכים ומספרים
+                    if isinstance(cell.value, datetime):
+                        cell.number_format = 'DD/MM/YYYY HH:MM'
+                    elif isinstance(cell.value, (int, float)) and cell.value != 0:
+                        cell.number_format = '#,##0'
+            
+            # 📏 התאמת רוחב עמודות אוטומטית
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                
+                # הגבלת רוחב מקסימלי
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            # 🔒 הקפאת שורת כותרות
+            worksheet.freeze_panes = "A2"
+            
+            # 🔽 הוספת פילטרים אוטומטיים
+            max_col_letter = worksheet.cell(row=1, column=len(df.columns)).column_letter
+            worksheet.auto_filter.ref = f"A1:{max_col_letter}{worksheet.max_row}"
+            
+            # 📊 הוספת טבלה מעוצבת
+            table = Table(
+                displayName=f"Table_{table_name}",
+                ref=f"A1:{max_col_letter}{worksheet.max_row}"
+            )
+            
+            # עיצוב טבלה
+            style = TableStyleInfo(
+                name="TableStyleMedium9", 
+                showFirstColumn=False,
+                showLastColumn=False, 
+                showRowStripes=True, 
+                showColumnStripes=False
+            )
+            table.tableStyleInfo = style
+            worksheet.add_table(table)
+        
+        logger.info(f"✅ הטבלה {table_name} יוצאה בהצלחה: {filepath}")
+        logger.info(f"📊 {len(df)} שורות, {len(df.columns)} עמודות")
+        logger.info(f"🎨 כולל עיצוב מקצועי: כותרות, פילטרים, זברה, והקפאת כותרות")
+        
+        return filepath
+        
+    except Exception as e:
+        logger.error(f"❌ שגיאה ביצוא הטבלה {table_name} ל-Excel: {e}")
+        return None
+
 def export_all_main_tables():
     """מייצא את כל הטבלאות הראשיות ל-CSV עם UTF-8 תקין"""
     main_tables = ['user_profiles', 'chat_messages', 'interactions_log']
@@ -345,6 +489,25 @@ def export_all_main_tables():
     
     return exported_files
 
+def export_all_main_tables_excel():
+    """מייצא את כל הטבלאות הראשיות ל-Excel מעוצב ומקצועי"""
+    main_tables = ['user_profiles', 'chat_messages', 'interactions_log']
+    exported_files = []
+    
+    logger.info("📤 מתחיל יצוא כל הטבלאות הראשיות ל-Excel מעוצב...")
+    
+    for table in main_tables:
+        filepath = export_table_to_excel(table)
+        if filepath:
+            exported_files.append(filepath)
+    
+    if exported_files:
+        logger.info(f"✅ יוצאו {len(exported_files)} טבלאות Excel בהצלחה:")
+        for file in exported_files:
+            logger.info(f"   📄 {file}")
+    
+    return exported_files
+
 if __name__ == "__main__":
     import sys
     
@@ -352,10 +515,10 @@ if __name__ == "__main__":
         command = sys.argv[1]
         
         if command == "export":
-            # יצוא טבלה ספציפית או כל הטבלאות
+            # יצוא טבלה ספציפית או כל הטבלאות ל-CSV
             if len(sys.argv) > 2:
                 table_name = sys.argv[2]
-                print(f"📤 מייצא טבלה: {table_name}")
+                print(f"📤 מייצא טבלה ל-CSV: {table_name}")
                 filepath = export_table_to_utf8_csv(table_name)
                 if filepath:
                     print(f"✅ הטבלה יוצאה בהצלחה: {filepath}")
@@ -363,10 +526,27 @@ if __name__ == "__main__":
                 else:
                     print("❌ שגיאה ביצוא הטבלה")
             else:
-                print("📤 מייצא את כל הטבלאות הראשיות...")
+                print("📤 מייצא את כל הטבלאות הראשיות ל-CSV...")
                 files = export_all_main_tables()
                 if files:
                     print("🎯 כל הקבצים נשמרו עם UTF-8 BOM - יפתחו נכון ב-Excel!")
+                    
+        elif command == "excel":
+            # יצוא טבלה ספציפית או כל הטבלאות ל-Excel מעוצב
+            if len(sys.argv) > 2:
+                table_name = sys.argv[2]
+                print(f"📊 מייצא טבלה ל-Excel מעוצב: {table_name}")
+                filepath = export_table_to_excel(table_name)
+                if filepath:
+                    print(f"✅ הטבלה יוצאה בהצלחה: {filepath}")
+                    print("🎨 קובץ Excel מעוצב עם כותרות, פילטרים, זברה והקפאת כותרות!")
+                else:
+                    print("❌ שגיאה ביצוא הטבלה")
+            else:
+                print("📊 מייצא את כל הטבלאות הראשיות ל-Excel מעוצב...")
+                files = export_all_main_tables_excel()
+                if files:
+                    print("🎨 כל הקבצים נשמרו כ-Excel מעוצב ומקצועי!")
                     
         elif command == "test":
             # בדיקת חיבור
@@ -382,7 +562,8 @@ if __name__ == "__main__":
             
         else:
             print("🔧 שימוש:")
-            print("  python db_tool.py export [table_name]  # יצוא טבלה ספציפית או כל הטבלאות")
+            print("  python db_tool.py export [table_name]  # יצוא לCSV טבלה ספציפית או כל הטבלאות")
+            print("  python db_tool.py excel [table_name]   # יצוא לExcel מעוצב טבלה ספציפית או כל הטבלאות")
             print("  python db_tool.py test                 # בדיקת חיבור")
             print("  python db_tool.py stats                # סטטיסטיקות כלליות")
     else:
@@ -401,5 +582,7 @@ if __name__ == "__main__":
             print(f"Sample query failed: {e}")
             
         print("\n🔧 לשימוש CLI:")
-        print("  python db_tool.py export              # יצוא כל הטבלאות עם UTF-8 תקין")
-        print("  python db_tool.py export user_profiles # יצוא טבלה ספציפית") 
+        print("  python db_tool.py export              # יצוא כל הטבלאות ל-CSV עם UTF-8 תקין")
+        print("  python db_tool.py export user_profiles # יצוא טבלה ספציפית ל-CSV")
+        print("  python db_tool.py excel               # יצוא כל הטבלאות ל-Excel מעוצב")
+        print("  python db_tool.py excel user_profiles  # יצוא טבלה ספציפית ל-Excel מעוצב") 
