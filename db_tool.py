@@ -37,34 +37,44 @@ except ImportError:
     print("⚠️ psycopg2 not available - database queries disabled")
     PSYCOPG2_AVAILABLE = False
 
-# ייבוא logger בטוח
-try:
-    from simple_logger import logger
-except ImportError:
-    # ברירת מחדל אם logger לא זמין
-    class SimpleLogger:
-        def info(self, msg): print(f"ℹ️ {msg}")
-        def error(self, msg): print(f"❌ {msg}")
-        def warning(self, msg): print(f"⚠️ {msg}")
-    logger = SimpleLogger()
+# ייבוא logger מינימלי - ללא תלויות מיותרות
+class SimpleLogger:
+    def info(self, msg): print(f"ℹ️ {msg}")
+    def error(self, msg): print(f"❌ {msg}")
+    def warning(self, msg): print(f"⚠️ {msg}")
 
-def load_config():
-    """🎯 טעינת קונפיגורציה דרך הפונקציה המרכזית"""
-    try:
-        from config import get_config
-        return get_config()
-    except Exception as e:
-        print(f"❌ שגיאה בטעינת קונפיגורציה: {e}")
-        return {}
+logger = SimpleLogger()
 
 def get_database_url():
-    """קבלת URL למסד הנתונים מהקונפיגורציה הקיימת"""
-    config = load_config()
-    if not config:
-        return None
+    """קבלת URL למסד הנתונים ישירות ממשתני סביבה - ללא טעינת המערכת כולה"""
+    import os
+    import json
     
-    # שימוש באותו דפוס כמו בקוד הקיים
-    return config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+    # נסיון 1: משתני סביבה
+    db_url = os.getenv("DATABASE_EXTERNAL_URL") or os.getenv("DATABASE_URL")
+    if db_url:
+        return db_url
+    
+    # נסיון 2: קריאה ישירה מקובץ config.json אם קיים
+    try:
+        # נתיב לקובץ הקונפיגורציה
+        config_paths = [
+            "etc/secrets/config.json",
+            "config.json",
+            os.path.expanduser("~/.telegram-bot/config.json")
+        ]
+        
+        for config_path in config_paths:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+                    db_url = config_data.get("DATABASE_EXTERNAL_URL") or config_data.get("DATABASE_URL")
+                    if db_url:
+                        return db_url
+    except Exception as e:
+        print(f"⚠️ לא ניתן לקרוא קובץ קונפיגורציה: {e}")
+    
+    return None
 
 def run_query(query: str) -> List[Dict[str, Any]]:
     """
