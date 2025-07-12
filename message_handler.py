@@ -177,7 +177,7 @@ async def send_message(update, chat_id, text, is_bot_message=True, is_gpt_a_resp
             try:
                 # שליחה עם timeout מהיר
                 sent_message = await asyncio.wait_for(
-                    update.message.reply_text(formatted_text, parse_mode="HTML"),
+                    update.message.reply_text(formatted_text, parse_mode="Markdown"),
                     timeout=current_timeout
                 )
                 
@@ -918,12 +918,12 @@ async def send_system_message(update, chat_id, text, reply_markup=None):
             try:
                 if reply_markup:
                     await asyncio.wait_for(
-                        update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML"),
+                        update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown"),
                         timeout=current_timeout
                     )
                 else:
                     await asyncio.wait_for(
-                        update.message.reply_text(text, parse_mode="HTML"),
+                        update.message.reply_text(text, parse_mode="Markdown"),
                         timeout=current_timeout
                     )
                 break  # הצלחה - יוצאים מהלולאה

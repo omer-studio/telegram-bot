@@ -659,54 +659,64 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             system_prompts_list = full_system_prompts.split('\n\n--- SYSTEM PROMPT SEPARATOR ---\n\n')
             for i, prompt in enumerate(system_prompts_list, 1):
                 if prompt.strip():
-                    if len(prompt) > 50:
-                        prompt_preview = prompt[:50] + "..."
-                        remaining_chars = len(prompt) - 50
+                    if len(prompt) > 30:
+                        prompt_preview = prompt[:30] + "..."
+                        remaining_chars = len(prompt) - 30
                         notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt_preview} (+{remaining_chars})\n"
                     else:
                         notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt}\n"
+            
+            # בדיקה האם יש סיסטם פרומפט של המשתמש
+            user_summary_found = False
+            for prompt in system_prompts_list:
+                if "מידע על המשתמש" in prompt or "🎯" in prompt:
+                    user_summary_found = True
+                    break
+            
+            if not user_summary_found:
+                notification_text += f"<b>⚠️ סיסטם פרומפט של המשתמש:</b> חסר (אין פרופיל למשתמש)\n"
         else:
             notification_text += f"<b>סיסטם פרומפט:</b> לא נמצאו סיסטם פרומפטים בטבלה\n"
         
-        notification_text += f"\n➖➖➖➖<b>הודעת משתמש</b>➖➖➖➖\n\n"
+        notification_text += f"\n➖➖➖➖➖➖➖     <b>הודעת משתמש</b>     ➖➖➖➖➖➖➖\n\n"
         notification_text += f"{user_msg}\n\n"
         
-        notification_text += f"➖➖➖➖<b>תשובת הבוט</b>➖➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖➖➖➖        <b>תשובת הבוט</b>       ➖➖➖➖➖➖➖\n\n"
         notification_text += f"{bot_msg}\n\n"
         
-        notification_text += f".➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
         
         # GPT-B
-        notification_text += f"<b>מודל gpt_b:</b>\n"
+        notification_text += f"<b><u>מודל gpt_b:</u></b>\n"
         if gpt_b_activated and gpt_b_reply:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_b_model or 'לא זמין'}\n"
+            notification_text += f"({gpt_b_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-B (לא קטועה)
             notification_text += f"{gpt_b_reply}\n\n"
         else:
-            notification_text += f"לא הופעל (אם הופעל אז לכתוב רק את התשובה)\n\n"
+            notification_text += f"לא הופעל\n\n"
         
         # GPT-C
-        notification_text += f"<b>מודל gpt_c:</b>\n"
+        notification_text += f"<b><u>מודל gpt_c:</u></b>\n"
         if gpt_c_activated and gpt_c_reply:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_c_model or 'לא זמין'}\n"
+            notification_text += f"({gpt_c_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-C (לא קטועה)
             notification_text += f"{gpt_c_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
         # GPT-D
-        notification_text += f"<b>מודל gpt_d:</b>\n"
+        notification_text += f"<b><u>מודל gpt_d:</u></b>\n"
         if gpt_d_activated and gpt_d_reply:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_d_model or 'לא זמין'}\n"
+            notification_text += f"({gpt_d_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-D (לא קטועה)
             notification_text += f"{gpt_d_reply}\n\n"
         else:
             notification_text += f"לא הופעל\n\n"
         
         # GPT-E - תיקון המונה
-        notification_text += f"<b>מודל gpt_e:</b>\n"
+        notification_text += f"<b><u>מודל gpt_e:</u></b>\n"
         if gpt_e_activated and gpt_e_reply:
-            notification_text += f"🔧 <b>מודל:</b> {gpt_e_model or 'לא זמין'}\n"
+            notification_text += f"({gpt_e_model or 'לא זמין'})\n"
             # הצגת התשובה המלאה של GPT-E (לא קטועה)
             notification_text += f"{gpt_e_reply}"
         else:
@@ -719,13 +729,25 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
         notification_text += f"\n\n"
         
         # הפרדה לפני נתוני אמת מהמסד
-        notification_text += f".➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
+        notification_text += f"➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
         
         # נתוני אמת מהמסד - למטה
         notification_text += f"📊 <b>נתוני אמת מהמסד:</b>\n"
         notification_text += f"💰 <b>עלות כוללת לכל האינטרקציה:</b> {total_cost_agorot:.1f} אגורות\n"
-        notification_text += f"⏱️ <b>זמן שלקח לבינה:</b> {gpt_a_time or 0:.2f}s | <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s    | <b>פער קוד:</b> {background_time:.2f}s\n"
+        
+        # תיקון חישוב הזמנים - 3 שורות נפרדות
+        notification_text += f"⏱️ <b>זמן שלקח לבינה:</b> {gpt_a_time or 0:.2f}s\n"
+        notification_text += f"     <b>זמן שלקח למשתמש לקבל:</b> {user_to_bot_time:.2f}s\n"
+        
+        # חישוב פער קוד נכון
+        if gpt_a_time and user_to_bot_time:
+            code_gap = user_to_bot_time - gpt_a_time
+            notification_text += f"     <b>פער קוד:</b> {code_gap:.2f}s\n"
+        else:
+            notification_text += f"     <b>פער קוד:</b> {background_time:.2f}s\n"
+        
         notification_text += f"📊 <b>מספר הודעות משתמש כולל:</b> {history_user_count or 1}\n"
+        
         # המרה לזמן ישראל עם pytz
         import pytz
         israel_tz = pytz.timezone('Asia/Jerusalem')
