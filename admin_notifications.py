@@ -659,24 +659,14 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             system_prompts_list = full_system_prompts.split('\n\n--- SYSTEM PROMPT SEPARATOR ---\n\n')
             for i, prompt in enumerate(system_prompts_list, 1):
                 if prompt.strip():
-                    if len(prompt) > 30:
-                        prompt_preview = prompt[:30] + "..."
-                        remaining_chars = len(prompt) - 30
-                        notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt_preview} (+{remaining_chars})\n"
+                    if len(prompt) > 25:
+                        prompt_preview = prompt[:25] + "..."
+                        remaining_chars = len(prompt) - 25
+                        notification_text += f"{prompt_preview} (+{remaining_chars})\n"
                     else:
-                        notification_text += f"<b>סיסטם פרומפט {i}:</b> {prompt}\n"
-            
-            # בדיקה האם יש סיסטם פרומפט של המשתמש
-            user_summary_found = False
-            for prompt in system_prompts_list:
-                if "מידע על המשתמש" in prompt or "🎯" in prompt:
-                    user_summary_found = True
-                    break
-            
-            if not user_summary_found:
-                notification_text += f"<b>⚠️ סיסטם פרומפט של המשתמש:</b> חסר (אין פרופיל למשתמש)\n"
+                        notification_text += f"{prompt}\n"
         else:
-            notification_text += f"<b>סיסטם פרומפט:</b> לא נמצאו סיסטם פרומפטים בטבלה\n"
+            notification_text += f"לא נמצאו סיסטם פרומפטים בטבלה\n"
         
         notification_text += f"\n➖➖➖➖➖➖➖     <b>הודעת משתמש</b>     ➖➖➖➖➖➖➖\n\n"
         notification_text += f"{user_msg}\n\n"
@@ -727,6 +717,23 @@ def send_admin_notification_from_db(interaction_id: int) -> bool:
             notification_text += f"לא הופעל - מופעל לפי מונה הודעות כרגע המונה עומד על {counter_display} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
         
         notification_text += f"\n\n"
+        
+        # הוספת סיכום פרופיל רגשי אם קיים
+        # שליפת פרופיל המשתמש
+        try:
+            profile_conn = psycopg2.connect(db_url)
+            profile_cur = profile_conn.cursor()
+            profile_cur.execute("SELECT summary FROM user_profiles WHERE chat_id = %s", (safe_str(chat_id),))
+            user_profile = profile_cur.fetchone()
+            
+            if user_profile and user_profile[0] and user_profile[0].strip():
+                notification_text += f"➖➖➖➖ <b>סיכום פרופיל רגשי</b> ➖➖➖➖➖➖\n"
+                notification_text += f"{user_profile[0]}\n\n"
+            
+            profile_cur.close()
+            profile_conn.close()
+        except Exception as profile_err:
+            logger.warning(f"[DB_NOTIFICATION] שגיאה בשליפת פרופיל: {profile_err}")
         
         # הפרדה לפני נתוני אמת מהמסד
         notification_text += f"➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n\n"
