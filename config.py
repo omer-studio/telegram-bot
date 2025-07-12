@@ -139,7 +139,7 @@ def load_config():
         return {
             "TELEGRAM_BOT_TOKEN": "dummy_bot_token",
             "OPENAI_API_KEY": "dummy_openai_key", 
-            "OPENAI_ADMIN_KEY": "dummy_admin_key",
+    
             "GOOGLE_SHEET_ID": "dummy_sheet_id",
             "ADMIN_BOT_TELEGRAM_TOKEN": "dummy_admin_bot_token",
             "GEMINI_API_KEY": "dummy_gemini_key",
@@ -301,8 +301,8 @@ def _mask_sensitive(value: Optional[str], visible_chars: int = 4) -> str:
 # 🚀 טוקנים וזיהויים
 TELEGRAM_BOT_TOKEN = config["TELEGRAM_BOT_TOKEN"]
 OPENAI_API_KEY = config["OPENAI_API_KEY"]
-OPENAI_ADMIN_KEY = os.getenv("OPENAI_ADMIN_KEY", config.get("OPENAI_ADMIN_KEY", OPENAI_API_KEY))
-print("מפתח Admin בשימוש (ה־OPENAI_ADMIN_KEY):", _mask_sensitive(OPENAI_ADMIN_KEY, 5))
+# הוסר OPENAI_ADMIN_KEY - משתמשים במפתח הרגיל בלבד
+print("מפתח OpenAI בשימוש:", _mask_sensitive(OPENAI_API_KEY, 5))
 
 # 🎯 הגדרת מסד נתונים - קריטי לפעולה תקינה
 DB_URL = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL") or os.getenv("DATABASE_URL")
@@ -471,7 +471,7 @@ def check_config_sanity():
     """
     missing = []
     sensitive_keys = [
-        "TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "OPENAI_ADMIN_KEY", "ADMIN_BOT_TELEGRAM_TOKEN"
+        "TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY", "ADMIN_BOT_TELEGRAM_TOKEN"
     ]
     for key in sensitive_keys:
         val = globals().get(key, None)
