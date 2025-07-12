@@ -666,12 +666,12 @@ def count_existing_data():
         except:
             counts['user_profiles'] = 0
         
-        # ספירת קריאות GPT
+        # 🔥 ספירת אינטראקציות מלאות
         try:
-            cur.execute("SELECT COUNT(*) FROM gpt_calls_log")
-            counts['gpt_calls'] = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM interactions_log")
+            counts['interactions'] = cur.fetchone()[0]
         except:
-            counts['gpt_calls'] = 0
+            counts['interactions'] = 0
         
         # ספירת שימוש
         try:

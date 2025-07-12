@@ -211,11 +211,11 @@ def generate_visual_backup_tree(backup_results, yesterday_comparison):
     """יוצר תצוגה ויזואלית של מבנה תיקיות הגיבוי"""
     tree = f"```\n{BACKUP_SCHEMA}/\n"
     
-    # מיפוי שמות לתיקיות ויזואליות
+    # מיפוי שמות לתיקיות ויזואליות - שם הטבלה + "_backup"
     folder_mapping = {
-        "user_profiles": "user_profile_backup",
-        "chat_messages": "chat_history_backup", 
-        "interactions_log": "interactions_backup"  # החליפה את gpt_calls_log
+        "user_profiles": "user_profiles_backup",
+        "chat_messages": "chat_messages_backup", 
+        "interactions_log": "interactions_log_backup"
     }
     
     table_count = len(backup_results)

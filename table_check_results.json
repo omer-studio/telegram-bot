@@ -1,0 +1,896 @@
+{
+  "timestamp": "2025-01-20T12:00:00",
+  "tables": {
+    "chat_messages": {
+      "exists": true,
+      "description": "הודעות צ'אט",
+      "row_count": 193,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "chat_id",
+          "type": "bigint"
+        },
+        {
+          "name": "chat_id",
+          "type": "bigint"
+        },
+        {
+          "name": "user_msg",
+          "type": "text"
+        },
+        {
+          "name": "user_msg",
+          "type": "text"
+        },
+        {
+          "name": "bot_msg",
+          "type": "text"
+        },
+        {
+          "name": "bot_msg",
+          "type": "text"
+        },
+        {
+          "name": "timestamp",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "timestamp",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "message_type",
+          "type": "text"
+        },
+        {
+          "name": "telegram_message_id",
+          "type": "text"
+        },
+        {
+          "name": "source_file",
+          "type": "text"
+        },
+        {
+          "name": "source_line_number",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_type",
+          "type": "text"
+        },
+        {
+          "name": "gpt_model",
+          "type": "text"
+        },
+        {
+          "name": "gpt_cost_usd",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_tokens_input",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_tokens_output",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_request",
+          "type": "jsonb"
+        },
+        {
+          "name": "gpt_response",
+          "type": "jsonb"
+        },
+        {
+          "name": "user_data",
+          "type": "jsonb"
+        },
+        {
+          "name": "bot_data",
+          "type": "jsonb"
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone"
+        }
+      ],
+      "status": "✅ תקין"
+    },
+    "user_profiles": {
+      "exists": true,
+      "description": "פרופילי משתמשים",
+      "row_count": 23,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "chat_id",
+          "type": "bigint"
+        },
+        {
+          "name": "chat_id",
+          "type": "bigint"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "age",
+          "type": "integer"
+        },
+        {
+          "name": "age",
+          "type": "integer"
+        },
+        {
+          "name": "pronoun_preference",
+          "type": "text"
+        },
+        {
+          "name": "pronoun_preference",
+          "type": "text"
+        },
+        {
+          "name": "occupation_or_role",
+          "type": "text"
+        },
+        {
+          "name": "occupation_or_role",
+          "type": "text"
+        },
+        {
+          "name": "attracted_to",
+          "type": "text"
+        },
+        {
+          "name": "attracted_to",
+          "type": "text"
+        },
+        {
+          "name": "relationship_type",
+          "type": "text"
+        },
+        {
+          "name": "relationship_type",
+          "type": "text"
+        },
+        {
+          "name": "parental_status",
+          "type": "text"
+        },
+        {
+          "name": "parental_status",
+          "type": "text"
+        },
+        {
+          "name": "self_religious_affiliation",
+          "type": "text"
+        },
+        {
+          "name": "self_religious_affiliation",
+          "type": "text"
+        },
+        {
+          "name": "self_religiosity_level",
+          "type": "text"
+        },
+        {
+          "name": "self_religiosity_level",
+          "type": "text"
+        },
+        {
+          "name": "family_religiosity",
+          "type": "text"
+        },
+        {
+          "name": "family_religiosity",
+          "type": "text"
+        },
+        {
+          "name": "closet_status",
+          "type": "text"
+        },
+        {
+          "name": "closet_status",
+          "type": "text"
+        },
+        {
+          "name": "who_knows",
+          "type": "text"
+        },
+        {
+          "name": "who_knows",
+          "type": "text"
+        },
+        {
+          "name": "who_doesnt_know",
+          "type": "text"
+        },
+        {
+          "name": "who_doesnt_know",
+          "type": "text"
+        },
+        {
+          "name": "attends_therapy",
+          "type": "text"
+        },
+        {
+          "name": "attends_therapy",
+          "type": "text"
+        },
+        {
+          "name": "primary_conflict",
+          "type": "text"
+        },
+        {
+          "name": "primary_conflict",
+          "type": "text"
+        },
+        {
+          "name": "trauma_history",
+          "type": "text"
+        },
+        {
+          "name": "trauma_history",
+          "type": "text"
+        },
+        {
+          "name": "goal_in_course",
+          "type": "text"
+        },
+        {
+          "name": "goal_in_course",
+          "type": "text"
+        },
+        {
+          "name": "language_of_strength",
+          "type": "text"
+        },
+        {
+          "name": "language_of_strength",
+          "type": "text"
+        },
+        {
+          "name": "date_first_seen",
+          "type": "text"
+        },
+        {
+          "name": "date_first_seen",
+          "type": "text"
+        },
+        {
+          "name": "coping_strategies",
+          "type": "text"
+        },
+        {
+          "name": "coping_strategies",
+          "type": "text"
+        },
+        {
+          "name": "fears_concerns",
+          "type": "text"
+        },
+        {
+          "name": "fears_concerns",
+          "type": "text"
+        },
+        {
+          "name": "future_vision",
+          "type": "text"
+        },
+        {
+          "name": "future_vision",
+          "type": "text"
+        },
+        {
+          "name": "other_insights",
+          "type": "text"
+        },
+        {
+          "name": "other_insights",
+          "type": "text"
+        },
+        {
+          "name": "last_update",
+          "type": "text"
+        },
+        {
+          "name": "last_update",
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "total_messages_count",
+          "type": "integer"
+        },
+        {
+          "name": "total_messages_count",
+          "type": "integer"
+        },
+        {
+          "name": "approved",
+          "type": "boolean"
+        },
+        {
+          "name": "approved",
+          "type": "boolean"
+        },
+        {
+          "name": "code_approve",
+          "type": "text"
+        },
+        {
+          "name": "code_approve",
+          "type": "text"
+        },
+        {
+          "name": "code_try",
+          "type": "integer"
+        },
+        {
+          "name": "code_try",
+          "type": "integer"
+        },
+        {
+          "name": "welcome_messages_sent",
+          "type": "boolean"
+        },
+        {
+          "name": "welcome_messages_sent",
+          "type": "boolean"
+        }
+      ],
+      "status": "✅ תקין"
+    },
+    "interactions_log": {
+      "exists": true,
+      "description": "לוג אינטראקציות מלא (החליף את gpt_calls_log)",
+      "row_count": 3,
+      "columns": [
+        {
+          "name": "serial_number",
+          "type": "integer"
+        },
+        {
+          "name": "telegram_message_id",
+          "type": "text"
+        },
+        {
+          "name": "chat_id",
+          "type": "bigint"
+        },
+        {
+          "name": "full_system_prompts",
+          "type": "text"
+        },
+        {
+          "name": "user_msg",
+          "type": "text"
+        },
+        {
+          "name": "bot_msg",
+          "type": "text"
+        },
+        {
+          "name": "gpt_a_model",
+          "type": "text"
+        },
+        {
+          "name": "gpt_a_cost_agorot",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_a_processing_time",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_a_tokens_input",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_a_tokens_output",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_b_activated",
+          "type": "boolean"
+        },
+        {
+          "name": "gpt_b_reply",
+          "type": "text"
+        },
+        {
+          "name": "gpt_b_model",
+          "type": "text"
+        },
+        {
+          "name": "gpt_b_cost_agorot",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_b_processing_time",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_b_tokens_input",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_b_tokens_output",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_c_activated",
+          "type": "boolean"
+        },
+        {
+          "name": "gpt_c_reply",
+          "type": "text"
+        },
+        {
+          "name": "gpt_c_model",
+          "type": "text"
+        },
+        {
+          "name": "gpt_c_cost_agorot",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_c_processing_time",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_c_tokens_input",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_c_tokens_output",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_d_activated",
+          "type": "boolean"
+        },
+        {
+          "name": "gpt_d_reply",
+          "type": "text"
+        },
+        {
+          "name": "gpt_d_model",
+          "type": "text"
+        },
+        {
+          "name": "gpt_d_cost_agorot",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_d_processing_time",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_d_tokens_input",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_d_tokens_output",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_e_activated",
+          "type": "boolean"
+        },
+        {
+          "name": "gpt_e_reply",
+          "type": "text"
+        },
+        {
+          "name": "gpt_e_model",
+          "type": "text"
+        },
+        {
+          "name": "gpt_e_cost_agorot",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_e_processing_time",
+          "type": "numeric"
+        },
+        {
+          "name": "gpt_e_tokens_input",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_e_tokens_output",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_e_counter",
+          "type": "text"
+        },
+        {
+          "name": "timestamp",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "date_only",
+          "type": "date"
+        },
+        {
+          "name": "time_only",
+          "type": "time without time zone"
+        },
+        {
+          "name": "user_to_bot_response_time",
+          "type": "numeric"
+        },
+        {
+          "name": "background_processing_time",
+          "type": "numeric"
+        },
+        {
+          "name": "total_cost_agorot",
+          "type": "numeric"
+        },
+        {
+          "name": "source_commit_hash",
+          "type": "text"
+        },
+        {
+          "name": "admin_notification_text",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "gpt_a_tokens_cached",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_b_tokens_cached",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_c_tokens_cached",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_d_tokens_cached",
+          "type": "integer"
+        },
+        {
+          "name": "gpt_e_tokens_cached",
+          "type": "integer"
+        },
+        {
+          "name": "history_user_messages_count",
+          "type": "integer"
+        },
+        {
+          "name": "history_bot_messages_count",
+          "type": "integer"
+        }
+      ],
+      "status": "✅ תקין"
+    },
+    "deployment_logs": {
+      "exists": true,
+      "description": "לוגי פריסה",
+      "row_count": 70,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "timestamp",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "timestamp",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "session_id",
+          "type": "text"
+        },
+        {
+          "name": "session_id",
+          "type": "text"
+        },
+        {
+          "name": "commit_hash",
+          "type": "text"
+        },
+        {
+          "name": "commit_hash",
+          "type": "text"
+        },
+        {
+          "name": "commit_message",
+          "type": "text"
+        },
+        {
+          "name": "commit_message",
+          "type": "text"
+        },
+        {
+          "name": "branch_name",
+          "type": "text"
+        },
+        {
+          "name": "branch_name",
+          "type": "text"
+        },
+        {
+          "name": "deployment_id",
+          "type": "text"
+        },
+        {
+          "name": "deployment_id",
+          "type": "text"
+        },
+        {
+          "name": "environment",
+          "type": "text"
+        },
+        {
+          "name": "environment",
+          "type": "text"
+        },
+        {
+          "name": "log_level",
+          "type": "text"
+        },
+        {
+          "name": "log_level",
+          "type": "text"
+        },
+        {
+          "name": "source_module",
+          "type": "text"
+        },
+        {
+          "name": "source_module",
+          "type": "text"
+        },
+        {
+          "name": "source_function",
+          "type": "text"
+        },
+        {
+          "name": "source_function",
+          "type": "text"
+        },
+        {
+          "name": "source_line",
+          "type": "integer"
+        },
+        {
+          "name": "source_line",
+          "type": "integer"
+        },
+        {
+          "name": "message",
+          "type": "text"
+        },
+        {
+          "name": "message",
+          "type": "text"
+        },
+        {
+          "name": "user_id",
+          "type": "text"
+        },
+        {
+          "name": "user_id",
+          "type": "text"
+        },
+        {
+          "name": "error_type",
+          "type": "text"
+        },
+        {
+          "name": "error_type",
+          "type": "text"
+        },
+        {
+          "name": "stack_trace",
+          "type": "text"
+        },
+        {
+          "name": "stack_trace",
+          "type": "text"
+        },
+        {
+          "name": "performance_ms",
+          "type": "integer"
+        },
+        {
+          "name": "performance_ms",
+          "type": "integer"
+        },
+        {
+          "name": "memory_mb",
+          "type": "integer"
+        },
+        {
+          "name": "memory_mb",
+          "type": "integer"
+        },
+        {
+          "name": "cpu_percent",
+          "type": "numeric"
+        },
+        {
+          "name": "cpu_percent",
+          "type": "numeric"
+        },
+        {
+          "name": "request_id",
+          "type": "text"
+        },
+        {
+          "name": "request_id",
+          "type": "text"
+        },
+        {
+          "name": "ip_address",
+          "type": "text"
+        },
+        {
+          "name": "ip_address",
+          "type": "text"
+        },
+        {
+          "name": "user_agent",
+          "type": "text"
+        },
+        {
+          "name": "user_agent",
+          "type": "text"
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb"
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "read",
+          "type": "boolean"
+        }
+      ],
+      "status": "✅ תקין"
+    },
+    "reminder_states": {
+      "exists": false,
+      "description": "מצבי תזכורות",
+      "error": "relation \"reminder_states\" does not exist\nLINE 1: SELECT COUNT(*) FROM reminder_states\n                             ^\n",
+      "status": "⚠️ שגיאה: relation \"reminder_states\" does not exist\nLINE 1: SELECT COUNT(*) FROM reminder_states\n                             ^\n"
+    },
+    "bot_error_logs": {
+      "exists": false,
+      "description": "לוגי שגיאות בוט",
+      "error": "current transaction is aborted, commands ignored until end of transaction block\n",
+      "status": "⚠️ שגיאה: current transaction is aborted, commands ignored until end of transaction block\n"
+    },
+    "bot_trace_logs": {
+      "exists": false,
+      "description": "לוגי trace בוט",
+      "error": "current transaction is aborted, commands ignored until end of transaction block\n",
+      "status": "⚠️ שגיאה: current transaction is aborted, commands ignored until end of transaction block\n"
+    },
+    "gpt_calls_log": {
+      "exists": false,
+      "description": "לוג קריאות GPT הישן (הוחלף ב-interactions_log)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    },
+    "gpt_usage_log": {
+      "exists": false,
+      "description": "לוג שימוש GPT (הושבת - כפול ל-interactions_log)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    },
+    "system_logs": {
+      "exists": false,
+      "description": "לוגי מערכת (הושבת - יש לוגים ספציפיים)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    },
+    "critical_users": {
+      "exists": false,
+      "description": "משתמשים קריטיים (הושבת - מנוהל בקונפיג)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    },
+    "billing_usage": {
+      "exists": false,
+      "description": "נתוני חיוב (הושבת - נתונים ב-interactions_log)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    },
+    "errors_stats": {
+      "exists": false,
+      "description": "סטטיסטיקות שגיאות (הושבת - לא קריטי)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    },
+    "free_model_limits": {
+      "exists": false,
+      "description": "מגבלות מודלים (הושבת - מנוהל בקונפיג)",
+      "status": "🚫 הושבתה",
+      "disabled": true
+    }
+  },
+  "integrity": {
+    "chat_messages": {
+      "error": "invalid input syntax for type bigint: \"\"\nLINE 1: ...(*) FROM chat_messages WHERE chat_id IS NULL OR chat_id = ''\n                                                                     ^\n"
+    },
+    "interactions_log": {
+      "error": "current transaction is aborted, commands ignored until end of transaction block\n"
+    },
+    "user_profiles": {
+      "error": "current transaction is aborted, commands ignored until end of transaction block\n"
+    }
+  }
+}

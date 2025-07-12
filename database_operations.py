@@ -337,28 +337,8 @@ def save_gpt_call(chat_id: str, call_type: str, request_data: Dict,
         handle_database_error("save", chat_id, f"gpt_call_{call_type}")
         return False
 
-def save_gpt_call_log(chat_id: str, gpt_type: str, request_data: Dict, response_data: Dict, 
-                      tokens_input: int, tokens_output: int, cost_usd: float, 
-                      processing_time_seconds: float, timestamp: Optional[datetime] = None) -> Optional[int]:
-    """
-    🚫 DEPRECATED: פונקציה הושבתה - כל הנתונים נשמרים ב-interactions_log
-    
-    ⚠️ המערכת עברה ל-interactions_log שמכילה נתונים מתקדמים יותר:
-    - cached tokens עבור כל GPT
-    - ספירת הודעות היסטוריה
-    - 55 שדות מפורטים במקום 11
-    
-    השתמש ב-interactions_logger.log_interaction() במקום.
-    
-    Returns:
-        int: None (פונקציה מושבתת)
-    """
-    if should_log_debug_prints():
-        print(f"🔄 [DEPRECATED] save_gpt_call_log disabled - data now saved in interactions_log")
-        print(f"   GPT-{gpt_type} call for chat_id={chat_id} skipped (use interactions_logger instead)")
-    
-    # החזרת ID דמה לתאימות לאחור
-    return None
+# 🚫 REMOVED: save_gpt_call_log - הועברה למערכת interactions_log החדשה
+# השתמש ב-interactions_logger.log_interaction() במקום
 
 # =================================
 # 📊 פונקציות שמירת מטריקות

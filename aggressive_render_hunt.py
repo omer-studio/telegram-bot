@@ -58,55 +58,37 @@ def direct_ssh_hunt():
         print(f"\n🔍 פקודה {i}: {cmd[:50]}...")
         
         try:
-                    full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
+            full_cmd = f'ssh -o ConnectTimeout={TimeoutConfig.SSH_CONNECTION_TIMEOUT} -o StrictHostKeyChecking=no {ssh_host} "{cmd}"'
         
-        result = subprocess.run(
-            full_cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT,
+            result = subprocess.run(
+                full_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=TimeoutConfig.SSH_COMMAND_TIMEOUT,
                 encoding='utf-8',
                 errors='ignore'
             )
             
             if result.returncode == 0 and result.stdout.strip():
                 output = result.stdout.strip()
-                lines = output.split('\n')
+                print(f"✅ נמצאו תוצאות:")
                 
-                print(f"✅ נמצאו {len(lines)} שורות:")
-                
-                for line in lines[:10]:  # רק 10 ראשונות
-                    if line.strip():
-                        print(f"   📝 {line[:100]}...")
-                        
-                        # חילוץ chat_id אם יש
-                        chat_id_match = re.search(r'chat_id[=:\s]*([0-9]+)', line)
-                        if chat_id_match:
-                            found_messages.append({
-                                'source': f'SSH_cmd_{i}',
-                                'chat_id': chat_id_match.group(1),
-                                'content': line.strip(),
-                                'command': cmd
-                            })
-                
-                if len(lines) > 10:
-                    print(f"   ... ועוד {len(lines) - 10} שורות")
-                    
-                # עיבוד כל השורות (לא רק תצוגה)
-                for line in lines:
-                    if line.strip() and any(keyword in line for keyword in ['chat_id', 'user_msg', 'התקבלה']):
-                        chat_id_match = re.search(r'chat_id[=:\s]*([0-9]+)', line)
-                        if chat_id_match:
-                            found_messages.append({
-                                'source': f'SSH_cmd_{i}',
-                                'chat_id': chat_id_match.group(1),
-                                'content': line.strip(),
-                                'command': cmd
-                            })
-            else:
-                print("📭 אין תוצאות")
-                
+                # אם זה רשימת קבצים, קרא מהם תוכן
+                if "/var/log" in output:
+                    for log_file in output.split('\n')[:5]:  # רק 5 קבצים ראשונים
+                        if log_file.strip():
+                            print(f"   📄 {log_file}")
+                            # קריאת תוכן הקובץ
+                            read_cmd = f'tail -n 100 "{log_file.strip()}" 2>/dev/null | grep -E "(chat_id|user_msg|התקבלה הודעה)" | head -20'
+                            content = get_ssh_content(read_cmd)
+                            if content:
+                                extracted_messages.extend(parse_log_content(content, f"SSH:{log_file}"))
+                else:
+                    print(f"   📝 {output}")
+            
+        except subprocess.TimeoutExpired:
+            print("⏰ timeout")
         except Exception as e:
             print(f"❌ שגיאה: {e}")
     

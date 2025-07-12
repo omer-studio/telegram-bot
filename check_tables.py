@@ -19,7 +19,8 @@ def check_critical_tables():
         critical_tables = {
             'chat_messages': 'הודעות צ\'אט',
             'user_profiles': 'פרופילי משתמשים', 
-            'gpt_calls_log': 'לוג קריאות GPT (כולל עלויות)',
+            'interactions_log': 'לוג אינטראקציות מלא (החליף את gpt_calls_log)',
+            'deployment_logs': 'לוגי פריסה',
             'reminder_states': 'מצבי תזכורות',
             'bot_error_logs': 'לוגי שגיאות בוט',
             'bot_trace_logs': 'לוגי trace בוט'
@@ -83,10 +84,11 @@ def check_critical_tables():
         
         # 🚫 טבלאות מיותרות - רק דיווח שהושבתו
         disabled_tables = {
-            'gpt_usage_log': 'לוג שימוש GPT (הושבת - כפול ל-gpt_calls_log)',
+            'gpt_calls_log': 'לוג קריאות GPT הישן (הוחלף ב-interactions_log)',
+            'gpt_usage_log': 'לוג שימוש GPT (הושבת - כפול ל-interactions_log)',
             'system_logs': 'לוגי מערכת (הושבת - יש לוגים ספציפיים)',
             'critical_users': 'משתמשים קריטיים (הושבת - מנוהל בקונפיג)',
-            'billing_usage': 'נתוני חיוב (הושבת - נתונים ב-gpt_calls_log)',
+            'billing_usage': 'נתוני חיוב (הושבת - נתונים ב-interactions_log)',
             'errors_stats': 'סטטיסטיקות שגיאות (הושבת - לא קריטי)',
             'free_model_limits': 'מגבלות מודלים (הושבת - מנוהל בקונפיג)'
         }
@@ -146,22 +148,24 @@ def check_data_integrity():
         except Exception as e:
             integrity_results['chat_messages'] = {'error': str(e)}
         
-        # בדיקת gpt_calls_log
+        # 🔥 בדיקת interactions_log החדשה
         try:
-            cur.execute("SELECT COUNT(*) FROM gpt_calls_log WHERE cost_usd IS NULL")
+            cur.execute("SELECT COUNT(*) FROM interactions_log WHERE total_cost_agorot IS NULL")
             null_costs = cur.fetchone()[0]
             
-            cur.execute("SELECT SUM(cost_usd) FROM gpt_calls_log WHERE cost_usd > 0")
-            total_cost = cur.fetchone()[0] or 0
+            cur.execute("SELECT SUM(total_cost_agorot) FROM interactions_log WHERE total_cost_agorot > 0")
+            total_cost_agorot = cur.fetchone()[0] or 0
+            total_cost_usd = total_cost_agorot / 100 if total_cost_agorot else 0
             
-            integrity_results['gpt_calls_log'] = {
+            integrity_results['interactions_log'] = {
                 'null_costs': null_costs,
-                'total_cost_usd': float(total_cost),
-                'status': f'✅ עלות כוללת: ${total_cost:.6f}'
+                'total_cost_agorot': int(total_cost_agorot),
+                'total_cost_usd': float(total_cost_usd),
+                'status': f'✅ עלות כוללת: {total_cost_agorot} אגורות (${total_cost_usd:.6f})'
             }
             
         except Exception as e:
-            integrity_results['gpt_calls_log'] = {'error': str(e)}
+            integrity_results['interactions_log'] = {'error': str(e)}
         
         # בדיקת user_profiles
         try:
