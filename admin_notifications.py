@@ -18,6 +18,7 @@ from config import (
 )
 from simple_config import TimeoutConfig
 from utils import get_israel_time
+from typing import Optional
 
 try:
     import telegram
@@ -564,3 +565,162 @@ def send_anonymous_chat_notification(user_message: str, bot_response: str, histo
         logger.error(f"🚨 שגיאה בשליחת התראת התכתבות אנונימית: {e}")
         logger.error(f"Error sending anonymous chat notification: {e}")
         return None 
+
+def send_admin_notification_from_db(interaction_id: int) -> bool:
+    """
+    🔥 שליחת התראה לאדמין מנתוני אמת מטבלת interactions_log
+    
+    Args:
+        interaction_id: מזהה אינטראקציה בטבלת interactions_log
+        
+    Returns:
+        bool: האם ההתראה נשלחה בהצלחה
+    """
+    try:
+        if is_test_environment():
+            logger.info(f"📨 [DB_NOTIFICATION] בסביבת בדיקה, לא שולח התראה לאדמין | interaction_id={interaction_id}")
+            return True
+
+        # חיבור למסד הנתונים
+        from config import get_config
+        import psycopg2
+        config = get_config()
+        db_url = config.get("DATABASE_EXTERNAL_URL") or config.get("DATABASE_URL")
+        
+        if not db_url:
+            logger.error("[DB_NOTIFICATION] לא נמצא URL למסד הנתונים")
+            return False
+        
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        
+        # שליפת נתוני האינטראקציה המלאים
+        cur.execute("""
+            SELECT 
+                serial_number, chat_id, user_msg, bot_msg,
+                gpt_a_model, gpt_a_processing_time, gpt_a_tokens_input, gpt_a_tokens_output, gpt_a_tokens_cached,
+                gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_processing_time, gpt_b_tokens_input, gpt_b_tokens_output, gpt_b_tokens_cached,
+                gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_processing_time, gpt_c_tokens_input, gpt_c_tokens_output, gpt_c_tokens_cached,
+                gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_processing_time, gpt_d_tokens_input, gpt_d_tokens_output, gpt_d_tokens_cached,
+                gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_processing_time, gpt_e_tokens_input, gpt_e_tokens_output, gpt_e_tokens_cached, gpt_e_counter,
+                user_to_bot_response_time, background_processing_time, total_cost_agorot,
+                history_user_messages_count, history_bot_messages_count, timestamp
+            FROM interactions_log 
+            WHERE serial_number = %s
+        """, (interaction_id,))
+        
+        row = cur.fetchone()
+        if not row:
+            logger.error(f"[DB_NOTIFICATION] לא נמצאה אינטראקציה {interaction_id}")
+            cur.close()
+            conn.close()
+            return False
+        
+        # פירוק הנתונים
+        (serial_num, chat_id, user_msg, bot_msg,
+         gpt_a_model, gpt_a_time, gpt_a_input, gpt_a_output, gpt_a_cached,
+         gpt_b_activated, gpt_b_reply, gpt_b_model, gpt_b_time, gpt_b_input, gpt_b_output, gpt_b_cached,
+         gpt_c_activated, gpt_c_reply, gpt_c_model, gpt_c_time, gpt_c_input, gpt_c_output, gpt_c_cached,
+         gpt_d_activated, gpt_d_reply, gpt_d_model, gpt_d_time, gpt_d_input, gpt_d_output, gpt_d_cached,
+         gpt_e_activated, gpt_e_reply, gpt_e_model, gpt_e_time, gpt_e_input, gpt_e_output, gpt_e_cached, gpt_e_counter,
+         user_to_bot_time, background_time, total_cost_agorot,
+         history_user_count, history_bot_count, timestamp) = row
+        
+        cur.close()
+        conn.close()
+        
+        # בניית תוכן ההתראה מנתוני אמת
+        notification_text = f"""🔥 התכתבות חדשה | ID: {serial_num}
+
+👤 **המשתמש כתב:**
+{user_msg}
+
+🤖 **תשובת הבוט:**
+{bot_msg}
+
+📊 **נתוני אמת מהמסד:**
+💰 עלות כוללת: {total_cost_agorot:.1f} אגורות ({total_cost_agorot/100:.3f} ₪)
+⏱️ זמן תגובה: {user_to_bot_time:.2f}s | רקע: {background_time:.2f}s  
+📚 היסטוריה: {history_user_count} משתמש + {history_bot_count} בוט
+🕐 זמן: {timestamp.strftime('%H:%M:%S')}
+
+🧠 **GPT-A (מודל עיקרי):**
+🔧 מודל: {gpt_a_model or 'לא זמין'}
+⏱️ זמן: {gpt_a_time or 0:.2f}s
+🎯 טוקנים: {gpt_a_input or 0}→{gpt_a_output or 0} (cached: {gpt_a_cached or 0})"""
+
+        # הוספת נתוני GPT-B אם פעיל
+        if gpt_b_activated:
+            notification_text += f"""
+
+🧠 **GPT-B (סיכום):**
+📝 תשובה: {gpt_b_reply[:100]}...
+🔧 מודל: {gpt_b_model or 'לא זמין'}  
+⏱️ זמן: {gpt_b_time or 0:.2f}s
+🎯 טוקנים: {gpt_b_input or 0}→{gpt_b_output or 0} (cached: {gpt_b_cached or 0})"""
+
+        # הוספת נתוני GPT-C אם פעיל
+        if gpt_c_activated:
+            notification_text += f"""
+
+🧠 **GPT-C (עדכון פרופיל):**
+📝 תשובה: {gpt_c_reply[:100] if gpt_c_reply else 'לא זמין'}...
+🔧 מודל: {gpt_c_model or 'לא זמין'}
+⏱️ זמן: {gpt_c_time or 0:.2f}s  
+🎯 טוקנים: {gpt_c_input or 0}→{gpt_c_output or 0} (cached: {gpt_c_cached or 0})"""
+
+        # הוספת נתוני GPT-D אם פעיל
+        if gpt_d_activated:
+            notification_text += f"""
+
+🧠 **GPT-D (עדכון חכם):**
+📝 תשובה: {gpt_d_reply[:100] if gpt_d_reply else 'לא זמין'}...
+🔧 מודל: {gpt_d_model or 'לא זמין'}
+⏱️ זמן: {gpt_d_time or 0:.2f}s
+🎯 טוקנים: {gpt_d_input or 0}→{gpt_d_output or 0} (cached: {gpt_d_cached or 0})"""
+
+        # הוספת נתוני GPT-E אם פעיל
+        if gpt_e_activated:
+            notification_text += f"""
+
+🧠 **GPT-E (אימוג'ים ומתקדם):**
+📝 תשובה: {gpt_e_reply[:100] if gpt_e_reply else 'לא זמין'}...
+🔧 מודל: {gpt_e_model or 'לא זמין'}
+⏱️ זמן: {gpt_e_time or 0:.2f}s
+🎯 טוקנים: {gpt_e_input or 0}→{gpt_e_output or 0} (cached: {gpt_e_cached or 0})
+📊 מונה: {gpt_e_counter or 'לא זמין'}"""
+
+        notification_text += f"""
+
+🔗 **לגישה מהירה לטבלה:**
+```sql
+SELECT * FROM interactions_log WHERE serial_number = {serial_num};
+```"""
+
+        # שליחת ההתראה לאדמין
+        success = send_admin_notification_raw(notification_text)
+        
+        if success:
+            # עדכון הטבלה עם הנוסח שנשלח
+            try:
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE interactions_log 
+                    SET admin_notification_text = %s 
+                    WHERE serial_number = %s
+                """, (notification_text, serial_num))
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                logger.info(f"✅ [DB_NOTIFICATION] התראה נשלחה ועודכנה בטבלה | interaction_id={interaction_id}")
+                
+            except Exception as update_err:
+                logger.warning(f"[DB_NOTIFICATION] שגיאה בעדכון הטבלה: {update_err}")
+        
+        return success
+        
+    except Exception as e:
+        logger.error(f"❌ [DB_NOTIFICATION] שגיאה בשליחת התראה מהטבלה: {e}")
+        return False 

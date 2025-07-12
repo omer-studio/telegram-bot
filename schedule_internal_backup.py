@@ -8,10 +8,10 @@ schedule_internal_backup.py
 Schema: backup/
 ├── user_profiles_backup_10_07_2025
 ├── chat_messages_backup_10_07_2025  
-├── interactions_log_backup_10_07_2025  # החליפה את gpt_calls_log
+├── interactions_log_backup_10_07_2025
 ├── user_profiles_backup_09_07_2025
 ├── chat_messages_backup_09_07_2025
-└── interactions_log_backup_09_07_2025  # החליפה את gpt_calls_log
+└── interactions_log_backup_09_07_2025
 
 🗄️ כל הגיבוי במסד נתונים - מתמשך ב-Render, אבטח לחלוטין!
 """

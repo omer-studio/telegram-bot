@@ -765,7 +765,7 @@ def perform_detailed_migration():
         'chat_messages': {'migrated': 0, 'errors': 0, 'details': []},
         'user_profiles': {'migrated': 0, 'errors': 0, 'details': []},
         'gpt_usage': {'migrated': 0, 'errors': 0, 'details': []},
-        'gpt_calls': {'migrated': 0, 'errors': 0, 'details': []},
+        # 'gpt_calls': {'migrated': 0, 'errors': 0, 'details': []},  # 🗑️ REMOVED
         'critical_users': {'migrated': 0, 'errors': 0, 'details': []},
         'reminder_state': {'migrated': 0, 'errors': 0, 'details': []},
         'billing_usage': {'migrated': 0, 'errors': 0, 'details': []},
@@ -1727,7 +1727,7 @@ def count_table_rows():
         critical_tables = [
             'chat_messages',
             'user_profiles', 
-            'gpt_calls_log',
+            # 'gpt_calls_log',  # 🗑️ REMOVED - migrated to interactions_log
             'reminder_states',
             'bot_error_logs',
             'bot_trace_logs'

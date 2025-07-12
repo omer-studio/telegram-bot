@@ -54,20 +54,22 @@ def get_summary(user_msg, bot_reply, chat_id, message_id=None):
         
         # 💾 שמירת מטריקות זמן GPT-B למסד הנתונים
         try:
-            from db_manager import save_system_metrics
-            save_system_metrics(
-                metric_type="gpt_timing",
-                chat_id=safe_str(chat_id),
-                gpt_latency_seconds=gpt_duration,
-                additional_data={
-                    "message_id": message_id,
-                    "gpt_type": "B",
-                    "model": response.model,
-                    "tokens_used": usage.get("total_tokens", 0),
-                    "cost_usd": usage.get("cost_total", 0),
-                    "operation": "summary"
-                }
-            )
+            # 🗑️ REMOVED: save_system_metrics disabled
+            # from db_manager import save_system_metrics
+            # save_system_metrics(
+            #     metric_type="gpt_timing",
+            #     chat_id=safe_str(chat_id),
+            #     gpt_latency_seconds=gpt_duration,
+            #     additional_data={
+            #         "message_id": message_id,
+            #         "gpt_type": "B",
+            #         "model": response.model,
+            #         "tokens_used": usage.get("total_tokens", 0),
+            #         "cost_usd": usage.get("cost_total", 0),
+            #         "operation": "summary"
+            #     }
+            # )
+            pass  # מבוטל זמנית
         except Exception as save_err:
             logger.warning(f"Could not save GPT-B timing metrics: {save_err}", source="gpt_b_handler")
         

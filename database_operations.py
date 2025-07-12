@@ -303,7 +303,8 @@ def save_gpt_call(chat_id: str, call_type: str, request_data: Dict,
             
             # יצירת טבלה אם לא קיימת
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS gpt_calls (
+                -- 🗑️ REMOVED: gpt_calls table disabled - migrated to interactions_log
+    -- CREATE TABLE IF NOT EXISTS gpt_calls (
                     id SERIAL PRIMARY KEY,
                     chat_id TEXT NOT NULL,
                     call_type VARCHAR(50),
@@ -319,7 +320,8 @@ def save_gpt_call(chat_id: str, call_type: str, request_data: Dict,
             
             # הכנסת הנתונים
             cur.execute("""
-                INSERT INTO gpt_calls (chat_id, call_type, request_data, response_data, 
+                -- 🗑️ REMOVED: INSERT into gpt_calls disabled
+    -- INSERT INTO gpt_calls (chat_id, call_type, request_data, response_data, 
                                      tokens_input, tokens_output, cost_usd, processing_time)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (chat_id, call_type, json.dumps(request_data), json.dumps(response_data),
@@ -344,141 +346,17 @@ def save_gpt_call(chat_id: str, call_type: str, request_data: Dict,
 # 📊 פונקציות שמירת מטריקות
 # =================================
 
+# 🗑️ REMOVED: system_metrics functionality - not needed anymore
+# כל המטריקות מטופלות עכשיו דרך הלוגינג הרגיל
+
 def save_system_metrics(metric_type: str, chat_id: Optional[str] = None, **metrics) -> bool:
     """
-    שמירת מטריקות מערכת ברקע - הפונקציה המרכזית
-    
-    Args:
-        metric_type: סוג המטריקה
-        chat_id: מזהה צ'אט (אם רלוונטי)
-        **metrics: מטריקות נוספות
-        
-    Returns:
-        bool: True אם הצליח, False אם נכשל
+    🗑️ DEPRECATED: system_metrics טבלה הוסרה - לא נדרשת יותר
+    כל המטריקות מטופלות דרך הלוגינג הרגיל של הבוט
     """
-    try:
-        # הוספה לתור ברקע
-        if not _metrics_worker_running:
-            start_metrics_worker()
-        
-        metrics_data = {
-            'metric_type': metric_type,
-            'chat_id': chat_id,
-            **metrics
-        }
-        
-        _metrics_queue.put(metrics_data, timeout=TimeoutConfig.DATABASE_QUEUE_TIMEOUT_MICRO)
-        return True
-        
-    except queue.Full:
-        if should_log_debug_prints():
-            print(f"⚠️ [METRICS] Queue full, skipping {metric_type} metric")
-        return False
-    except Exception as e:
-        if should_log_debug_prints():
-            print(f"❌ שגיאה בהוספת מטריקה {metric_type}: {e}")
-        return False
-
-def _save_system_metrics_sync(metric_type: str, chat_id: Optional[str] = None, **metrics) -> bool:
-    """שמירת מטריקות סינכרונית - לworker thread בלבד"""
-    try:
-        with safe_db_connection() as conn:
-            cur = conn.cursor()
-            
-            # יצירת טבלה אם לא קיימת
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS system_metrics (
-                    id SERIAL PRIMARY KEY,
-                    metric_type VARCHAR(50) NOT NULL,
-                    chat_id TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    memory_mb DECIMAL(10,2),
-                    memory_stage VARCHAR(50),
-                    response_time_seconds DECIMAL(10,3),
-                    prep_time_seconds DECIMAL(10,3),
-                    processing_time_seconds DECIMAL(10,3),
-                    billing_time_seconds DECIMAL(10,3),
-                    gpt_latency_seconds DECIMAL(10,3),
-                    active_sessions INTEGER,
-                    max_concurrent_users INTEGER,
-                    avg_response_time DECIMAL(10,3),
-                    max_response_time DECIMAL(10,3),
-                    api_calls_count INTEGER,
-                    api_calls_per_minute INTEGER,
-                    error_count INTEGER,
-                    error_type VARCHAR(100),
-                    timeout_count INTEGER,
-                    success_count INTEGER,
-                    additional_data JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # הכנת הנתונים
-            insert_data = {
-                'metric_type': metric_type,
-                'chat_id': chat_id,
-                'memory_mb': metrics.get('memory_mb'),
-                'memory_stage': metrics.get('memory_stage'),
-                'response_time_seconds': metrics.get('response_time_seconds'),
-                'prep_time_seconds': metrics.get('prep_time_seconds'),
-                'processing_time_seconds': metrics.get('processing_time_seconds'),
-                'billing_time_seconds': metrics.get('billing_time_seconds'),
-                'gpt_latency_seconds': metrics.get('gpt_latency_seconds'),
-                'active_sessions': metrics.get('active_sessions'),
-                'max_concurrent_users': metrics.get('max_concurrent_users'),
-                'avg_response_time': metrics.get('avg_response_time'),
-                'max_response_time': metrics.get('max_response_time'),
-                'api_calls_count': metrics.get('api_calls_count'),
-                'api_calls_per_minute': metrics.get('api_calls_per_minute'),
-                'error_count': metrics.get('error_count'),
-                'error_type': metrics.get('error_type'),
-                'timeout_count': metrics.get('timeout_count'),
-                'success_count': metrics.get('success_count'),
-                'additional_data': json.dumps(metrics.get('additional_data', {})) if metrics.get('additional_data') else None
-            }
-            
-            # יצירת SQL דינמי
-            fields = [k for k, v in insert_data.items() if v is not None]
-            placeholders = ', '.join(['%s'] * len(fields))
-            values = [insert_data[k] for k in fields]
-            
-            insert_sql = f"""
-            INSERT INTO system_metrics ({', '.join(fields)})
-            VALUES ({placeholders})
-            """
-            
-            cur.execute(insert_sql, values)
-            conn.commit()
-            cur.close()
-            
-            return True
-            
-    except Exception as e:
-        if should_log_debug_prints():
-            print(f"❌ שגיאה בשמירת מטריקות {metric_type}: {e}")
-        return False
-
-def start_metrics_worker():
-    """הפעלת worker thread למטריקות"""
-    global _metrics_worker_running
-    if not _metrics_worker_running:
-        _metrics_worker_running = True
-        worker_thread = threading.Thread(target=_metrics_worker, daemon=True)
-        worker_thread.start()
-
-def _metrics_worker():
-    """Worker thread למטריקות"""
-    while True:
-        try:
-            metrics_data = _metrics_queue.get(timeout=TimeoutConfig.LOG_QUEUE_TIMEOUT)
-            _save_system_metrics_sync(**metrics_data)
-            _metrics_queue.task_done()
-        except queue.Empty:
-            continue
-        except Exception as e:
-            if should_log_debug_prints():
-                print(f"❌ שגיאה ב-metrics worker: {e}")
+    if should_log_debug_prints():
+        print(f"🔄 [DISABLED] system_metrics removed - metric '{metric_type}' skipped")
+    return True
 
 # =================================
 # 🔄 פונקציות אינטראקציות
@@ -1088,8 +966,8 @@ def create_all_tables():
             create_user_profiles_table(cur)
             create_interactions_log_table(cur)
             
-            # טבלאות מטריקות
-            _save_system_metrics_sync("table_creation", None)  # יוצר את טבלת המטריקות
+            # 🗑️ REMOVED: system_metrics table creation disabled
+            # כל המטריקות מטופלות דרך הלוגינג הרגיל
             
             conn.commit()
             cur.close()

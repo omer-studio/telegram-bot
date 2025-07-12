@@ -386,8 +386,8 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                     except:
                         gpt_e_counter = None
                 
-                # רישום האינטראקציה המלאה
-                log_success = log_interaction(
+                # 🔥 רישום האינטראקציה המלאה והחזרת מזהה לצורך התראה
+                interaction_id = log_interaction(
                     chat_id=chat_id,
                     telegram_message_id=str(message_id),
                     user_msg=user_msg,
@@ -398,8 +398,16 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
                     gpt_e_counter=gpt_e_counter
                 )
                 
-                if log_success:
-                    print(f"🔥 [INTERACTIONS_LOG] אינטראקציה נרשמה בטבלה המרכזית החדשה | chat_id={safe_str(chat_id)}")
+                if interaction_id:
+                    print(f"🔥 [INTERACTIONS_LOG] אינטראקציה #{interaction_id} נרשמה בטבלה המרכזית | chat_id={safe_str(chat_id)}")
+                    
+                    # 🔥 שליחת התראה לאדמין מנתוני אמת
+                    try:
+                        from admin_notifications import send_admin_notification_from_db
+                        send_admin_notification_from_db(interaction_id)
+                        print(f"✅ [ADMIN_NOTIFICATION] התראה נשלחה מנתוני אמת | interaction_id={interaction_id}")
+                    except Exception as admin_notif_err:
+                        logger.warning(f"[ADMIN_NOTIFICATION] שגיאה בשליחת התראה: {admin_notif_err}", source="message_handler")
                 
             except Exception as interactions_log_err:
                 logger.warning(f"[INTERACTIONS_LOG] שגיאה ברישום לטבלה המרכזית: {interactions_log_err}", source="message_handler")
@@ -520,82 +528,11 @@ async def handle_background_tasks(update, context, chat_id, user_msg, bot_reply,
         except Exception as admin_err:
             logger.warning(f"[BACKGROUND] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
         
-        # 📨 **הדבר האחרון בשרשרת**: שליחת התכתבות אנונימית לאדמין עם כל הנתונים המלאים!
-        # ✅ כעת נשלח התראה אחרי שכל הדברים הקשורים לאותה הודעה הסתיימו
-        try:
-            # 🔧 תיקון: שימוש בזמן התגובה האמיתי שנמדד מיד אחרי שליחה למשתמש
-            gpt_response_time = gpt_result.get("gpt_pure_latency", 0) if isinstance(gpt_result, dict) else 0
-            
-            # חישוב מונה GPT-E
-            gpt_e_counter = None
-            if gpt_e_result and isinstance(gpt_e_result, dict) and gpt_e_result.get("success"):
-                try:
-                    from chat_utils import get_total_user_messages_count
-                    from gpt_e_handler import GPT_E_RUN_EVERY_MESSAGES
-                    total_messages = get_total_user_messages_count(safe_str(chat_id))
-                    current_count = total_messages % GPT_E_RUN_EVERY_MESSAGES
-                    gpt_e_counter = f"מופעל לפי מונה הודעות כרגע המונה עומד על {current_count} מתוך {GPT_E_RUN_EVERY_MESSAGES}"
-                except:
-                    gpt_e_counter = None
-            
-            # 🔧 **התראה סופית לאדמין עם כל המידע האמיתי!**
-            from admin_notifications import send_anonymous_chat_notification
-            admin_notification_result = send_anonymous_chat_notification(
-                user_msg,
-                bot_reply,  # התשובה האמיתית במקום "⏳ טרם נענה"
-                history_messages=original_history_messages,  # ✅ ההיסטוריה המקורית שנשלחה ל-GPT
-                messages_for_gpt=original_messages_for_gpt,  # ✅ ההודעות המקוריות שנשלחו ל-GPT
-                gpt_timing=gpt_response_time,
-                user_timing=user_response_actual_time,
-                chat_id=chat_id,
-                gpt_b_result=summary_result,
-                gpt_c_result=gpt_c_result,
-                gpt_d_result=gpt_d_result,
-                gpt_e_result=gpt_e_result,
-                gpt_e_counter=gpt_e_counter,
-                message_number=None  # הסרנו מספר הודעה - יירשם ב-interactions_log
-            )
-            
-            # 🔥 עדכון טבלת interactions_log עם הנוסח שנשלח לאדמין
-            try:
-                from interactions_logger import get_interactions_logger
-                logger_instance = get_interactions_logger()
-                
-                # קבלת הנוסח שנשלח לאדמין (admin_notification_result הוא הטקסט עצמו)
-                admin_notification_text = admin_notification_result if isinstance(admin_notification_result, str) else ''
-                
-                if admin_notification_text:
-                    # עדכון הטבלה עם הנוסח לאדמין
-                    try:
-                        import psycopg2
-                        conn = psycopg2.connect(logger_instance.db_url)
-                        cur = conn.cursor()
-                        
-                        # עדכון השורה האחרונה עבור המשתמש הזה
-                        cur.execute("""
-                            UPDATE interactions_log 
-                            SET admin_notification_text = %s 
-                            WHERE chat_id = %s 
-                            ORDER BY serial_number DESC 
-                            LIMIT 1
-                        """, (admin_notification_text, int(safe_str(chat_id))))
-                        
-                        conn.commit()
-                        cur.close()
-                        conn.close()
-                        
-                        print(f"🔥 [INTERACTIONS_LOG] עדכון הטבלה עם נוסח ההתראה לאדמין | chat_id={safe_str(chat_id)}")
-                        
-                    except ImportError:
-                        logger.warning(f"[INTERACTIONS_LOG] psycopg2 לא זמין לעדכון הטבלה", source="message_handler")
-                    
-            except Exception as update_admin_err:
-                logger.warning(f"[INTERACTIONS_LOG] שגיאה בעדכון נוסח ההתראה לאדמין: {update_admin_err}", source="message_handler")
-            
-            logger.info(f"📨 [FINAL] ההתראה הסופית נשלחה לאדמין אחרי שכל הדברים הסתיימו | chat_id={safe_str(chat_id)}", source="message_handler")
-            
-        except Exception as final_admin_err:
-            logger.warning(f"[FINAL] שגיאה בשליחת ההתראה הסופית לאדמין: {final_admin_err}", source="message_handler")
+        # 🔥 **DEPRECATED**: הקוד הישן של שליחת התראות הוסר
+        # עכשיו ההתראות נשלחות מנתוני אמת ישירות מטבלת interactions_log
+        # בקטע הרישום לעיל באמצעות send_admin_notification_from_db()
+        
+        logger.info(f"✅ [MODERN_NOTIFICATIONS] התראות נשלחות מנתוני אמת מהטבלה | chat_id={safe_str(chat_id)}", source="message_handler")
         
         logger.info(f"✅ [BACKGROUND] סיום משימות ברקע | chat_id={safe_str(chat_id)} | זמן תגובה אמיתי: {response_time:.2f}s | זמן כולל כולל רקע: {time.time() - user_request_start_time:.2f}s", source="message_handler")
         
@@ -688,23 +625,25 @@ async def handle_new_user_background(update, context, chat_id, user_msg):
             await send_system_message(update, chat_id, error_msg)
             bot_reply = error_msg
             
-        # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
-        # הסרנו כפילות רישום - כל אינטראקציה תרושם פעם אחת ב-interactions_log
-            
-        # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש חדש**
+        # 🔥 **תיקון מערכתי: רישום ושליחת התראה מנתוני אמת**
         try:
-            from admin_notifications import send_anonymous_chat_notification
-            send_anonymous_chat_notification(
-                user_msg,
-                bot_reply,
-                history_messages=None,
-                messages_for_gpt=None,
-                gpt_timing=None,
-                user_timing=None,
-                chat_id=chat_id
+            from interactions_logger import log_simple
+            from admin_notifications import send_admin_notification_from_db
+            
+            # רישום האינטראקציה לטבלה
+            interaction_id = log_simple(
+                chat_id=chat_id,
+                user_msg=user_msg,
+                bot_msg=bot_reply,
+                telegram_message_id=str(getattr(update.message, 'message_id', 'unknown'))
             )
+            
+            # שליחת התראה מנתוני אמת
+            if interaction_id:
+                send_admin_notification_from_db(interaction_id)
+                
         except Exception as admin_err:
-            logger.warning(f"[NEW_USER] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+            logger.warning(f"[NEW_USER] שגיאה ברישום והתראה: {admin_err}", source="message_handler")
             
     except Exception as e:
         logger.error(f"[Onboarding] שגיאה בטיפול במשתמש חדש: {e}", source="message_handler")
@@ -755,20 +694,25 @@ async def handle_unregistered_user_background(update, context, chat_id, user_msg
                 # שליחת בקשת אישור תנאים (הודעת ה-"רק לפני שנתחיל…")
                 await send_approval_message(update, chat_id)
                 
-                # 🔧 **תיקון מערכתי: החזרת התראה ישירה למשתמש לא מאושר**
+                # 🔥 **תיקון מערכתי: רישום ושליחת התראה מנתוני אמת**
                 try:
-                    from admin_notifications import send_anonymous_chat_notification
-                    send_anonymous_chat_notification(
-                        user_msg,
-                        bot_reply,
-                        history_messages=None,
-                        messages_for_gpt=None,
-                        gpt_timing=None,
-                        user_timing=None,
-                        chat_id=chat_id
+                    from interactions_logger import log_simple
+                    from admin_notifications import send_admin_notification_from_db
+                    
+                    # רישום האינטראקציה לטבלה
+                    interaction_id = log_simple(
+                        chat_id=chat_id,
+                        user_msg=user_msg,
+                        bot_msg=bot_reply,
+                        telegram_message_id=str(getattr(update.message, 'message_id', 'unknown'))
                     )
+                    
+                    # שליחת התראה מנתוני אמת
+                    if interaction_id:
+                        send_admin_notification_from_db(interaction_id)
+                        
                 except Exception as admin_err:
-                    logger.warning(f"[CODE_APPROVED] שגיאה בשליחת התראה לאדמין: {admin_err}", source="message_handler")
+                    logger.warning(f"[CODE_APPROVED] שגיאה ברישום והתראה: {admin_err}", source="message_handler")
                 
                 # 🔥 **פישוט מערכתי**: רישום יקרה אוטומטי בסוף התהליך במקום אחד
                 # הסרנו כפילות רישום - אישור קוד יירשם ב-interactions_log

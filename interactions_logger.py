@@ -124,7 +124,7 @@ class InteractionsLogger:
                                 gpt_results: Dict[str, Any],
                                 timing_data: Dict[str, float],
                                 admin_notification: Optional[str] = None,
-                                gpt_e_counter: Optional[str] = None) -> bool:
+                                gpt_e_counter: Optional[str] = None) -> Optional[int]:
         """
         רישום אינטראקציה מלאה לטבלה
         
@@ -138,16 +138,19 @@ class InteractionsLogger:
             timing_data: נתוני זמנים {'user_to_bot': X, 'total': Y, etc}
             admin_notification: תוכן ההתראה לאדמין
             gpt_e_counter: מונה GPT-E ("5/10")
+            
+        Returns:
+            int: מזהה הרשומה (serial_number) או None אם כשל
         """
         
         if not self.db_url:
             print("❌ [InteractionsLogger] לא נמצא URL למסד הנתונים")
-            return False
+            return None
         
         # וידוא שהטבלה קיימת עם השדות החדשים
         if not self.ensure_table_schema():
             print("❌ [InteractionsLogger] כשל בעדכון מבנה הטבלה")
-            return False
+            return None
         
         try:
             conn = psycopg2.connect(self.db_url)
@@ -296,11 +299,76 @@ class InteractionsLogger:
             print(f"   ⏱️ זמן תגובה: {user_to_bot_time:.2f}s | רקע: {background_time:.2f}s")
             print(f"   📊 היסטוריה: {history_user_count} משתמש + {history_bot_count} בוט")
             
-            return True
+            return serial_number
             
         except Exception as e:
             print(f"❌ [InteractionsLogger] שגיאה ברישום אינטראקציה: {e}")
-            return False
+            return None
+
+    def log_simple_interaction(self, chat_id: Union[str, int], user_msg: str, bot_msg: str, 
+                              telegram_message_id: Optional[str] = None) -> Optional[int]:
+        """
+        🔥 רישום אינטראקציה פשוטה (למשתמשים חדשים/לא מאושרים)
+        
+        Args:
+            chat_id: מזהה משתמש  
+            user_msg: הודעת המשתמש
+            bot_msg: תשובת הבוט
+            telegram_message_id: מזהה הודעה בטלגרם
+            
+        Returns:
+            int: מזהה הרשומה (serial_number) או None אם כשל
+        """
+        
+        if not self.db_url:
+            print("❌ [InteractionsLogger] לא נמצא URL למסד הנתונים")
+            return None
+        
+        # וידוא שהטבלה קיימת
+        if not self.ensure_table_schema():
+            print("❌ [InteractionsLogger] כשל בעדכון מבנה הטבלה")
+            return None
+        
+        try:
+            conn = psycopg2.connect(self.db_url)
+            cur = conn.cursor()
+            
+            now = datetime.utcnow()
+            commit_hash = self.get_current_commit_hash()
+            
+            # רישום פשוט - רק השדות הבסיסיים
+            insert_sql = """
+            INSERT INTO interactions_log (
+                telegram_message_id, chat_id, user_msg, bot_msg,
+                timestamp, date_only, time_only, source_commit_hash
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) 
+            RETURNING serial_number
+            """
+            
+            values = (
+                telegram_message_id,
+                int(safe_str(chat_id)),
+                user_msg,
+                bot_msg,
+                now,
+                now.date(),
+                now.time(),
+                commit_hash
+            )
+            
+            cur.execute(insert_sql, values)
+            serial_number = cur.fetchone()[0]
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            print(f"✅ [InteractionsLogger] אינטראקציה פשוטה #{serial_number} נרשמה")
+            return serial_number
+            
+        except Exception as e:
+            print(f"❌ [InteractionsLogger] שגיאה ברישום אינטראקציה פשוטה: {e}")
+            return None
 
     def ensure_table_schema(self):
         """וידוא שהטבלה קיימת עם השדות החדשים"""
@@ -436,10 +504,27 @@ def get_interactions_logger() -> InteractionsLogger:
         _logger_instance = InteractionsLogger()
     return _logger_instance
 
-def log_interaction(**kwargs) -> bool:
+def log_interaction(**kwargs) -> Optional[int]:
     """פונקציה קצרה לרישום אינטראקציה"""
     logger = get_interactions_logger()
     return logger.log_complete_interaction(**kwargs)
+
+def log_simple(chat_id: Union[str, int], user_msg: str, bot_msg: str, 
+               telegram_message_id: Optional[str] = None) -> Optional[int]:
+    """
+    🔥 פונקציה נוחה לרישום אינטראקציה פשוטה
+    
+    Args:
+        chat_id: מזהה משתמש  
+        user_msg: הודעת המשתמש
+        bot_msg: תשובת הבוט
+        telegram_message_id: מזהה הודעה בטלגרם
+        
+    Returns:
+        int: מזהה הרשומה (serial_number) או None אם כשל
+    """
+    logger = get_interactions_logger()
+    return logger.log_simple_interaction(chat_id, user_msg, bot_msg, telegram_message_id)
 
 if __name__ == "__main__":
     # בדיקה פשוטה של הלוגר

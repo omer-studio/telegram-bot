@@ -193,7 +193,8 @@ class SimpleDataManager:
                 
                 # יצירת טבלה אם לא קיימת
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS gpt_calls (
+                    -- 🗑️ REMOVED: gpt_calls table disabled - migrated to interactions_log
+    -- CREATE TABLE IF NOT EXISTS gpt_calls (
                         id SERIAL PRIMARY KEY,
                         chat_id TEXT NOT NULL,
                         call_type VARCHAR(50),
@@ -208,7 +209,8 @@ class SimpleDataManager:
                 """)
                 
                 cur.execute("""
-                    INSERT INTO gpt_calls (chat_id, call_type, request_data, response_data, 
+                    -- 🗑️ REMOVED: INSERT into gpt_calls disabled
+    -- INSERT INTO gpt_calls (chat_id, call_type, request_data, response_data, 
                                          tokens_input, tokens_output, cost_usd, processing_time)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (chat_id, call_type, json.dumps(request_data), json.dumps(response_data),

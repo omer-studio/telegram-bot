@@ -2,6 +2,8 @@
 """
 🚀 Deployment Logger - מערכת לוגים מתקדמת לפריסות
 שומר כל פלט טרמינל ומידע חשוב במסד הנתונים
+
+🎯 עדכון חדש: תופס כל print וכל פלט טרמינל ושומר לטבלה!
 """
 
 import threading
@@ -14,6 +16,7 @@ import time
 import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any
+import io
 
 # Import with fallback for missing modules
 try:
@@ -24,8 +27,44 @@ except ImportError:
     PSYCOPG2_AVAILABLE = False
     psycopg2 = None
 
+class DatabaseStdoutCapture:
+    """תופס כל פלט stdout/stderr ושומר לטבלת deployment_logs"""
+    
+    def __init__(self, deployment_logger, stream_type="stdout"):
+        self.deployment_logger = deployment_logger
+        self.stream_type = stream_type
+        self.original_stream = sys.stdout if stream_type == "stdout" else sys.stderr
+        
+    def write(self, message):
+        """כתיבה - גם למסך וגם למסד נתונים"""
+        try:
+            # כתיבה רגילה למסך
+            self.original_stream.write(message)
+            self.original_stream.flush()
+            
+            # שמירה למסד נתונים רק אם זה לא הודעת שגיאה פנימית
+            if message.strip() and not message.startswith("[DEPLOY_LOG_ERROR]"):
+                level = "ERROR" if self.stream_type == "stderr" else "PRINT"
+                self.deployment_logger.log(
+                    message.strip(), 
+                    level=level, 
+                    source="terminal_output",
+                    metadata={"stream_type": self.stream_type}
+                )
+        except Exception as e:
+            # אם יש שגיאה בלוגינג - לא נעצור את הבוט!
+            self.original_stream.write(f"[DEPLOY_LOG_ERROR] Capture failed: {e}\n")
+    
+    def flush(self):
+        """flush למסך"""
+        self.original_stream.flush()
+    
+    def isatty(self):
+        """תאימות למסך"""
+        return self.original_stream.isatty()
+
 class DeploymentLogger:
-    def __init__(self):
+    def __init__(self, capture_all_output=True):
         self.log_queue = queue.Queue()
         self.session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.commit_hash = self._get_commit_hash()
@@ -33,6 +72,7 @@ class DeploymentLogger:
         self.branch_name = self._get_branch_name()
         self.deployment_id = self._get_deployment_id()
         self.environment = self._detect_environment()
+        self.capture_enabled = capture_all_output
         
         # יצירת הטבלה אם לא קיימת
         self._create_table_if_not_exists()
@@ -43,7 +83,40 @@ class DeploymentLogger:
         
         # רישום התחלת הסשן
         self.log("🚀 Deployment Logger initialized", "INFO", "deployment_logger")
+        
+        # הפעלת תפיסת הפלט הכללית
+        if self.capture_enabled and self.environment == "render":
+            self._setup_output_capture()
     
+    def _setup_output_capture(self):
+        """הקמת תפיסת כל הפלט לטרמינל"""
+        try:
+            # שמירת הסטרימים המקוריים
+            self.original_stdout = sys.stdout
+            self.original_stderr = sys.stderr
+            
+            # התקנת הwrappers
+            sys.stdout = DatabaseStdoutCapture(self, "stdout")
+            sys.stderr = DatabaseStdoutCapture(self, "stderr")
+            
+            self.log("📝 Output capture enabled - all prints will be saved to deployment_logs", "INFO", "deployment_logger")
+            
+        except Exception as e:
+            self.log(f"❌ Failed to setup output capture: {e}", "ERROR", "deployment_logger")
+    
+    def disable_output_capture(self):
+        """השבתת תפיסת הפלט"""
+        try:
+            if hasattr(self, 'original_stdout'):
+                sys.stdout = self.original_stdout
+            if hasattr(self, 'original_stderr'):
+                sys.stderr = self.original_stderr
+                
+            self.log("📝 Output capture disabled", "INFO", "deployment_logger")
+            
+        except Exception as e:
+            self.log(f"❌ Failed to disable output capture: {e}", "ERROR", "deployment_logger")
+
     def _get_db_connection(self):
         """קבלת חיבור למסד הנתונים"""
         if not PSYCOPG2_AVAILABLE:
@@ -330,11 +403,14 @@ class DeploymentLogger:
         """סגירה נקייה של הלוגר"""
         self.log("🛑 Deployment Logger shutting down", "INFO", "deployment_logger")
         
+        # השבת הסטרימים המקוריים
+        self.disable_output_capture()
+        
         # המתנה לסיום עיבוד כל הלוגים
         self.log_queue.join()
 
-# יצירת instance גלובלי
-deployment_logger = DeploymentLogger()
+# יצירת instance גלובלי - תפיסת פלט מופעלת רק ברנדר
+deployment_logger = DeploymentLogger(capture_all_output=True)
 
 # פונקציות נוחות
 def log_info(message: str, **kwargs):

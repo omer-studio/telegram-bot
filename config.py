@@ -310,7 +310,7 @@ if not DB_URL:
     # יצירת DB_URL dummy לסביבת CI/CD
     if IS_CI_ENVIRONMENT:
         DB_URL = "postgresql://dummy:dummy@localhost:5432/dummy"
-        print("⚠️ [CONFIG] סביבת CI - משתמש ב-dummy DB_URL")
+        print("WARNING [CONFIG] סביבת CI - משתמש ב-dummy DB_URL")
     else:
         raise ValueError("❌ [CONFIG] DB_URL חסר! הגדר DATABASE_URL או DATABASE_EXTERNAL_URL בקונפיגורציה")
 else:

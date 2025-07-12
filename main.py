@@ -81,10 +81,12 @@ def clear_gpt_c_html_log():
     logger.info("📝 [GPT_C_LOGGER] זמנית מושבת - צריך ליצור clear_gpt_c_html_log", source="main")
     return True
 
-# 🚀 יבוא מערכת הלוגים החדשה
+# 🚀 יבוא מערכת הלוגים החדשה + הפעלת תפיסת פלט
 try:
     from deployment_logger import deployment_logger, log_info, log_error, log_warning
     DEPLOYMENT_LOGGER_AVAILABLE = True
+    print("✅ [DEPLOY] Deployment Logger initialized - capturing all terminal output to database")
+    print("📝 [DEPLOY] All prints and logs will be saved to deployment_logs table")
 except ImportError as e:
     print(f"⚠️ Deployment Logger לא זמין: {e}")
     DEPLOYMENT_LOGGER_AVAILABLE = False
@@ -105,18 +107,12 @@ def log_memory_usage(stage: str):
         
         # 💾 שמירת מדידת זיכרון למסד הנתונים
         try:
-            data_manager.save_gpt_call(
-                chat_id="system",
-                call_type="memory_metrics",
-                request_data={"stage": stage, "memory_mb": memory_mb},
-                response_data={"status": "logged"},
-                tokens_input=0,
-                tokens_output=0,
-                cost_usd=0.0,
-                processing_time=0.0
-            )
+            # 🗑️ REMOVED: save_gpt_call disabled - migrated to interactions_log
+            print(f"🔄 [DISABLED] save_gpt_call disabled - use interactions_log instead")
+            pass  # סיום try block
+            
         except Exception as save_err:
-            logger.warning(f"Could not save memory metrics: {save_err}", source="main")
+            print(f"⚠️ שגיאה בשמירת מדידות זיכרון: {save_err}")
             
     except Exception as e:
         logger.warning(f"Could not log memory usage: {e}", source="main")

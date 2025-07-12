@@ -84,7 +84,7 @@ def check_critical_tables():
         
         # 🚫 טבלאות מיותרות - רק דיווח שהושבתו
         disabled_tables = {
-            'gpt_calls_log': 'לוג קריאות GPT הישן (הוחלף ב-interactions_log)',
+            # 'gpt_calls_log': 'לוג קריאות GPT הישן (הוחלף ב-interactions_log)',  # 🗑️ REMOVED
             'gpt_usage_log': 'לוג שימוש GPT (הושבת - כפול ל-interactions_log)',
             'system_logs': 'לוגי מערכת (הושבת - יש לוגים ספציפיים)',
             'critical_users': 'משתמשים קריטיים (הושבת - מנוהל בקונפיג)',

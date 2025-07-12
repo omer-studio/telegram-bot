@@ -87,7 +87,7 @@ class CodeEnforcer:
                 r'\.post\(',
                 r'\.get\(',
                 r'billing_guard\.',
-                r'save_system_metrics',
+                # r'save_system_metrics',  # 🗑️ REMOVED: function disabled
                 r'GPTJSONLLogger\.'
             ]
             

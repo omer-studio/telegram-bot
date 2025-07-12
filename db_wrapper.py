@@ -158,17 +158,9 @@ def force_clear_user_cache_db(chat_id: str):
 def log_sheets_to_db_migration(operation: str, chat_id: str, success: bool = True):
     """מתעד מעבר מ-Sheets למסד נתונים"""
     try:
-        from db_manager import save_system_metrics
-        save_system_metrics(
-            metric_type="sheets_to_db_migration",
-            operation=operation,
-            chat_id=chat_id,
-            success=success,
-            additional_data={
-                "migration_timestamp": str(logging.time()),
-                "source": "db_wrapper"
-            }
-        )
+        # 🗑️ REMOVED: save_system_metrics disabled
+        # הקוד הישן מבוטל - הפונקציה נשארת לתאימות לאחור
+        logging.info(f"📊 Migration logged: {operation} for {chat_id}, success: {success}")
     except Exception as e:
         logging.warning(f"⚠️ שגיאה בתיעוד מיגרציה: {e}")
 

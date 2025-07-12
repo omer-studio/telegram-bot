@@ -92,21 +92,23 @@ def extract_user_info(user_msg, chat_id, message_id=None):
         
         # 💾 שמירת מטריקות זמן GPT-C למסד הנתונים
         try:
-            from db_manager import save_system_metrics
-            save_system_metrics(
-                metric_type="gpt_timing",
-                chat_id=safe_chat_id,
-                gpt_latency_seconds=gpt_duration,
-                additional_data={
-                    "message_id": message_id,
-                    "gpt_type": "C",
-                    "model": response.model,
-                    "tokens_used": usage.get("total_tokens", 0),
-                    "cost_usd": usage.get("cost_total", 0),
-                    "operation": "extract_user_info",
-                    "extracted_fields_count": len(extracted_fields)
-                }
-            )
+            # 🗑️ REMOVED: save_system_metrics disabled
+            # from db_manager import save_system_metrics
+            # save_system_metrics(
+            #     metric_type="gpt_timing",
+            #     chat_id=safe_chat_id,
+            #     gpt_latency_seconds=gpt_duration,
+            #     additional_data={
+            #         "message_id": message_id,
+            #         "gpt_type": "C",
+            #         "model": response.model,
+            #         "tokens_used": usage.get("total_tokens", 0),
+            #         "cost_usd": usage.get("cost_total", 0),
+            #         "operation": "extract_user_info",
+            #         "extracted_fields_count": len(extracted_fields)
+            #     }
+            # )
+            pass
         except Exception as save_err:
             logger.warning(f"Could not save GPT-C timing metrics: {save_err}", source="gpt_c_handler")
         

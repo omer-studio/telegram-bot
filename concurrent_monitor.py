@@ -453,20 +453,9 @@ class ConcurrentMonitor:
             
             # 💾 שמירת מטריקות concurrent למסד הנתונים
             try:
-                from db_manager import save_system_metrics
-                save_system_metrics(
-                    metric_type="concurrent",
-                    chat_id=safe_str(chat_id),
-                    response_time_seconds=response_time,
-                    active_sessions=len(self.active_sessions),
-                    max_concurrent_users=self.max_users,
-                    additional_data={
-                        "session_stage": session.stage,
-                        "success": success,
-                        "timeout": response_time > session.max_allowed_time,
-                        "session_id": f"{session.chat_id}_{session.queue_position}"
-                    }
-                )
+                # 🗑️ REMOVED: save_system_metrics disabled
+                # הקוד הישן מבוטל - שמירת מטריקות concurrent הושבתה
+                logging.debug(f"[ConcurrentMonitor] Metrics logging disabled for session {chat_id}")
             except Exception as save_err:
                 logging.warning(f"Could not save concurrent metrics: {save_err}")
             

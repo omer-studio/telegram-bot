@@ -148,7 +148,8 @@ def verify_critical_tables_intact():
         critical_tables = [
             'chat_messages',
             'user_profiles', 
-            'gpt_calls_log',
+            # 'gpt_calls_log',  # 🗑️ REMOVED - migrated to interactions_log
+            'interactions_log',  # מערכת הלוגינג החדשה
             'reminder_states'
         ]
         
@@ -197,7 +198,8 @@ def create_drop_log():
             'critical_tables_preserved': [
                 'chat_messages',
                 'user_profiles', 
-                'gpt_calls_log',
+                # 'gpt_calls_log',  # 🗑️ REMOVED - migrated to interactions_log
+                'interactions_log',  # מערכת הלוגינג החדשה
                 'reminder_states',
                 'bot_error_logs',
                 'bot_trace_logs'

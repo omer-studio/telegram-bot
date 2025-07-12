@@ -12,6 +12,10 @@ import re
 import json
 import traceback
 from typing import List, Dict, Any
+import sys
+from datetime import datetime
+import csv
+from io import StringIO
 
 try:
     import psycopg2
@@ -20,6 +24,17 @@ try:
 except ImportError:
     print("⚠️ psycopg2 not available - database queries disabled")
     PSYCOPG2_AVAILABLE = False
+
+# ייבוא logger בטוח
+try:
+    from simple_logger import logger
+except ImportError:
+    # ברירת מחדל אם logger לא זמין
+    class SimpleLogger:
+        def info(self, msg): print(f"ℹ️ {msg}")
+        def error(self, msg): print(f"❌ {msg}")
+        def warning(self, msg): print(f"⚠️ {msg}")
+    logger = SimpleLogger()
 
 def load_config():
     """🎯 טעינת קונפיגורציה דרך הפונקציה המרכזית"""
@@ -156,9 +171,9 @@ def טבלה_gpt_לוגים(limit: int = 25) -> List[Dict[str, Any]]:
     return run_query(query)
 
 def טבלה_gpt_קריאות(limit: int = 25) -> List[Dict[str, Any]]:
-    """הצגת טבלת gpt_calls מלאה עם כל השדות"""
-    query = f"SELECT * FROM gpt_calls ORDER BY timestamp DESC LIMIT {limit}"
-    return run_query(query)
+    """🗑️ DEPRECATED: gpt_calls table disabled - השתמש ב-interactions_log במקום"""
+    print("🔄 [DISABLED] gpt_calls table disabled - use interactions_log instead")
+    return []
 
 def טבלה_שגיאות(limit: int = 20) -> List[Dict[str, Any]]:
     """הצגת טבלת errors_stats מלאה עם כל השדות"""
@@ -244,17 +259,147 @@ def test_connection() -> Dict[str, Any]:
             "error": str(e)
         }
 
-if __name__ == "__main__":
-    # בדיקה מקומית של הכלי
-    print("🧪 Testing database tool...")
-    
-    # בדיקת חיבור
-    connection_test = test_connection()
-    print(f"Connection test: {connection_test}")
-    
-    # בדיקת שאילתה פשוטה
+def export_table_to_utf8_csv(table_name, output_dir="csv_exports"):
+    """
+    מייצא טבלה לקובץ CSV עם UTF-8 BOM תקין 📊
+    מבטיח תצוגה נכונה ב-Excel ובכל התוכנות
+    """
     try:
-        result = run_query("SELECT COUNT(*) as total_users FROM user_profiles")
-        print(f"Sample query result: {result}")
+        # יצירת תיקיה אם לא קיימת
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # קבלת URL למסד הנתונים
+        db_url = get_database_url()
+        if not db_url:
+            logger.error("❌ לא נמצא URL למסד הנתונים")
+            return None
+            
+        conn = psycopg2.connect(db_url, sslmode="require")
+        cursor = conn.cursor()
+        
+        # שליפת כל הנתונים מהטבלה
+        cursor.execute(f"SELECT * FROM {table_name}")
+        rows = cursor.fetchall()
+        
+        # שליפת שמות העמודות
+        if cursor.description:
+            column_names = [desc[0] for desc in cursor.description]
+        else:
+            logger.error("❌ לא נמצאו עמודות בטבלה")
+            return None
+        
+        # יצירת שם קובץ עם תאריך
+        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M")
+        filename = f"{table_name}_{timestamp}.csv"
+        filepath = os.path.join(output_dir, filename)
+        
+        # כתיבת הקובץ עם UTF-8 BOM
+        with open(filepath, 'w', encoding='utf-8-sig', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            # כתיבת כותרות
+            writer.writerow(column_names)
+            
+            # כתיבת הנתונים
+            if rows:
+                for row in rows:
+                    # המרה של ערכים ל-string ותיקון None
+                    processed_row = []
+                    for value in row if row else []:
+                        if value is None:
+                            processed_row.append("")
+                        elif isinstance(value, datetime):
+                            processed_row.append(value.strftime("%Y-%m-%d %H:%M:%S"))
+                        else:
+                            processed_row.append(str(value))
+                    writer.writerow(processed_row)
+        
+        cursor.close()
+        conn.close()
+        
+        logger.info(f"✅ הטבלה {table_name} יוצאה בהצלחה: {filepath}")
+        logger.info(f"📊 {len(rows)} שורות, {len(column_names)} עמודות")
+        
+        return filepath
+        
     except Exception as e:
-        print(f"Sample query failed: {e}") 
+        logger.error(f"❌ שגיאה ביצוא הטבלה {table_name}: {e}")
+        return None
+
+def export_all_main_tables():
+    """מייצא את כל הטבלאות הראשיות ל-CSV עם UTF-8 תקין"""
+    main_tables = ['user_profiles', 'chat_messages', 'interactions_log']
+    exported_files = []
+    
+    logger.info("📤 מתחיל יצוא כל הטבלאות הראשיות...")
+    
+    for table in main_tables:
+        filepath = export_table_to_utf8_csv(table)
+        if filepath:
+            exported_files.append(filepath)
+    
+    if exported_files:
+        logger.info(f"✅ יוצאו {len(exported_files)} טבלאות בהצלחה:")
+        for file in exported_files:
+            logger.info(f"   📄 {file}")
+    
+    return exported_files
+
+if __name__ == "__main__":
+    import sys
+    
+    if len(sys.argv) > 1:
+        command = sys.argv[1]
+        
+        if command == "export":
+            # יצוא טבלה ספציפית או כל הטבלאות
+            if len(sys.argv) > 2:
+                table_name = sys.argv[2]
+                print(f"📤 מייצא טבלה: {table_name}")
+                filepath = export_table_to_utf8_csv(table_name)
+                if filepath:
+                    print(f"✅ הטבלה יוצאה בהצלחה: {filepath}")
+                    print("🎯 הקובץ נשמר עם UTF-8 BOM - יפתח נכון ב-Excel!")
+                else:
+                    print("❌ שגיאה ביצוא הטבלה")
+            else:
+                print("📤 מייצא את כל הטבלאות הראשיות...")
+                files = export_all_main_tables()
+                if files:
+                    print("🎯 כל הקבצים נשמרו עם UTF-8 BOM - יפתחו נכון ב-Excel!")
+                    
+        elif command == "test":
+            # בדיקת חיבור
+            print("🧪 בודק חיבור למסד הנתונים...")
+            connection_test = test_connection()
+            print(f"תוצאה: {connection_test}")
+            
+        elif command == "stats":
+            # סטטיסטיקות
+            print("📊 מביא סטטיסטיקות...")
+            stats = סטטיסטיקות_כלליות()
+            print(f"סטטיסטיקות: {stats}")
+            
+        else:
+            print("🔧 שימוש:")
+            print("  python db_tool.py export [table_name]  # יצוא טבלה ספציפית או כל הטבלאות")
+            print("  python db_tool.py test                 # בדיקת חיבור")
+            print("  python db_tool.py stats                # סטטיסטיקות כלליות")
+    else:
+        # בדיקה מקומית של הכלי
+        print("🧪 Testing database tool...")
+        
+        # בדיקת חיבור
+        connection_test = test_connection()
+        print(f"Connection test: {connection_test}")
+        
+        # בדיקת שאילתה פשוטה
+        try:
+            result = run_query("SELECT COUNT(*) as total_users FROM user_profiles")
+            print(f"Sample query result: {result}")
+        except Exception as e:
+            print(f"Sample query failed: {e}")
+            
+        print("\n🔧 לשימוש CLI:")
+        print("  python db_tool.py export              # יצוא כל הטבלאות עם UTF-8 תקין")
+        print("  python db_tool.py export user_profiles # יצוא טבלה ספציפית") 
